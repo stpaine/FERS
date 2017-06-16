@@ -1,0 +1,103 @@
+<!-- Script for sonar tests -->
+<!-- Marc Brooker mbrooker@rrsg.ee.uct.ac.za -->
+
+<?xml version="1.0" ?>
+<!DOCTYPE simulation SYSTEM "../../fers-xml.dtd">
+<simulation name="sim1">
+  <parameters>
+    <starttime>0</starttime>
+    <endtime>1</endtime>
+    <c>340.29</c>
+    <rate>44100</rate>
+    <export csv="true" binary="true" csvbinary="true"/>
+  </parameters>
+
+  <pulse name="trpulse" type="file" filename="pn.csv">
+    <power>0.2</power>
+    <carrier>40000</carrier>
+  </pulse>
+
+  <timing name="clock">
+    <frequency>10e6</frequency>
+    <jitter>1e-9</jitter>
+  </timing>
+
+  <antenna name="trantenna" pattern="isotropic">
+  </antenna>
+
+  <platform name="trans">
+    <motionpath>
+      <positionwaypoint>
+	<x>0.0</x>
+	<y>0.0</y>
+	<altitude>0.0</altitude>
+	<time>0</time>
+      </positionwaypoint>
+    </motionpath>
+    <fixedrotation>
+      <startazimuth>0.0</startazimuth>
+      <startelevation>0.0</startelevation>                   
+      <azimuthrate>0</azimuthrate>
+      <elevationrate>0</elevationrate>
+    </fixedrotation>
+    <transmitter name="sum_channel" type="pulsed" pulse="trpulse" antenna="trantenna" timing="clock">
+      <prf>10</prf>
+    </transmitter>
+  </platform>
+
+  <platform name="recv">
+    <motionpath>
+      <positionwaypoint>
+	<x>0.01</x>
+	<y>0.0</y>
+	<altitude>0.0</altitude>
+	<time>0</time>
+      </positionwaypoint>
+    </motionpath>
+    <fixedrotation>
+      <startazimuth>0</startazimuth> <!-- Squint angle of ~0.2 degrees -->
+      <startelevation>0</startelevation>
+      <azimuthrate>0</azimuthrate>
+      <elevationrate>0</elevationrate>
+    </fixedrotation>
+    <receiver name="feedD" antenna="trantenna" timing="clock">
+      <window_skip>0</window_skip>
+      <window_length>0.07</window_length>
+      <prf>10</prf>
+    </receiver>
+  </platform>
+
+  <platform name="target">
+    <motionpath interpolation="linear">
+      <positionwaypoint>
+	<x>-10</x>
+	<y>0</y>
+	<altitude>1</altitude>
+	<time>0</time>
+      </positionwaypoint>
+      <positionwaypoint>
+	<x>0</x>
+	<y>0</y>
+	<altitude>1</altitude>
+	<time>0.5</time>
+      </positionwaypoint>
+      <positionwaypoint>
+	<x>10</x>
+	<y>0</y>
+	<altitude>1</altitude>
+	<time>1</time>
+      </positionwaypoint>
+    </motionpath>
+    <fixedrotation>
+      <startazimuth>0.0</startazimuth>
+      <startelevation>0.0</startelevation>
+      <azimuthrate>0</azimuthrate>
+      <elevationrate>0</elevationrate>
+    </fixedrotation>
+    <target name="wings">
+      <rcs type="isotropic">
+      <value>1</value>
+      </rcs>
+    </target>
+  </platform>
+</simulation>

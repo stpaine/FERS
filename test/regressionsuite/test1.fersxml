@@ -1,0 +1,69 @@
+<!-- Test pulsed radar. One Monostatic radar and one target -->
+<?xml version="1.0" ?>
+<!DOCTYPE simulation SYSTEM "../../fers-xml.dtd">
+<simulation name="sim1">
+  <parameters>
+    <starttime>0</starttime>
+    <endtime>0.01</endtime>
+    <rate>10e6</rate>
+    <export binary="true" csvbinary="true" xml="true"/>
+  </parameters>
+
+  <pulse name="pulse1" type="file" filename="5000ns_mono.csv">
+    <power>1000</power>
+    <carrier>1e9</carrier>
+  </pulse>
+
+  <timing name="clock">
+    <frequency>10e6</frequency>
+    <jitter>0</jitter>
+  </timing>
+
+  <antenna name="ant1" pattern="isotropic">
+  </antenna>
+
+  <platform name="radarsite">
+    <motionpath>
+      <positionwaypoint>
+	<x>0.00</x>
+	<y>0.0</y>
+	<altitude>0.0</altitude>
+	<time>0</time>
+      </positionwaypoint>
+    </motionpath>
+    <fixedrotation>
+      <startazimuth>0.0</startazimuth>
+      <startelevation>0</startelevation>
+      <azimuthrate>0</azimuthrate>
+      <elevationrate>0</elevationrate>
+    </fixedrotation>
+    <monostatic name="mono1" type="pulsed" antenna="ant1" pulse="pulse1" timing="clock">      
+      <window_skip>0</window_skip>
+      <window_length>20e-5</window_length> 
+      <prf>1000</prf>
+    </monostatic>
+  </platform>
+
+  <platform name="aeroplane">
+    <motionpath>
+      <positionwaypoint>
+	<x>10000.0</x>
+	<y>0.0</y>
+	<altitude>0.0</altitude>
+	<time>0</time>
+      </positionwaypoint>
+    </motionpath>    
+    <fixedrotation>
+      <startazimuth>0.0</startazimuth>
+      <startelevation>0.0</startelevation>
+      <azimuthrate>0</azimuthrate>
+      <elevationrate>0</elevationrate>
+    </fixedrotation>
+    <target name="wings">
+      <rcs type="isotropic">
+        <value>10</value>
+      </rcs>
+    </target>
+  </platform>
+
+</simulation>

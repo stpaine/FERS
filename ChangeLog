@@ -1,0 +1,25 @@
+2013-12-10  Version 0.23 Craig Tong <craig.tong@uct.ac.za>
+	* Fixed for current versions of Boost.
+	* General improvements with the CMake setup.
+	* Build configuration defaults to Release.
+
+2013-03-15  Version 0.22 Craig Tong <craig.tong@uct.ac.za>
+	* Fixed "[BUG] Requested delay filter value out of range" problem caused by outbound arrays indexes. This could still be revised more elegantly.
+	* Tidied up general program output.
+	* Added title banner to program.
+
+2012-07-16  Version 0.21  Graham Inggs <graham@nerve.org.za>
+	* Remove included TinyXML - TinyXML is now in Debian and Red Hat
+
+2012-07-06  Version 0.20  Graham Inggs <graham@nerve.org.za>
+	* Various patches from RRSG @ UCT	
+	* Remove debian directory
+	* Fix up CMakeLists to allow both in-source and out-of-source building
+	* Remove src/FindPythonLibs.cmake - use CMake's module instead
+
+2006-11-03  Marc Brooker <marcbrooker@gmail.com>
+	* <fers> Third public release
+	* <fers> Added the ability to export to HDF5 files
+	* <fers> Fixed phase and doppler calculations
+	* <fers> Fixed up some examples to the new XML format. More work needs to be done here
+

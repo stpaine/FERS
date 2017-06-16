@@ -1,0 +1,10 @@
+Utilities provided with FERS
+----------------------------
+
+These utilities are little programs that may make working with FERS easier. They are very simple, and were written for very particular purposes, so may not do what you want them to. They do demonstrate, however, some ways in which FERS can be aided by utility programs
+
+cluttergen - Generate a 1d line of randomly spread clutter
+cluttergen2d - Generate a 2d field of randomly spread clutter
+csv2antenna - Turn a comma seperated values file of antenna gain readings into an XML file for FERS (see also antennatool)
+h52raw - Change a FERS output file into a raw binary format. This is currently designed for using FERS with the G2 SAR processor.
+

@@ -1,0 +1,165 @@
+\documentclass[a4paper,10pt]{article}
+\usepackage{amsmath}
+
+%opening
+\title{FERS: Equations Reference}
+\author{Marc Brooker}
+
+\begin{document}
+
+\maketitle
+
+\section{rssim.cpp}
+\subsection{Bistatic Narrowband Radar Equation}
+\begin{equation}
+P_r=\frac{P_t G_t G_r \sigma_b \lambda^2 L_t L_r}{(4 \pi)^3 R_t^2 R_r^2}
+\end{equation}
+\begin{description}
+\item[$P_r$ and $P_t$] Received and Transmitted Power ($W$)
+\item[$G_r$ and $G_t$] Gain of the receive and transmit antennas
+\item[$\sigma_b$] Bistatic Radar Cross Section of the target ($m^2$)
+\item[$\lambda$] Center wavelength of the pulse ($m$)
+\item[$L_r$ and $L_t$] Loss factors for receive and transmit systems
+\item[$R_r$ and $R_t$] Range of the receive and transmit antennas from the target ($m$)
+ \end{description}
+From page 275 of \cite{kings} and 36-3 of \cite{skolnik70}.
+
+
+\subsection{One Way Narrowband Radar Equation}
+\begin{equation}
+P_r=\frac{P_t G_t G_r \lambda^2 L_t L_r}{(4 \pi)^2 R^2}
+\end{equation}
+\begin{description}
+\item[$R$] One-way range ($m$)
+\end{description}
+
+
+\subsection{Delay Equation}
+\begin{equation}
+T_d = \frac{R_t + R_r}{c}
+\end{equation}
+\begin{description}
+\item[$T_d$] Time delay of the arrival of the pulse due to propagation speed ($s$)
+\item[$c$] Propagation speed in medium ($ms^{-1}$). Typically 299 792 458 $ms^{-1}$
+\end{description}
+
+\subsection{Phase Delay Equation}\label{phase}
+The phase shift introduced by the delay in a wave of frequency $f$ is:
+\begin{equation}
+\phi_d = (2\pi f T_d)~{mod}~2\pi
+\end{equation}
+or
+\begin{equation}
+\phi_d = (2\pi f T_d) - 2\pi \lfloor f T_d \rfloor
+\end{equation}
+
+\subsection{Bistatic Doppler Equation}
+\begin{align}
+V_r &= \frac{dR_r}{dt}\\
+V_t &= \frac{dR_t}{dt}\\
+f' &= f_0 \frac{c+V_r}{c-V_t}
+\end{align}
+\begin{description}
+ \item[$f'$] Frequency of return pulse
+\item[$f_0$] Center frequency of transmitted pulse
+\item[$R_t \quad R_r$] Transmitter-target and Receiver-target ranges
+\item[$c$] Propagation speed in medium ($ms^{-1}$)
+\end{description}
+
+\subsection{Monostatic Doppler Equation}
+\begin{align}
+v &= \frac{dR_t}{dt} \\
+f' &= f_0 \frac{c+v}{c-v}
+\end{align}
+
+\section {rsnoise.cpp}
+
+\subsection{Noise Power Equation}
+From page 2-29 of \cite{skolnik70}:
+\begin{align}
+V_n &= \sqrt{4k T_s RB} \\
+P_n &= k T_s B
+\end{align}
+\begin{description}
+ \item[k] Boltzmann's constant
+\item[$T_s$] System noise temperature (for the simulated part of the system)
+\item[R] R is the resistance, in ohms. In FERS, the resistance used is 1ohm.
+\item[B] B is the system bandwidth
+\end{description}
+
+\par
+In addition, receiver noise temperature is added to the antenna noise temperature to obtain the system noise temperature. For a demonstration that this is valid see pages 190-203 of \cite{stremler}.
+\begin{align}
+T_s &= T_a + T_r{\text{, so}} \\
+P_n &= k (T_a+T_r) B
+\end{align}
+
+
+\section{rsantenna.cpp}
+
+\subsection{Sinc Pattern}
+The sinc radiation pattern is based on the equation
+\begin{equation}
+G(\theta)=\alpha\left(\frac{sin~(\beta\theta)}{\beta\theta}\right)^\gamma
+\end{equation}
+Three parameters, $\alpha$, $\beta$ and $\gamma$ are included to tweak the model
+\begin{description}
+ \item[$\theta$] Angle off boresight
+\end{description}
+
+\subsection{Square Horn Pattern}
+Radiation pattern from a square horn antenna (from page 89 of \cite{gagli86})
+$$G_e=\frac{4\pi d^2}{\lambda^2}$$
+$$x = \left(\frac{\pi d}{\lambda}\right)sin~\theta$$
+$$G(\theta) = G_e\left(\frac{sin~x}{x}\right)^2$$
+\begin{description}
+ \item[$\theta$] Angle off boresight
+\item[$\lambda$] Wavelength
+\item[$d$] Dimension of Horn
+\end{description}
+
+\subsection{Parabolic Dish Pattern}
+Radiation Pattern from a uniformly illuminated parabolic reflector (from page 91 of \cite{gagli86})
+$$G_e=\left(\frac{\pi d}{\lambda}\right)^2$$
+$$x = \left(\frac{\pi d}{\lambda}\right)sin~\theta$$
+$$G(\theta) = G_e\left(\frac{2 J_1(x)}{x}\right)^2$$
+\begin{description}
+ \item[$J_1(x)$] The Bessel function of the first kind of order one of x
+\end{description}
+
+\section {rssignal.cpp}
+
+\subsection{Doppler Shift}
+The doppler shift simulation in performed in the time domain, using libsamplerate (http://www.mega-nerd.com/SRC/). This library uses an algorithm developed by Julius O. Smith\cite{smith} which performs very well for irrational sampling factors. A frequency domain doppler algorithm will likely replace this one at some stage.
+
+\subsection{Frequency Domain Time Shift}
+The frequency domain time shift is an operation to shift the frequency domain signal $X$ (of length $N$ samples and with a sampling frequency of $F_s$) $n$ samples in time and produce a frequency domain signal $Y$.
+
+In order to work with non-integer $n$, a minimal-slope interpolation algorithm is used:
+\begin{equation*}
+E[k]=\begin{cases}
+	e^{-j 2 \pi n \frac{k}{N} } & k < N-k \\
+	cos(\pi n) & k = N \\
+	e^{-j 2 \pi n \frac{k-N}{N} } & k > N-k \\
+       \end{cases}
+\end{equation*}
+$$Y[k]=X[k]E[k]$$
+
+To get the number of samples $n$ from a time offset $t$ the equation $n = t F_s$.
+
+\subsection{IQ Demodulation}
+
+I/Q demodulation is handled in the frequency domain using a very simple alogorithm:
+$$i[n] = y[n]~cos(\phi_d)$$
+$$q[n] = y[n]~sin(-\phi_d)$$
+where $\phi_d$ is derived from the phase delay equation (section \ref{phase}).
+
+This calculation is only valid if the highest frequency in $y[n]$ is less than the carrier frequency. A simple argument why this is the case follows.
+
+If the signal $y(t) cos(2\pi f_c t)$ is transmitted, it undergoes a time delay and returns to the receiver as $y(t-t_d) cos\left(2\pi f_c t (t-t_d)\right)$. In the I/Q demodulation process, this return is mixed with $cos(2\pi f_c t)$ to get I and $sin(2\pi f_c t)$ to get Q. This $i(t) = y(t-t_d) cos(2\pi f_c t + 2\pi f_c t_d) cos(2\pi f_c t)$ which simplifies to
+$$i(t) = y(t-t_d) cos(2\pi f_c t_d) + y(t-t_d) cos(4 \pi f_c t)$$.
+The $cos(4 \pi f_c t)$ part is rejected by a lowpass filter, but only if the highest frequency in $y(t)$ is less than $f_c$.
+
+\bibliographystyle{ieeetr}
+\bibliography{equations}
+\end{document}
