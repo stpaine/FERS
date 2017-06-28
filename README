@@ -1,5 +1,9 @@
 FERS - The Flexible Extensible Radar Simulator
 
+------------------------------------------------------------
+NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION
+------------------------------------------------------------
+
 FERS is a simulator for simulating the performance and output of a variety of radar systems. It is designed to support a wide range of traditional and modern radar system designs. FERS is currently under active development - this version is likely to contain many bugs, incomplete or missing features, incomplete or missing documentation and major inaccuracies.
 
 FERS has been used to generate useful results for real-world projects, so it might be useful for your projects. Documentation is currently very sparse - it will be improved soon.
