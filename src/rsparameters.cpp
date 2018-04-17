@@ -51,12 +51,12 @@ rsParameters::rsParameters() {
   sim_parms.filter_length = 33;
   // Binary file type defaults to CSV
   sim_parms.filetype = rsParms::RS_FILE_FERSBIN;
-  // Export xml by default
-  sim_parms.export_xml = true;
-  // Export csv by default
-  sim_parms.export_csv = true;
-  // Don't export binary by default
-  sim_parms.export_binary = false;
+  // Don't export xml by default
+  sim_parms.export_xml = false;
+  // Don't export csv by default
+  sim_parms.export_csv = false;
+  // Export binary by default
+  sim_parms.export_binary = true;
   // The random seed is set the to the current time by default
   sim_parms.random_seed = static_cast<unsigned int>(time(NULL));
   // The default is not to quantize
