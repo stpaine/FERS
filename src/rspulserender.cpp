@@ -123,7 +123,7 @@ namespace {
       for (unsigned int i = 0; i < wsize; i++) {
 	noise[i] = timing->NextNoiseSample();        
       }
-      std::printf("%g\n", noise[0]);
+      //std::printf("%g\n", noise[0]);
       //Calculate the number of samples to skip
       if (timing->GetSyncOnPulse()) {
 	timing->Reset();
