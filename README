@@ -44,11 +44,19 @@ FERS also depends on the cmake system. This system can generate makefiles, VC++ 
 
 Download and extract the tar ball.
 
+-------------------------------------------------------------------------------------
+NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION ON SOLVING COMPILE ERRORS
+-------------------------------------------------------------------------------------
+
 cd into the extacted directory (by befault: cd fers/)
 mkdir build
 cd build
 cmake ../
 make
+
+-------------------------------------------------------------------------------------
+NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION ON SOLVING COMPILE ERRORS
+-------------------------------------------------------------------------------------
 
 A "fers" binary will be then be placed in the "src" directory which can be copied to a location of your choice.
 
