@@ -1,8 +1,8 @@
-FERS - The Flexible Extensible Radar Simulator
+# FERS - The Flexible Extensible Radar Simulator
 
-------------------------------------------------------------
-NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION
-------------------------------------------------------------
+## NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION
+
+---
 
 FERS is a simulator for simulating the performance and output of a variety of radar systems. It is designed to support a wide range of traditional and modern radar system designs. FERS is currently under active development - this version is likely to contain many bugs, incomplete or missing features, incomplete or missing documentation and major inaccuracies.
 
@@ -19,7 +19,7 @@ The features which are currently implemented are:
 * Modelling of 1/f noise on local oscillators
 * Effects of multipath propagation
 
-AUTHORS
+#### AUTHORS:
 
 FERS was written by:
 
@@ -29,7 +29,7 @@ FERS is currently maintained by the following people:
 
 Craig Tong (craig.tong@uct.ac.za)
 
-BUILDING FERS
+#### BUILDING FERS
 
 FERS depends on a number of external libraries, which you need to install before attempting to build FERS. The libraries you need to have installed are:
 
@@ -42,41 +42,40 @@ On a Debian or Ubuntu system (or pretty much any other decent GNU/Linux distribu
 
 FERS also depends on the cmake system. This system can generate makefiles, VC++ projects, KDevelop projects and more from the FERS sources. Please install cmake before attempting to build FERS.
 
-Download and extract the tar ball.
+* Download and extract the tar ball.
+* Navigate to the extracted directory (by default: `cd fers/`)
+* Enter the following commands:
+    ```bash
+    mkdir build
+    cd build
+    cmake ../
+    make
+    ```
 
 -------------------------------------------------------------------------------------
-NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION ON SOLVING COMPILE ERRORS
--------------------------------------------------------------------------------------
-
-cd into the extacted directory (by befault: cd fers/)
-mkdir build
-cd build
-cmake ../
-make
-
--------------------------------------------------------------------------------------
-NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION ON SOLVING COMPILE ERRORS
+## NOTE: PLEASE REFER TO THE GIT WIKI FOR FURTHER INFORMATION ON SOLVING COMPILE ERRORS
 -------------------------------------------------------------------------------------
 
 A "fers" binary will be then be placed in the "src" directory which can be copied to a location of your choice.
 
 FERS can be build in debug mode by replacing the "cmake ../" with cmake -DCMAKE_BUILD_TYPE=Debug ../
+
 Note it is advisable use separate build folders for release and debug builds.
 
 FERS is written in standard C++ and should compile and run on many architectures and operating systems. Please report successes and failures of running this software on non-Linux and non-x86 platforms to the authors, so we can improve the software and make it more portable.
 
-DOCUMENTATION
+#### DOCUMENTATION
 
 Documentation is available in the doc/ directory. Highlights include:
 
 doc/equations/equations.tex - All equations used by FERS in convenient LaTeX form
 fersxml.dtd - Document Type Definition for the XML script file format
 
-THANKS
+#### THANKS
 
 The authors of tinyXml, FFTW and Boost for making excellent software freely available.
 
-COPYRIGHT NOTICE
+#### COPYRIGHT NOTICE
 
 FERS is covered by the following copyright notice. Should you wish to acquire a copy of FERS not covered by these terms, please contact the Department of Electrical Engineering at the University of Cape Town.
 
