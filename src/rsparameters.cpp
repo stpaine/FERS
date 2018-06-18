@@ -84,7 +84,7 @@ rsFloat rsParameters::c()
 
 rsFloat rsParameters::boltzmann_k()
 {
-  return 1.3806503e-23l;
+  return 1.3806503e-23;
 }
 
 rsFloat rsParameters::start_time()
