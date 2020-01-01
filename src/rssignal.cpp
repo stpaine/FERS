@@ -395,11 +395,11 @@ Signal::Render(const std::vector<InterpPoint> &points, rsFloat trans_power, unsi
         continue;
 
       accum += amplitude * data[i + j + iSampleUnwrap] * filt[j + filt_length / 2]; //Apply unwrapping to Tx samples.
-      if (isnan(data[j].real()))
+      if (std::isnan(data[j].real()))
         throw std::runtime_error("NAN in Render: data[j].r");
-      if (isnan(data[j].imag()))
+      if (std::isnan(data[j].imag()))
         throw std::runtime_error("NAN in Render: data[j].i");
-      if (isnan(filt[j - start]))
+      if (std::isnan(filt[j - start]))
         throw std::runtime_error("NAN in Render: filt");
     }
     //rsDebug::printf(rsDebug::RS_VERY_VERBOSE, "Out = %g %g\n", accum.real(), accum.imag());
