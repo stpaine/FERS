@@ -72,7 +72,7 @@ namespace {
         max = std::fabs(data[i].real());
       if (std::fabs(data[i].imag()) > max)
         max = std::fabs(data[i].imag());
-        if (isnan(data[i].real()) || (isnan(data[i].imag())))
+        if (std::isnan(data[i].real()) || (std::isnan(data[i].imag())))
           throw std::runtime_error("NAN in QuantizeWindow -- early");
     }
     if (rsParameters::adc_bits() > 0) {
@@ -84,7 +84,7 @@ namespace {
       if (max != 0) {
         for (unsigned int i = 0; i < size; i++) {
           data[i] /= max;
-          if (isnan(data[i].real()) || (isnan(data[i].imag())))
+          if (std::isnan(data[i].real()) || (std::isnan(data[i].imag())))
             throw std::runtime_error("NAN in QuantizeWindow -- late");
         }
       }
@@ -152,12 +152,12 @@ namespace {
   {    
       for (unsigned int i = 0; i < wsize; i++) {
 	//Modify the phase
-        if (isnan(noise[i]))
+        if (std::isnan(noise[i]))
           throw std::runtime_error("[BUG] Noise is NAN in AddPhaseNoiseToWindow");	
 	//	std::printf("%g\n", noise[i]);
 	rsComplex mn = exp(rsComplex(0.0, 1.0)*noise[i]);
 	window[i] *= mn;
-        if (isnan(window[i].real()) || (isnan(window[i].imag())))
+        if (std::isnan(window[i].real()) || (std::isnan(window[i].imag())))
           throw std::runtime_error("[BUG] NAN encountered in AddPhaseNoiseToWindow");
       }
   }
