@@ -76,7 +76,7 @@ void SolveRE(const Transmitter *trans, const Receiver *recv, const Target *targ,
     results.power *= trans->MultipathDualFactor();
   //Step 3, calculate phase shift
   //See "Phase Delay Equation" in doc/equations/equations.tex
-  results.phase = -results.delay*2*M_PI*wave->GetCarrier();
+  results.phase = fmod(results.delay*2*M_PI*wave->GetCarrier(), 2*M_PI);
   //Step 4, calculate doppler shift
   //Calculate positions at the end of the pulse
   Vec3 trpos_end = trans->GetPosition(time+length);
