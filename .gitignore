@@ -1,3 +1,8 @@
 doc/equations/equations.aux
 doc/equations/equations.log
 doc/equations/equations.pdf
+
+tutorials/.ipynb_checkpoints/*
+tutorials/__pycache__/*
+tutorials/*.h5
+tutorials/*.fersxml
