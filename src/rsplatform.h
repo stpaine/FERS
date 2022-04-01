@@ -40,7 +40,7 @@ private:
   std::string name; //!< The name of the platform
   Platform *dual; //!< Multipath dual of this platform
   /// Create a dual of this platform for multipath simulation
-  friend Platform* rs::CreateMultipathDual(const Platform *plat, const MultipathSurface *surf);
+  friend Platform* CreateMultipathDual(const Platform *plat, const MultipathSurface *surf);
 };
 
   /// Create a dual of this platform for multipath simulation

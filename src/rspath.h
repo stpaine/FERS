@@ -120,7 +120,7 @@ private:
   InterpType type; //!< Type of interpolation
   rsPython::PythonPath *pythonpath; //!< Pointer to the PythonPath object
   /// Create a new path which is a reflection of this one around the given plane
-  friend Path* rs::ReflectPath(const Path *path, const MultipathSurface *surf);
+  friend Path* ReflectPath(const Path *path, const MultipathSurface *surf);
 };
 
   /// Create a new path which is a reflection of this one around the given plane
@@ -153,7 +153,7 @@ protected:
 
   InterpType type; //!< Type of interpolation
   /// Create a new path which is a reflection of this one around the given plane
-  friend RotationPath* rs::ReflectPath(const RotationPath *path, const MultipathSurface *surf);
+  friend RotationPath* ReflectPath(const RotationPath *path, const MultipathSurface *surf);
 };
 
   /// Create a new path which is a reflection of this one around the given plane

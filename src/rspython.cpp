@@ -43,7 +43,7 @@ PythonExtension::PythonExtension(const std::string& module, const std::string& f
 {
   data = new PythonExtensionData;
   //Import the module
-  PyObject *modname = PyString_FromString(module.c_str());
+  PyObject *modname = PyUnicode_FromString(module.c_str());
   data->pModule = PyImport_Import(modname);
   Py_DECREF(modname);
 
@@ -52,7 +52,7 @@ PythonExtension::PythonExtension(const std::string& module, const std::string& f
     throw std::runtime_error("Could not import Python module "+module);
   }
   //Import the function
-  PyObject *funcname = PyString_FromString(function.c_str());
+  PyObject *funcname = PyUnicode_FromString(function.c_str());
   data->pFunc = PyObject_GetAttr(data->pModule, funcname);
   Py_DECREF(funcname);
   if (!data->pFunc) {

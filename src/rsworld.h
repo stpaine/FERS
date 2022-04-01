@@ -69,7 +69,7 @@ class MultipathSurface;
     ///Process the scene to add virtual receivers and transmitters
     void ProcessMultipath();
     
-    friend void rs::RunThreadedSim(int thread_limit, World *world);
+    friend void RunThreadedSim(int thread_limit, World *world);
     friend void SimulatePair(const Transmitter *trans, Receiver *recv, const World *world);
 
   protected:    
