@@ -94,16 +94,16 @@ void rshdf5::ReadPulseData(const std::string &name, std::complex<rsFloat> **data
 }
 
 ///Open the HDF5 file for writing
-int rshdf5::CreateFile(const std::string& name)
+long int rshdf5::CreateFile(const std::string& name)
 {
   hid_t file = H5Fcreate(name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
   if (file < 0)
     throw std::runtime_error("[ERROR] Could not create HDF5 file "+name+" for export");
-  return static_cast<int>(file);
+  return static_cast<long int>(file);
 }
 
 ///Add a dataset to the HDF5 file
-void rshdf5::AddChunkToFile(int file, std::complex<rsFloat> *data, unsigned int size, rsFloat time, rsFloat rate, rsFloat fullscale, unsigned int count)
+void rshdf5::AddChunkToFile(long int file, std::complex<rsFloat> *data, unsigned int size, rsFloat time, rsFloat rate, rsFloat fullscale, unsigned int count)
 {
   //Create the name of the dataset
   std::ostringstream oss;
@@ -146,7 +146,7 @@ void rshdf5::AddChunkToFile(int file, std::complex<rsFloat> *data, unsigned int 
 }
 
 ///Close the HDF5 file
-void rshdf5::CloseFile(int file) {
+void rshdf5::CloseFile(long int file) {
   if (H5Fclose(static_cast<hid_t>(file)) < 0)
     throw std::runtime_error("[ERROR] Error while closing HDF5 file");
 }
