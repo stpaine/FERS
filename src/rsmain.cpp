@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 {
   rsDebug::printf(rsDebug::RS_CRITICAL, "/------------------------------------------------\\\n");
   rsDebug::printf(rsDebug::RS_CRITICAL, "| FERS - The Flexible Extensible Radar Simulator |\n");
-  rsDebug::printf(rsDebug::RS_CRITICAL, "| Version 0.27                                   |\n");
+  rsDebug::printf(rsDebug::RS_CRITICAL, "| Version 0.28                                   |\n");
   rsDebug::printf(rsDebug::RS_CRITICAL, "\\------------------------------------------------/\n\n");
 
   if (argc != 2 || !strncmp(argv[1], "--help", 6))
