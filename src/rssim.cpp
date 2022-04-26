@@ -93,7 +93,7 @@ void SolveRE(const Transmitter *trans, const Receiver *recv, const Target *targ,
   //See "Bistatic Doppler Equation" in doc/equations/equations.tex
   rsFloat V_r = (Rr_end-Rr)/length;
   rsFloat V_t = (Rt_end-Rt)/length;
-  results.doppler = std::sqrt((1-V_r/rsParameters::c())/(1+V_r/rsParameters::c()))*std::sqrt((1-V_t/rsParameters::c())/(1+V_t/rsParameters::c()));
+  results.doppler = std::sqrt((1+V_r/rsParameters::c())/(1-V_r/rsParameters::c()))*std::sqrt((1+V_t/rsParameters::c())/(1-V_t/rsParameters::c()));
   //Step 5, calculate system noise temperature
   //We only use the receive antenna noise temperature for now
   results.noise_temperature = recv->GetNoiseTemperature(recv->GetRotation(time+results.delay));
