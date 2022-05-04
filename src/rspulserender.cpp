@@ -35,9 +35,9 @@ using namespace rs;
 namespace {
 
   ///Open the binary file for response export
-  int OpenHDF5File(const std::string &recv_name)
+  long int OpenHDF5File(const std::string &recv_name)
   {
-    int hdf5_file = 0;
+    long int hdf5_file = 0;
     if (rs::rsParameters::export_binary()) {
       //Build the filename for the binary file
       std::ostringstream b_oss;
@@ -169,7 +169,7 @@ namespace {
     if (responses.empty())
       return;
 
-    int out_bin = OpenHDF5File(recv_name);
+    long int out_bin = OpenHDF5File(recv_name);
 
     // Create a threaded render object, to manage the rendering process
     ThreadedRenderer thr_renderer(&responses, recv, rsParameters::render_threads());
