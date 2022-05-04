@@ -8,3 +8,4 @@ tutorials/*.h5
 tutorials/*.fersxml
 
 build/
+*/venv
