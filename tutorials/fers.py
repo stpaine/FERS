@@ -240,7 +240,7 @@ class FersXMLGenerator:
     def run(self):
         # print('Launching FERS:', self.filename)        
         try:
-            sbp.run(['./server.sh'])
+            sbp.run(['fers', 'sim.fersxml'])
         except:
             print('ERROR: failed to launch - check that FERS is installed correctly.')
             exit(1)

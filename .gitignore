@@ -6,3 +6,6 @@ tutorials/.ipynb_checkpoints/*
 tutorials/__pycache__/*
 tutorials/*.h5
 tutorials/*.fersxml
+
+build/
+*/venv
