@@ -25,10 +25,6 @@ FERS was written by:
 
 Marc Brooker (marcbrooker@gmail.com)
 
-FERS is currently maintained by the following people:
-
-Craig Tong (craig.tong@uct.ac.za)
-
 #### BUILDING FERS
 
 FERS depends on a number of external libraries, which you need to install before attempting to build FERS. The libraries you need to have installed are:
