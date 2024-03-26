@@ -29,8 +29,8 @@ jobs:
 
     - name: Prepare FERS for zip
       run: |
-            mkdir /toZip
-            cp build/src/fers /toZip/fers
+            sudo mkdir /toZip
+            sudo cp build/src/fers /toZip/fers
     
     - name: Go nack to home
       run: cd ..
@@ -52,9 +52,9 @@ jobs:
 
     - name: Prepare Validator for zip
       run: |
-            cp config_validators/build/xml_validator_output /toZip/xml_validator_output
-            cp config_validators/build/kml_visualiser /toZip/kml_visualiser
-            cp config_validators/build/validator /toZip/validator
+            sudo cp config_validators/build/xml_validator_output /toZip/xml_validator_output
+            sudo cp config_validators/build/kml_visualiser /toZip/kml_visualiser
+            sudo cp config_validators/build/validator /toZip/validator
 
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
