@@ -52,7 +52,6 @@ jobs:
 
     - name: Prepare Validator for zip
       run: |
-            cd ..
             cp config_validators/build/xml_validator_output ../toZip/xml_validator_output
             cp config_validators/build/kml_visualiser ../toZip/kml_visualiser
             cp config_validators/build/validator ../toZip/validator
