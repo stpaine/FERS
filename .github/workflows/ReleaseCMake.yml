@@ -54,7 +54,7 @@ jobs:
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
       with:
-       directory: build/toZip # File to add to the archive
+       directory: /toZip # File to add to the archive
        path: ./*
        Filename: FERS.zip # The name of the archive file
 
