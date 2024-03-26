@@ -13,10 +13,11 @@ jobs:
 
     - name: Generate FERS
       run: |
+        ls -a
         mkdir build
-        ls
         cd build
-        ls
+        pwd # This will print the current working directory after cd
+        ls -a 
         cmake ../../ -D FERS_LIB_HDF5="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so" -D FERS_LIB_HDF5_HL="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so" -D CMAKE_CXX_FLAGS="-I/usr/include/hdf5/serial/" 
 
     - name: Build FERS
