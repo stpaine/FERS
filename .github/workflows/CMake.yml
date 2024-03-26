@@ -8,16 +8,30 @@ jobs:
 
     steps:
 
-    - name: Install Requried Libs
+    - name: Install Requried Libs for FERS
       run: sudo apt-get install libboost-all-dev libfftw3-dev libhdf5-dev libhdf5-serial-dev build-essential cmake cmake-qt-gui python-all-dev libtinyxml-dev
 
-    - name: Generate
+    - name: Generate FERS
       run: |
         mkdir build
         cd build
         cmake -D FERS_LIB_HDF5="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so" -D FERS_LIB_HDF5_HL="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so" -D CMAKE_CXX_FLAGS="-I/usr/include/hdf5/serial/" ../
 
-    - name: Build
+    - name: Build FERS
       run: |
         cd build
         make
+
+    - name: Install Requried Libs for validator
+      run: sudo apt install libxerces-c-dev
+    
+    - name: Generate Validator
+      run: |
+        mkdir build
+        cd build
+        cmake 
+
+    - name: Build Validator
+      run: |
+         cd build
+         make

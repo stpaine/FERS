@@ -22,10 +22,34 @@ jobs:
         cd build
         make
 
-    - name: Prepare for zip
+    - name: Prepare FERS for zip
       run: |
-        mkdir build/toZip
-        cp build/src/fers build/toZip/fers
+            mkdir build/toZip
+            cp build/src/fers ~/toZip/fers
+    
+    - name: Go nack to home
+      run: cd ~
+
+    - name: Install Requried Libs for validator
+      run: sudo apt install libxerces-c-dev
+  
+    - name: Go to valifator and generate validator
+      run: |
+        cd config_validators
+        mkdir build
+        cd build
+        cmake 
+
+    - name: Build Validator
+      run: |
+        cd config_validators/build
+        make
+
+    - name: Prepare Validator for zip
+      run: |
+            cp config_validators/build/xml_validator_output ~/toZip/xml_validator_output
+            cp config_validators/build/kml_visualiser ~/toZip/kml_visualiser
+            cp config_validators/build/validator ~/toZip/validator
 
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
