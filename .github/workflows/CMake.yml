@@ -36,6 +36,7 @@ jobs:
     
     - name: Generate Validator
       run: |
+        cd config_validators
         mkdir build
         cd build
         cmake 
