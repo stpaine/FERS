@@ -13,6 +13,8 @@ jobs:
 
     - name: Generate FERS
       run: |
+        cd ..
+        pwd
         ls -a
         mkdir build
         cd build
