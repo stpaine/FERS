@@ -11,17 +11,15 @@ jobs:
     - name: Install Requried Libs for FERS
       run: sudo apt-get install libboost-all-dev libfftw3-dev libhdf5-dev libhdf5-serial-dev build-essential cmake cmake-qt-gui python-all-dev libtinyxml-dev
 
-    - name: XDTesting Print Directory Structure
-      uses: FiorelaCiroku/XDTesting-Print-Directory-Structure@v1.0.2
-    
     - name: Generate FERS
       run: |
-        sudo mkdir build
-        sudo ls -a
+        ls -a
+        mkdir build
         cd build
-        sudo ls
-        sudo cmake ../ -D FERS_LIB_HDF5="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so" -D FERS_LIB_HDF5_HL="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so" -D CMAKE_CXX_FLAGS="-I/usr/include/hdf5/serial/" 
-    
+        pwd # This will print the current working directory after cd
+        ls -a 
+        cmake .. -D FERS_LIB_HDF5="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so" -D FERS_LIB_HDF5_HL="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so" -D CMAKE_CXX_FLAGS="-I/usr/include/hdf5/serial/" 
+
     - name: Build FERS
       run: |
         cd build
