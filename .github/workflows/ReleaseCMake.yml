@@ -60,7 +60,7 @@ jobs:
       uses: TheDoctor0/zip-release@0.7.6
       with:
        directory: ./toZip # File to add to the archive
-       path: /*
+       path: ./*
        Filename: FERS.zip # The name of the archive file
 
     - name: Upload to Release
