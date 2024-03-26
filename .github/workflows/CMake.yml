@@ -11,6 +11,9 @@ jobs:
     - name: Install Requried Libs for FERS
       run: sudo apt-get install libboost-all-dev libfftw3-dev libhdf5-dev libhdf5-serial-dev build-essential cmake cmake-qt-gui python-all-dev libtinyxml-dev
 
+    - name: XDTesting Print Directory Structure
+      uses: FiorelaCiroku/XDTesting-Print-Directory-Structure@v1.0.2
+    
     - name: Generate FERS
       run: |
         mkdir build
