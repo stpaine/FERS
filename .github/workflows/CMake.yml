@@ -39,7 +39,7 @@ jobs:
         cd config_validators
         mkdir build
         cd build
-        cmake 
+        cmake ..
 
     - name: Build Validator
       run: |
