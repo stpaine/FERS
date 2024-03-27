@@ -1,12 +1,19 @@
 name: C++ Build on Linux
 
-on: [push]
+on:
+  release:
+    types: [published]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+       
+    - name: Checkout project and submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
 
     - name: Install Requried Libs
       run: sudo apt-get install libboost-all-dev libfftw3-dev libhdf5-dev libhdf5-serial-dev build-essential cmake cmake-qt-gui python-all-dev libtinyxml-dev
@@ -24,11 +31,11 @@ jobs:
 
     - name: Prepare FERS for zip
       run: |
-            mkdir build/toZip
-            cp build/src/fers ~/toZip/fers
+            mkdir ./toZip
+            cp build/src/fers ./toZip/fers
     
     - name: Go nack to home
-      run: cd ~
+      run: cd ..
 
     - name: Install Requried Libs for validator
       run: sudo apt install libxerces-c-dev
@@ -38,7 +45,7 @@ jobs:
         cd config_validators
         mkdir build
         cd build
-        cmake 
+        cmake ..
 
     - name: Build Validator
       run: |
@@ -47,14 +54,14 @@ jobs:
 
     - name: Prepare Validator for zip
       run: |
-            cp config_validators/build/xml_validator_output ~/toZip/xml_validator_output
-            cp config_validators/build/kml_visualiser ~/toZip/kml_visualiser
-            cp config_validators/build/validator ~/toZip/validator
+            sudo cp config_validators/build/xml_validator_output ./toZip/xml_validator_output
+            sudo cp config_validators/build/kml_visualiser ./toZip/kml_visualiser
+            sudo cp config_validators/build/validator ./toZip/validator
 
     - name: Zip Docs and Build
       uses: TheDoctor0/zip-release@0.7.6
       with:
-       directory: /toZip # File to add to the archive
+       directory: ./toZip # File to add to the archive
        path: ./*
        Filename: FERS.zip # The name of the archive file
 
@@ -62,6 +69,6 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          build/toZip/FERS.zip
+          ./toZip/FERS.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
