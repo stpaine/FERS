@@ -13,6 +13,9 @@ jobs:
       with:
         submodules: recursive
         
+    - name: Update
+      run: apt-get update 
+
     - name: Install Requried Libs for FERS
       run: sudo apt-get install libboost-all-dev libfftw3-dev libhdf5-dev libhdf5-serial-dev build-essential cmake cmake-qt-gui python-all-dev libtinyxml-dev
 
