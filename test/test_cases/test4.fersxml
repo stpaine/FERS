@@ -1,6 +1,6 @@
 <!-- Test bistatic radar. One receiver, one transmitter and a moving target. -->
 <?xml version="1.0" ?>
-<!DOCTYPE simulation SYSTEM "../../fers-xml.dtd">
+<!DOCTYPE simulation SYSTEM "../../xml_schema/fers-xml.dtd">
 <simulation name="sim1">
   <parameters>
     <starttime>0</starttime>
