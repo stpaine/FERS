@@ -7,15 +7,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
+    
+    - name: Checkout project and submodules
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+        
     - name: Install Requried Libs for FERS
       run: sudo apt-get install libboost-all-dev libfftw3-dev libhdf5-dev libhdf5-serial-dev build-essential cmake cmake-qt-gui python-all-dev libtinyxml-dev
 
     - name: Generate FERS
       run: |
+        ls -a
         mkdir build
         cd build
-        cmake -D FERS_LIB_HDF5="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so" -D FERS_LIB_HDF5_HL="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so" -D CMAKE_CXX_FLAGS="-I/usr/include/hdf5/serial/" ../
+        pwd # This will print the current working directory after cd
+        ls -a 
+        cmake -S .. -B . -D FERS_LIB_HDF5="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so" -D FERS_LIB_HDF5_HL="/usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5_hl.so" -D CMAKE_CXX_FLAGS="-I/usr/include/hdf5/serial/" 
 
     - name: Build FERS
       run: |
@@ -27,9 +35,10 @@ jobs:
     
     - name: Generate Validator
       run: |
+        cd config_validators
         mkdir build
         cd build
-        cmake 
+        cmake ..
 
     - name: Build Validator
       run: |
