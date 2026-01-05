@@ -7,13 +7,13 @@
 #-----------------------------------------------------------------------
 # Owner for critical repo-wide configuration, community files, and CI/CD workflows.
 # This ensures changes to the contribution process or build system are reviewed.
-/.github/                               @the-user-created
-.clang-format                           @the-user-created
-.gitattributes                          @the-user-created
-.gitignore                              @the-user-created
-.gitmodules                             @the-user-created
-LICENSE                                 @the-user-created
-README.md                               @the-user-created
+/.github/                               @davidbits
+.clang-format                           @davidbits
+.gitattributes                          @davidbits
+.gitignore                              @davidbits
+.gitmodules                             @davidbits
+LICENSE                                 @davidbits
+README.md                               @davidbits
 
 
 #-----------------------------------------------------------------------
@@ -22,13 +22,13 @@ README.md                               @the-user-created
 
 # The core C++ radar simulation engine.
 # Includes all source code, CMake build files, and tests.
-/packages/fers/                         @the-user-created
+/packages/fers/                         @davidbits
 
 # The Tauri/React graphical user interface.
 # Includes the frontend React code and the backend Rust/Tauri code.
-/packages/fers-ui/                      @the-user-created
+/packages/fers-ui/                      @davidbits
 
 # The shared XML schema.
 # Changes here can affect both the core simulator and the UI,
 # so they require careful review.
-/packages/schema/                       @the-user-created
+/packages/schema/                       @davidbits

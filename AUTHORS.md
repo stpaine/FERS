@@ -18,7 +18,7 @@ The foundational work on FERS was done as part of a PhD dissertation at the Univ
 
 The project was significantly modernized, refactored, and expanded from 2024 onwards by its current lead maintainer.
 
-- David Young (the-user-created)
+- David Young (davidbits)
 
 ## Project Supervision
 

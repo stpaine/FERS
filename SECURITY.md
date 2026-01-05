@@ -22,7 +22,7 @@ If you believe you have found a security vulnerability, please report it private
 vulnerability reporting** feature. This ensures the issue can be investigated and addressed before it becomes public
 knowledge.
 
-**➡️ [Report a vulnerability here](https://github.com/the-user-created/FERS/security/advisories/new)**
+**➡️ [Report a vulnerability here](https://github.com/davidbits/FERS/security/advisories/new)**
 
 You can find detailed instructions on the process in GitHub's
 documentation: "[Privately reporting a security vulnerability](https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing/privately-reporting-a-security-vulnerability)".
@@ -51,7 +51,7 @@ user-provided input files.
 ### Out of Scope (Considered a Bug, Not a Security Vulnerability)
 
 - The simulator crashing on a malformed or invalid (but not maliciously crafted) `.fersxml` file. Please report these as
-  regular [bug reports](https://github.com/the-user-created/FERS/issues/new/choose).
+  regular [bug reports](https://github.com/davidbits/FERS/issues/new/choose).
 - The simulator producing scientifically incorrect results. This is a correctness issue and should also be reported as a
   bug.
 

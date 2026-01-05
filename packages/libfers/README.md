@@ -1,7 +1,7 @@
 # libfers: The FERS Core Simulation Library
 
-[![Build Status](https://github.com/the-user-created/FERS/actions/workflows/CMake.yml/badge.svg)](https://github.com/the-user-created/FERS/actions/workflows/CMake.yml)
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/the-user-created/FERS/blob/master/LICENSE)
+[![Build Status](https://github.com/davidbits/FERS/actions/workflows/CMake.yml/badge.svg)](https://github.com/davidbits/FERS/actions/workflows/CMake.yml)
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/davidbits/FERS/blob/master/LICENSE)
 
 **libfers** is the core C++ simulation engine for the **Flexible Extensible Radar Simulator (FERS)**. It contains all
 the logic for parsing scenarios, modeling physics, executing simulations, and processing output data.
@@ -104,7 +104,7 @@ sudo ldconfig # On Linux, to update the cache
 
 ## Documentation
 
-The source code documentation is automatically built and deployed to our [GitHub Pages site](https://the-user-created.github.io/FERS/). If you wish to build it locally, you will need **Doxygen** and **Graphviz** installed. They are included in the dependency installation commands above.
+The source code documentation is automatically built and deployed to our [GitHub Pages site](https://davidbits.github.io/FERS/). If you wish to build it locally, you will need **Doxygen** and **Graphviz** installed. They are included in the dependency installation commands above.
 
 1. **Configure with documentation enabled:**
 

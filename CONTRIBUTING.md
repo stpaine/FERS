@@ -31,9 +31,9 @@ You can contribute in many ways:
 
 ## Reporting Bugs
 
-If you find a bug, please check the [existing issues](https://github.com/the-user-created/FERS/issues) to see if it has
+If you find a bug, please check the [existing issues](https://github.com/davidbits/FERS/issues) to see if it has
 already been reported. If not,
-please [open a new bug report](https://github.com/the-user-created/FERS/issues/new/choose).
+please [open a new bug report](https://github.com/davidbits/FERS/issues/new/choose).
 
 When filing a bug report, please include as many details as possible:
 
@@ -46,8 +46,8 @@ When filing a bug report, please include as many details as possible:
 ## Suggesting Enhancements
 
 If you have an idea for a new feature or an improvement, we'd love to hear about it! Please check
-the [existing issues and feature requests](https://github.com/the-user-created/FERS/issues) first. If your idea is new,
-please [open a new feature request](https://github.com/the-user-created/FERS/issues/new/choose).
+the [existing issues and feature requests](https://github.com/davidbits/FERS/issues) first. If your idea is new,
+please [open a new feature request](https://github.com/davidbits/FERS/issues/new/choose).
 
 Provide a clear description of the proposed enhancement and explain the problem it solves or the value it adds.
 
@@ -56,9 +56,9 @@ Provide a clear description of the proposed enhancement and explain the problem 
 Unsure where to begin contributing to FERS? You can start by looking through `good first issue` and `help wanted`
 issues:
 
-- [Good First Issues](https://github.com/the-user-created/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) - issues
+- [Good First Issues](https://github.com/davidbits/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) - issues
   which should only require a few lines of code, and a test or two.
-- [Help Wanted Issues](https://github.com/the-user-created/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) - issues which
+- [Help Wanted Issues](https://github.com/davidbits/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) - issues which
   should be a bit more involved than `good first issue` issues.
 
 ## Development Setup
@@ -71,7 +71,7 @@ on.
 The core simulator is written in C++.
 
 1. **Prerequisites**: Ensure you have a C++23 compiler, CMake, `libhdf5`, and `libxml2`.
-2. **Clone the repo**: `git clone --recursive https://github.com/the-user-created/FERS.git`
+2. **Clone the repo**: `git clone --recursive https://github.com/davidbits/FERS.git`
 3. **Build**: Follow the detailed build instructions in the [`packages/fers/README.md`](packages/fers/README.md).
 
 ### User Interface (`fers-ui`) Setup

@@ -2,10 +2,10 @@
 
 <!-- TODO: Build status should be present for both ui and core -->
 
-[![FERS Core CI](https://github.com/the-user-created/FERS/actions/workflows/CMake.yml/badge.svg)](https://github.com/the-user-created/FERS/actions/workflows/CMake.yml)
-[![Documentation](https://github.com/the-user-created/FERS/actions/workflows/docs.yml/badge.svg)](https://github.com/the-user-created/FERS/actions/workflows/docs.yml)
-[![GitHub issues](https://img.shields.io/github/issues/the-user-created/FERS.svg)](https://github.com/the-user-created/FERS/issues)
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/the-user-created/FERS/blob/master/LICENSE)
+[![FERS Core CI](https://github.com/davidbits/FERS/actions/workflows/CMake.yml/badge.svg)](https://github.com/davidbits/FERS/actions/workflows/CMake.yml)
+[![Documentation](https://github.com/davidbits/FERS/actions/workflows/docs.yml/badge.svg)](https://github.com/davidbits/FERS/actions/workflows/docs.yml)
+[![GitHub issues](https://img.shields.io/github/issues/davidbits/FERS.svg)](https://github.com/davidbits/FERS/issues)
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/davidbits/FERS/blob/master/LICENSE)
 
 ![Tech Stack](https://img.shields.io/badge/Core-C%2B%2B%2023-00599C?logo=cplusplus)
 ![Tech Stack](https://img.shields.io/badge/UI-Tauri%20%7C%20React-20232A?logo=react)
@@ -28,7 +28,7 @@ semi-independent packages.
 - **Advanced Data Export:** Output simulation data in HDF5, CSV, and XML formats for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and
-  deployed [documentation site](https://the-user-created.github.io/FERS/)
+  deployed [documentation site](https://davidbits.github.io/FERS/)
   with a searchable interface, generated directly from the source code.
 - **Unified Schema:** A central XML schema ensures consistency and serves as the single source of truth for scenarios
   across the simulator and the UI.
@@ -65,7 +65,7 @@ Ensure you have the following tools installed on your system:
 Clone the repository and its submodules from the root of the monorepo.
 
 ```bash
-git clone --recursive https://github.com/the-user-created/FERS.git
+git clone --recursive https://github.com/davidbits/FERS.git
 cd FERS
 ```
 
@@ -138,16 +138,16 @@ installed.
 - Copyright (C) 2008-present FERS contributors (see [AUTHORS.md](AUTHORS.md)).
 
 This program is free software; you can redistribute it and/or modify it under the terms of the
-[GNU General Public License](https://github.com/the-user-created/FERS/blob/master/LICENSE) as published by the Free
+[GNU General Public License](https://github.com/davidbits/FERS/blob/master/LICENSE) as published by the Free
 Software Foundation; version 2 of the License.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
-the [GNU General Public License](https://github.com/the-user-created/FERS/blob/master/LICENSE) for
+the [GNU General Public License](https://github.com/davidbits/FERS/blob/master/LICENSE) for
 more details.
 
 You should have received a copy of
-the [GNU General Public License](https://github.com/the-user-created/FERS/blob/master/LICENSE) along with this program;
+the [GNU General Public License](https://github.com/davidbits/FERS/blob/master/LICENSE) along with this program;
 if not, write to
 the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 

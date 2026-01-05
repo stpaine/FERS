@@ -1,6 +1,6 @@
 # FERS-CLI: Command-Line Interface for FERS
 
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/the-user-created/FERS/blob/master/LICENSE)
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/davidbits/FERS/blob/master/LICENSE)
 
 **FERS-CLI** is the command-line interface for the FERS simulation engine. It is a lightweight executable that acts as a
 client to the core `libfers` library.
@@ -19,7 +19,7 @@ terminal and to maintain backward compatibility with the original FERS workflow.
 ## Building
 
 The `fers-cli` executable is built as part of the main C++ build process for the monorepo. Please see the build
-instructions in the [`packages/libfers/README.md`](https://github.com/the-user-created/FERS/blob/master/packages/libfers/README.md) file.
+instructions in the [`packages/libfers/README.md`](https://github.com/davidbits/FERS/blob/master/packages/libfers/README.md) file.
 
 After a successful build, the executable can be found at `build/packages/fers-cli/fers-cli`.
 
