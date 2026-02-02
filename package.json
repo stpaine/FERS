@@ -18,7 +18,7 @@
         "eslint": "^9.39.2",
         "husky": "^9.1.7",
         "lint-staged": "^16.2.7",
-        "prettier": "^3.7.4"
+        "prettier": "^3.8.1"
     },
     "lint-staged": {
         "*.{md,json,yml,yaml}": "prettier --write",

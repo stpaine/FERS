@@ -7,9 +7,9 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { Canvas } from '@react-three/fiber';
 import {
     Panel,
-    PanelGroup,
-    PanelResizeHandle,
-    type ImperativePanelGroupHandle,
+    Group,
+    Separator,
+    type GroupImperativeHandle,
 } from 'react-resizable-panels';
 import WorldView from '@/components/WorldView';
 import SceneTree from '@/components/SceneTree';
@@ -26,7 +26,7 @@ import { fersColors } from '@/theme';
  */
 function ResizeHandle() {
     return (
-        <PanelResizeHandle>
+        <Separator>
             <Box
                 sx={{
                     width: '2px',
@@ -41,7 +41,7 @@ function ResizeHandle() {
                     },
                 }}
             />
-        </PanelResizeHandle>
+        </Separator>
     );
 }
 
@@ -51,7 +51,7 @@ function ResizeHandle() {
 export const ScenarioView = React.memo(function ScenarioView() {
     const isSimulating = useScenarioStore((state) => state.isSimulating);
     const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
-    const panelGroupRef = useRef<ImperativePanelGroupHandle>(null);
+    const panelGroupRef = useRef<GroupImperativeHandle>(null);
 
     // 1. Lift refs to this level to bridge Logic (Canvas) and UI (DOM)
     const controlsRef = useRef<MapControlsImpl>(null);
@@ -60,7 +60,11 @@ export const ScenarioView = React.memo(function ScenarioView() {
 
     const handleExpandInspector = () => {
         // Restore panels to their default sizes: [SceneTree, Main, Inspector]
-        panelGroupRef.current?.setLayout([25, 50, 25]);
+        panelGroupRef.current?.setLayout({
+            'scene-tree': 25,
+            'main-content': 50,
+            'property-inspector': 25,
+        });
     };
 
     return (
@@ -77,14 +81,23 @@ export const ScenarioView = React.memo(function ScenarioView() {
                 WebkitUserSelect: 'none',
             }}
         >
-            <PanelGroup direction="horizontal" ref={panelGroupRef}>
-                <Panel id="scene-tree" defaultSize={25} minSize={20} order={1}>
+            <Group
+                orientation="horizontal"
+                groupRef={panelGroupRef}
+                defaultLayout={{
+                    'scene-tree': 25,
+                    'main-content': 50,
+                    'property-inspector': 25,
+                }}
+                style={{ height: '100%', width: '100%' }}
+            >
+                <Panel id="scene-tree" defaultSize={25} minSize={20}>
                     <SceneTree />
                 </Panel>
 
                 <ResizeHandle />
 
-                <Panel id="main-content" minSize={30} order={2}>
+                <Panel id="main-content" minSize={30}>
                     <Box
                         sx={{
                             height: '100%',
@@ -198,15 +211,15 @@ export const ScenarioView = React.memo(function ScenarioView() {
                     id="property-inspector"
                     collapsible
                     collapsedSize={0}
-                    onCollapse={() => setIsInspectorCollapsed(true)}
-                    onExpand={() => setIsInspectorCollapsed(false)}
+                    onResize={(size) =>
+                        setIsInspectorCollapsed(size.asPercentage === 0)
+                    }
                     defaultSize={25}
                     minSize={5}
-                    order={3}
                 >
                     <PropertyInspector />
                 </Panel>
-            </PanelGroup>
+            </Group>
 
             {isInspectorCollapsed && (
                 <Tooltip title="Show Properties">
