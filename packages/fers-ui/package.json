@@ -22,9 +22,9 @@
         "@emotion/react": "^11.14.0",
         "@emotion/styled": "^11.14.1",
         "@fontsource/roboto": "^5.2.9",
-        "@mui/icons-material": "^7.3.7",
-        "@mui/material": "^7.3.7",
-        "@mui/x-tree-view": "^8.27.0",
+        "@mui/icons-material": "^7.3.8",
+        "@mui/material": "^7.3.8",
+        "@mui/x-tree-view": "^8.27.1",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.5.0",
         "@tauri-apps/api": "^2.10.1",
@@ -34,8 +34,8 @@
         "immer": "^11.1.4",
         "react": "^19.2.4",
         "react-dom": "^19.2.4",
-        "react-resizable-panels": "^4.6.2",
-        "three": "^0.182.0",
+        "react-resizable-panels": "^4.6.4",
+        "three": "^0.183.0",
         "three-stdlib": "^2.36.1",
         "uuid": "^13.0.0",
         "zod": "^4.3.6",
@@ -44,7 +44,7 @@
     "devDependencies": {
         "@eslint/js": "^9.39.2",
         "@tauri-apps/cli": "^2.10.0",
-        "@types/react": "^19.2.13",
+        "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.182.0",
         "@vitejs/plugin-react": "^5.1.4",
@@ -56,9 +56,9 @@
         "globals": "^17.3.0",
         "prettier": "^3.8.1",
         "typescript": "~5.9.3",
-        "typescript-eslint": "^8.55.0",
+        "typescript-eslint": "^8.56.0",
         "vite": "^7.3.1",
-        "vite-tsconfig-paths": "^6.1.0"
+        "vite-tsconfig-paths": "^6.1.1"
     },
     "packageManager": "pnpm@10.29.2+sha512.bef43fa759d91fd2da4b319a5a0d13ef7a45bb985a3d7342058470f9d2051a3ba8674e629672654686ef9443ad13a82da2beb9eeb3e0221c87b8154fff9d74b8"
 }
