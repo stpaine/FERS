@@ -23,6 +23,7 @@
 #include <memory>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 #include "math/geometry_ops.h"
 
 namespace core
@@ -190,9 +191,9 @@ namespace simulation
 		LinkType type;
 		LinkQuality quality;
 		std::string label;
-		std::string source_name; // The start of this specific link segment
-		std::string dest_name; // The end of this specific link segment
-		std::string origin_name; // The original source of energy (Transmitter)
+		SimId source_id; // The start of this specific link segment
+		SimId dest_id; // The end of this specific link segment
+		SimId origin_id; // The original source of energy (Transmitter)
 	};
 
 	/**

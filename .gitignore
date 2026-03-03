@@ -17,3 +17,5 @@ venv
 
 cmake-build-*/
 node_modules/
+
+.cache

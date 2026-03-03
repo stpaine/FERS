@@ -2,6 +2,7 @@
 #define FERS_API_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -284,7 +285,7 @@ typedef struct
  * This is a stateless utility useful for UI previews and analysis.
  *
  * @param context A valid `fers_context_t` handle containing a loaded scenario with the antenna.
- * @param antenna_name The name of the antenna asset to sample.
+ * @param antenna_id The unique ID of the antenna asset to sample.
  * @param az_samples The desired number of sample points along the azimuth axis.
  * @param el_samples The desired number of sample points along the elevation axis.
  * @param frequency_hz The frequency in Hz to use for gain calculation (affects aperture antennas).
@@ -292,7 +293,7 @@ typedef struct
  *         Returns NULL on failure (e.g., antenna not found). The caller owns the
  *         returned struct and must free it with `fers_free_antenna_pattern_data`.
  */
-fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* context, const char* antenna_name,
+fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* context, uint64_t antenna_id,
 													  size_t az_samples, size_t el_samples, double frequency_hz);
 
 /**
@@ -462,9 +463,9 @@ typedef struct
 	fers_link_type_t type; /**< Type of the link (Monostatic, Bistatic, etc.). */
 	fers_link_quality_t quality; /**< Signal quality (Strong/Weak). */
 	char label[128]; /**< Pre-formatted label (e.g., "-95 dBm"). */
-	char source_name[64]; /**< Name of the source component (e.g. Transmitter). */
-	char dest_name[64]; /**< Name of the destination component (e.g. Receiver/Target). */
-	char origin_name[64]; /**< Name of the originating Transmitter (for scattered paths). */
+	uint64_t source_id; /**< ID of the source component (e.g. Transmitter). */
+	uint64_t dest_id; /**< ID of the destination component (e.g. Receiver/Target). */
+	uint64_t origin_id; /**< ID of the originating Transmitter (for scattered paths). */
 } fers_visual_link_t;
 
 /**

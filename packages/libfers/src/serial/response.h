@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 #include "interpolation/interpolation_point.h"
 
 class XmlElement;
@@ -96,11 +97,11 @@ namespace serial
 		[[nodiscard]] RealType getLength() const noexcept { return endTime() - startTime(); }
 
 		/**
-		 * @brief Retrieves the name of the associated transmitter.
+		 * @brief Retrieves the ID of the associated transmitter.
 		 *
-		 * @return The name of the transmitter as a `std::string`.
+		 * @return The transmitter SimId.
 		 */
-		[[nodiscard]] std::string getTransmitterName() const noexcept;
+		[[nodiscard]] SimId getTransmitterId() const noexcept;
 
 	private:
 		const radar::Transmitter* _transmitter; ///< Pointer to the transmitter object.

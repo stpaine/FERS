@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 
 namespace interp
 {
@@ -131,7 +132,7 @@ namespace fers_signal
 		 * @throws std::runtime_error if the signal is null.
 		 */
 		RadarSignal(std::string name, RealType power, RealType carrierfreq, RealType length,
-					std::unique_ptr<Signal> signal);
+					std::unique_ptr<Signal> signal, const SimId id = 0);
 
 		~RadarSignal() = default;
 
@@ -177,6 +178,13 @@ namespace fers_signal
 		[[nodiscard]] const std::string& getName() const noexcept { return _name; }
 
 		/**
+		 * @brief Gets the unique ID of the radar signal.
+		 *
+		 * @return The radar signal SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return _id; }
+
+		/**
 		 * @brief Gets the sample rate of the radar signal.
 		 *
 		 * @return The sample rate of the radar signal.
@@ -209,6 +217,7 @@ namespace fers_signal
 
 	private:
 		std::string _name; ///< The name of the radar signal.
+		SimId _id; ///< Unique ID for this radar signal.
 		RealType _power; ///< The power of the radar signal.
 		RealType _carrierfreq; ///< The carrier frequency of the radar signal.
 		RealType _length; ///< The length of the radar signal.

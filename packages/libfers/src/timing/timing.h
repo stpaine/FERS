@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 #include "noise/noise_generators.h"
 
 namespace timing
@@ -39,7 +40,7 @@ namespace timing
 		 * @param name The name of the timing source.
 		 * @param seed The seed for the timing source's internal random number generator.
 		 */
-		explicit Timing(std::string name, unsigned seed) noexcept;
+		explicit Timing(std::string name, unsigned seed, const SimId id = 0) noexcept;
 
 		~Timing() = default;
 
@@ -64,6 +65,14 @@ namespace timing
 		 * @return The name of the timing source.
 		 */
 		[[nodiscard]] std::string getName() const noexcept { return _name; }
+
+
+		/**
+		 * @brief Gets the unique ID of the timing source.
+		 *
+		 * @return The timing source SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return _id; }
 
 		/**
 		 * @brief Checks if the timing source synchronizes on pulse.
@@ -133,6 +142,7 @@ namespace timing
 
 	private:
 		std::string _name; ///< The name of the timing source.
+		SimId _id; ///< Unique ID for this timing source.
 		bool _enabled{false}; ///< Flag indicating if the timing source is enabled.
 		std::unique_ptr<noise::ClockModelGenerator> _model{nullptr}; ///< Noise generator model for the timing source.
 		std::vector<RealType> _alphas; ///< The alpha values for the noise generator model.

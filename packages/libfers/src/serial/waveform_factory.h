@@ -16,6 +16,7 @@
 #include <string>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 
 namespace fers_signal
 {
@@ -34,6 +35,8 @@ namespace serial
 	 * @return A unique pointer to a RadarSignal object loaded with the waveform data.
 	 * @throws std::runtime_error If the file cannot be opened or the file format is unrecognized.
 	 */
-	[[nodiscard]] std::unique_ptr<fers_signal::RadarSignal>
-	loadWaveformFromFile(const std::string& name, const std::string& filename, RealType power, RealType carrierFreq);
+	[[nodiscard]] std::unique_ptr<fers_signal::RadarSignal> loadWaveformFromFile(const std::string& name,
+																				 const std::string& filename,
+																				 RealType power, RealType carrierFreq,
+																				 const SimId id = 0);
 }

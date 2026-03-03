@@ -12,6 +12,7 @@
 
 #include <core/logging.h>
 #include <core/parameters.h>
+#include <core/sim_id.h>
 #include <cstring>
 #include <functional>
 #include <libfers/api.h>
@@ -625,14 +626,14 @@ void fers_free_interpolated_rotation_path(fers_interpolated_rotation_path_t* pat
 
 // --- Antenna Pattern Implementation ---
 
-fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* context, const char* antenna_name,
+fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* context, const uint64_t antenna_id,
 													  const size_t az_samples, const size_t el_samples,
 													  const double frequency_hz)
 {
 	last_error_message.clear();
-	if (!context || !antenna_name || az_samples == 0 || el_samples == 0)
+	if (!context || az_samples == 0 || el_samples == 0)
 	{
-		last_error_message = "Invalid arguments: context, antenna_name, or sample counts are invalid.";
+		last_error_message = "Invalid arguments: context or sample counts are invalid.";
 		LOG(logging::Level::ERROR, last_error_message);
 		return nullptr;
 	}
@@ -640,11 +641,11 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 	try
 	{
 		const auto* ctx = reinterpret_cast<const FersContext*>(context);
-		antenna::Antenna* ant = ctx->getWorld()->findAntenna(antenna_name);
+		antenna::Antenna* ant = ctx->getWorld()->findAntenna(static_cast<SimId>(antenna_id));
 
 		if (!ant)
 		{
-			last_error_message = "Antenna '" + std::string(antenna_name) + "' not found in the world.";
+			last_error_message = "Antenna ID '" + std::to_string(antenna_id) + "' not found in the world.";
 			LOG(logging::Level::ERROR, last_error_message);
 			return nullptr;
 		}
@@ -773,14 +774,9 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 				std::strncpy(dst.label, src.label.c_str(), sizeof(dst.label) - 1);
 				dst.label[sizeof(dst.label) - 1] = '\0';
 
-				std::strncpy(dst.source_name, src.source_name.c_str(), sizeof(dst.source_name) - 1);
-				dst.source_name[sizeof(dst.source_name) - 1] = '\0';
-
-				std::strncpy(dst.dest_name, src.dest_name.c_str(), sizeof(dst.dest_name) - 1);
-				dst.dest_name[sizeof(dst.dest_name) - 1] = '\0';
-
-				std::strncpy(dst.origin_name, src.origin_name.c_str(), sizeof(dst.origin_name) - 1);
-				dst.origin_name[sizeof(dst.origin_name) - 1] = '\0';
+				dst.source_id = static_cast<uint64_t>(src.source_id);
+				dst.dest_id = static_cast<uint64_t>(src.dest_id);
+				dst.origin_id = static_cast<uint64_t>(src.origin_id);
 			}
 		}
 		else

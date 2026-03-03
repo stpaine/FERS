@@ -24,6 +24,7 @@
 
 #include "core/config.h"
 #include "core/parameters.h"
+#include "core/sim_id.h"
 #include "hdf5_handler.h"
 #include "signal/radar_signal.h"
 
@@ -44,15 +45,15 @@ namespace
 	 */
 	std::unique_ptr<RadarSignal> loadWaveformFromHdf5File(const std::string& name,
 														  const std::filesystem::path& filepath, const RealType power,
-														  const RealType carrierFreq)
+														  const RealType carrierFreq, const SimId id)
 	{
 		std::vector<ComplexType> data;
 		serial::readPulseData(filepath.string(), data);
 
 		auto signal = std::make_unique<Signal>();
 		signal->load(data, data.size(), params::rate());
-		return std::make_unique<RadarSignal>(name, power, carrierFreq,
-											 static_cast<RealType>(data.size()) / params::rate(), std::move(signal));
+		return std::make_unique<RadarSignal>(
+			name, power, carrierFreq, static_cast<RealType>(data.size()) / params::rate(), std::move(signal), id);
 	}
 
 	/**
@@ -66,7 +67,8 @@ namespace
 	 * @throws std::runtime_error If the file cannot be opened or the file format is unrecognized.
 	 */
 	std::unique_ptr<RadarSignal> loadWaveformFromCsvFile(const std::string& name, const std::filesystem::path& filepath,
-														 const RealType power, const RealType carrierFreq)
+														 const RealType power, const RealType carrierFreq,
+														 const SimId id)
 	{
 		std::ifstream ifile(filepath);
 		if (!ifile)
@@ -94,7 +96,7 @@ namespace
 
 		auto signal = std::make_unique<Signal>();
 		signal->load(data, length, rate);
-		return std::make_unique<RadarSignal>(name, power, carrierFreq, rlength / rate, std::move(signal));
+		return std::make_unique<RadarSignal>(name, power, carrierFreq, rlength / rate, std::move(signal), id);
 	}
 
 	/**
@@ -113,20 +115,20 @@ namespace
 namespace serial
 {
 	std::unique_ptr<RadarSignal> loadWaveformFromFile(const std::string& name, const std::string& filename,
-													  const RealType power, const RealType carrierFreq)
+													  const RealType power, const RealType carrierFreq, const SimId id)
 	{
 		const std::filesystem::path filepath = filename;
 		const auto extension = filepath.extension().string();
 
 		if (hasExtension(extension, ".csv"))
 		{
-			auto wave = loadWaveformFromCsvFile(name, filepath, power, carrierFreq);
+			auto wave = loadWaveformFromCsvFile(name, filepath, power, carrierFreq, id);
 			wave->setFilename(filename);
 			return wave;
 		}
 		if (hasExtension(extension, ".h5"))
 		{
-			auto wave = loadWaveformFromHdf5File(name, filepath, power, carrierFreq);
+			auto wave = loadWaveformFromHdf5File(name, filepath, power, carrierFreq, id);
 			wave->setFilename(filename);
 			return wave;
 		}

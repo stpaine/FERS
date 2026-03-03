@@ -17,6 +17,7 @@
 
 #include "antenna/antenna_factory.h"
 #include "core/sim_events.h"
+#include "core/sim_id.h"
 #include "parameters.h"
 #include "radar/radar_obj.h"
 #include "signal/radar_signal.h"
@@ -42,44 +43,50 @@ namespace core
 
 	void World::add(std::unique_ptr<RadarSignal> waveform)
 	{
-		if (_waveforms.contains(waveform->getName()))
+		const SimId id = waveform->getId();
+		if (_waveforms.contains(id))
 		{
-			throw std::runtime_error("A waveform with the name " + waveform->getName() + " already exists.");
+			throw std::runtime_error("A waveform with the ID " + std::to_string(id) + " already exists.");
 		}
-		_waveforms[waveform->getName()] = std::move(waveform);
+		_waveforms[id] = std::move(waveform);
 	}
 
 	void World::add(std::unique_ptr<Antenna> antenna)
 	{
-		if (_antennas.contains(antenna->getName()))
+		const SimId id = antenna->getId();
+		if (_antennas.contains(id))
 		{
-			throw std::runtime_error("An antenna with the name " + antenna->getName() + " already exists.");
+			throw std::runtime_error("An antenna with the ID " + std::to_string(id) + " already exists.");
 		}
-		_antennas[antenna->getName()] = std::move(antenna);
+		_antennas[id] = std::move(antenna);
 	}
 
 	void World::add(std::unique_ptr<PrototypeTiming> timing)
 	{
-		if (_timings.contains(timing->getName()))
+		const SimId id = timing->getId();
+		if (_timings.contains(id))
 		{
-			throw std::runtime_error("A timing source with the name " + timing->getName() + " already exists.");
+			throw std::runtime_error("A timing source with the ID " + std::to_string(id) + " already exists.");
 		}
-		_timings[timing->getName()] = std::move(timing);
+		_timings[id] = std::move(timing);
 	}
 
-	RadarSignal* World::findWaveform(const std::string& name)
+	RadarSignal* World::findWaveform(const SimId id)
 	{
-		return _waveforms.contains(name) ? _waveforms[name].get() : nullptr;
+		const auto it = _waveforms.find(id);
+		return it != _waveforms.end() ? it->second.get() : nullptr;
 	}
 
-	Antenna* World::findAntenna(const std::string& name)
+	Antenna* World::findAntenna(const SimId id)
 	{
-		return _antennas.contains(name) ? _antennas[name].get() : nullptr;
+		const auto it = _antennas.find(id);
+		return it != _antennas.end() ? it->second.get() : nullptr;
 	}
 
-	PrototypeTiming* World::findTiming(const std::string& name)
+	PrototypeTiming* World::findTiming(const SimId id)
 	{
-		return _timings.contains(name) ? _timings[name].get() : nullptr;
+		const auto it = _timings.find(id);
+		return it != _timings.end() ? it->second.get() : nullptr;
 	}
 
 	void World::clear() noexcept

@@ -20,8 +20,10 @@
 
 namespace radar
 {
-	Receiver::Receiver(Platform* platform, std::string name, const unsigned seed, const OperationMode mode) noexcept :
-		Radar(platform, std::move(name)), _mode(mode), _rng(seed)
+	Receiver::Receiver(Platform* platform, std::string name, const unsigned seed, const OperationMode mode,
+					   const SimId id) noexcept :
+		Radar(platform, std::move(name), id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Receiver) : id),
+		_mode(mode), _rng(seed)
 	{
 	}
 

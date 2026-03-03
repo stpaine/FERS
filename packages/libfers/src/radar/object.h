@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "core/sim_id.h"
 #include "platform.h"
 
 namespace radar
@@ -29,7 +30,10 @@ namespace radar
 		 * @param platform Pointer to the Platform object associated with this Object.
 		 * @param name The name of the Object.
 		 */
-		Object(Platform* platform, std::string name) noexcept : _platform(platform), _name(std::move(name)) {}
+		Object(Platform* platform, std::string name, const ObjectType type, const SimId id = 0) noexcept :
+			_platform(platform), _id(id == 0 ? SimIdGenerator::instance().generateId(type) : id), _name(std::move(name))
+		{
+		}
 
 		virtual ~Object() = default;
 		Object(const Object&) = delete;
@@ -61,6 +65,13 @@ namespace radar
 		[[nodiscard]] Platform* getPlatform() const noexcept { return _platform; }
 
 		/**
+		 * @brief Retrieves the unique ID of the object.
+		 *
+		 * @return The unique SimId of the object.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return _id; }
+
+		/**
 		 * @brief Retrieves the name of the object.
 		 *
 		 * @return A const reference to the string representing the object's name.
@@ -69,6 +80,7 @@ namespace radar
 
 	private:
 		Platform* _platform; ///< Pointer to the Platform object associated with this Object.
+		SimId _id; ///< Unique ID for this object.
 		std::string _name; ///< The name of the Object.
 	};
 }

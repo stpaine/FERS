@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 
 namespace timing
 {
@@ -33,7 +34,10 @@ namespace timing
 		 *
 		 * @param name The name of the timing source.
 		 */
-		explicit PrototypeTiming(std::string name) noexcept : _name(std::move(name)) {}
+		explicit PrototypeTiming(std::string name, const SimId id = 0) noexcept :
+			_id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Timing) : id), _name(std::move(name))
+		{
+		}
 
 		~PrototypeTiming() = default;
 
@@ -66,6 +70,13 @@ namespace timing
 		 * @return The name of the timing source.
 		 */
 		[[nodiscard]] std::string getName() const { return _name; }
+
+		/**
+		 * @brief Gets the unique ID of the timing source.
+		 *
+		 * @return The timing source SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return _id; }
 
 		/**
 		 * @brief Checks if synchronization on pulse is enabled.
@@ -141,6 +152,7 @@ namespace timing
 		void setRandomPhaseOffsetStdev(RealType stdev) noexcept { _random_phase_stdev = stdev; }
 
 	private:
+		SimId _id; ///< Unique ID for this timing source.
 		std::string _name; ///< The name of the timing source.
 		std::vector<RealType> _alphas; ///< Vector of alpha values.
 		std::vector<RealType> _weights; ///< Vector of weight values.

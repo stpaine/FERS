@@ -17,6 +17,7 @@
 #include <utility>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 #include "math/geometry_ops.h"
 #include "math/path.h"
 #include "math/rotation_path.h"
@@ -35,9 +36,9 @@ namespace radar
 		 *
 		 * @param name The name of the platform.
 		 */
-		explicit Platform(std::string name) noexcept :
+		explicit Platform(std::string name, const SimId id = 0) noexcept :
 			_motion_path(std::make_unique<math::Path>()), _rotation_path(std::make_unique<math::RotationPath>()),
-			_name(std::move(name))
+			_id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Platform) : id), _name(std::move(name))
 		{
 		}
 
@@ -89,6 +90,13 @@ namespace radar
 		[[nodiscard]] const std::string& getName() const noexcept { return _name; }
 
 		/**
+		 * @brief Gets the unique ID of the platform.
+		 *
+		 * @return The platform SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return _id; }
+
+		/**
 		 * @brief Sets the rotation path of the platform.
 		 *
 		 * @param path A unique pointer to the new rotation path.
@@ -105,6 +113,7 @@ namespace radar
 	private:
 		std::unique_ptr<math::Path> _motion_path; ///< The motion path of the platform.
 		std::unique_ptr<math::RotationPath> _rotation_path; ///< The rotation path of the platform.
+		SimId _id; ///< Unique ID for this platform.
 		std::string _name; ///< The name of the platform.
 	};
 }

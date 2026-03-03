@@ -20,6 +20,7 @@
 
 #include "core/config.h"
 #include "core/logging.h"
+#include "core/sim_id.h"
 #include "interpolation/interpolation_set.h"
 #include "math/geometry_ops.h"
 
@@ -42,7 +43,11 @@ namespace antenna
 		 *
 		 * @param name The name of the antenna.
 		 */
-		explicit Antenna(std::string name) noexcept : _loss_factor(1), _name(std::move(name)) {}
+		explicit Antenna(std::string name, const SimId id = 0) noexcept :
+			_loss_factor(1), _id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Antenna) : id),
+			_name(std::move(name))
+		{
+		}
 
 		virtual ~Antenna() = default;
 
@@ -80,6 +85,13 @@ namespace antenna
 		[[nodiscard]] std::string getName() const noexcept { return _name; }
 
 		/**
+		 * @brief Retrieves the unique ID of the antenna.
+		 *
+		 * @return The antenna SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return _id; }
+
+		/**
 		 * @brief Computes the noise temperature of the antenna based on the angle.
 		 *
 		 * @param angle The angle at which the noise temperature is to be computed.
@@ -107,6 +119,7 @@ namespace antenna
 
 	private:
 		RealType _loss_factor; ///< Efficiency factor of the antenna.
+		SimId _id; ///< Unique ID for this antenna.
 		std::string _name; ///< Name of the antenna.
 	};
 
@@ -124,7 +137,7 @@ namespace antenna
 		 *
 		 * @param name The name of the antenna.
 		 */
-		explicit Isotropic(const std::string_view name) : Antenna(name.data()) {}
+		explicit Isotropic(const std::string_view name, const SimId id = 0) : Antenna(name.data(), id) {}
 
 		~Isotropic() override = default;
 
@@ -167,8 +180,8 @@ namespace antenna
 		 * @param beta The beta parameter.
 		 * @param gamma The gamma parameter.
 		 */
-		Sinc(const std::string_view name, const RealType alpha, const RealType beta, const RealType gamma) :
-			Antenna(name.data()), _alpha(alpha), _beta(beta), _gamma(gamma)
+		Sinc(const std::string_view name, const RealType alpha, const RealType beta, const RealType gamma,
+			 const SimId id = 0) : Antenna(name.data(), id), _alpha(alpha), _beta(beta), _gamma(gamma)
 		{
 		}
 
@@ -224,8 +237,8 @@ namespace antenna
 		 * @param azscale The azimuth scale factor.
 		 * @param elscale The elevation scale factor.
 		 */
-		Gaussian(const std::string_view name, const RealType azscale, const RealType elscale) :
-			Antenna(name.data()), _azscale(azscale), _elscale(elscale)
+		Gaussian(const std::string_view name, const RealType azscale, const RealType elscale, const SimId id = 0) :
+			Antenna(name.data(), id), _azscale(azscale), _elscale(elscale)
 		{
 		}
 
@@ -276,7 +289,8 @@ namespace antenna
 		 * @param name The name of the antenna.
 		 * @param dimension The dimension of the square horn.
 		 */
-		SquareHorn(const std::string_view name, const RealType dimension) : Antenna(name.data()), _dimension(dimension)
+		SquareHorn(const std::string_view name, const RealType dimension, const SimId id = 0) :
+			Antenna(name.data(), id), _dimension(dimension)
 		{
 		}
 
@@ -323,7 +337,10 @@ namespace antenna
 		 * @param name The name of the antenna.
 		 * @param diameter The diameter of the parabolic reflector.
 		 */
-		Parabolic(const std::string_view name, const RealType diameter) : Antenna(name.data()), _diameter(diameter) {}
+		Parabolic(const std::string_view name, const RealType diameter, const SimId id = 0) :
+			Antenna(name.data(), id), _diameter(diameter)
+		{
+		}
 
 		~Parabolic() override = default;
 
@@ -370,8 +387,8 @@ namespace antenna
 		 * @param name The name of the antenna.
 		 * @param filename The path to the XML file containing the antenna's gain pattern data.
 		 */
-		XmlAntenna(const std::string_view name, const std::string_view filename) :
-			Antenna(name.data()), _azi_samples(std::make_unique<interp::InterpSet>()),
+		XmlAntenna(const std::string_view name, const std::string_view filename, const SimId id = 0) :
+			Antenna(name.data(), id), _azi_samples(std::make_unique<interp::InterpSet>()),
 			_elev_samples(std::make_unique<interp::InterpSet>())
 		{
 			loadAntennaDescription(filename);
@@ -442,8 +459,8 @@ namespace antenna
 		 * @param name The name of the antenna.
 		 * @param filename The path to the file containing the antenna's gain pattern.
 		 */
-		H5Antenna(const std::string_view name, const std::string& filename) :
-			Antenna(name.data()), _pattern(serial::readPattern(filename, "antenna")), _filename(filename)
+		H5Antenna(const std::string_view name, const std::string& filename, const SimId id = 0) :
+			Antenna(name.data(), id), _pattern(serial::readPattern(filename, "antenna")), _filename(filename)
 		{
 		}
 
