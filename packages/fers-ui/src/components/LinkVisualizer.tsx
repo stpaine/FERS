@@ -37,9 +37,9 @@ interface LinkMetadata {
     link_type: 'monostatic' | 'illuminator' | 'scattered' | 'direct';
     quality: 'strong' | 'weak';
     label: string;
-    source_name: string;
-    dest_name: string;
-    origin_name: string;
+    source_id: string;
+    dest_id: string;
+    origin_id: string;
 }
 
 // Derived object used for actual rendering
@@ -54,9 +54,9 @@ interface RustVisualLink {
     link_type: number;
     quality: number;
     label: string;
-    source_name: string;
-    dest_name: string;
-    origin_name: string;
+    source_id: string;
+    dest_id: string;
+    origin_id: string;
 }
 
 // Helper to determine color based on link type and quality
@@ -114,12 +114,11 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
                         Link Details
                     </Typography>
                     <Typography variant="caption" display="block">
-                        <b>Path Segment:</b> {link.source_name} →{' '}
-                        {link.dest_name}
+                        <b>Path Segment:</b> {link.source_id} → {link.dest_id}
                     </Typography>
                     {link.link_type === 'scattered' && (
                         <Typography variant="caption" display="block">
-                            <b>Illuminator:</b> {link.origin_name}
+                            <b>Illuminator:</b> {link.origin_id}
                         </Typography>
                     )}
                     <Typography variant="caption" display="block">
@@ -229,7 +228,13 @@ export default function LinkVisualizer() {
         const map = new Map<string, Platform>();
         platforms.forEach((p) => {
             // Map platform components (Tx, Rx, Tgt) to the platform
-            p.components.forEach((c) => map.set(c.name, p));
+            p.components.forEach((c) => {
+                map.set(c.id, p);
+                if (c.type === 'monostatic') {
+                    map.set(c.txId, p);
+                    map.set(c.rxId, p);
+                }
+            });
         });
         return map;
     }, [platforms]);
@@ -282,9 +287,9 @@ export default function LinkVisualizer() {
                             link_type: TYPE_MAP[l.link_type],
                             quality: QUALITY_MAP[l.quality],
                             label: l.label,
-                            source_name: l.source_name,
-                            dest_name: l.dest_name,
-                            origin_name: l.origin_name,
+                            source_id: l.source_id,
+                            dest_id: l.dest_id,
+                            origin_id: l.origin_id,
                         })
                     );
                     setLinkMetadata(reconstructedLinks);
@@ -318,8 +323,8 @@ export default function LinkVisualizer() {
             if (meta.link_type === 'scattered' && !showLinkScattered) return;
             if (meta.link_type === 'direct' && !showLinkDirect) return;
 
-            const sourcePlat = componentToPlatform.get(meta.source_name);
-            const destPlat = componentToPlatform.get(meta.dest_name);
+            const sourcePlat = componentToPlatform.get(meta.source_id);
+            const destPlat = componentToPlatform.get(meta.dest_id);
 
             if (sourcePlat && destPlat) {
                 const startPos = calculateInterpolatedPosition(

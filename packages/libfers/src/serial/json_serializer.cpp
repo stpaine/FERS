@@ -39,6 +39,8 @@
 
 namespace
 {
+	nlohmann::json sim_id_to_json(const SimId id) { return std::to_string(id); }
+
 	SimId parse_json_id(const nlohmann::json& j, const std::string& key, const std::string& owner)
 	{
 		if (!j.contains(key))
@@ -198,7 +200,7 @@ namespace timing
 {
 	void to_json(nlohmann::json& j, const PrototypeTiming& pt)
 	{
-		j = nlohmann::json{{"id", pt.getId()},
+		j = nlohmann::json{{"id", sim_id_to_json(pt.getId())},
 						   {"name", pt.getName()},
 						   {"frequency", pt.getFrequency()},
 						   {"synconpulse", pt.getSyncOnPulse()}};
@@ -273,7 +275,7 @@ namespace fers_signal
 {
 	void to_json(nlohmann::json& j, const RadarSignal& rs)
 	{
-		j = nlohmann::json{{"id", rs.getId()},
+		j = nlohmann::json{{"id", sim_id_to_json(rs.getId())},
 						   {"name", rs.getName()},
 						   {"power", rs.getPower()},
 						   {"carrier_frequency", rs.getCarrier()}};
@@ -330,7 +332,7 @@ namespace antenna
 {
 	void to_json(nlohmann::json& j, const Antenna& a)
 	{
-		j = {{"id", a.getId()}, {"name", a.getName()}, {"efficiency", a.getEfficiencyFactor()}};
+		j = {{"id", sim_id_to_json(a.getId())}, {"name", a.getName()}, {"efficiency", a.getEfficiencyFactor()}};
 
 		if (const auto* sinc = dynamic_cast<const Sinc*>(&a))
 		{
@@ -440,11 +442,11 @@ namespace radar
 
 	void to_json(nlohmann::json& j, const Transmitter& t)
 	{
-		j = nlohmann::json{{"id", t.getId()},
+		j = nlohmann::json{{"id", sim_id_to_json(t.getId())},
 						   {"name", t.getName()},
-						   {"waveform", t.getSignal() ? t.getSignal()->getId() : 0},
-						   {"antenna", t.getAntenna() ? t.getAntenna()->getId() : 0},
-						   {"timing", t.getTiming() ? t.getTiming()->getId() : 0}};
+						   {"waveform", sim_id_to_json(t.getSignal() ? t.getSignal()->getId() : 0)},
+						   {"antenna", sim_id_to_json(t.getAntenna() ? t.getAntenna()->getId() : 0)},
+						   {"timing", sim_id_to_json(t.getTiming() ? t.getTiming()->getId() : 0)}};
 
 		if (t.getMode() == OperationMode::PULSED_MODE)
 		{
@@ -462,11 +464,11 @@ namespace radar
 
 	void to_json(nlohmann::json& j, const Receiver& r)
 	{
-		j = nlohmann::json{{"id", r.getId()},
+		j = nlohmann::json{{"id", sim_id_to_json(r.getId())},
 						   {"name", r.getName()},
 						   {"noise_temp", r.getNoiseTemperature()},
-						   {"antenna", r.getAntenna() ? r.getAntenna()->getId() : 0},
-						   {"timing", r.getTiming() ? r.getTiming()->getId() : 0},
+						   {"antenna", sim_id_to_json(r.getAntenna() ? r.getAntenna()->getId() : 0)},
+						   {"timing", sim_id_to_json(r.getTiming() ? r.getTiming()->getId() : 0)},
 						   {"nodirect", r.checkFlag(Receiver::RecvFlag::FLAG_NODIRECT)},
 						   {"nopropagationloss", r.checkFlag(Receiver::RecvFlag::FLAG_NOPROPLOSS)}};
 
@@ -487,7 +489,7 @@ namespace radar
 
 	void to_json(nlohmann::json& j, const Target& t)
 	{
-		j["id"] = t.getId();
+		j["id"] = sim_id_to_json(t.getId());
 		j["name"] = t.getName();
 		nlohmann::json rcs_json;
 		if (const auto* iso = dynamic_cast<const IsoTarget*>(&t))
@@ -521,7 +523,7 @@ namespace radar
 
 	void to_json(nlohmann::json& j, const Platform& p)
 	{
-		j = {{"id", p.getId()}, {"name", p.getName()}, {"motionpath", *p.getMotionPath()}};
+		j = {{"id", sim_id_to_json(p.getId())}, {"name", p.getName()}, {"motionpath", *p.getMotionPath()}};
 
 		if (p.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CONSTANT)
 		{
@@ -638,11 +640,11 @@ namespace serial
 					{
 						nlohmann::json monostatic_comp;
 						monostatic_comp["name"] = t->getName();
-						monostatic_comp["tx_id"] = t->getId();
-						monostatic_comp["rx_id"] = t->getAttached()->getId();
-						monostatic_comp["waveform"] = t->getSignal() ? t->getSignal()->getId() : 0;
-						monostatic_comp["antenna"] = t->getAntenna() ? t->getAntenna()->getId() : 0;
-						monostatic_comp["timing"] = t->getTiming() ? t->getTiming()->getId() : 0;
+						monostatic_comp["tx_id"] = sim_id_to_json(t->getId());
+						monostatic_comp["rx_id"] = sim_id_to_json(t->getAttached()->getId());
+						monostatic_comp["waveform"] = sim_id_to_json(t->getSignal() ? t->getSignal()->getId() : 0);
+						monostatic_comp["antenna"] = sim_id_to_json(t->getAntenna() ? t->getAntenna()->getId() : 0);
+						monostatic_comp["timing"] = sim_id_to_json(t->getTiming() ? t->getTiming()->getId() : 0);
 
 						if (const auto* recv = dynamic_cast<const radar::Receiver*>(t->getAttached()))
 						{

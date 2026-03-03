@@ -28,11 +28,12 @@ import { Section, NumberField } from './InspectorControls';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
-import { v4 as uuidv4 } from 'uuid';
 import { PlatformComponentInspector } from './PlatformComponentInspector';
+import { generateSimId } from '@/stores/scenarioStore/idUtils';
 
 interface PlatformInspectorProps {
     item: Platform;
+    selectedComponentId: string | null;
 }
 
 interface WaypointEditDialogProps {
@@ -151,7 +152,10 @@ function WaypointEditDialog({
     );
 }
 
-export function PlatformInspector({ item }: PlatformInspectorProps) {
+export function PlatformInspector({
+    item,
+    selectedComponentId,
+}: PlatformInspectorProps) {
     const {
         updateItem,
         addPositionWaypoint,
@@ -209,7 +213,12 @@ export function PlatformInspector({ item }: PlatformInspectorProps) {
                 type: 'path',
                 interpolation: 'static',
                 waypoints: [
-                    { id: uuidv4(), azimuth: 0, elevation: 0, time: 0 },
+                    {
+                        id: generateSimId('Platform'),
+                        azimuth: 0,
+                        elevation: 0,
+                        time: 0,
+                    },
                 ],
             });
         }
@@ -501,6 +510,8 @@ export function PlatformInspector({ item }: PlatformInspectorProps) {
                         >
                             <Typography variant="subtitle2" color="primary">
                                 {comp.type.toUpperCase()}
+                                {selectedComponentId === comp.id &&
+                                    ' (Selected)'}
                             </Typography>
                             <IconButton
                                 size="small"

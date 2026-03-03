@@ -2,9 +2,9 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
 import { ScenarioStore, AssetActions, Antenna } from '../types';
 import { defaultWaveform, defaultTiming, defaultAntenna } from '../defaults';
+import { generateSimId } from '../idUtils';
 
 export const createAssetSlice: StateCreator<
     ScenarioStore,
@@ -14,7 +14,7 @@ export const createAssetSlice: StateCreator<
 > = (set) => ({
     addWaveform: () =>
         set((state) => {
-            const id = uuidv4();
+            const id = generateSimId('Waveform');
             state.waveforms.push({
                 ...defaultWaveform,
                 id,
@@ -24,7 +24,7 @@ export const createAssetSlice: StateCreator<
         }),
     addTiming: () =>
         set((state) => {
-            const id = uuidv4();
+            const id = generateSimId('Timing');
             state.timings.push({
                 ...defaultTiming,
                 id,
@@ -34,7 +34,7 @@ export const createAssetSlice: StateCreator<
         }),
     addAntenna: () =>
         set((state) => {
-            const id = uuidv4();
+            const id = generateSimId('Antenna');
             state.antennas.push({
                 ...defaultAntenna,
                 id,
@@ -47,7 +47,7 @@ export const createAssetSlice: StateCreator<
             const timing = state.timings.find((t) => t.id === timingId);
             if (timing) {
                 timing.noiseEntries.push({
-                    id: uuidv4(),
+                    id: generateSimId('Timing'),
                     alpha: 0,
                     weight: 0,
                 });

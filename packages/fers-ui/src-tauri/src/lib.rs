@@ -363,7 +363,7 @@ fn get_interpolated_rotation_path(
 /// It is stateful because it relies on the antenna assets defined in the loaded scenario.
 ///
 /// # Parameters
-/// * `antenna_name` - The unique name of the antenna asset to sample.
+/// * `antenna_id` - The unique ID of the antenna asset to sample.
 /// * `az_samples` - Resolution along the azimuth axis (e.g., 360).
 /// * `el_samples` - Resolution along the elevation axis (e.g., 180).
 /// * `frequency` - The frequency in Hz at which to calculate gain (relevant for frequency-dependent antennas).
@@ -374,14 +374,14 @@ fn get_interpolated_rotation_path(
 /// * `Err(String)` - Error if antenna not found or context locked.
 #[tauri::command]
 fn get_antenna_pattern(
-    antenna_name: String,
+    antenna_id: String,
     az_samples: usize,
     el_samples: usize,
     frequency: f64,
     state: State<'_, FersState>,
 ) -> Result<fers_api::AntennaPatternData, String> {
     state.lock().map_err(|e| e.to_string())?.get_antenna_pattern(
-        &antenna_name,
+        &antenna_id,
         az_samples,
         el_samples,
         frequency,

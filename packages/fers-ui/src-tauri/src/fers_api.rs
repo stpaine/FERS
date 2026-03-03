@@ -311,12 +311,12 @@ pub struct VisualLink {
     pub quality: u8,
     /// A pre-formatted label string (e.g., "-95 dBm").
     pub label: String,
-    /// The name of the start component for this segment.
-    pub source_name: String,
-    /// The name of the end component for this segment.
-    pub dest_name: String,
-    /// The name of the original transmitter (useful for scattered paths).
-    pub origin_name: String,
+    /// The ID of the start component for this segment.
+    pub source_id: String,
+    /// The ID of the end component for this segment.
+    pub dest_id: String,
+    /// The ID of the original transmitter (useful for scattered paths).
+    pub origin_id: String,
 }
 
 impl FersContext {
@@ -543,7 +543,7 @@ impl FersContext {
     ///
     /// # Parameters
     ///
-    /// * `antenna_name` - The name of the antenna asset to sample.
+    /// * `antenna_id` - The ID of the antenna asset to sample.
     /// * `az_samples` - The resolution along the azimuth axis.
     /// * `el_samples` - The resolution along the elevation axis.
     /// * `frequency` - The frequency in Hz to use for calculation.
@@ -554,17 +554,19 @@ impl FersContext {
     /// * `Err(String)` - If the antenna was not found or an error occurred.
     pub fn get_antenna_pattern(
         &self,
-        antenna_name: &str,
+        antenna_id: &str,
         az_samples: usize,
         el_samples: usize,
         frequency: f64,
     ) -> Result<AntennaPatternData, String> {
-        let c_antenna_name = CString::new(antenna_name).map_err(|e| e.to_string())?;
+        let antenna_id_val = antenna_id
+            .parse::<u64>()
+            .map_err(|e| format!("Invalid antenna ID '{antenna_id}': {e}"))?;
         // SAFETY: We pass a valid context pointer and valid arguments.
         let result_ptr = unsafe {
             ffi::fers_get_antenna_pattern(
                 self.ptr,
-                c_antenna_name.as_ptr(),
+                antenna_id_val,
                 az_samples,
                 el_samples,
                 frequency,
@@ -627,22 +629,17 @@ impl FersContext {
 
                 let label =
                     unsafe { CStr::from_ptr(l.label.as_ptr()) }.to_string_lossy().into_owned();
-                let source_name = unsafe { CStr::from_ptr(l.source_name.as_ptr()) }
-                    .to_string_lossy()
-                    .into_owned();
-                let dest_name =
-                    unsafe { CStr::from_ptr(l.dest_name.as_ptr()) }.to_string_lossy().into_owned();
-                let origin_name = unsafe { CStr::from_ptr(l.origin_name.as_ptr()) }
-                    .to_string_lossy()
-                    .into_owned();
+                let source_id = l.source_id.to_string();
+                let dest_id = l.dest_id.to_string();
+                let origin_id = l.origin_id.to_string();
 
                 result.push(VisualLink {
                     link_type: link_type_val,
                     quality: quality_val,
                     label,
-                    source_name,
-                    dest_name,
-                    origin_name,
+                    source_id,
+                    dest_id,
+                    origin_id,
                 });
             }
         }

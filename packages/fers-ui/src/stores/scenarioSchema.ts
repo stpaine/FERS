@@ -49,9 +49,11 @@ export const GlobalParametersSchema = z.object({
         ),
 });
 
+const SimIdSchema = z.string().regex(/^\d+$/, 'ID must be a numeric string.');
+
 export const WaveformSchema = z
     .object({
-        id: z.string().uuid(),
+        id: SimIdSchema,
         type: z.literal('Waveform'),
         name: z.string().min(1, 'Waveform name cannot be empty.'),
         waveformType: z.enum(['pulsed_from_file', 'cw']),
@@ -75,13 +77,13 @@ export const WaveformSchema = z
     );
 
 export const NoiseEntrySchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     alpha: z.number(),
     weight: z.number(),
 });
 
 export const TimingSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('Timing'),
     name: z.string().min(1, 'Timing name cannot be empty.'),
     frequency: z.number().positive('Frequency must be positive.'),
@@ -93,7 +95,7 @@ export const TimingSchema = z.object({
 });
 
 const BaseAntennaSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('Antenna'),
     name: z.string().min(1, 'Antenna name cannot be empty.'),
     efficiency: nullableNumber.pipe(z.number().min(0).max(1).nullable()),
@@ -141,7 +143,7 @@ export const AntennaSchema = z.discriminatedUnion('pattern', [
 ]);
 
 export const PositionWaypointSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     x: z.number(),
     y: z.number(),
     altitude: z.number(),
@@ -164,7 +166,7 @@ export const FixedRotationSchema = z.object({
 });
 
 export const RotationWaypointSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     azimuth: z.number(),
     elevation: z.number(),
     time: z.number().min(0, 'Time cannot be negative.'),
@@ -184,16 +186,18 @@ export const SchedulePeriodSchema = z.object({
 });
 
 const MonostaticComponentSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('monostatic'),
     name: z.string().min(1),
+    txId: SimIdSchema,
+    rxId: SimIdSchema,
     radarType: z.enum(['pulsed', 'cw']),
     window_skip: nullableNumber,
     window_length: nullableNumber,
     prf: nullableNumber,
-    antennaId: z.string().uuid().nullable(),
-    waveformId: z.string().uuid().nullable(),
-    timingId: z.string().uuid().nullable(),
+    antennaId: SimIdSchema.nullable(),
+    waveformId: SimIdSchema.nullable(),
+    timingId: SimIdSchema.nullable(),
     noiseTemperature: nullableNumber.pipe(z.number().min(0).nullable()),
     noDirectPaths: z.boolean(),
     noPropagationLoss: z.boolean(),
@@ -201,27 +205,27 @@ const MonostaticComponentSchema = z.object({
 });
 
 const TransmitterComponentSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('transmitter'),
     name: z.string().min(1),
     radarType: z.enum(['pulsed', 'cw']),
     prf: nullableNumber,
-    antennaId: z.string().uuid().nullable(),
-    waveformId: z.string().uuid().nullable(),
-    timingId: z.string().uuid().nullable(),
+    antennaId: SimIdSchema.nullable(),
+    waveformId: SimIdSchema.nullable(),
+    timingId: SimIdSchema.nullable(),
     schedule: z.array(SchedulePeriodSchema).default([]),
 });
 
 const ReceiverComponentSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('receiver'),
     name: z.string().min(1),
     radarType: z.enum(['pulsed', 'cw']),
     window_skip: nullableNumber,
     window_length: nullableNumber,
     prf: nullableNumber,
-    antennaId: z.string().uuid().nullable(),
-    timingId: z.string().uuid().nullable(),
+    antennaId: SimIdSchema.nullable(),
+    timingId: SimIdSchema.nullable(),
     noiseTemperature: nullableNumber.pipe(z.number().min(0).nullable()),
     noDirectPaths: z.boolean(),
     noPropagationLoss: z.boolean(),
@@ -229,7 +233,7 @@ const ReceiverComponentSchema = z.object({
 });
 
 const TargetComponentSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('target'),
     name: z.string().min(1),
     rcs_type: z.enum(['isotropic', 'file']),
@@ -247,7 +251,7 @@ export const PlatformComponentSchema = z.discriminatedUnion('type', [
 ]);
 
 export const PlatformSchema = z.object({
-    id: z.string().uuid(),
+    id: SimIdSchema,
     type: z.literal('Platform'),
     name: z.string().min(1, 'Platform name cannot be empty.'),
     motionPath: MotionPathSchema,
