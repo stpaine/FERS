@@ -23,7 +23,6 @@
 #include "antenna/antenna_factory.h"
 #include "core/config.h"
 #include "core/parameters.h"
-#include "core/sim_id.h"
 #include "core/world.h"
 #include "libxml_wrapper.h"
 #include "math/coord.h"
@@ -148,7 +147,6 @@ namespace
 
 	void serializeWaveform(const fers_signal::RadarSignal& waveform, const XmlElement& parent)
 	{
-		parent.setAttribute("id", std::to_string(waveform.getId()));
 		parent.setAttribute("name", waveform.getName());
 
 		addChildWithNumber(parent, "power", waveform.getPower());
@@ -171,7 +169,6 @@ namespace
 
 	void serializeTiming(const timing::PrototypeTiming& timing, const XmlElement& parent)
 	{
-		parent.setAttribute("id", std::to_string(timing.getId()));
 		parent.setAttribute("name", timing.getName());
 		setAttributeFromBool(parent, "synconpulse", timing.getSyncOnPulse());
 
@@ -205,7 +202,6 @@ namespace
 
 	void serializeAntenna(const antenna::Antenna& antenna, const XmlElement& parent)
 	{
-		parent.setAttribute("id", std::to_string(antenna.getId()));
 		parent.setAttribute("name", antenna.getName());
 
 		if (const auto* sinc = dynamic_cast<const antenna::Sinc*>(&antenna))
@@ -333,11 +329,10 @@ namespace
 	void serializeTransmitter(const radar::Transmitter& tx, const XmlElement& parent)
 	{
 		const XmlElement tx_elem = parent.addChild("transmitter");
-		tx_elem.setAttribute("id", std::to_string(tx.getId()));
 		tx_elem.setAttribute("name", tx.getName());
-		tx_elem.setAttribute("waveform", tx.getSignal() ? std::to_string(tx.getSignal()->getId()) : "");
-		tx_elem.setAttribute("antenna", tx.getAntenna() ? std::to_string(tx.getAntenna()->getId()) : "");
-		tx_elem.setAttribute("timing", tx.getTiming() ? std::to_string(tx.getTiming()->getId()) : "");
+		tx_elem.setAttribute("waveform", tx.getSignal() ? tx.getSignal()->getName() : "");
+		tx_elem.setAttribute("antenna", tx.getAntenna() ? tx.getAntenna()->getName() : "");
+		tx_elem.setAttribute("timing", tx.getTiming() ? tx.getTiming()->getName() : "");
 
 		if (tx.getMode() == radar::OperationMode::PULSED_MODE)
 		{
@@ -355,10 +350,9 @@ namespace
 	void serializeReceiver(const radar::Receiver& rx, const XmlElement& parent)
 	{
 		const XmlElement rx_elem = parent.addChild("receiver");
-		rx_elem.setAttribute("id", std::to_string(rx.getId()));
 		rx_elem.setAttribute("name", rx.getName());
-		rx_elem.setAttribute("antenna", rx.getAntenna() ? std::to_string(rx.getAntenna()->getId()) : "");
-		rx_elem.setAttribute("timing", rx.getTiming() ? std::to_string(rx.getTiming()->getId()) : "");
+		rx_elem.setAttribute("antenna", rx.getAntenna() ? rx.getAntenna()->getName() : "");
+		rx_elem.setAttribute("timing", rx.getTiming() ? rx.getTiming()->getName() : "");
 		setAttributeFromBool(rx_elem, "nodirect", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		setAttributeFromBool(rx_elem, "nopropagationloss", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 
@@ -385,12 +379,10 @@ namespace
 	void serializeMonostatic(const radar::Transmitter& tx, const radar::Receiver& rx, const XmlElement& parent)
 	{
 		const XmlElement mono_elem = parent.addChild("monostatic");
-		mono_elem.setAttribute("tx_id", std::to_string(tx.getId()));
-		mono_elem.setAttribute("rx_id", std::to_string(rx.getId()));
 		mono_elem.setAttribute("name", tx.getName());
-		mono_elem.setAttribute("antenna", tx.getAntenna() ? std::to_string(tx.getAntenna()->getId()) : "");
-		mono_elem.setAttribute("waveform", tx.getSignal() ? std::to_string(tx.getSignal()->getId()) : "");
-		mono_elem.setAttribute("timing", tx.getTiming() ? std::to_string(tx.getTiming()->getId()) : "");
+		mono_elem.setAttribute("antenna", tx.getAntenna() ? tx.getAntenna()->getName() : "");
+		mono_elem.setAttribute("waveform", tx.getSignal() ? tx.getSignal()->getName() : "");
+		mono_elem.setAttribute("timing", tx.getTiming() ? tx.getTiming()->getName() : "");
 		setAttributeFromBool(mono_elem, "nodirect", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		setAttributeFromBool(mono_elem, "nopropagationloss", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 
@@ -417,7 +409,6 @@ namespace
 	void serializeTarget(const radar::Target& target, const XmlElement& parent)
 	{
 		const XmlElement target_elem = parent.addChild("target");
-		target_elem.setAttribute("id", std::to_string(target.getId()));
 		target_elem.setAttribute("name", target.getName());
 
 		const XmlElement rcs_elem = target_elem.addChild("rcs");
@@ -446,7 +437,6 @@ namespace
 
 	void serializePlatform(const radar::Platform& platform, const core::World& world, const XmlElement& parent)
 	{
-		parent.setAttribute("id", std::to_string(platform.getId()));
 		parent.setAttribute("name", platform.getName());
 
 		const XmlElement motion_elem = parent.addChild("motionpath");

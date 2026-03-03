@@ -46,7 +46,7 @@
 
         <!-- Waveform definition -->
         <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw))>
-        <!ATTLIST waveform id CDATA #REQUIRED
+        <!ATTLIST waveform
                 name CDATA #REQUIRED>
 
         <!-- Waveform power and carrier frequency -->
@@ -63,7 +63,7 @@
         <!-- Timing Source -->
         <!ELEMENT timing (frequency,freq_offset?,random_freq_offset_stdev?,phase_offset?,random_phase_offset_stdev?,noise_entry*)>
         <!-- Timing source. Sets frequency -->
-        <!ATTLIST timing id CDATA #REQUIRED
+        <!ATTLIST timing
                 name CDATA #REQUIRED
                 synconpulse (true|false) "false">
 
@@ -87,7 +87,7 @@
 
         <!-- Antenna -->
         <!ELEMENT antenna (alpha?,beta?,gamma?,diameter?,azscale?,elscale?,efficiency?)>
-        <!ATTLIST antenna id CDATA #REQUIRED
+        <!ATTLIST antenna
                 name CDATA #REQUIRED
                 pattern CDATA #REQUIRED
                 filename CDATA #IMPLIED>
@@ -108,7 +108,7 @@
 
         <!-- Platform -->
         <!ELEMENT platform (motionpath,(rotationpath|fixedrotation),(monostatic|transmitter|receiver|target)*)>
-        <!ATTLIST platform id CDATA #REQUIRED
+        <!ATTLIST platform
                 name CDATA #REQUIRED>
 
         <!-- Motion paths and Position Waypoints -->
@@ -158,8 +158,6 @@
         <!-- Monostatic radar installations -->
         <!ELEMENT monostatic ((pulsed_mode | cw_mode), noise_temp?, schedule?)>
         <!ATTLIST monostatic
-                tx_id CDATA #REQUIRED
-                rx_id CDATA #REQUIRED
                 name CDATA #REQUIRED
                 antenna CDATA #REQUIRED
                 waveform CDATA #REQUIRED
@@ -172,7 +170,6 @@
         <!-- Standalone Transmitter -->
         <!ELEMENT transmitter ((pulsed_mode | cw_mode), schedule?)>
         <!ATTLIST transmitter
-                id CDATA #REQUIRED
                 name CDATA #REQUIRED
                 waveform CDATA #REQUIRED
                 antenna CDATA #REQUIRED
@@ -181,7 +178,6 @@
         <!-- Standalone Receiver -->
         <!ELEMENT receiver ((pulsed_mode | cw_mode), noise_temp?, schedule?)>
         <!ATTLIST receiver
-                id CDATA #REQUIRED
                 name CDATA #REQUIRED
                 antenna CDATA #REQUIRED
                 timing CDATA #REQUIRED
@@ -194,7 +190,7 @@
 
         <!-- Target -->
         <!ELEMENT target (rcs,model?)>
-        <!ATTLIST target id CDATA #REQUIRED
+        <!ATTLIST target
                 name CDATA #REQUIRED>
 
         <!-- RCS can either have a 'value' element or a 'filename' attribute -->

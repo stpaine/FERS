@@ -246,7 +246,7 @@ namespace simulation
 		}
 		catch (const RangeError&)
 		{
-			LOG(Level::FATAL, "Transmitter or Receiver too close to Target for accurate simulation");
+			LOG(Level::INFO, "Transmitter or Receiver too close to Target for accurate simulation");
 			throw;
 		}
 
@@ -290,7 +290,7 @@ namespace simulation
 		}
 		catch (const RangeError&)
 		{
-			LOG(Level::FATAL, "Transmitter or Receiver too close for accurate simulation");
+			LOG(Level::INFO, "Transmitter or Receiver too close for accurate simulation");
 			throw;
 		}
 
@@ -432,8 +432,6 @@ namespace simulation
 		//    no direct coupling/interference for co-located far-field antennas.
 		if (targ == nullptr && (trans->getAttached() == recv || trans->getPlatform() == recv->getPlatform()))
 		{
-			LOG(Level::TRACE, "Skipping direct path calculation for co-located Transmitter {} and Receiver {}",
-				trans->getName(), recv->getName());
 			return nullptr;
 		}
 
@@ -488,7 +486,7 @@ namespace simulation
 		}
 		catch (const RangeError&)
 		{
-			LOG(Level::FATAL, "Receiver or Transmitter too close for accurate simulation");
+			LOG(Level::INFO, "Receiver or Transmitter too close for accurate simulation");
 			throw; // Re-throw to be caught by the runner
 		}
 

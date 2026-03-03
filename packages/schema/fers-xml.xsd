@@ -99,7 +99,6 @@
                     <!-- Additional waveform types (e.g., FMCW) can be added here -->
                 </xs:choice>
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" type="xs:string" use="required"/>
         </xs:complexType>
     </xs:element>
@@ -115,7 +114,6 @@
                 <xs:element minOccurs="0" name="random_phase_offset_stdev" type="xs:string"/>
                 <xs:element minOccurs="0" ref="noise_entry" maxOccurs="unbounded"/>
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
             <xs:attribute name="synconpulse" default="false">
                 <xs:simpleType>
@@ -149,7 +147,6 @@
                 <xs:element minOccurs="0" name="elscale" type="xs:string"/>
                 <xs:element minOccurs="0" name="efficiency" type="xs:string"/>
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
             <xs:attribute name="pattern" use="required"/>
             <xs:attribute name="filename"/>
@@ -172,7 +169,6 @@
                     <xs:element ref="target"/>
                 </xs:choice>
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
         </xs:complexType>
     </xs:element>
@@ -286,12 +282,10 @@
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
-            <xs:attribute name="tx_id" type="xs:unsignedLong" use="required"/>
-            <xs:attribute name="rx_id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
-            <xs:attribute name="antenna" type="xs:unsignedLong" use="required"/>
-            <xs:attribute name="waveform" type="xs:unsignedLong" use="required"/>
-            <xs:attribute name="timing" type="xs:unsignedLong" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="waveform" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
             <xs:attribute name="nodirect" type="xs:boolean" default="false"/>
             <xs:attribute name="nopropagationloss" type="xs:boolean" default="false"/>
         </xs:complexType>
@@ -315,11 +309,10 @@
                 </xs:choice>
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
-            <xs:attribute name="waveform" type="xs:unsignedLong" use="required"/>
-            <xs:attribute name="antenna" type="xs:unsignedLong" use="required"/>
-            <xs:attribute name="timing" type="xs:unsignedLong" use="required"/>
+            <xs:attribute name="waveform" type="xs:string" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
         </xs:complexType>
     </xs:element>
 
@@ -344,10 +337,9 @@
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
-            <xs:attribute name="antenna" type="xs:unsignedLong" use="required"/>
-            <xs:attribute name="timing" type="xs:unsignedLong" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
             <xs:attribute name="nodirect" type="xs:boolean" default="false"/>
             <xs:attribute name="nopropagationloss" type="xs:boolean" default="false"/>
         </xs:complexType>
@@ -360,7 +352,6 @@
                 <xs:element ref="rcs"/>
                 <xs:element ref="model" minOccurs="0"/> <!-- model is optional -->
             </xs:sequence>
-            <xs:attribute name="id" type="xs:unsignedLong" use="required"/>
             <xs:attribute name="name" use="required"/>
         </xs:complexType>
     </xs:element>
