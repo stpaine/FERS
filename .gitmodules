@@ -1,7 +1,3 @@
-[submodule "third_party/geographiclib"]
-	path = packages/libfers/third_party/geographiclib
-	url = https://github.com/geographiclib/geographiclib.git
-	branch = main
 [submodule "third_party/highfive"]
 	path = packages/libfers/third_party/highfive
 	url = https://github.com/highfive-devs/highfive.git

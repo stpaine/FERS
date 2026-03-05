@@ -1,5 +1,7 @@
 project(libfers)
 
+include(FetchContent)
+
 # Helper function to apply common settings to a library target
 function(fers_configure_library_target target_name)
 	# Apply project-wide compiler warnings and flags
@@ -74,8 +76,23 @@ add_custom_target(generate_schemas ALL DEPENDS
 
 # --- Third-Party Dependencies ---
 add_subdirectory(third_party/highfive EXCLUDE_FROM_ALL)
-add_subdirectory(third_party/geographiclib EXCLUDE_FROM_ALL)
 add_subdirectory(third_party/json EXCLUDE_FROM_ALL)
+
+# We configure options to disable tools, tests, and docs to speed up build
+set(BUILD_DOCUMENTATION OFF CACHE BOOL "Disable GeographicLib docs" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Disable GeographicLib tests" FORCE)
+# Setting BINDIR to empty/OFF prevents GeographicLib from building CLI tools
+set(BINDIR "" CACHE STRING "Disable GeographicLib tools" FORCE)
+# Ensure it builds as a static library if you prefer, or let it follow BUILD_SHARED_LIBS
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build GeographicLib as static" FORCE)
+
+FetchContent_Declare(
+		GeographicLib
+		GIT_REPOSITORY https://github.com/geographiclib/geographiclib.git
+		GIT_TAG        r2.7
+)
+FetchContent_MakeAvailable(GeographicLib)
+
 find_package(LibXml2 REQUIRED)
 find_package(HDF5 COMPONENTS C HL REQUIRED)
 
