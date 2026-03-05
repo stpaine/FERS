@@ -21,6 +21,12 @@ include(FersOptions)
 # --- Compiler Warnings and Flags ---
 include(FersCompilerWarnings)
 
+# --- Testing ---
+option(FERS_BUILD_TESTS "Build unit tests" ON)
+if (FERS_BUILD_TESTS)
+	enable_testing()
+endif()
+
 # --- macOS Specific Configuration ---
 if (APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	message(STATUS "macOS with a modern toolchain (e.g., Homebrew LLVM) is recommended.")
