@@ -16,6 +16,8 @@ add_executable(libfers_tests
 			   math/test_geometry_ops.cpp
 			   math/test_path.cpp
 			   math/test_rotation_path.cpp
+			   interpolation/test_interpolation_set.cpp
+			   interpolation/test_interpolation_filter.cpp
 )
 
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
