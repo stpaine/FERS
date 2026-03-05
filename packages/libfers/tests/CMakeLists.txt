@@ -18,15 +18,12 @@ add_executable(libfers_tests
 			   math/test_rotation_path.cpp
 )
 
-# We need access to the private headers in src/ to test internal classes
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
 target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers)
 
-# Apply project warnings if the function is available
 if(COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
 endif()
 
-# Automatically discover and register Catch2 tests with CTest
 catch_discover_tests(libfers_tests)
