@@ -20,6 +20,7 @@
 
 #include "antenna/antenna_factory.h"
 #include "core/sim_events.h"
+#include "core/sim_id.h"
 #include "core/simulation_state.h"
 #include "radar/platform.h"
 #include "radar/receiver.h"
@@ -81,7 +82,7 @@ namespace core
 		 * @brief Adds a radar signal (waveform) to the simulation world.
 		 *
 		 * @param waveform A unique pointer to a RadarSignal object.
-		 * @throws std::runtime_error if a waveform with the same name already exists.
+		 * @throws std::runtime_error if a waveform with the same ID already exists.
 		 */
 		void add(std::unique_ptr<fers_signal::RadarSignal> waveform);
 
@@ -89,7 +90,7 @@ namespace core
 		 * @brief Adds an antenna to the simulation world.
 		 *
 		 * @param antenna A unique pointer to an Antenna object.
-		 * @throws std::runtime_error if an antenna with the same name already exists.
+		 * @throws std::runtime_error if an antenna with the same ID already exists.
 		 */
 		void add(std::unique_ptr<antenna::Antenna> antenna);
 
@@ -97,33 +98,33 @@ namespace core
 		 * @brief Adds a timing source to the simulation world.
 		 *
 		 * @param timing A unique pointer to a PrototypeTiming object.
-		 * @throws std::runtime_error if a timing source with the same name already exists.
+		 * @throws std::runtime_error if a timing source with the same ID already exists.
 		 */
 		void add(std::unique_ptr<timing::PrototypeTiming> timing);
 
 		/**
-		 * @brief Finds a radar signal by name.
+		 * @brief Finds a radar signal by ID.
 		 *
-		 * @param name The name of the radar signal to find.
+		 * @param id The ID of the radar signal to find.
 		 * @return A pointer to the RadarSignal if found, or nullptr if not found.
 		 */
-		[[nodiscard]] fers_signal::RadarSignal* findWaveform(const std::string& name);
+		[[nodiscard]] fers_signal::RadarSignal* findWaveform(const SimId id);
 
 		/**
-		 * @brief Finds an antenna by name.
+		 * @brief Finds an antenna by ID.
 		 *
-		 * @param name The name of the antenna to find.
+		 * @param id The ID of the antenna to find.
 		 * @return A pointer to the Antenna if found, or nullptr if not found.
 		 */
-		[[nodiscard]] antenna::Antenna* findAntenna(const std::string& name);
+		[[nodiscard]] antenna::Antenna* findAntenna(const SimId id);
 
 		/**
-		 * @brief Finds a timing source by name.
+		 * @brief Finds a timing source by ID.
 		 *
-		 * @param name The name of the timing source to find.
+		 * @param id The ID of the timing source to find.
 		 * @return A pointer to the PrototypeTiming if found, or nullptr if not found.
 		 */
-		[[nodiscard]] timing::PrototypeTiming* findTiming(const std::string& name);
+		[[nodiscard]] timing::PrototypeTiming* findTiming(const SimId id);
 
 		/**
 		 * @brief Retrieves the list of platforms.
@@ -169,7 +170,7 @@ namespace core
 		 * @brief Retrieves the map of radar signals (waveforms).
 		 * @return A const reference to the map of signal names to RadarSignal objects.
 		 */
-		[[nodiscard]] const std::unordered_map<std::string, std::unique_ptr<fers_signal::RadarSignal>>&
+		[[nodiscard]] const std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>>&
 		getWaveforms() const noexcept
 		{
 			return _waveforms;
@@ -179,8 +180,7 @@ namespace core
 		 * @brief Retrieves the map of antennas.
 		 * @return A const reference to the map of antenna names to Antenna objects.
 		 */
-		[[nodiscard]] const std::unordered_map<std::string, std::unique_ptr<antenna::Antenna>>&
-		getAntennas() const noexcept
+		[[nodiscard]] const std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>>& getAntennas() const noexcept
 		{
 			return _antennas;
 		}
@@ -189,7 +189,7 @@ namespace core
 		 * @brief Retrieves the map of timing prototypes.
 		 * @return A const reference to the map of timing names to PrototypeTiming objects.
 		 */
-		[[nodiscard]] const std::unordered_map<std::string, std::unique_ptr<timing::PrototypeTiming>>&
+		[[nodiscard]] const std::unordered_map<SimId, std::unique_ptr<timing::PrototypeTiming>>&
 		getTimings() const noexcept
 		{
 			return _timings;
@@ -236,11 +236,11 @@ namespace core
 
 		std::vector<std::unique_ptr<radar::Target>> _targets;
 
-		std::unordered_map<std::string, std::unique_ptr<fers_signal::RadarSignal>> _waveforms;
+		std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>> _waveforms;
 
-		std::unordered_map<std::string, std::unique_ptr<antenna::Antenna>> _antennas;
+		std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>> _antennas;
 
-		std::unordered_map<std::string, std::unique_ptr<timing::PrototypeTiming>> _timings;
+		std::unordered_map<SimId, std::unique_ptr<timing::PrototypeTiming>> _timings;
 
 		std::priority_queue<Event, std::vector<Event>, EventComparator> _event_queue;
 

@@ -306,13 +306,6 @@ export function PlatformComponentInspector({
                         value={component.name}
                         onChange={(e) => handleChange('name', e.target.value)}
                     />
-                    <TextField
-                        label="Component Name"
-                        size="small"
-                        fullWidth
-                        value={component.name}
-                        onChange={(e) => handleChange('name', e.target.value)}
-                    />
                     <FormControl fullWidth size="small">
                         <InputLabel>RCS Type</InputLabel>
                         <Select

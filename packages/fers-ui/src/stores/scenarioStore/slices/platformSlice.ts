@@ -2,7 +2,6 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
 import { invoke } from '@tauri-apps/api/core';
 import {
     ScenarioStore,
@@ -11,6 +10,7 @@ import {
     PlatformComponent,
 } from '../types';
 import { createDefaultPlatform } from '../defaults';
+import { generateSimId } from '../idUtils';
 
 const NUM_PATH_POINTS = 100;
 type InterpolationType = 'static' | 'linear' | 'cubic';
@@ -36,7 +36,7 @@ export const createPlatformSlice: StateCreator<
 > = (set, get) => ({
     addPlatform: () =>
         set((state) => {
-            const id = uuidv4();
+            const id = generateSimId('Platform');
             const newName = `Platform ${state.platforms.length + 1}`;
             const newPlatform: Platform = {
                 ...createDefaultPlatform(),
@@ -52,7 +52,7 @@ export const createPlatformSlice: StateCreator<
             const platform = state.platforms.find((p) => p.id === platformId);
             if (platform) {
                 platform.motionPath.waypoints.push({
-                    id: uuidv4(),
+                    id: generateSimId('Platform'),
                     x: 0,
                     y: 0,
                     altitude: 0,
@@ -79,7 +79,7 @@ export const createPlatformSlice: StateCreator<
             const platform = state.platforms.find((p) => p.id === platformId);
             if (platform?.rotation.type === 'path') {
                 platform.rotation.waypoints.push({
-                    id: uuidv4(),
+                    id: generateSimId('Platform'),
                     azimuth: 0,
                     elevation: 0,
                     time: 0,
@@ -108,7 +108,18 @@ export const createPlatformSlice: StateCreator<
             const platform = state.platforms.find((p) => p.id === platformId);
             if (!platform) return;
 
-            const id = uuidv4();
+            const id =
+                componentType === 'transmitter'
+                    ? generateSimId('Transmitter')
+                    : componentType === 'receiver'
+                      ? generateSimId('Receiver')
+                      : componentType === 'target'
+                        ? generateSimId('Target')
+                        : generateSimId('Transmitter');
+            const rxId =
+                componentType === 'monostatic'
+                    ? generateSimId('Receiver')
+                    : null;
             const name = `${platform.name} ${
                 componentType.charAt(0).toUpperCase() + componentType.slice(1)
             }`;
@@ -119,6 +130,8 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'monostatic',
+                        txId: id,
+                        rxId: rxId ?? generateSimId('Receiver'),
                         name,
                         radarType: 'pulsed',
                         window_skip: 0,
@@ -188,6 +201,9 @@ export const createPlatformSlice: StateCreator<
                 );
                 if (index > -1) {
                     platform.components.splice(index, 1);
+                    if (state.selectedComponentId === componentId) {
+                        state.selectedComponentId = null;
+                    }
                     state.isDirty = true;
                 }
             }

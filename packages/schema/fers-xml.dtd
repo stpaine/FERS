@@ -46,7 +46,8 @@
 
         <!-- Waveform definition -->
         <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw))>
-        <!ATTLIST waveform name CDATA #REQUIRED>
+        <!ATTLIST waveform
+                name CDATA #REQUIRED>
 
         <!-- Waveform power and carrier frequency -->
         <!-- Pulse power (Watts) -->
@@ -62,7 +63,8 @@
         <!-- Timing Source -->
         <!ELEMENT timing (frequency,freq_offset?,random_freq_offset_stdev?,phase_offset?,random_phase_offset_stdev?,noise_entry*)>
         <!-- Timing source. Sets frequency -->
-        <!ATTLIST timing name CDATA #REQUIRED
+        <!ATTLIST timing
+                name CDATA #REQUIRED
                 synconpulse (true|false) "false">
 
         <!-- Frequency (Hz) -->
@@ -85,7 +87,8 @@
 
         <!-- Antenna -->
         <!ELEMENT antenna (alpha?,beta?,gamma?,diameter?,azscale?,elscale?,efficiency?)>
-        <!ATTLIST antenna name CDATA #REQUIRED
+        <!ATTLIST antenna
+                name CDATA #REQUIRED
                 pattern CDATA #REQUIRED
                 filename CDATA #IMPLIED>
 
@@ -105,7 +108,8 @@
 
         <!-- Platform -->
         <!ELEMENT platform (motionpath,(rotationpath|fixedrotation),(monostatic|transmitter|receiver|target)*)>
-        <!ATTLIST platform name CDATA #REQUIRED>
+        <!ATTLIST platform
+                name CDATA #REQUIRED>
 
         <!-- Motion paths and Position Waypoints -->
         <!ELEMENT motionpath (positionwaypoint+)>
@@ -186,7 +190,8 @@
 
         <!-- Target -->
         <!ELEMENT target (rcs,model?)>
-        <!ATTLIST target name CDATA #REQUIRED>
+        <!ATTLIST target
+                name CDATA #REQUIRED>
 
         <!-- RCS can either have a 'value' element or a 'filename' attribute -->
         <!-- Target RCS -->

@@ -54,7 +54,7 @@ export function AntennaPatternMesh({
         })
     );
 
-    const antennaName = antenna?.name;
+    const antennaIdStr = antenna?.id;
     const userScale = antenna?.meshScale ?? 1.0;
     const groupRef = useRef<THREE.Group>(null!);
 
@@ -101,7 +101,7 @@ export function AntennaPatternMesh({
             // If we don't have a valid frequency or name, we simply exit.
             // The cleanup function from the previous run will have already cleared the data,
             // so the component will render nothing (which is correct).
-            if (!antennaName || frequency === null) {
+            if (!antennaIdStr || frequency === null) {
                 return;
             }
 
@@ -109,7 +109,7 @@ export function AntennaPatternMesh({
                 const data = await invoke<AntennaPatternData>(
                     'get_antenna_pattern',
                     {
-                        antennaName: antennaName,
+                        antennaId: antennaIdStr,
                         azSamples: AZIMUTH_SEGMENTS + 1,
                         elSamples: ELEVATION_SEGMENTS + 1,
                         frequency: frequency,
@@ -121,7 +121,7 @@ export function AntennaPatternMesh({
                 }
             } catch (error) {
                 console.error(
-                    `Failed to fetch pattern for antenna ${antennaName}:`,
+                    `Failed to fetch pattern for antenna ${antennaIdStr}:`,
                     error
                 );
                 if (!isCancelled) {
@@ -137,7 +137,7 @@ export function AntennaPatternMesh({
             // Clear data on cleanup to prevent "stale" patterns flashing when switching configurations
             setPatternData(null);
         };
-    }, [antennaName, frequency, backendVersion]);
+    }, [antennaIdStr, frequency, backendVersion]);
 
     const geometry = useMemo(() => {
         if (!patternData) return new THREE.BufferGeometry();

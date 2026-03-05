@@ -21,6 +21,7 @@ export const useScenarioStore = create<ScenarioStore>()(
         antennas: [],
         platforms: [],
         selectedItemId: null,
+        selectedComponentId: null,
         isDirty: false,
         isPlaying: false,
         currentTime: 0,

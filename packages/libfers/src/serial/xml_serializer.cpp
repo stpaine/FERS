@@ -506,7 +506,7 @@ namespace serial
 		serializeParameters(params_elem);
 
 		// Assets (waveforms, timings, antennas) are serialized first. This is
-		// necessary because platforms reference these assets by name. By defining
+		// necessary because platforms reference these assets by ID. By defining
 		// them at the top of the document, we ensure that any XML parser can
 		// resolve these references when it later encounters the platform definitions.
 		for (const auto& waveform : world.getWaveforms() | std::views::values)

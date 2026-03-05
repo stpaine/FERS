@@ -14,6 +14,7 @@
 
 #include <optional>
 
+#include "core/sim_id.h"
 #include "radar_obj.h"
 #include "schedule_period.h"
 
@@ -38,8 +39,10 @@ namespace radar
 		 * @param name Name of the transmitter.
 		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
 		 */
-		Transmitter(Platform* platform, std::string name, const OperationMode mode) noexcept :
-			Radar(platform, std::move(name)), _mode(mode)
+		Transmitter(Platform* platform, std::string name, const OperationMode mode, const SimId id = 0) noexcept :
+			Radar(platform, std::move(name),
+				  id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Transmitter) : id),
+			_mode(mode)
 		{
 		}
 
@@ -66,6 +69,13 @@ namespace radar
 		 * @return Pointer to the RadarSignal object being transmitted.
 		 */
 		[[nodiscard]] fers_signal::RadarSignal* getSignal() const noexcept { return _signal; }
+
+		/**
+		 * @brief Retrieves the unique ID of the transmitter.
+		 *
+		 * @return The transmitter SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return Radar::getId(); }
 
 		/**
 		 * @brief Gets the operational mode of the transmitter.

@@ -56,8 +56,9 @@ namespace radar
 		return _model ? _rcs * _model->sampleModel() : _rcs;
 	}
 
-	FileTarget::FileTarget(Platform* platform, std::string name, const std::string& filename, const unsigned seed) :
-		Target(platform, std::move(name), seed), _azi_samples(std::make_unique_for_overwrite<interp::InterpSet>()),
+	FileTarget::FileTarget(Platform* platform, std::string name, const std::string& filename, const unsigned seed,
+						   const SimId id) :
+		Target(platform, std::move(name), seed, id), _azi_samples(std::make_unique_for_overwrite<interp::InterpSet>()),
 		_elev_samples(std::make_unique_for_overwrite<interp::InterpSet>()), _filename(filename)
 	{
 		XmlDocument doc;

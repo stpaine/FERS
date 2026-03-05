@@ -18,6 +18,7 @@
 #include <random>
 
 #include "core/rendering_job.h"
+#include "core/sim_id.h"
 #include "radar_obj.h"
 #include "serial/response.h"
 
@@ -53,7 +54,8 @@ namespace radar
 		 * @param seed The seed for the receiver's internal random number generator.
 		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
 		 */
-		explicit Receiver(Platform* platform, std::string name, unsigned seed, OperationMode mode) noexcept;
+		explicit Receiver(Platform* platform, std::string name, unsigned seed, OperationMode mode,
+						  const SimId id = 0) noexcept;
 
 		~Receiver() override = default;
 
@@ -84,6 +86,13 @@ namespace radar
 		 * @return True if the flag is set, false otherwise.
 		 */
 		[[nodiscard]] bool checkFlag(RecvFlag flag) const noexcept { return _flags & static_cast<int>(flag); }
+
+		/**
+		 * @brief Retrieves the unique ID of the receiver.
+		 *
+		 * @return The receiver SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return Radar::getId(); }
 
 		/**
 		 * @brief Retrieves the noise temperature of the receiver.

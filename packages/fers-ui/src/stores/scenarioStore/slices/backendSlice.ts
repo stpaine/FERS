@@ -30,6 +30,7 @@ const cleanObject = <T>(obj: T): T => {
 
 // --- Backend-specific type definitions ---
 type BackendTarget = {
+    id: string;
     name: string;
     rcs: {
         type: TargetComponent['rcs_type'];
@@ -52,14 +53,6 @@ export const createBackendSlice: StateCreator<
         set({ isBackendSyncing: true });
         const { globalParameters, waveforms, timings, antennas, platforms } =
             get();
-
-        // Helper functions to map frontend asset IDs back to names for the backend
-        const findAntennaName = (id: string | null) =>
-            antennas.find((a) => a.id === id)?.name;
-        const findWaveformName = (id: string | null) =>
-            waveforms.find((p) => p.id === id)?.name;
-        const findTimingName = (id: string | null) =>
-            timings.find((t) => t.id === id)?.name;
 
         const backendPlatforms = platforms.map((p) => {
             const { components, motionPath, rotation, ...rest } = p;
@@ -87,13 +80,13 @@ export const createBackendSlice: StateCreator<
                     case 'monostatic':
                         compObj = {
                             monostatic: {
+                                tx_id: component.txId,
+                                rx_id: component.rxId,
                                 name: component.name,
                                 ...mode,
-                                antenna: findAntennaName(component.antennaId),
-                                waveform: findWaveformName(
-                                    component.waveformId
-                                ),
-                                timing: findTimingName(component.timingId),
+                                antenna: component.antennaId ?? 0,
+                                waveform: component.waveformId ?? 0,
+                                timing: component.timingId ?? 0,
                                 noise_temp: component.noiseTemperature,
                                 nodirect: component.noDirectPaths,
                                 nopropagationloss: component.noPropagationLoss,
@@ -104,13 +97,12 @@ export const createBackendSlice: StateCreator<
                     case 'transmitter':
                         compObj = {
                             transmitter: {
+                                id: component.id,
                                 name: component.name,
                                 ...mode,
-                                antenna: findAntennaName(component.antennaId),
-                                waveform: findWaveformName(
-                                    component.waveformId
-                                ),
-                                timing: findTimingName(component.timingId),
+                                antenna: component.antennaId ?? 0,
+                                waveform: component.waveformId ?? 0,
+                                timing: component.timingId ?? 0,
                                 schedule: component.schedule,
                             },
                         };
@@ -118,10 +110,11 @@ export const createBackendSlice: StateCreator<
                     case 'receiver':
                         compObj = {
                             receiver: {
+                                id: component.id,
                                 name: component.name,
                                 ...mode,
-                                antenna: findAntennaName(component.antennaId),
-                                timing: findTimingName(component.timingId),
+                                antenna: component.antennaId ?? 0,
+                                timing: component.timingId ?? 0,
                                 noise_temp: component.noiseTemperature,
                                 nodirect: component.noDirectPaths,
                                 nopropagationloss: component.noPropagationLoss,
@@ -132,6 +125,7 @@ export const createBackendSlice: StateCreator<
                     case 'target':
                         {
                             const targetObj: BackendTarget = {
+                                id: component.id,
                                 name: component.name,
                                 rcs: {
                                     type: component.rcs_type,
@@ -172,6 +166,7 @@ export const createBackendSlice: StateCreator<
 
             return cleanObject({
                 ...rest,
+                id: p.id,
                 motionpath: {
                     interpolation: motionPath.interpolation,
                     positionwaypoints: motionPath.waypoints.map((wp) =>
@@ -190,6 +185,7 @@ export const createBackendSlice: StateCreator<
                     : { pulsed_from_file: { filename: w.filename } };
 
             return {
+                id: w.id,
                 name: w.name,
                 power: w.power,
                 carrier_frequency: w.carrier_frequency,
@@ -198,7 +194,7 @@ export const createBackendSlice: StateCreator<
         });
 
         const backendTimings = timings.map((t: Timing) => {
-            const rest = omit(t, 'id', 'type');
+            const rest = omit(t, 'type');
             const timingObj = {
                 ...rest,
                 synconpulse: false,
@@ -216,7 +212,7 @@ export const createBackendSlice: StateCreator<
         });
 
         const backendAntennas = antennas.map((a) =>
-            omit(a, 'id', 'type', 'meshScale')
+            omit(a, 'type', 'meshScale')
         );
 
         const {

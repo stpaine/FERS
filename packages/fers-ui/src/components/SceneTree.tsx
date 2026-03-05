@@ -91,6 +91,7 @@ export default function SceneTree() {
         antennas,
         platforms,
         selectedItemId,
+        selectedComponentId,
         selectItem,
         addWaveform,
         addTiming,
@@ -105,6 +106,7 @@ export default function SceneTree() {
             antennas: state.antennas,
             platforms: state.platforms,
             selectedItemId: state.selectedItemId,
+            selectedComponentId: state.selectedComponentId,
             selectItem: state.selectItem,
             addWaveform: state.addWaveform,
             addTiming: state.addTiming,
@@ -169,7 +171,7 @@ export default function SceneTree() {
                 }}
             >
                 <SimpleTreeView
-                    selectedItems={selectedItemId}
+                    selectedItems={selectedComponentId ?? selectedItemId}
                     onSelectedItemsChange={handleSelect}
                     slots={{
                         collapseIcon: ExpandMoreIcon,

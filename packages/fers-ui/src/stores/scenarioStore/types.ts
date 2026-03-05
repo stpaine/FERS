@@ -99,6 +99,7 @@ export type ViewControlAction = {
 
 export type ScenarioState = ScenarioData & {
     selectedItemId: string | null;
+    selectedComponentId: string | null;
     isDirty: boolean;
     isPlaying: boolean;
     currentTime: number;

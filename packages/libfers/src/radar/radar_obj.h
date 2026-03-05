@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include "core/sim_id.h"
 #include "object.h"
 
 namespace timing
@@ -51,7 +52,11 @@ namespace radar
 		 * @param platform Pointer to the platform on which the radar is mounted.
 		 * @param name Name of the radar object.
 		 */
-		Radar(Platform* platform, std::string name) noexcept : Object(platform, std::move(name)) {}
+		Radar(Platform* platform, std::string name, const SimId id = 0) noexcept :
+			Object(platform, std::move(name), ObjectType::Unknown,
+				   id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Unknown) : id)
+		{
+		}
 
 		~Radar() override = default;
 
@@ -69,6 +74,13 @@ namespace radar
 		 * @return Pointer to the attached radar object.
 		 */
 		[[nodiscard]] const Radar* getAttached() const noexcept { return _attached; }
+
+		/**
+		 * @brief Retrieves the unique ID of the radar object.
+		 *
+		 * @return The radar SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return Object::getId(); }
 
 		/**
 		 * @brief Gets the antenna associated with this radar.

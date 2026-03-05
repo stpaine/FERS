@@ -283,9 +283,9 @@
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
             <xs:attribute name="name" use="required"/>
-            <xs:attribute name="antenna" use="required"/>
-            <xs:attribute name="waveform" use="required"/>
-            <xs:attribute name="timing" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="waveform" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
             <xs:attribute name="nodirect" type="xs:boolean" default="false"/>
             <xs:attribute name="nopropagationloss" type="xs:boolean" default="false"/>
         </xs:complexType>
@@ -310,9 +310,9 @@
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
             <xs:attribute name="name" use="required"/>
-            <xs:attribute name="waveform" use="required"/>
-            <xs:attribute name="antenna" use="required"/>
-            <xs:attribute name="timing" use="required"/>
+            <xs:attribute name="waveform" type="xs:string" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
         </xs:complexType>
     </xs:element>
 
@@ -338,8 +338,8 @@
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
             <xs:attribute name="name" use="required"/>
-            <xs:attribute name="antenna" use="required"/>
-            <xs:attribute name="timing" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
             <xs:attribute name="nodirect" type="xs:boolean" default="false"/>
             <xs:attribute name="nopropagationloss" type="xs:boolean" default="false"/>
         </xs:complexType>

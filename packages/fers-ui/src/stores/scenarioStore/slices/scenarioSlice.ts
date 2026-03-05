@@ -2,7 +2,6 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
-import { v4 as uuidv4 } from 'uuid';
 import {
     ScenarioStore,
     ScenarioActions,
@@ -20,6 +19,12 @@ import {
 import { createDefaultPlatform, defaultGlobalParameters } from '../defaults';
 import { setPropertyByPath } from '../utils';
 import { ScenarioDataSchema } from '../../scenarioSchema';
+import {
+    generateSimId,
+    normalizeSimId,
+    seedSimIdCounters,
+    reserveSimId,
+} from '../idUtils';
 
 // Define interfaces for the expected backend data structure.
 interface BackendObjectWithName {
@@ -40,9 +45,12 @@ interface BackendSchedulePeriod {
 
 interface BackendPlatformComponentData {
     name: string;
-    antenna?: string;
-    timing?: string;
-    waveform?: string;
+    id?: string | number;
+    tx_id?: string | number;
+    rx_id?: string | number;
+    antenna?: string | number;
+    timing?: string | number;
+    waveform?: string | number;
     noise_temp?: number | null;
     nodirect?: boolean;
     nopropagationloss?: boolean;
@@ -69,6 +77,7 @@ interface BackendRotationWaypoint {
 
 interface BackendPlatform {
     name: string;
+    id?: string | number;
     motionpath?: {
         interpolation: 'static' | 'linear' | 'cubic';
         positionwaypoints?: BackendPositionWaypoint[];
@@ -88,6 +97,7 @@ interface BackendPlatform {
 
 interface BackendWaveform {
     name: string;
+    id?: string | number;
     power: number;
     carrier_frequency: number;
     cw?: object;
@@ -102,7 +112,59 @@ export const createScenarioSlice: StateCreator<
     [],
     ScenarioActions
 > = (set) => ({
-    selectItem: (itemId) => set({ selectedItemId: itemId }),
+    selectItem: (itemId) =>
+        set((state) => {
+            if (!itemId) {
+                state.selectedItemId = null;
+                state.selectedComponentId = null;
+                return;
+            }
+
+            if (itemId === 'global-parameters') {
+                state.selectedItemId = itemId;
+                state.selectedComponentId = null;
+                return;
+            }
+
+            const collections = [
+                'waveforms',
+                'timings',
+                'antennas',
+                'platforms',
+            ] as const;
+
+            for (const key of collections) {
+                if (state[key].some((i: { id: string }) => i.id === itemId)) {
+                    state.selectedItemId = itemId;
+                    state.selectedComponentId = null;
+                    return;
+                }
+            }
+
+            for (const platform of state.platforms) {
+                const component = platform.components.find(
+                    (c) => c.id === itemId
+                );
+                if (component) {
+                    state.selectedItemId = platform.id;
+                    state.selectedComponentId = component.id;
+                    return;
+                }
+                const monostatic = platform.components.find(
+                    (c) =>
+                        c.type === 'monostatic' &&
+                        (c.txId === itemId || c.rxId === itemId)
+                );
+                if (monostatic) {
+                    state.selectedItemId = platform.id;
+                    state.selectedComponentId = monostatic.id;
+                    return;
+                }
+            }
+
+            state.selectedItemId = itemId;
+            state.selectedComponentId = null;
+        }),
     updateItem: (itemId, propertyPath, value) =>
         set((state) => {
             if (itemId === 'global-parameters') {
@@ -156,6 +218,9 @@ export const createScenarioSlice: StateCreator<
                     if (state.selectedItemId === itemId) {
                         state.selectedItemId = null;
                     }
+                    if (key === 'platforms') {
+                        state.selectedComponentId = null;
+                    }
                     state.isDirty = true;
                     return;
                 }
@@ -169,6 +234,7 @@ export const createScenarioSlice: StateCreator<
             antennas: [],
             platforms: [],
             selectedItemId: null,
+            selectedComponentId: null,
             isDirty: false,
             currentTime: defaultGlobalParameters.start,
         }),
@@ -189,10 +255,12 @@ export const createScenarioSlice: StateCreator<
                     : (backendData as Record<string, unknown>);
 
             const nameToIdMap = new Map<string, string>();
-            const assignId = <T extends object>(item: T) => ({
-                ...item,
-                id: uuidv4(),
-            });
+            const normalizeIdOrNull = (value: unknown) => normalizeSimId(value);
+            const normalizeRefId = (value: unknown) => {
+                const id = normalizeIdOrNull(value);
+                if (!id || id === '0') return null;
+                return id;
+            };
 
             // 1. Parameters
             const params = (data.parameters as Record<string, unknown>) || {};
@@ -241,8 +309,10 @@ export const createScenarioSlice: StateCreator<
                     : ('pulsed_from_file' as const);
                 const filename = w.pulsed_from_file?.filename ?? '';
 
+                const waveformId =
+                    normalizeIdOrNull(w.id) ?? generateSimId('Waveform');
                 const waveform: Waveform = {
-                    id: uuidv4(),
+                    id: waveformId,
                     type: 'Waveform',
                     name: w.name,
                     waveformType,
@@ -251,14 +321,19 @@ export const createScenarioSlice: StateCreator<
                     filename,
                 };
                 nameToIdMap.set(waveform.name, waveform.id);
+                reserveSimId(waveformId);
                 return waveform;
             });
 
             const timings: Timing[] = (
                 (data.timings as BackendObjectWithName[]) || []
             ).map((t) => {
+                const timingId =
+                    normalizeIdOrNull((t as { id?: unknown }).id) ??
+                    generateSimId('Timing');
                 const timing = {
-                    ...assignId(t),
+                    ...t,
+                    id: timingId,
                     type: 'Timing' as const,
                     freqOffset: (t.freq_offset as number) ?? null,
                     randomFreqOffsetStdev:
@@ -267,23 +342,31 @@ export const createScenarioSlice: StateCreator<
                     randomPhaseOffsetStdev:
                         (t.random_phase_offset_stdev as number) ?? null,
                     noiseEntries: Array.isArray(t.noise_entries)
-                        ? t.noise_entries.map((item) =>
-                              assignId(item as object)
-                          )
+                        ? t.noise_entries.map((item) => ({
+                              ...(item as object),
+                              id: generateSimId('Timing'),
+                          }))
                         : [],
                 };
+                timing.noiseEntries.forEach((entry) => reserveSimId(entry.id));
                 nameToIdMap.set(timing.name, timing.id);
+                reserveSimId(timingId);
                 return timing as Timing;
             });
 
             const antennas: Antenna[] = (
                 (data.antennas as BackendObjectWithName[]) || []
             ).map((a) => {
+                const antennaId =
+                    normalizeIdOrNull((a as { id?: unknown }).id) ??
+                    generateSimId('Antenna');
                 const antenna = {
-                    ...assignId(a),
+                    ...a,
+                    id: antennaId,
                     type: 'Antenna' as const,
                 };
                 nameToIdMap.set(antenna.name, antenna.id);
+                reserveSimId(antennaId);
                 return antenna as Antenna;
             });
 
@@ -291,12 +374,20 @@ export const createScenarioSlice: StateCreator<
             const platforms: Platform[] = (
                 (data.platforms as BackendPlatform[]) || []
             ).map((p): Platform => {
+                const platformId =
+                    normalizeIdOrNull(p.id) ?? generateSimId('Platform');
+                reserveSimId(platformId);
+
                 const motionPath: MotionPath = {
                     interpolation: p.motionpath?.interpolation ?? 'static',
                     waypoints: (p.motionpath?.positionwaypoints ?? []).map(
-                        assignId
+                        (item) => ({
+                            ...item,
+                            id: generateSimId('Platform'),
+                        })
                     ),
                 };
+                motionPath.waypoints.forEach((wp) => reserveSimId(wp.id));
 
                 let rotation: FixedRotation | RotationPath;
                 if (p.fixedrotation) {
@@ -312,9 +403,13 @@ export const createScenarioSlice: StateCreator<
                         type: 'path',
                         interpolation: p.rotationpath.interpolation ?? 'static',
                         waypoints: (p.rotationpath.rotationwaypoints || []).map(
-                            assignId
+                            (item) => ({
+                                ...item,
+                                id: generateSimId('Platform'),
+                            })
                         ),
                     };
+                    rotation.waypoints.forEach((wp) => reserveSimId(wp.id));
                 } else {
                     rotation = createDefaultPlatform().rotation as
                         | FixedRotation
@@ -327,7 +422,25 @@ export const createScenarioSlice: StateCreator<
                     p.components.forEach((compWrapper) => {
                         const cType = Object.keys(compWrapper)[0];
                         const cData = compWrapper[cType];
-                        const id = uuidv4();
+                        const componentId =
+                            normalizeIdOrNull(cData.id) ??
+                            (cType === 'transmitter'
+                                ? generateSimId('Transmitter')
+                                : cType === 'receiver'
+                                  ? generateSimId('Receiver')
+                                  : cType === 'target'
+                                    ? generateSimId('Target')
+                                    : generateSimId('Transmitter'));
+                        const txId =
+                            normalizeIdOrNull(cData.tx_id) ??
+                            (cType === 'monostatic'
+                                ? generateSimId('Transmitter')
+                                : null);
+                        const rxId =
+                            normalizeIdOrNull(cData.rx_id) ??
+                            (cType === 'monostatic'
+                                ? generateSimId('Receiver')
+                                : null);
 
                         const radarType = cData.pulsed_mode
                             ? 'pulsed'
@@ -336,11 +449,22 @@ export const createScenarioSlice: StateCreator<
                               : 'pulsed';
                         const pulsed = cData.pulsed_mode;
 
+                        const antennaId =
+                            normalizeRefId(cData.antenna) ??
+                            nameToIdMap.get(String(cData.antenna ?? '')) ??
+                            null;
+                        const timingId =
+                            normalizeRefId(cData.timing) ??
+                            nameToIdMap.get(String(cData.timing ?? '')) ??
+                            null;
+                        const waveformId =
+                            normalizeRefId(cData.waveform) ??
+                            nameToIdMap.get(String(cData.waveform ?? '')) ??
+                            null;
+
                         const commonRadar = {
-                            antennaId:
-                                nameToIdMap.get(cData.antenna ?? '') ?? null,
-                            timingId:
-                                nameToIdMap.get(cData.timing ?? '') ?? null,
+                            antennaId,
+                            timingId,
                             schedule: cData.schedule ?? [],
                         };
                         const commonReceiver = {
@@ -354,37 +478,35 @@ export const createScenarioSlice: StateCreator<
                         switch (cType) {
                             case 'monostatic':
                                 newComp = {
-                                    id,
+                                    id: componentId,
                                     type: 'monostatic',
+                                    txId: txId ?? componentId,
+                                    rxId: rxId ?? generateSimId('Receiver'),
                                     name: cData.name,
                                     radarType,
                                     window_skip: pulsed?.window_skip ?? null,
                                     window_length:
                                         pulsed?.window_length ?? null,
                                     prf: pulsed?.prf ?? null,
-                                    waveformId:
-                                        nameToIdMap.get(cData.waveform ?? '') ??
-                                        null,
+                                    waveformId,
                                     ...commonRadar,
                                     ...commonReceiver,
                                 };
                                 break;
                             case 'transmitter':
                                 newComp = {
-                                    id,
+                                    id: componentId,
                                     type: 'transmitter',
                                     name: cData.name,
                                     radarType,
                                     prf: pulsed?.prf ?? null,
-                                    waveformId:
-                                        nameToIdMap.get(cData.waveform ?? '') ??
-                                        null,
+                                    waveformId,
                                     ...commonRadar,
                                 };
                                 break;
                             case 'receiver':
                                 newComp = {
-                                    id,
+                                    id: componentId,
                                     type: 'receiver',
                                     name: cData.name,
                                     radarType,
@@ -398,7 +520,7 @@ export const createScenarioSlice: StateCreator<
                                 break;
                             case 'target':
                                 newComp = {
-                                    id,
+                                    id: componentId,
                                     type: 'target',
                                     name: cData.name,
                                     rcs_type: cData.rcs?.type ?? 'isotropic',
@@ -417,7 +539,7 @@ export const createScenarioSlice: StateCreator<
                 }
 
                 return {
-                    id: uuidv4(),
+                    id: platformId,
                     type: 'Platform',
                     name: p.name,
                     motionPath,
@@ -425,6 +547,20 @@ export const createScenarioSlice: StateCreator<
                     components,
                 };
             });
+
+            seedSimIdCounters([
+                ...waveforms.map((w) => w.id),
+                ...timings.map((t) => t.id),
+                ...antennas.map((a) => a.id),
+                ...platforms.map((p) => p.id),
+                ...platforms.flatMap((p) =>
+                    p.components.flatMap((c) =>
+                        c.type === 'monostatic'
+                            ? [c.id, c.txId, c.rxId]
+                            : [c.id]
+                    )
+                ),
+            ]);
 
             const transformedScenario: ScenarioData = {
                 globalParameters,
@@ -449,6 +585,7 @@ export const createScenarioSlice: StateCreator<
             set({
                 ...result.data,
                 selectedItemId: null,
+                selectedComponentId: null,
                 isDirty: true,
                 currentTime: result.data.globalParameters.start,
             });

@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "core/config.h"
+#include "core/sim_id.h"
 #include "interpolation/interpolation_set.h"
 #include "noise/noise_generators.h"
 #include "object.h"
@@ -123,8 +124,8 @@ namespace radar
 		 * @param name The name of the target.
 		 * @param seed The seed for the target's internal random number generator.
 		 */
-		Target(Platform* platform, std::string name, const unsigned seed) :
-			Object(platform, std::move(name)), _rng(seed)
+		Target(Platform* platform, std::string name, const unsigned seed, const SimId id = 0) :
+			Object(platform, std::move(name), ObjectType::Target, id), _rng(seed)
 		{
 		}
 
@@ -143,6 +144,13 @@ namespace radar
 		 * @return A mutable reference to the RNG engine.
 		 */
 		[[nodiscard]] std::mt19937& getRngEngine() noexcept { return _rng; }
+
+		/**
+		 * @brief Gets the unique ID of the target.
+		 *
+		 * @return The target SimId.
+		 */
+		[[nodiscard]] SimId getId() const noexcept { return Object::getId(); }
 
 		/**
 		 * @brief Sets the RCS fluctuation model.
@@ -179,8 +187,8 @@ namespace radar
 		 * @param rcs The constant RCS value for the target.
 		 * @param seed The seed for the target's internal random number generator.
 		 */
-		IsoTarget(Platform* platform, std::string name, const RealType rcs, const unsigned seed) :
-			Target(platform, std::move(name), seed), _rcs(rcs)
+		IsoTarget(Platform* platform, std::string name, const RealType rcs, const unsigned seed, const SimId id = 0) :
+			Target(platform, std::move(name), seed, id), _rcs(rcs)
 		{
 		}
 
@@ -218,7 +226,8 @@ namespace radar
 		 * @param seed The seed for the target's internal random number generator.
 		 * @throws std::runtime_error If the file cannot be loaded or parsed.
 		 */
-		FileTarget(Platform* platform, std::string name, const std::string& filename, unsigned seed);
+		FileTarget(Platform* platform, std::string name, const std::string& filename, unsigned seed,
+				   const SimId id = 0);
 
 		/**
 		 * @brief Gets the RCS value from file-based data for a specific bistatic geometry and time.
@@ -262,9 +271,10 @@ namespace radar
 	 * @param seed The seed for the target's internal random number generator.
 	 * @return A unique pointer to the newly created IsoTarget.
 	 */
-	inline std::unique_ptr<Target> createIsoTarget(Platform* platform, std::string name, RealType rcs, unsigned seed)
+	inline std::unique_ptr<Target> createIsoTarget(Platform* platform, std::string name, RealType rcs, unsigned seed,
+												   const SimId id = 0)
 	{
-		return std::make_unique<IsoTarget>(platform, std::move(name), rcs, seed);
+		return std::make_unique<IsoTarget>(platform, std::move(name), rcs, seed, id);
 	}
 
 	/**
@@ -277,8 +287,8 @@ namespace radar
 	 * @return A unique pointer to the newly created FileTarget.
 	 */
 	inline std::unique_ptr<Target> createFileTarget(Platform* platform, std::string name, const std::string& filename,
-													unsigned seed)
+													unsigned seed, const SimId id = 0)
 	{
-		return std::make_unique<FileTarget>(platform, std::move(name), filename, seed);
+		return std::make_unique<FileTarget>(platform, std::move(name), filename, seed, id);
 	}
 }

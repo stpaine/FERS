@@ -19,7 +19,9 @@
 #include <memory>
 #include <random>
 #include <span>
+#include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -28,6 +30,7 @@
 #include "core/config.h"
 #include "core/logging.h"
 #include "core/parameters.h"
+#include "core/sim_id.h"
 #include "core/world.h"
 #include "fers_xml_dtd.h"
 #include "fers_xml_xsd.h"
@@ -127,6 +130,36 @@ auto get_attribute_bool = [](const XmlElement& element, const std::string& attri
 
 namespace
 {
+	struct ReferenceLookup
+	{
+		const std::unordered_map<std::string, SimId>* waveforms;
+		const std::unordered_map<std::string, SimId>* antennas;
+		const std::unordered_map<std::string, SimId>* timings;
+	};
+
+	SimId assign_id_from_attribute(const std::string& owner, ObjectType type)
+	{
+		const SimId id = SimIdGenerator::instance().generateId(type);
+		LOG(Level::TRACE, "Assigned ID {} to {} (generated)", id, owner);
+		return id;
+	}
+
+	SimId resolve_reference_id(const XmlElement& element, const std::string& attributeName, const std::string& owner,
+							   const std::unordered_map<std::string, SimId>& name_map)
+	{
+		const std::string value = XmlElement::getSafeAttribute(element, attributeName);
+		if (value.empty())
+		{
+			throw XmlException("Missing " + attributeName + " for " + owner + ".");
+		}
+		const auto it = name_map.find(value);
+		if (it != name_map.end())
+		{
+			return it->second;
+		}
+		throw XmlException("Unknown " + attributeName + " '" + value + "' for " + owner + ".");
+	}
+
 	std::vector<radar::SchedulePeriod> parseSchedule(const XmlElement& parent, const std::string& parentName,
 													 const bool isPulsed, const RealType pri = 0.0)
 	{
@@ -299,6 +332,7 @@ namespace
 	void parseWaveform(const XmlElement& waveform, World* world, const fs::path& baseDir)
 	{
 		const std::string name = XmlElement::getSafeAttribute(waveform, "name");
+		const SimId id = assign_id_from_attribute("waveform '" + name + "'", ObjectType::Waveform);
 
 		const auto power = get_child_real_type(waveform, "power");
 		const auto carrier = get_child_real_type(waveform, "carrier_frequency");
@@ -319,14 +353,14 @@ namespace
 				throw XmlException("Waveform file not found: " + filename_str);
 			}
 
-			auto wave = serial::loadWaveformFromFile(name, pulse_path.string(), power, carrier);
+			auto wave = serial::loadWaveformFromFile(name, pulse_path.string(), power, carrier, id);
 			world->add(std::move(wave));
 		}
 		else if (waveform.childElement("cw", 0).isValid())
 		{
 			auto cw_signal = std::make_unique<fers_signal::CwSignal>();
 			auto wave = std::make_unique<RadarSignal>(name, power, carrier, params::endTime() - params::startTime(),
-													  std::move(cw_signal));
+													  std::move(cw_signal), id);
 			world->add(std::move(wave));
 		}
 		else
@@ -345,8 +379,9 @@ namespace
 	void parseTiming(const XmlElement& timing, World* world)
 	{
 		const std::string name = XmlElement::getSafeAttribute(timing, "name");
+		const SimId id = assign_id_from_attribute("timing '" + name + "'", ObjectType::Timing);
 		const RealType freq = get_child_real_type(timing, "frequency");
-		auto timing_obj = std::make_unique<PrototypeTiming>(name);
+		auto timing_obj = std::make_unique<PrototypeTiming>(name, id);
 
 		timing_obj->setFrequency(freq);
 
@@ -416,6 +451,7 @@ namespace
 	void parseAntenna(const XmlElement& antenna, World* world)
 	{
 		std::string name = XmlElement::getSafeAttribute(antenna, "name");
+		const SimId id = assign_id_from_attribute("antenna '" + name + "'", ObjectType::Antenna);
 		const std::string pattern = XmlElement::getSafeAttribute(antenna, "pattern");
 
 		std::unique_ptr<Antenna> ant;
@@ -423,34 +459,34 @@ namespace
 		LOG(Level::DEBUG, "Adding antenna '{}' with pattern '{}'", name, pattern);
 		if (pattern == "isotropic")
 		{
-			ant = std::make_unique<antenna::Isotropic>(name);
+			ant = std::make_unique<antenna::Isotropic>(name, id);
 		}
 		else if (pattern == "sinc")
 		{
 			ant = std::make_unique<antenna::Sinc>(name, get_child_real_type(antenna, "alpha"),
 												  get_child_real_type(antenna, "beta"),
-												  get_child_real_type(antenna, "gamma"));
+												  get_child_real_type(antenna, "gamma"), id);
 		}
 		else if (pattern == "gaussian")
 		{
 			ant = std::make_unique<antenna::Gaussian>(name, get_child_real_type(antenna, "azscale"),
-													  get_child_real_type(antenna, "elscale"));
+													  get_child_real_type(antenna, "elscale"), id);
 		}
 		else if (pattern == "squarehorn")
 		{
-			ant = std::make_unique<antenna::SquareHorn>(name, get_child_real_type(antenna, "diameter"));
+			ant = std::make_unique<antenna::SquareHorn>(name, get_child_real_type(antenna, "diameter"), id);
 		}
 		else if (pattern == "parabolic")
 		{
-			ant = std::make_unique<antenna::Parabolic>(name, get_child_real_type(antenna, "diameter"));
+			ant = std::make_unique<antenna::Parabolic>(name, get_child_real_type(antenna, "diameter"), id);
 		}
 		else if (pattern == "xml")
 		{
-			ant = std::make_unique<antenna::XmlAntenna>(name, XmlElement::getSafeAttribute(antenna, "filename"));
+			ant = std::make_unique<antenna::XmlAntenna>(name, XmlElement::getSafeAttribute(antenna, "filename"), id);
 		}
 		else if (pattern == "file")
 		{
-			ant = std::make_unique<antenna::H5Antenna>(name, XmlElement::getSafeAttribute(antenna, "filename"));
+			ant = std::make_unique<antenna::H5Antenna>(name, XmlElement::getSafeAttribute(antenna, "filename"), id);
 		}
 		else
 		{
@@ -657,9 +693,10 @@ namespace
 	 * @return A pointer to the created Transmitter object.
 	 */
 	Transmitter* parseTransmitter(const XmlElement& transmitter, Platform* platform, World* world,
-								  std::mt19937& masterSeeder)
+								  std::mt19937& masterSeeder, const ReferenceLookup& refs)
 	{
 		const std::string name = XmlElement::getSafeAttribute(transmitter, "name");
+		const SimId id = assign_id_from_attribute("transmitter '" + name + "'", ObjectType::Transmitter);
 		const XmlElement pulsed_mode_element = transmitter.childElement("pulsed_mode", 0);
 		const bool is_pulsed = pulsed_mode_element.isValid();
 		const OperationMode mode = is_pulsed ? OperationMode::PULSED_MODE : OperationMode::CW_MODE;
@@ -669,13 +706,15 @@ namespace
 			throw XmlException("Transmitter '" + name + "' must specify a radar mode (<pulsed_mode> or <cw_mode>).");
 		}
 
-		auto transmitter_obj = std::make_unique<Transmitter>(platform, name, mode);
+		auto transmitter_obj = std::make_unique<Transmitter>(platform, name, mode, id);
 
-		const std::string waveform_name = XmlElement::getSafeAttribute(transmitter, "waveform");
-		RadarSignal* wave = world->findWaveform(waveform_name);
+		const SimId waveform_id =
+			resolve_reference_id(transmitter, "waveform", "transmitter '" + name + "'", *refs.waveforms);
+		RadarSignal* wave = world->findWaveform(waveform_id);
 		if (!wave)
 		{
-			throw XmlException("Waveform '" + waveform_name + "' not found for transmitter '" + name + "'");
+			throw XmlException("Waveform ID '" + std::to_string(waveform_id) + "' not found for transmitter '" + name +
+							   "'");
 		}
 		transmitter_obj->setWave(wave);
 
@@ -684,21 +723,25 @@ namespace
 			transmitter_obj->setPrf(get_child_real_type(pulsed_mode_element, "prf"));
 		}
 
-		const std::string antenna_name = XmlElement::getSafeAttribute(transmitter, "antenna");
-		const Antenna* ant = world->findAntenna(antenna_name);
+		const SimId antenna_id =
+			resolve_reference_id(transmitter, "antenna", "transmitter '" + name + "'", *refs.antennas);
+		const Antenna* ant = world->findAntenna(antenna_id);
 		if (!ant)
 		{
-			throw XmlException("Antenna '" + antenna_name + "' not found for transmitter '" + name + "'");
+			throw XmlException("Antenna ID '" + std::to_string(antenna_id) + "' not found for transmitter '" + name +
+							   "'");
 		}
 		transmitter_obj->setAntenna(ant);
 
-		const std::string timing_name = XmlElement::getSafeAttribute(transmitter, "timing");
-		const auto timing = std::make_shared<Timing>(timing_name, masterSeeder());
-		const PrototypeTiming* proto = world->findTiming(timing_name);
+		const SimId timing_id =
+			resolve_reference_id(transmitter, "timing", "transmitter '" + name + "'", *refs.timings);
+		const PrototypeTiming* proto = world->findTiming(timing_id);
 		if (!proto)
 		{
-			throw XmlException("Timing '" + timing_name + "' not found for transmitter '" + name + "'");
+			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for transmitter '" + name +
+							   "'");
 		}
+		const auto timing = std::make_shared<Timing>(proto->getName(), masterSeeder(), proto->getId());
 		timing->initializeModel(proto);
 		transmitter_obj->setTiming(timing);
 
@@ -723,21 +766,23 @@ namespace
 	 * @param masterSeeder The master random number generator for seeding.
 	 * @return A pointer to the created Receiver object.
 	 */
-	Receiver* parseReceiver(const XmlElement& receiver, Platform* platform, World* world, std::mt19937& masterSeeder)
+	Receiver* parseReceiver(const XmlElement& receiver, Platform* platform, World* world, std::mt19937& masterSeeder,
+							const ReferenceLookup& refs)
 	{
 		const std::string name = XmlElement::getSafeAttribute(receiver, "name");
+		const SimId id = assign_id_from_attribute("receiver '" + name + "'", ObjectType::Receiver);
 		const XmlElement pulsed_mode_element = receiver.childElement("pulsed_mode", 0);
 		const bool is_pulsed = pulsed_mode_element.isValid();
 		const OperationMode mode = is_pulsed ? OperationMode::PULSED_MODE : OperationMode::CW_MODE;
 
-		auto receiver_obj = std::make_unique<Receiver>(platform, name, masterSeeder(), mode);
+		auto receiver_obj = std::make_unique<Receiver>(platform, name, masterSeeder(), mode, id);
 
-		const std::string ant_name = XmlElement::getSafeAttribute(receiver, "antenna");
+		const SimId ant_id = resolve_reference_id(receiver, "antenna", "receiver '" + name + "'", *refs.antennas);
 
-		const Antenna* antenna = world->findAntenna(ant_name);
+		const Antenna* antenna = world->findAntenna(ant_id);
 		if (!antenna)
 		{
-			throw XmlException("Antenna '" + ant_name + "' not found for receiver '" + name + "'");
+			throw XmlException("Antenna ID '" + std::to_string(ant_id) + "' not found for receiver '" + name + "'");
 		}
 		receiver_obj->setAntenna(antenna);
 
@@ -776,14 +821,14 @@ namespace
 			throw XmlException("Receiver '" + name + "' must specify a radar mode (<pulsed_mode> or <cw_mode>).");
 		}
 
-		const std::string timing_name = XmlElement::getSafeAttribute(receiver, "timing");
-		const auto timing = std::make_shared<Timing>(timing_name, masterSeeder());
+		const SimId timing_id = resolve_reference_id(receiver, "timing", "receiver '" + name + "'", *refs.timings);
 
-		const PrototypeTiming* proto = world->findTiming(timing_name);
+		const PrototypeTiming* proto = world->findTiming(timing_id);
 		if (!proto)
 		{
-			throw XmlException("Timing '" + timing_name + "' not found for receiver '" + name + "'");
+			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for receiver '" + name + "'");
 		}
+		const auto timing = std::make_shared<Timing>(proto->getName(), masterSeeder(), proto->getId());
 		timing->initializeModel(proto);
 		receiver_obj->setTiming(timing);
 
@@ -819,10 +864,12 @@ namespace
 	 * @param world A pointer to the World
 	 * @param masterSeeder The master random number generator for seeding.
 	 */
-	void parseMonostatic(const XmlElement& monostatic, Platform* platform, World* world, std::mt19937& masterSeeder)
+	void parseMonostatic(const XmlElement& monostatic, Platform* platform, World* world, std::mt19937& masterSeeder,
+						 const ReferenceLookup& refs)
 	{
-		Transmitter* trans = parseTransmitter(monostatic, platform, world, masterSeeder);
-		Receiver* recv = parseReceiver(monostatic, platform, world, masterSeeder);
+		const std::string name = XmlElement::getSafeAttribute(monostatic, "name");
+		Transmitter* trans = parseTransmitter(monostatic, platform, world, masterSeeder, refs);
+		Receiver* recv = parseReceiver(monostatic, platform, world, masterSeeder, refs);
 		trans->setAttached(recv);
 		recv->setAttached(trans);
 	}
@@ -839,6 +886,7 @@ namespace
 	void parseTarget(const XmlElement& target, Platform* platform, World* world, std::mt19937& masterSeeder)
 	{
 		const std::string name = XmlElement::getSafeAttribute(target, "name");
+		const SimId id = assign_id_from_attribute("target '" + name + "'", ObjectType::Target);
 
 		const XmlElement rcs_element = target.childElement("rcs", 0);
 		if (!rcs_element.isValid())
@@ -853,11 +901,12 @@ namespace
 
 		if (rcs_type == "isotropic")
 		{
-			target_obj = createIsoTarget(platform, name, get_child_real_type(rcs_element, "value"), seed);
+			target_obj = createIsoTarget(platform, name, get_child_real_type(rcs_element, "value"), seed, id);
 		}
 		else if (rcs_type == "file")
 		{
-			target_obj = createFileTarget(platform, name, XmlElement::getSafeAttribute(rcs_element, "filename"), seed);
+			target_obj =
+				createFileTarget(platform, name, XmlElement::getSafeAttribute(rcs_element, "filename"), seed, id);
 		}
 		else
 		{
@@ -886,9 +935,11 @@ namespace
 		world->add(std::move(target_obj));
 	}
 
-	void parsePlatformElements(const XmlElement& platform, World* world, Platform* plat, std::mt19937& masterSeeder)
+	void parsePlatformElements(const XmlElement& platform, World* world, Platform* plat, std::mt19937& masterSeeder,
+							   const std::function<void(const XmlElement&, std::string_view)>& register_name,
+							   const ReferenceLookup& refs)
 	{
-		auto parseChildren = [&](const std::string& elementName, auto parseFunc)
+		auto parseChildrenWithRefs = [&](const std::string& elementName, auto parseFunc)
 		{
 			unsigned index = 0;
 			while (true)
@@ -898,14 +949,45 @@ namespace
 				{
 					break;
 				}
+				register_name(element, elementName);
+				parseFunc(element, plat, world, masterSeeder, refs);
+			}
+		};
+
+		auto parseChildren4 = [&](const std::string& elementName, auto parseFunc)
+		{
+			unsigned index = 0;
+			while (true)
+			{
+				const XmlElement element = platform.childElement(elementName, index++);
+				if (!element.isValid())
+				{
+					break;
+				}
+				register_name(element, elementName);
+				parseFunc(element, plat, world, masterSeeder, refs);
+			}
+		};
+
+		auto parseChildrenWithoutRefs = [&](const std::string& elementName, auto parseFunc)
+		{
+			unsigned index = 0;
+			while (true)
+			{
+				const XmlElement element = platform.childElement(elementName, index++);
+				if (!element.isValid())
+				{
+					break;
+				}
+				register_name(element, elementName);
 				parseFunc(element, plat, world, masterSeeder);
 			}
 		};
 
-		parseChildren("monostatic", parseMonostatic);
-		parseChildren("transmitter", parseTransmitter);
-		parseChildren("receiver", parseReceiver);
-		parseChildren("target", parseTarget);
+		parseChildren4("monostatic", parseMonostatic);
+		parseChildrenWithRefs("transmitter", parseTransmitter);
+		parseChildrenWithRefs("receiver", parseReceiver);
+		parseChildrenWithoutRefs("target", parseTarget);
 	}
 
 	/**
@@ -915,12 +997,15 @@ namespace
 	 * @param world A pointer to the World object where the Platform object is added.
 	 * @param masterSeeder The master random number generator for seeding.
 	 */
-	void parsePlatform(const XmlElement& platform, World* world, std::mt19937& masterSeeder)
+	void parsePlatform(const XmlElement& platform, World* world, std::mt19937& masterSeeder,
+					   const std::function<void(const XmlElement&, std::string_view)>& register_name,
+					   const ReferenceLookup& refs)
 	{
 		std::string name = XmlElement::getSafeAttribute(platform, "name");
-		auto plat = std::make_unique<Platform>(name);
+		const SimId id = assign_id_from_attribute("platform '" + name + "'", ObjectType::Platform);
+		auto plat = std::make_unique<Platform>(name, id);
 
-		parsePlatformElements(platform, world, plat.get(), masterSeeder);
+		parsePlatformElements(platform, world, plat.get(), masterSeeder, register_name, refs);
 
 		if (const XmlElement motion_path = platform.childElement("motionpath", 0); motion_path.isValid())
 		{
@@ -1058,6 +1143,19 @@ namespace
 			throw XmlException("Root element is not <simulation>!");
 		}
 
+		std::unordered_map<std::string, std::string> name_registry;
+		name_registry.reserve(64);
+		const auto register_name = [&](const XmlElement& element, const std::string_view kind)
+		{
+			const std::string name = XmlElement::getSafeAttribute(element, "name");
+			const auto [iter, inserted] = name_registry.emplace(name, std::string(kind));
+			if (!inserted)
+			{
+				throw XmlException("Duplicate name '" + name + "' found for " + std::string(kind) +
+								   "; previously used by " + iter->second + ".");
+			}
+		};
+
 		try
 		{
 			params::params.simulation_name = XmlElement::getSafeAttribute(root, "name");
@@ -1072,12 +1170,50 @@ namespace
 		}
 
 		parseParameters(root.childElement("parameters", 0));
-		auto waveform_parser = [&](const XmlElement& p, World* w) { parseWaveform(p, w, baseDir); };
+		auto waveform_parser = [&](const XmlElement& p, World* w)
+		{
+			register_name(p, "waveform");
+			parseWaveform(p, w, baseDir);
+		};
 		parseElements(root, "waveform", world, waveform_parser);
-		parseElements(root, "timing", world, parseTiming);
-		parseElements(root, "antenna", world, parseAntenna);
+		auto timing_parser = [&](const XmlElement& p, World* w)
+		{
+			register_name(p, "timing");
+			parseTiming(p, w);
+		};
+		parseElements(root, "timing", world, timing_parser);
+		auto antenna_parser = [&](const XmlElement& p, World* w)
+		{
+			register_name(p, "antenna");
+			parseAntenna(p, w);
+		};
+		parseElements(root, "antenna", world, antenna_parser);
 
-		auto platform_parser = [&](const XmlElement& p, World* w) { parsePlatform(p, w, masterSeeder); };
+		std::unordered_map<std::string, SimId> waveform_refs;
+		std::unordered_map<std::string, SimId> antenna_refs;
+		std::unordered_map<std::string, SimId> timing_refs;
+		waveform_refs.reserve(world->getWaveforms().size());
+		antenna_refs.reserve(world->getAntennas().size());
+		timing_refs.reserve(world->getTimings().size());
+		for (const auto& [id, waveform] : world->getWaveforms())
+		{
+			waveform_refs.emplace(waveform->getName(), id);
+		}
+		for (const auto& [id, antenna] : world->getAntennas())
+		{
+			antenna_refs.emplace(antenna->getName(), id);
+		}
+		for (const auto& [id, timing] : world->getTimings())
+		{
+			timing_refs.emplace(timing->getName(), id);
+		}
+		const ReferenceLookup refs{&waveform_refs, &antenna_refs, &timing_refs};
+
+		auto platform_parser = [&](const XmlElement& p, World* w)
+		{
+			register_name(p, "platform");
+			parsePlatform(p, w, masterSeeder, register_name, refs);
+		};
 		parseElements(root, "platform", world, platform_parser);
 
 		// Prepare CW receiver buffers before starting simulation

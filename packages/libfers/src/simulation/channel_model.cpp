@@ -20,6 +20,7 @@
 
 #include "core/logging.h"
 #include "core/parameters.h"
+#include "core/sim_id.h"
 #include "core/world.h"
 #include "interpolation/interpolation_point.h"
 #include "math/geometry_ops.h"
@@ -245,7 +246,7 @@ namespace simulation
 		}
 		catch (const RangeError&)
 		{
-			LOG(Level::FATAL, "Transmitter or Receiver too close to Target for accurate simulation");
+			LOG(Level::INFO, "Transmitter or Receiver too close to Target for accurate simulation");
 			throw;
 		}
 
@@ -289,7 +290,7 @@ namespace simulation
 		}
 		catch (const RangeError&)
 		{
-			LOG(Level::FATAL, "Transmitter or Receiver too close for accurate simulation");
+			LOG(Level::INFO, "Transmitter or Receiver too close for accurate simulation");
 			throw;
 		}
 
@@ -431,8 +432,6 @@ namespace simulation
 		//    no direct coupling/interference for co-located far-field antennas.
 		if (targ == nullptr && (trans->getAttached() == recv || trans->getPlatform() == recv->getPlatform()))
 		{
-			LOG(Level::TRACE, "Skipping direct path calculation for co-located Transmitter {} and Receiver {}",
-				trans->getName(), recv->getName());
 			return nullptr;
 		}
 
@@ -487,7 +486,7 @@ namespace simulation
 		}
 		catch (const RangeError&)
 		{
-			LOG(Level::FATAL, "Receiver or Transmitter too close for accurate simulation");
+			LOG(Level::INFO, "Receiver or Transmitter too close for accurate simulation");
 			throw; // Re-throw to be caught by the runner
 		}
 
@@ -540,9 +539,9 @@ namespace simulation
 				links.push_back({.type = LinkType::BistaticTxTgt,
 								 .quality = LinkQuality::Strong,
 								 .label = std::format("{:.1f} dBW/m\u00B2", wattsToDb(p_density)),
-								 .source_name = tx->getName(),
-								 .dest_name = tgt->getName(),
-								 .origin_name = tx->getName()});
+								 .source_id = tx->getId(),
+								 .dest_id = tgt->getId(),
+								 .origin_id = tx->getId()});
 			}
 
 			for (const auto& rx : world.getReceivers())
@@ -598,9 +597,9 @@ namespace simulation
 							 .quality = isSignalStrong(pr_watts, rx->getNoiseTemperature()) ? LinkQuality::Strong
 																							: LinkQuality::Weak,
 							 .label = std::format("{:.1f} dBm (RCS: {:.1f}m\u00B2)", wattsToDbm(pr_watts), rcs),
-							 .source_name = tx->getName(), // Monostatic implies Tx/Rx is same platform/system
-							 .dest_name = tgt->getName(),
-							 .origin_name = tx->getName()});
+							 .source_id = tx->getId(), // Monostatic implies Tx/Rx is same platform/system
+							 .dest_id = tgt->getId(),
+							 .origin_id = tx->getId()});
 					}
 				}
 				else
@@ -628,9 +627,9 @@ namespace simulation
 							links.push_back({.type = LinkType::DirectTxRx,
 											 .quality = LinkQuality::Strong,
 											 .label = std::format("Direct: {:.1f} dBm", wattsToDbm(pr_watts)),
-											 .source_name = tx->getName(),
-											 .dest_name = rx->getName(),
-											 .origin_name = tx->getName()});
+											 .source_id = tx->getId(),
+											 .dest_id = rx->getId(),
+											 .origin_id = tx->getId()});
 						}
 					}
 
@@ -671,9 +670,9 @@ namespace simulation
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
 										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_watts)),
-										 .source_name = tgt->getName(),
-										 .dest_name = rx->getName(),
-										 .origin_name = tx->getName()});
+										 .source_id = tgt->getId(),
+										 .dest_id = rx->getId(),
+										 .origin_id = tx->getId()});
 					}
 				}
 			}

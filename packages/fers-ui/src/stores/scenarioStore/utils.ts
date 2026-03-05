@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { ScenarioState, ScenarioItem, Platform } from './types';
+import {
+    ScenarioState,
+    ScenarioItem,
+    Platform,
+    PlatformComponent,
+} from './types';
 import { Euler, Vector3 } from 'three';
 
 // Helper to set nested properties safely
@@ -45,6 +50,21 @@ export const findItemInStore = (
     for (const collection of collections) {
         const item = collection.find((i) => i.id === id);
         if (item) return item as ScenarioItem;
+    }
+    return null;
+};
+
+// Helper to find a platform component and its parent platform by component ID
+export const findComponentInStore = (
+    state: ScenarioState,
+    componentId: string | null
+): { platform: Platform; component: PlatformComponent } | null => {
+    if (!componentId) return null;
+    for (const platform of state.platforms) {
+        const component = platform.components.find((c) => c.id === componentId);
+        if (component) {
+            return { platform, component };
+        }
     }
     return null;
 };

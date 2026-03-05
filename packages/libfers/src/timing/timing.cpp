@@ -21,7 +21,11 @@ using logging::Level;
 
 namespace timing
 {
-	Timing::Timing(std::string name, const unsigned seed) noexcept : _name(std::move(name)), _rng(seed), _seed(seed) {}
+	Timing::Timing(std::string name, const unsigned seed, const SimId id) noexcept :
+		_name(std::move(name)), _id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Timing) : id),
+		_rng(seed), _seed(seed)
+	{
+	}
 
 	// NOLINTNEXTLINE(readability-make-member-function-const)
 	void Timing::skipSamples(const long long samples) noexcept
@@ -82,7 +86,7 @@ namespace timing
 			LOG(Level::FATAL, "Cannot clone a Timing object that has not been initialized from a prototype.");
 			throw std::logic_error("Cannot clone a Timing object that has not been initialized from a prototype.");
 		}
-		auto new_timing = std::make_unique<Timing>(_name, _seed);
+		auto new_timing = std::make_unique<Timing>(_name, _seed, _id);
 		new_timing->initializeModel(_prototype);
 		return new_timing;
 	}

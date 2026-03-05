@@ -12,6 +12,7 @@
 
 #include "response.h"
 
+#include "core/sim_id.h"
 #include "libxml_wrapper.h"
 #include "radar/radar_obj.h"
 #include "radar/transmitter.h"
@@ -21,7 +22,7 @@ using interp::InterpPoint;
 
 namespace serial
 {
-	std::string Response::getTransmitterName() const noexcept { return _transmitter->getName(); }
+	SimId Response::getTransmitterId() const noexcept { return _transmitter->getId(); }
 
 	void Response::addInterpPoint(const InterpPoint& point) { _points.push_back(point); }
 

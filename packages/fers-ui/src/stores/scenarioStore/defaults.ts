@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { v4 as uuidv4 } from 'uuid';
 import { GlobalParameters, Waveform, Timing, Antenna, Platform } from './types';
+import { generateSimId } from './idUtils';
 
 export const defaultGlobalParameters: GlobalParameters = {
     id: 'global-parameters',
@@ -60,7 +60,9 @@ export const createDefaultPlatform = (): Omit<Platform, 'id' | 'name'> => ({
     type: 'Platform',
     motionPath: {
         interpolation: 'static',
-        waypoints: [{ id: uuidv4(), x: 0, y: 0, altitude: 0, time: 0 }],
+        waypoints: [
+            { id: generateSimId('Platform'), x: 0, y: 0, altitude: 0, time: 0 },
+        ],
     },
     rotation: {
         type: 'fixed',
