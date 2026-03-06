@@ -3,7 +3,7 @@ include(FetchContent)
 FetchContent_Declare(
 		Catch2
 		GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-		GIT_TAG        v3.13.0
+		GIT_TAG v3.13.0
 )
 FetchContent_MakeAvailable(Catch2)
 
@@ -25,6 +25,7 @@ add_executable(libfers_tests
 			   core/test_fers_context.cpp
 			   core/test_logging.cpp
 			   core/test_parameters.cpp
+			   core/test_sim_threading.cpp
 			   core/test_portable_utils.cpp
 			   core/test_sim_events.cpp
 			   core/test_sim_id.cpp
@@ -40,24 +41,24 @@ add_executable(libfers_tests
 			   radar/test_radar_obj.cpp
 			   radar/test_transmitter.cpp
 			   radar/test_target.cpp
-		   radar/test_receiver.cpp
-		   processing/test_signal_processor.cpp
-		   serial/test_response.cpp
-		   serial/test_libxml_wrapper.cpp
-		   serial/test_hdf5_handler.cpp
-		   simulation/test_channel_model_helpers.cpp
-		   simulation/test_channel_model_direct.cpp
-		   simulation/test_channel_model_reflected.cpp
-		   simulation/test_channel_model_response.cpp
-		   simulation/test_channel_model_preview.cpp
+			   radar/test_receiver.cpp
+			   processing/test_signal_processor.cpp
+			   serial/test_response.cpp
+			   serial/test_libxml_wrapper.cpp
+			   serial/test_hdf5_handler.cpp
+			   simulation/test_channel_model_helpers.cpp
+			   simulation/test_channel_model_direct.cpp
+			   simulation/test_channel_model_reflected.cpp
+			   simulation/test_channel_model_response.cpp
+			   simulation/test_channel_model_preview.cpp
 )
 
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${HDF5_INCLUDE_DIRS})
 
 target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2 ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
 
-if(COMMAND apply_fers_warnings)
+if (COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
-endif()
+endif ()
 
 catch_discover_tests(libfers_tests)
