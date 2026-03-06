@@ -422,6 +422,197 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 	}
 }
 
+TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle", "[core][threading]")
+{
+	// This test covers:
+	// 1. initializeFinalizers() -> _finalizer_threads.emplace_back(...)
+	// 6. shutdown() -> else if (PULSED_MODE) { enqueue shutdown_job }
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.005);
+
+	auto world = createPhysicsWorld();
+
+	// Add a pulsed receiver to trigger the thread creation and shutdown logic
+	auto rx_plat = std::make_unique<radar::Platform>("PulsedRxPlat", 100);
+	rx_plat->getMotionPath()->addCoord(math::Coord{math::Vec3(0, 0, 0), 0});
+	rx_plat->getMotionPath()->finalize();
+	rx_plat->getRotationPath()->addCoord(math::RotationCoord(0, 0, 0));
+	rx_plat->getRotationPath()->finalize();
+
+	auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "PulsedRx", 42, radar::OperationMode::PULSED_MODE, 101);
+	auto proto_timing = std::make_unique<timing::PrototypeTiming>("RxClock", 102);
+	auto timing = std::make_shared<timing::Timing>("RxClockInst", 99);
+	timing->initializeModel(proto_timing.get());
+	rx->setTiming(timing);
+	rx->setWindowProperties(0.001, 1000.0, 0.0);
+
+	world->add(std::move(rx_plat));
+	world->add(std::move(proto_timing));
+	world->add(std::move(rx));
+
+	pool::ThreadPool pool(1);
+
+	// Running the engine will initialize the finalizer thread and then shut it down.
+	// If the shutdown logic fails, the std::jthread will hang indefinitely waiting for a job.
+	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr));
+}
+
+TEST_CASE("SimulationEngine processCwPhysics exits early if t_event <= t_current", "[core][threading]")
+{
+	// This test covers:
+	// 2. processCwPhysics(t_event) -> if (t_event <= t_current) { return; }
+	ParamGuard guard;
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr);
+
+	auto* rx = world->getReceivers().front().get();
+	rx->prepareCwData(10);
+	rx->setActive(true);
+
+	// Advance the simulation state time
+	world->getSimulationState().t_current = 1.0;
+
+	// Call with t_event < t_current
+	REQUIRE_NOTHROW(engine.processCwPhysics(0.5));
+
+	// Call with t_event == t_current
+	REQUIRE_NOTHROW(engine.processCwPhysics(1.0));
+
+	// The buffer should be completely untouched (all zeros) because the method returned early
+	for (const auto& sample : rx->getCwData())
+	{
+		REQUIRE(sample.real() == 0.0);
+		REQUIRE(sample.imag() == 0.0);
+	}
+}
+
+TEST_CASE("SimulationEngine processEvent dispatches all event types correctly", "[core][threading]")
+{
+	// This test covers:
+	// 3. processEvent(event) -> switch (event.type) (all cases)
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0); // FIX: Ensure simulation end time allows future events to be scheduled
+
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr);
+
+	auto* tx = world->getTransmitters().front().get();
+	auto* rx = world->getReceivers().front().get();
+
+	// Test TX_CW_START
+	engine.processEvent({1.0, core::EventType::TX_CW_START, tx});
+	REQUIRE(world->getSimulationState().active_cw_transmitters.size() == 1);
+
+	// Test TX_CW_END
+	engine.processEvent({2.0, core::EventType::TX_CW_END, tx});
+	REQUIRE(world->getSimulationState().active_cw_transmitters.empty());
+
+	// Test RX_CW_START
+	engine.processEvent({3.0, core::EventType::RX_CW_START, rx});
+	REQUIRE(rx->isActive());
+
+	// Test RX_CW_END
+	engine.processEvent({4.0, core::EventType::RX_CW_END, rx});
+	REQUIRE_FALSE(rx->isActive());
+
+	// Test TX_PULSED_START
+	auto queue_size_before = world->getEventQueue().size();
+	engine.processEvent({5.0, core::EventType::TX_PULSED_START, tx});
+	// Should schedule next pulse, increasing the queue size
+	REQUIRE(world->getEventQueue().size() > queue_size_before);
+
+	// Test RX_PULSED_WINDOW_START
+	queue_size_before = world->getEventQueue().size();
+	engine.processEvent({6.0, core::EventType::RX_PULSED_WINDOW_START, rx});
+	REQUIRE(rx->isActive());
+	// Should schedule the end of the window
+	REQUIRE(world->getEventQueue().size() > queue_size_before);
+
+	// Test RX_PULSED_WINDOW_END
+	queue_size_before = world->getEventQueue().size();
+	engine.processEvent({7.0, core::EventType::RX_PULSED_WINDOW_END, rx});
+	REQUIRE_FALSE(rx->isActive());
+	// Should schedule the next window start
+	REQUIRE(world->getEventQueue().size() > queue_size_before);
+}
+
+TEST_CASE("SimulationEngine routeResponse handles null responses safely", "[core][threading]")
+{
+	// This test covers:
+	// 4. routeResponse(...) -> if (!response) { return; }
+	ParamGuard guard;
+	auto world = std::make_unique<core::World>();
+
+	// Put Tx and Rx on the EXACT SAME platform to force calculateResponse to return nullptr
+	// (Simulation skips direct path calculations for co-located far-field antennas).
+	auto plat = std::make_unique<radar::Platform>("SharedPlat", 200);
+	plat->getMotionPath()->addCoord(math::Coord{math::Vec3(0, 0, 0), 0});
+	plat->getMotionPath()->finalize();
+	plat->getRotationPath()->addCoord(math::RotationCoord(0, 0, 0));
+	plat->getRotationPath()->finalize();
+
+	auto proto_timing = std::make_unique<timing::PrototypeTiming>("Clock", 201);
+	auto timing = std::make_shared<timing::Timing>("ClockInst", 99);
+	timing->initializeModel(proto_timing.get());
+
+	auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 202);
+	auto signal = std::make_unique<fers_signal::RadarSignal>("CWWave", 1.0, 1e9, 1.0,
+															 std::make_unique<fers_signal::CwSignal>(), 203);
+
+	auto tx = std::make_unique<radar::Transmitter>(plat.get(), "Tx", radar::OperationMode::PULSED_MODE, 204);
+	tx->setTiming(timing);
+	tx->setAntenna(antenna.get());
+	tx->setSignal(signal.get());
+	tx->setPrf(1000.0);
+
+	auto rx = std::make_unique<radar::Receiver>(plat.get(), "Rx", 42, radar::OperationMode::PULSED_MODE, 205);
+	rx->setTiming(timing);
+	rx->setAntenna(antenna.get());
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	world->add(std::move(plat));
+	world->add(std::move(proto_timing));
+	world->add(std::move(antenna));
+	world->add(std::move(signal));
+	world->add(std::move(tx));
+	world->add(std::move(rx));
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr);
+
+	// This will call calculateResponse, which returns nullptr because they share a platform,
+	// and then pass it to routeResponse. It should return early without crashing.
+	REQUIRE_NOTHROW(engine.handleTxPulsedStart(tx_ptr, 0.0));
+
+	// Ensure nothing was added to the inbox
+	REQUIRE(rx_ptr->drainInbox().empty());
+}
+
+TEST_CASE("SimulationEngine updateProgress safely handles null reporter", "[core][threading]")
+{
+	// This test covers:
+	// 5. updateProgress() -> if (!_reporter) { return; }
+	ParamGuard guard;
+	params::setTime(0.0, 1.0);
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+
+	// Add an event to ensure the main loop runs at least once, triggering updateProgress()
+	auto* tx = world->getTransmitters().front().get();
+	world->getEventQueue().push({0.5, core::EventType::TX_CW_START, tx});
+
+	// Passing nullptr for the progress callback ensures the internal _reporter is null
+	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr));
+}
+
 // TODO: A deeply synchronized test for the `shutdown()` thread joining logic is currently omitted.
 // The `shutdown()` method enqueues jobs to `std::jthread`s which join automatically on destruction.
 // Testing the precise thread joining deterministic behavior requires complex synchronization hooks
