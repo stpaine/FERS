@@ -23,6 +23,8 @@ add_executable(libfers_tests
 			   antenna/test_antenna_factory.cpp
 			   signal/test_dsp_filters.cpp
 			   signal/test_radar_signal.cpp
+			   timing/test_prototype_timing.cpp
+			   timing/test_timing.cpp
 )
 
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
