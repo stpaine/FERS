@@ -12,14 +12,6 @@
  * This file contains the primary simulation loop, which orchestrates the entire
  * simulation process. It operates on a unified, event-driven model capable of
  * handling both pulsed and continuous-wave (CW) radar systems concurrently.
- * The loop advances simulation time by processing events from a priority queue.
- *
- * A key feature is the time-stepped inner loop that calculates physics for
- * active CW systems between discrete events. This hybrid approach allows for
- * efficient simulation of both event-based (pulsed) and continuous (CW) phenomena.
- * To maintain performance, expensive post-processing tasks are offloaded to
- * worker threads, decoupling the main physics calculations from I/O and signal
- * rendering.
  */
 
 #include "sim_threading.h"
@@ -29,11 +21,7 @@
 #include <chrono>
 #include <cmath>
 #include <format>
-#include <functional>
-#include <memory>
-#include <thread>
 #include <utility>
-#include <vector>
 
 #include "logging.h"
 #include "parameters.h"
@@ -49,265 +37,272 @@
 using logging::Level;
 using radar::OperationMode;
 using radar::Receiver;
-using radar::Target;
 using radar::Transmitter;
 
 namespace core
 {
-	void runEventDrivenSim(World* world, pool::ThreadPool& pool,
-						   const std::function<void(const std::string&, int, int)>& progress_callback)
+	SimulationEngine::SimulationEngine(World* world, pool::ThreadPool& pool,
+									   std::shared_ptr<ProgressReporter> reporter) :
+		_world(world), _pool(pool), _reporter(std::move(reporter)), _last_report_time(std::chrono::steady_clock::now())
 	{
-		auto& event_queue = world->getEventQueue();
-		auto& [t_current, active_cw_transmitters] = world->getSimulationState();
-		const RealType end_time = params::endTime();
-		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
+	}
 
-		// Create shared thread-safe reporter
-		auto reporter = std::make_shared<ProgressReporter>(progress_callback);
-
-		if (progress_callback)
+	void SimulationEngine::run()
+	{
+		if (_reporter)
 		{
-			reporter->report("Initializing event-driven simulation...", 0, 100);
+			_reporter->report("Initializing event-driven simulation...", 0, 100);
 		}
 
-		// Start dedicated finalizer threads for each pulsed receiver. This creates a
-		// one-thread-per-receiver pipeline for asynchronous data processing.
-		std::vector<std::jthread> finalizer_threads;
-		for (const auto& receiver_ptr : world->getReceivers())
-		{
-			if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
-			{
-				finalizer_threads.emplace_back(processing::runPulsedFinalizer, receiver_ptr.get(), &world->getTargets(),
-											   reporter);
-			}
-		}
+		initializeFinalizers();
 
 		LOG(Level::INFO, "Starting unified event-driven simulation loop.");
 
-		// Throttling state for the main loop
-		auto last_report_time = std::chrono::steady_clock::now();
-		int last_reported_percent = -1;
-		const auto report_interval = std::chrono::milliseconds(100); // Max 10 updates/sec
+		auto& event_queue = _world->getEventQueue();
+		auto& state = _world->getSimulationState();
+		const RealType end_time = params::endTime();
 
-		// Main Simulation Loop
-		while (!event_queue.empty() && t_current <= end_time)
+		while (!event_queue.empty() && state.t_current <= end_time)
 		{
-			// Advance Clock to the next scheduled event
-			const auto [timestamp, event_type, source_object] = event_queue.top();
+			const Event event = event_queue.top();
 			event_queue.pop();
 
-			const RealType t_event = timestamp;
+			processCwPhysics(event.timestamp);
 
-			// Before processing the event, run a time-stepped inner loop to calculate
-			// physics for any active continuous-wave systems. This handles the "continuous"
-			// part of the simulation between discrete events.
-			if (t_event > t_current)
+			state.t_current = event.timestamp;
+
+			processEvent(event);
+			updateProgress();
+		}
+
+		shutdown();
+	}
+
+	void SimulationEngine::initializeFinalizers()
+	{
+		for (const auto& receiver_ptr : _world->getReceivers())
+		{
+			if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
-				const RealType t_next_event = t_event;
-
-				const auto start_index = static_cast<size_t>(std::ceil((t_current - params::startTime()) / dt_sim));
-				const auto end_index = static_cast<size_t>(std::ceil((t_next_event - params::startTime()) / dt_sim));
-
-				for (size_t sample_index = start_index; sample_index < end_index; ++sample_index)
-				{
-					const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
-
-					for (const auto& receiver_ptr : world->getReceivers())
-					{
-						if (receiver_ptr->getMode() == OperationMode::CW_MODE && receiver_ptr->isActive())
-						{
-							ComplexType total_sample{0.0, 0.0};
-							// Query active CW sources
-							for (const auto& cw_source : active_cw_transmitters)
-							{
-								// Calculate direct and reflected paths
-								if (!receiver_ptr->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
-								{
-									total_sample += simulation::calculateDirectPathContribution(
-										cw_source, receiver_ptr.get(), t_step);
-								}
-								for (const auto& target_ptr : world->getTargets())
-								{
-									total_sample += simulation::calculateReflectedPathContribution(
-										cw_source, receiver_ptr.get(), target_ptr.get(), t_step);
-								}
-							}
-							// Store sample in the receiver's main buffer using the correct index
-							receiver_ptr->setCwSample(sample_index, total_sample);
-						}
-					}
-				}
+				_finalizer_threads.emplace_back(processing::runPulsedFinalizer, receiver_ptr.get(),
+												&_world->getTargets(), _reporter);
 			}
+		}
+	}
 
-			t_current = t_event;
+	void SimulationEngine::processCwPhysics(const RealType t_event)
+	{
+		auto& [t_current, active_cw_transmitters] = _world->getSimulationState();
 
-			// Process the discrete event
-			switch (event_type)
+		if (t_event <= t_current)
+		{
+			return;
+		}
+
+		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
+		const auto start_index = static_cast<size_t>(std::ceil((t_current - params::startTime()) / dt_sim));
+		const auto end_index = static_cast<size_t>(std::ceil((t_event - params::startTime()) / dt_sim));
+
+		for (size_t sample_index = start_index; sample_index < end_index; ++sample_index)
+		{
+			const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
+
+			for (const auto& receiver_ptr : _world->getReceivers())
 			{
-			case EventType::TX_PULSED_START:
+				if (receiver_ptr->getMode() == OperationMode::CW_MODE && receiver_ptr->isActive())
 				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* tx = static_cast<Transmitter*>(source_object);
-					// For each pulse, calculate its interaction with every receiver and target.
-					for (const auto& rx_ptr : world->getReceivers())
-					{
-						// Calculate unique Response objects for direct and reflected paths.
-						if (!rx_ptr->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
-						{
-							if (auto response =
-									simulation::calculateResponse(tx, rx_ptr.get(), tx->getSignal(), t_event))
-							{
-								if (rx_ptr->getMode() == OperationMode::PULSED_MODE)
-								{
-									rx_ptr->addResponseToInbox(std::move(response));
-								}
-								else
-								{
-									rx_ptr->addInterferenceToLog(std::move(response));
-								}
-							}
-						}
-						for (const auto& target_ptr : world->getTargets())
-						{
-							if (auto response = simulation::calculateResponse(tx, rx_ptr.get(), tx->getSignal(),
-																			  t_event, target_ptr.get()))
-							{
-								if (rx_ptr->getMode() == OperationMode::PULSED_MODE)
-								{
-									rx_ptr->addResponseToInbox(std::move(response));
-								}
-								else
-								{
-									rx_ptr->addInterferenceToLog(std::move(response));
-								}
-							}
-						}
-					}
-					// Schedule next pulse
-					const RealType next_theoretical_time = t_event + 1.0 / tx->getPrf();
-
-					// Use schedule to determine actual next time (handles gaps in schedule)
-					if (const auto next_pulse_opt = tx->getNextPulseTime(next_theoretical_time);
-						next_pulse_opt && *next_pulse_opt <= end_time)
-					{
-						event_queue.push({*next_pulse_opt, EventType::TX_PULSED_START, tx});
-					}
-					break;
-				}
-			case EventType::RX_PULSED_WINDOW_START:
-				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* rx = static_cast<Receiver*>(source_object);
-					rx->setActive(true);
-					event_queue.push({t_event + rx->getWindowLength(), EventType::RX_PULSED_WINDOW_END, rx});
-					break;
-				}
-			case EventType::RX_PULSED_WINDOW_END:
-				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* rx = static_cast<Receiver*>(source_object);
-					rx->setActive(false);
-					// The receive window is over. Package all received data into a RenderingJob.
-					RenderingJob job{.ideal_start_time = t_event - rx->getWindowLength(),
-									 .duration = rx->getWindowLength(),
-									 .responses = rx->drainInbox(),
-									 .active_cw_sources = active_cw_transmitters};
-					// Offload the job to the dedicated finalizer thread for this receiver.
-					rx->enqueueFinalizerJob(std::move(job));
-
-					// Schedule the start of the next receive window based on schedule
-					const RealType next_theoretical = t_event - rx->getWindowLength() + 1.0 / rx->getWindowPrf();
-
-					if (const auto next_start = rx->getNextWindowTime(next_theoretical);
-						next_start && *next_start <= end_time)
-					{
-						event_queue.push({*next_start, EventType::RX_PULSED_WINDOW_START, rx});
-					}
-					break;
-				}
-			case EventType::TX_CW_START:
-				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* tx = static_cast<Transmitter*>(source_object);
-					active_cw_transmitters.push_back(tx);
-					break;
-				}
-			case EventType::TX_CW_END:
-				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* tx = static_cast<Transmitter*>(source_object);
-					std::erase(active_cw_transmitters, tx);
-					break;
-				}
-			case EventType::RX_CW_START:
-				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* rx = static_cast<Receiver*>(source_object);
-					rx->setActive(true);
-					break;
-				}
-			case EventType::RX_CW_END:
-				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): Type is guaranteed by event_type
-					auto* rx = static_cast<Receiver*>(source_object);
-					rx->setActive(false);
-					// Do NOT finalize here. CW data is a continuous buffer; 'Ending' a schedule period
-					// just means we stop recording active signal (leaving zeros/silence in the buffer).
-					break;
-				}
-			}
-
-			// Throttled Progress Reporting
-			if (progress_callback)
-			{
-				const int progress = static_cast<int>(t_current / end_time * 100.0);
-
-				// Only report if percentage changed significantly OR enough time elapsed
-				if (const auto now = std::chrono::steady_clock::now();
-					progress != last_reported_percent || now - last_report_time >= report_interval)
-				{
-					reporter->report(std::format("Simulating... {:.2f}s / {:.2f}s", t_current, end_time), progress,
-									 100);
-					last_reported_percent = progress;
-					last_report_time = now;
+					ComplexType sample = calculateCwSample(receiver_ptr.get(), t_step, active_cw_transmitters);
+					receiver_ptr->setCwSample(sample_index, sample);
 				}
 			}
 		}
+	}
 
-		// Shutdown Phase
+	ComplexType SimulationEngine::calculateCwSample(Receiver* rx, const RealType t_step,
+													const std::vector<Transmitter*>& cw_sources) const
+	{
+		ComplexType total_sample{0.0, 0.0};
+		for (const auto& cw_source : cw_sources)
+		{
+			if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
+			{
+				total_sample += simulation::calculateDirectPathContribution(cw_source, rx, t_step);
+			}
+			for (const auto& target_ptr : _world->getTargets())
+			{
+				total_sample += simulation::calculateReflectedPathContribution(cw_source, rx, target_ptr.get(), t_step);
+			}
+		}
+		return total_sample;
+	}
+
+	void SimulationEngine::processEvent(const Event& event)
+	{
+		// NOLINTBEGIN(cppcoreguidelines-pro-type-static-cast-downcast)
+		switch (event.type)
+		{
+		case EventType::TX_PULSED_START:
+			handleTxPulsedStart(static_cast<Transmitter*>(event.source_object), event.timestamp);
+			break;
+		case EventType::RX_PULSED_WINDOW_START:
+			handleRxPulsedWindowStart(static_cast<Receiver*>(event.source_object), event.timestamp);
+			break;
+		case EventType::RX_PULSED_WINDOW_END:
+			handleRxPulsedWindowEnd(static_cast<Receiver*>(event.source_object), event.timestamp);
+			break;
+		case EventType::TX_CW_START:
+			handleTxCwStart(static_cast<Transmitter*>(event.source_object));
+			break;
+		case EventType::TX_CW_END:
+			handleTxCwEnd(static_cast<Transmitter*>(event.source_object));
+			break;
+		case EventType::RX_CW_START:
+			handleRxCwStart(static_cast<Receiver*>(event.source_object));
+			break;
+		case EventType::RX_CW_END:
+			handleRxCwEnd(static_cast<Receiver*>(event.source_object));
+			break;
+		}
+		// NOLINTEND(cppcoreguidelines-pro-type-static-cast-downcast)
+	}
+
+	void SimulationEngine::routeResponse(Receiver* rx, std::unique_ptr<serial::Response> response) const
+	{
+		if (!response)
+		{
+			return;
+		}
+		if (rx->getMode() == OperationMode::PULSED_MODE)
+		{
+			rx->addResponseToInbox(std::move(response));
+		}
+		else
+		{
+			rx->addInterferenceToLog(std::move(response));
+		}
+	}
+
+	void SimulationEngine::handleTxPulsedStart(Transmitter* tx, const RealType t_event)
+	{
+		for (const auto& rx_ptr : _world->getReceivers())
+		{
+			if (!rx_ptr->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
+			{
+				routeResponse(rx_ptr.get(), simulation::calculateResponse(tx, rx_ptr.get(), tx->getSignal(), t_event));
+			}
+			for (const auto& target_ptr : _world->getTargets())
+			{
+				routeResponse(
+					rx_ptr.get(),
+					simulation::calculateResponse(tx, rx_ptr.get(), tx->getSignal(), t_event, target_ptr.get()));
+			}
+		}
+
+		const RealType next_theoretical_time = t_event + 1.0 / tx->getPrf();
+		if (const auto next_pulse_opt = tx->getNextPulseTime(next_theoretical_time);
+			next_pulse_opt && *next_pulse_opt <= params::endTime())
+		{
+			_world->getEventQueue().push({*next_pulse_opt, EventType::TX_PULSED_START, tx});
+		}
+	}
+
+	void SimulationEngine::handleRxPulsedWindowStart(Receiver* rx, const RealType t_event)
+	{
+		rx->setActive(true);
+		_world->getEventQueue().push({t_event + rx->getWindowLength(), EventType::RX_PULSED_WINDOW_END, rx});
+	}
+
+	void SimulationEngine::handleRxPulsedWindowEnd(Receiver* rx, const RealType t_event)
+	{
+		rx->setActive(false);
+		const auto& active_cw_transmitters = _world->getSimulationState().active_cw_transmitters;
+
+		RenderingJob job{.ideal_start_time = t_event - rx->getWindowLength(),
+						 .duration = rx->getWindowLength(),
+						 .responses = rx->drainInbox(),
+						 .active_cw_sources = active_cw_transmitters};
+
+		rx->enqueueFinalizerJob(std::move(job));
+
+		const RealType next_theoretical = t_event - rx->getWindowLength() + 1.0 / rx->getWindowPrf();
+		if (const auto next_start = rx->getNextWindowTime(next_theoretical);
+			next_start && *next_start <= params::endTime())
+		{
+			_world->getEventQueue().push({*next_start, EventType::RX_PULSED_WINDOW_START, rx});
+		}
+	}
+
+	void SimulationEngine::handleTxCwStart(Transmitter* tx)
+	{
+		_world->getSimulationState().active_cw_transmitters.push_back(tx);
+	}
+
+	void SimulationEngine::handleTxCwEnd(Transmitter* tx)
+	{
+		auto& cw_txs = _world->getSimulationState().active_cw_transmitters;
+		std::erase(cw_txs, tx);
+	}
+
+	void SimulationEngine::handleRxCwStart(Receiver* rx) { rx->setActive(true); }
+
+	void SimulationEngine::handleRxCwEnd(Receiver* rx) { rx->setActive(false); }
+
+	void SimulationEngine::updateProgress()
+	{
+		if (!_reporter)
+		{
+			return;
+		}
+
+		const RealType t_current = _world->getSimulationState().t_current;
+		const RealType end_time = params::endTime();
+		const int progress = static_cast<int>(t_current / end_time * 100.0);
+
+		if (const auto now = std::chrono::steady_clock::now();
+			progress != _last_reported_percent || now - _last_report_time >= std::chrono::milliseconds(100))
+		{
+			_reporter->report(std::format("Simulating... {:.2f}s / {:.2f}s", t_current, end_time), progress, 100);
+			_last_reported_percent = progress;
+			_last_report_time = now;
+		}
+	}
+
+	void SimulationEngine::shutdown()
+	{
 		LOG(Level::INFO, "Main simulation loop finished. Waiting for finalization tasks...");
-		reporter->report("Main simulation finished. Waiting for data export...", 100, 100);
+		if (_reporter)
+		{
+			_reporter->report("Main simulation finished. Waiting for data export...", 100, 100);
+		}
 
-		// 1. Queue CW Finalization Tasks
-		// We finalize CW receivers here to ensure the full timeline (including all schedule periods) is exported once.
-		for (const auto& receiver_ptr : world->getReceivers())
+		for (const auto& receiver_ptr : _world->getReceivers())
 		{
 			if (receiver_ptr->getMode() == OperationMode::CW_MODE)
 			{
-				pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &pool, reporter);
+				_pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &_pool, _reporter);
 			}
-		}
-
-		// 2. Signal pulsed finalizer threads to shut down
-		for (const auto& receiver_ptr : world->getReceivers())
-		{
-			if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
+			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
 				RenderingJob shutdown_job{.duration = -1.0};
 				receiver_ptr->enqueueFinalizerJob(std::move(shutdown_job));
 			}
 		}
 
-		// Wait for any remaining CW finalization tasks in the main pool to complete.
-		pool.wait();
+		_pool.wait();
 
-		// The std::jthread finalizer threads are automatically joined here at the end of scope.
 		LOG(Level::INFO, "All finalization tasks complete.");
-
-		if (progress_callback)
+		if (_reporter)
 		{
-			reporter->report("Simulation complete", 100, 100);
+			_reporter->report("Simulation complete", 100, 100);
 		}
 		LOG(Level::INFO, "Event-driven simulation loop finished.");
+	}
+
+	void runEventDrivenSim(World* world, pool::ThreadPool& pool,
+						   const std::function<void(const std::string&, int, int)>& progress_callback)
+	{
+		auto reporter = std::make_shared<ProgressReporter>(progress_callback);
+		SimulationEngine engine(world, pool, reporter);
+		engine.run();
 	}
 }
