@@ -43,6 +43,7 @@ add_executable(libfers_tests
 		   radar/test_receiver.cpp
 		   processing/test_signal_processor.cpp
 		   serial/test_response.cpp
+		   serial/test_libxml_wrapper.cpp
 		   simulation/test_channel_model_helpers.cpp
 		   simulation/test_channel_model_direct.cpp
 		   simulation/test_channel_model_reflected.cpp
@@ -52,7 +53,7 @@ add_executable(libfers_tests
 
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 
-target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers)
+target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2)
 
 if(COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
