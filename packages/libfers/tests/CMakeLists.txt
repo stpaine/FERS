@@ -18,6 +18,8 @@ add_executable(libfers_tests
 			   math/test_rotation_path.cpp
 			   interpolation/test_interpolation_set.cpp
 			   interpolation/test_interpolation_filter.cpp
+			   noise/test_noise_generators.cpp
+			   noise/test_falpha_branch.cpp
 			   antenna/test_antenna_factory.cpp
 			   signal/test_dsp_filters.cpp
 			   signal/test_radar_signal.cpp
