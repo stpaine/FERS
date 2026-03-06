@@ -44,6 +44,7 @@ add_executable(libfers_tests
 		   processing/test_signal_processor.cpp
 		   serial/test_response.cpp
 		   serial/test_libxml_wrapper.cpp
+		   serial/test_hdf5_handler.cpp
 		   simulation/test_channel_model_helpers.cpp
 		   simulation/test_channel_model_direct.cpp
 		   simulation/test_channel_model_reflected.cpp
@@ -51,9 +52,9 @@ add_executable(libfers_tests
 		   simulation/test_channel_model_preview.cpp
 )
 
-target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${HDF5_INCLUDE_DIRS})
 
-target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2)
+target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2 ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
 
 if(COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
