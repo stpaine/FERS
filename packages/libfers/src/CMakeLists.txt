@@ -23,6 +23,7 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/radar/transmitter.h
 	${CMAKE_CURRENT_LIST_DIR}/core/world.h
 	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer.h
+	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer_pipeline.h
 	${CMAKE_CURRENT_LIST_DIR}/core/rendering_job.h
 	${CMAKE_CURRENT_LIST_DIR}/core/simulation_state.h
 	${CMAKE_CURRENT_LIST_DIR}/core/sim_events.h
@@ -54,6 +55,7 @@ set(LIBFERS_PRIVATE_HEADERS
 set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/radar/schedule_period.cpp
 	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer_pipeline.cpp
 	${CMAKE_CURRENT_LIST_DIR}/api.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/logging.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/sim_threading.cpp
