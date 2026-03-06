@@ -21,6 +21,14 @@ add_executable(libfers_tests
 			   noise/test_noise_generators.cpp
 			   noise/test_falpha_branch.cpp
 			   antenna/test_antenna_factory.cpp
+			   core/test_config.cpp
+			   core/test_fers_context.cpp
+			   core/test_logging.cpp
+			   core/test_parameters.cpp
+			   core/test_portable_utils.cpp
+			   core/test_sim_events.cpp
+			   core/test_sim_id.cpp
+			   core/test_thread_pool.cpp
 			   signal/test_dsp_filters.cpp
 			   signal/test_radar_signal.cpp
 			   timing/test_prototype_timing.cpp
