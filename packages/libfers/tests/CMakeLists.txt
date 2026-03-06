@@ -29,6 +29,7 @@ add_executable(libfers_tests
 			   core/test_sim_events.cpp
 			   core/test_sim_id.cpp
 			   core/test_thread_pool.cpp
+			   core/test_world.cpp
 			   signal/test_dsp_filters.cpp
 			   signal/test_radar_signal.cpp
 			   timing/test_prototype_timing.cpp
