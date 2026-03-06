@@ -43,7 +43,7 @@
 #include "signal/radar_signal.h"
 
 
-namespace
+namespace kmlGen
 {
 	using namespace std;
 	using ConverterFunc = std::function<void(const math::Vec3&, double&, double&, double&)>;
@@ -656,7 +656,7 @@ namespace serial
 		try
 		{
 			// Setup coordinate conversion based on global parameters
-			ConverterFunc converter;
+			kmlGen::ConverterFunc converter;
 			double reference_latitude, reference_longitude, reference_altitude;
 
 			switch (params::coordinateFrame())
@@ -693,7 +693,7 @@ namespace serial
 				}
 			}
 
-			map<const radar::Platform*, vector<const radar::Object*>> platform_to_objects;
+			std::map<const radar::Platform*, std::vector<const radar::Object*>> platform_to_objects;
 			const auto group_objects = [&](const auto& objectCollection)
 			{
 				for (const auto& obj_ptr : objectCollection)
@@ -709,7 +709,7 @@ namespace serial
 			if (params::coordinateFrame() != params::CoordinateFrame::ENU)
 			{
 				bool ref_set = false;
-				for (const auto& platform : platform_to_objects | views::keys)
+				for (const auto& platform : platform_to_objects | std::views::keys)
 				{
 					if (!platform->getMotionPath()->getCoords().empty())
 					{
@@ -734,7 +734,7 @@ namespace serial
 				return false;
 			}
 
-			writeKmlHeaderAndStyles(kml_file);
+			kmlGen::writeKmlHeaderAndStyles(kml_file);
 
 			kml_file << "  <Folder>\n";
 			kml_file << "    <name>Reference Coordinate</name>\n";
@@ -750,7 +750,7 @@ namespace serial
 			const std::string platform_indent = "    ";
 			for (const auto& [platform, objects] : platform_to_objects)
 			{
-				processPlatform(platform, objects, kml_file, converter, reference_altitude, platform_indent);
+				kmlGen::processPlatform(platform, objects, kml_file, converter, reference_altitude, platform_indent);
 			}
 
 			kml_file << "  </Folder>\n";
