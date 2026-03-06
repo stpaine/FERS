@@ -42,6 +42,7 @@ add_executable(libfers_tests
 			   radar/test_target.cpp
 		   radar/test_receiver.cpp
 		   processing/test_signal_processor.cpp
+		   serial/test_response.cpp
 )
 
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
