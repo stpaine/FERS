@@ -33,6 +33,13 @@ add_executable(libfers_tests
 			   signal/test_radar_signal.cpp
 			   timing/test_prototype_timing.cpp
 			   timing/test_timing.cpp
+			   radar/test_object.cpp
+			   radar/test_platform.cpp
+			   radar/test_schedule_period.cpp
+			   radar/test_radar_obj.cpp
+			   radar/test_transmitter.cpp
+			   radar/test_target.cpp
+			   radar/test_receiver.cpp
 )
 
 target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
