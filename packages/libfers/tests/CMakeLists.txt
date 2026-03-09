@@ -22,6 +22,11 @@ add_executable(libfers_tests
 			   noise/test_falpha_branch.cpp
 			   antenna/test_antenna_factory.cpp
 			   antenna/test_antenna_factory_io.cpp
+			   api/test_api_contract.cpp
+			   api/test_api_scenario_io.cpp
+			   api/test_api_runtime.cpp
+			   api/test_api_paths.cpp
+			   api/test_api_preview.cpp
 			   core/test_config.cpp
 			   core/test_fers_context.cpp
 			   core/test_logging.cpp
@@ -59,7 +64,10 @@ add_executable(libfers_tests
 			   simulation/test_channel_model_preview.cpp
 )
 
-target_include_directories(libfers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src ${HDF5_INCLUDE_DIRS})
+target_include_directories(libfers_tests PRIVATE
+						  ${CMAKE_CURRENT_SOURCE_DIR}/../src
+						  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json/include
+						  ${HDF5_INCLUDE_DIRS})
 
 target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2 ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
 
