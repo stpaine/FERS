@@ -66,7 +66,7 @@ fers_context_t* fers_context_create();
  * handle after calling this function results in undefined behavior.
  *
  * @param context A valid pointer to a `fers_context_t` handle. If context is NULL,
- *                the function performs no action for safety.
+ *                the function performs no action for safety and does not set an error.
  */
 void fers_context_destroy(fers_context_t* context);
 
@@ -100,7 +100,8 @@ void fers_log(fers_log_level_t level, const char* message);
 /**
  * @brief Sets the number of worker threads for the simulation.
  * @param num_threads The number of threads to use.
- * @return 0 on success, non-zero on error.
+ * @return 0 on success, non-zero on error. This function clears any previous
+ *         thread-local error message at entry, like the other fallible API calls.
  */
 int fers_set_thread_count(unsigned num_threads);
 
@@ -287,7 +288,9 @@ typedef struct
  * @param context A valid `fers_context_t` handle containing a loaded scenario with the antenna.
  * @param antenna_id The unique ID of the antenna asset to sample.
  * @param az_samples The desired number of sample points along the azimuth axis.
+ *                   Must be at least 2 to span the full azimuth range.
  * @param el_samples The desired number of sample points along the elevation axis.
+ *                   Must be at least 2 to span the full elevation range.
  * @param frequency_hz The frequency in Hz to use for gain calculation (affects aperture antennas).
  * @return A pointer to a `fers_antenna_pattern_data_t` struct containing the results.
  *         Returns NULL on failure (e.g., antenna not found). The caller owns the
