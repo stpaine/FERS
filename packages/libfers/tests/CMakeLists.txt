@@ -43,6 +43,10 @@ add_executable(libfers_tests
 			   radar/test_target.cpp
 			   radar/test_receiver.cpp
 			   processing/test_signal_processor.cpp
+			   processing/test_finalizer_pipeline_timing.cpp
+			   processing/test_finalizer_pipeline_interference.cpp
+			   processing/test_finalizer_pipeline_io.cpp
+			   processing/test_finalizer.cpp
 			   serial/test_response.cpp
 			   serial/test_libxml_wrapper.cpp
 			   serial/test_hdf5_handler.cpp
