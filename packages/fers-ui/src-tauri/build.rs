@@ -40,20 +40,19 @@ fn main() {
     // Directory containing the compiled `libfers.a` static library.
     let libfers_lib_dir = build_dir.join("packages/libfers");
 
-    // Directory containing the compiled `GeographicLib` shared library.
-    let geographiclib_lib_dir = build_dir.join("packages/libfers/third_party/geographiclib/src/");
+    // Directory containing the compiled `GeographicLib` static library.
+    // CMake's FetchContent outputs build artifacts to the `_deps` directory.
+    let geographiclib_lib_dir = build_dir.join("_deps/geographiclib-build/src");
 
     // Tell Cargo where to find our custom-built libraries.
     println!("cargo:rustc-link-search=native={}", libfers_lib_dir.display());
     println!("cargo:rustc-link-search=native={}", geographiclib_lib_dir.display());
 
-    println!("cargo:rustc-link-arg=-Wl,-rpath,{}", geographiclib_lib_dir.display());
-
     // Link the `libfers` static library (compiled from C++).
     println!("cargo:rustc-link-lib=static=fers");
 
-    // Link the `GeographicLib` shared library (third-party dependency).
-    println!("cargo:rustc-link-lib=dylib=GeographicLib");
+    // Link the `GeographicLib` static library (third-party dependency).
+    println!("cargo:rustc-link-lib=static=GeographicLib");
 
     // -- Find and link system dependencies using pkg-config --
 
@@ -84,7 +83,12 @@ fn main() {
     }
 
     // Also watch the GeographicLib library.
-    let geographiclib_path = geographiclib_lib_dir.join("libGeographicLib.so");
+    let geographiclib_path = geographiclib_lib_dir.join(if cfg!(target_os = "windows") {
+        "GeographicLib.lib"
+    } else {
+        "libGeographicLib.a"
+    });
+
     if geographiclib_path.exists() {
         println!("cargo:rerun-if-changed={}", geographiclib_path.display());
     }
