@@ -32,6 +32,12 @@ TEST_CASE("Antenna ids default to antenna type", "[antenna]")
 	REQUIRE(SimIdGenerator::getType(antenna.getId()) == ObjectType::Antenna);
 }
 
+TEST_CASE("Antenna base noise temperature defaults to zero", "[antenna]")
+{
+	antenna::Isotropic antenna("iso");
+	REQUIRE_THAT(antenna.getNoiseTemperature(unitDirection(0.3, -0.2)), WithinAbs(0.0, 0.0));
+}
+
 TEST_CASE("Sinc antenna peak and null match physics", "[antenna]")
 {
 	const RealType alpha = 2.0;
@@ -67,6 +73,43 @@ TEST_CASE("Gaussian antenna gain follows expected Gaussian surface", "[antenna]"
 	REQUIRE_THAT(gain, WithinAbs(expected, 1e-12));
 	REQUIRE(antenna.getAzimuthScale() == azscale);
 	REQUIRE(antenna.getElevationScale() == elscale);
+}
+
+TEST_CASE("Sinc antenna gain is symmetric about boresight", "[antenna]")
+{
+	antenna::Sinc antenna("sinc", 3.0, 1.7, 2.0);
+	antenna.setEfficiencyFactor(0.6);
+
+	const auto ref = unitDirection(0.0, 0.0);
+	const auto left = unitDirection(-0.2, 0.0);
+	const auto right = unitDirection(0.2, 0.0);
+
+	REQUIRE_THAT(antenna.getGain(left, ref, 1.0), WithinAbs(antenna.getGain(right, ref, 1.0), 1e-12));
+}
+
+TEST_CASE("Gaussian antenna gain is symmetric about boresight", "[antenna]")
+{
+	antenna::Gaussian antenna("gauss", 0.75, 1.25);
+
+	const auto ref = unitDirection(0.0, 0.0);
+	const auto positive = unitDirection(0.2, -0.15);
+	const auto negative = unitDirection(-0.2, 0.15);
+
+	REQUIRE_THAT(antenna.getGain(positive, ref, 1.0), WithinAbs(antenna.getGain(negative, ref, 1.0), 1e-12));
+}
+
+TEST_CASE("Gaussian antenna currently ignores efficiency factor", "[antenna]")
+{
+	const RealType azscale = 0.5;
+	const RealType elscale = 1.5;
+	antenna::Gaussian antenna("gauss", azscale, elscale);
+	antenna.setEfficiencyFactor(0.2);
+
+	const auto ref = unitDirection(0.0, 0.0);
+	const auto angle = unitDirection(0.2, 0.1);
+	const RealType expected = std::exp(-0.2 * 0.2 * azscale) * std::exp(-0.1 * 0.1 * elscale);
+
+	REQUIRE_THAT(antenna.getGain(angle, ref, 1.0), WithinAbs(expected, 1e-12));
 }
 
 TEST_CASE("Square horn gain matches aperture physics", "[antenna]")
@@ -115,6 +158,42 @@ TEST_CASE("Parabolic gain matches Bessel-based model", "[antenna]")
 	const auto gain_off_axis = antenna.getGain(off_axis, ref, wavelength);
 	REQUIRE_THAT(gain_off_axis, WithinAbs(expected_off_axis, 1e-8));
 	REQUIRE(gain_off_axis < gain_on_axis);
+}
+
+TEST_CASE("Square horn efficiency scales gain", "[antenna]")
+{
+	const auto ref = unitDirection(0.0, 0.0);
+	const auto angle = unitDirection(0.1, -0.05);
+	constexpr RealType wavelength = 0.2;
+
+	antenna::SquareHorn low_efficiency("horn-low", 0.4);
+	low_efficiency.setEfficiencyFactor(0.25);
+
+	antenna::SquareHorn high_efficiency("horn-high", 0.4);
+	high_efficiency.setEfficiencyFactor(0.75);
+
+	const RealType low_gain = low_efficiency.getGain(angle, ref, wavelength);
+	const RealType high_gain = high_efficiency.getGain(angle, ref, wavelength);
+
+	REQUIRE_THAT(high_gain, WithinAbs(low_gain * 3.0, 1e-10));
+}
+
+TEST_CASE("Parabolic efficiency scales gain", "[antenna]")
+{
+	const auto ref = unitDirection(0.0, 0.0);
+	const auto angle = unitDirection(0.08, 0.0);
+	constexpr RealType wavelength = 0.25;
+
+	antenna::Parabolic low_efficiency("dish-low", 1.2);
+	low_efficiency.setEfficiencyFactor(0.4);
+
+	antenna::Parabolic high_efficiency("dish-high", 1.2);
+	high_efficiency.setEfficiencyFactor(0.9);
+
+	const RealType low_gain = low_efficiency.getGain(angle, ref, wavelength);
+	const RealType high_gain = high_efficiency.getGain(angle, ref, wavelength);
+
+	REQUIRE_THAT(high_gain, WithinAbs(low_gain * (0.9 / 0.4), 1e-8));
 }
 
 TEST_CASE("Efficiency factor accepts values greater than unity", "[antenna]")
