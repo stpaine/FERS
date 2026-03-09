@@ -50,6 +50,7 @@ add_executable(libfers_tests
 			   serial/test_response.cpp
 			   serial/test_libxml_wrapper.cpp
 			   serial/test_hdf5_handler.cpp
+			   serial/test_waveform_factory.cpp
 			   simulation/test_channel_model_helpers.cpp
 			   simulation/test_channel_model_direct.cpp
 			   simulation/test_channel_model_reflected.cpp
