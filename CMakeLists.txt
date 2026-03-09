@@ -21,6 +21,21 @@ include(FersOptions)
 # --- Compiler Warnings and Flags ---
 include(FersCompilerWarnings)
 
+# --- Testing ---
+if (FERS_BUILD_TESTS)
+	enable_testing()
+endif()
+
+if(FERS_ENABLE_COVERAGE)
+	if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+		message(STATUS "Enabling Code Coverage")
+		add_compile_options(-fprofile-arcs -ftest-coverage)
+		add_link_options(--coverage)
+	else()
+		message(WARNING "Code coverage is only supported for GCC and Clang")
+	endif()
+endif()
+
 # --- macOS Specific Configuration ---
 if (APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	message(STATUS "macOS with a modern toolchain (e.g., Homebrew LLVM) is recommended.")

@@ -81,8 +81,6 @@ void fers_context_destroy(fers_context_t* context)
 {
 	if (!context)
 	{
-		last_error_message = "Invalid context provided to fers_context_destroy.";
-		LOG(logging::Level::WARNING, last_error_message);
 		return;
 	}
 	delete context;
@@ -144,6 +142,7 @@ void fers_log(fers_log_level_t level, const char* message)
 
 int fers_set_thread_count(unsigned num_threads)
 {
+	last_error_message.clear();
 	try
 	{
 		if (auto res = params::setThreads(num_threads); !res)
@@ -631,9 +630,9 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 													  const double frequency_hz)
 {
 	last_error_message.clear();
-	if (!context || az_samples == 0 || el_samples == 0)
+	if (!context || az_samples < 2 || el_samples < 2)
 	{
-		last_error_message = "Invalid arguments: context or sample counts are invalid.";
+		last_error_message = "Invalid arguments: context must be non-null and sample counts must be >= 2.";
 		LOG(logging::Level::ERROR, last_error_message);
 		return nullptr;
 	}

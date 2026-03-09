@@ -17,7 +17,6 @@
 namespace radar
 {
 	class Receiver;
-
 	class Target;
 }
 

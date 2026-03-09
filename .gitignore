@@ -9,6 +9,7 @@ testing_files/
 design_docs/
 latex/
 build/
+build_cov/
 
 # JetBrains IDEs
 .idea/

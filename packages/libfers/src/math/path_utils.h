@@ -16,6 +16,11 @@
 #pragma once
 
 #include <algorithm>
+#include <concepts>
+#include <stdexcept>
+#include <vector>
+
+#include "core/config.h"
 
 namespace math
 {

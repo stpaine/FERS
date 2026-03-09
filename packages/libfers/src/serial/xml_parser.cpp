@@ -128,7 +128,7 @@ auto get_attribute_bool = [](const XmlElement& element, const std::string& attri
 	}
 };
 
-namespace
+namespace xmlParser
 {
 	struct ReferenceLookup
 	{
@@ -1250,18 +1250,18 @@ namespace serial
 		}
 
 		const fs::path main_dir = fs::path(filename).parent_path();
-		const bool did_combine = addIncludeFilesToMainDocument(main_doc, main_dir);
+		const bool did_combine = xmlParser::addIncludeFilesToMainDocument(main_doc, main_dir);
 
 		if (validate)
 		{
-			validateXml(did_combine, main_doc);
+			xmlParser::validateXml(did_combine, main_doc);
 		}
 		else
 		{
 			LOG(Level::DEBUG, "Skipping XML validation.");
 		}
 
-		processParsedDocument(main_doc, world, main_dir, masterSeeder);
+		xmlParser::processParsedDocument(main_doc, world, main_dir, masterSeeder);
 	}
 
 	void parseSimulationFromString(const std::string& xmlContent, World* world, const bool validate,
@@ -1278,7 +1278,7 @@ namespace serial
 		if (validate)
 		{
 			// Note: <include> tags are not processed when loading from a string.
-			validateXml(false, doc);
+			xmlParser::validateXml(false, doc);
 		}
 		else
 		{
@@ -1289,6 +1289,6 @@ namespace serial
 		// The UI/caller is responsible for ensuring any paths in the XML are absolute or resolvable.
 		const fs::path base_dir = ".";
 
-		processParsedDocument(doc, world, base_dir, masterSeeder);
+		xmlParser::processParsedDocument(doc, world, base_dir, masterSeeder);
 	}
 }

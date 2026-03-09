@@ -1,0 +1,205 @@
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <memory>
+#include <vector>
+
+#include "antenna/antenna_factory.h"
+#include "core/config.h"
+#include "core/parameters.h"
+#include "math/coord.h"
+#include "processing/finalizer_pipeline.h"
+#include "radar/platform.h"
+#include "radar/receiver.h"
+#include "radar/target.h"
+#include "radar/transmitter.h"
+#include "serial/response.h"
+#include "signal/radar_signal.h"
+#include "simulation/channel_model.h"
+#include "timing/prototype_timing.h"
+#include "timing/timing.h"
+
+using Catch::Matchers::WithinAbs;
+
+namespace
+{
+	struct ParamGuard
+	{
+		params::Parameters saved;
+		ParamGuard() : saved(params::params) {}
+		~ParamGuard() { params::params = saved; }
+	};
+
+	struct FixedSignal final : public fers_signal::Signal
+	{
+		std::vector<ComplexType> data;
+
+		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>&, unsigned& size,
+										RealType) const override
+		{
+			size = static_cast<unsigned>(data.size());
+			return data;
+		}
+	};
+
+	void setupPlatform(radar::Platform& platform, const math::Vec3& position)
+	{
+		platform.getMotionPath()->addCoord(math::Coord{position, 0.0});
+		platform.getMotionPath()->finalize();
+		platform.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+		platform.getRotationPath()->finalize();
+	}
+
+	std::shared_ptr<timing::Timing> makeQuietTiming(const std::string& name, unsigned seed)
+	{
+		timing::PrototypeTiming prototype(name);
+		prototype.setFrequency(1.0);
+
+		auto timing_model = std::make_shared<timing::Timing>(name, seed);
+		timing_model->initializeModel(&prototype);
+		return timing_model;
+	}
+
+	std::unique_ptr<serial::Response>
+	makeFixedResponse(const radar::Transmitter* transmitter,
+					  std::vector<std::unique_ptr<fers_signal::RadarSignal>>& wave_store,
+					  const std::vector<ComplexType>& samples, RealType sample_rate, RealType start_time)
+	{
+		auto signal = std::make_unique<FixedSignal>();
+		signal->data = samples;
+		signal->load(samples, static_cast<unsigned>(samples.size()), sample_rate);
+
+		auto wave = std::make_unique<fers_signal::RadarSignal>(
+			"wave", 1.0, 1.0e9, static_cast<RealType>(samples.size()) / sample_rate, std::move(signal));
+		const auto* wave_ptr = wave.get();
+		wave_store.push_back(std::move(wave));
+
+		auto response = std::make_unique<serial::Response>(wave_ptr, transmitter);
+		response->addInterpPoint({1.0, start_time, 0.0, 0.0});
+		response->addInterpPoint({1.0, start_time + static_cast<RealType>(samples.size() - 1) / sample_rate, 0.0, 0.0});
+		return response;
+	}
+}
+
+TEST_CASE("applyCwInterference adds direct-path CW energy sample by sample", "[processing][finalizer][interference]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	radar::Platform tx_platform("TxPlatform");
+	setupPlatform(tx_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_platform("RxPlatform");
+	setupPlatform(rx_platform, math::Vec3{1000.0, 0.0, 0.0});
+
+	antenna::Isotropic antenna("iso");
+	auto timing_model = makeQuietTiming("clk", 11);
+
+	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::CW_MODE, 101);
+	transmitter.setAntenna(&antenna);
+	transmitter.setTiming(timing_model);
+	auto signal = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("cw", 25.0, 1.0e9, 1.0, std::move(signal), 301);
+	transmitter.setSignal(&wave);
+
+	radar::Receiver receiver(&rx_platform, "RxA", 99, radar::OperationMode::CW_MODE, 202);
+	receiver.setAntenna(&antenna);
+	receiver.setTiming(timing_model);
+
+	std::vector<ComplexType> window(3, ComplexType{0.25, -0.5});
+	const std::vector<ComplexType> baseline = window;
+	const std::vector<radar::Transmitter*> cw_sources = {&transmitter};
+	const std::vector<std::unique_ptr<radar::Target>> targets;
+	const RealType start = 0.0;
+	const RealType dt = 0.25;
+
+	processing::pipeline::applyCwInterference(window, start, dt, &receiver, cw_sources, &targets);
+
+	for (size_t i = 0; i < window.size(); ++i)
+	{
+		const ComplexType expected =
+			simulation::calculateDirectPathContribution(&transmitter, &receiver, start + static_cast<RealType>(i) * dt);
+		const ComplexType actual = window[i] - baseline[i];
+		REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1e-12));
+		REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1e-12));
+	}
+}
+
+TEST_CASE("applyCwInterference respects FLAG_NODIRECT and keeps only physically reflected energy",
+		  "[processing][finalizer][interference]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	radar::Platform tx_platform("TxPlatform");
+	setupPlatform(tx_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_platform("RxPlatform");
+	setupPlatform(rx_platform, math::Vec3{1000.0, 1000.0, 0.0});
+	radar::Platform target_platform("TargetPlatform");
+	setupPlatform(target_platform, math::Vec3{1000.0, 0.0, 0.0});
+
+	antenna::Isotropic antenna("iso");
+	auto timing_model = makeQuietTiming("clk", 12);
+
+	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::CW_MODE, 102);
+	transmitter.setAntenna(&antenna);
+	transmitter.setTiming(timing_model);
+	auto signal = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("cw", 9.0, 1.0e9, 1.0, std::move(signal), 302);
+	transmitter.setSignal(&wave);
+
+	radar::Receiver receiver(&rx_platform, "RxA", 100, radar::OperationMode::CW_MODE, 203);
+	receiver.setAntenna(&antenna);
+	receiver.setTiming(timing_model);
+	receiver.setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+
+	std::vector<std::unique_ptr<radar::Target>> targets;
+	targets.push_back(radar::createIsoTarget(&target_platform, "TargetA", 4.0, 7, 501));
+
+	std::vector<ComplexType> window(3, ComplexType{});
+	const std::vector<radar::Transmitter*> cw_sources = {&transmitter};
+	const RealType start = 0.0;
+	const RealType dt = 0.2;
+
+	processing::pipeline::applyCwInterference(window, start, dt, &receiver, cw_sources, &targets);
+
+	for (size_t i = 0; i < window.size(); ++i)
+	{
+		const ComplexType expected = simulation::calculateReflectedPathContribution(
+			&transmitter, &receiver, targets.front().get(), start + static_cast<RealType>(i) * dt);
+		REQUIRE_THAT(window[i].real(), WithinAbs(expected.real(), 1e-12));
+		REQUIRE_THAT(window[i].imag(), WithinAbs(expected.imag(), 1e-12));
+	}
+}
+
+TEST_CASE("applyPulsedInterference maps pulse start times to simulation sample indices and clips overflow",
+		  "[processing][finalizer][interference]")
+{
+	ParamGuard guard;
+	params::setTime(10.0, 11.0);
+
+	radar::Platform tx_platform("TxPlatform");
+	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 401);
+
+	std::vector<std::unique_ptr<fers_signal::RadarSignal>> wave_store;
+	std::vector<std::unique_ptr<serial::Response>> interference_log;
+	interference_log.push_back(makeFixedResponse(
+		&transmitter, wave_store, {ComplexType{1.0, 0.5}, ComplexType{2.0, -0.5}, ComplexType{3.0, 1.0}}, 4.0, 10.25));
+	interference_log.push_back(
+		makeFixedResponse(&transmitter, wave_store,
+						  {ComplexType{10.0, 0.0}, ComplexType{20.0, 1.0}, ComplexType{30.0, 2.0}}, 4.0, 10.75));
+
+	std::vector<ComplexType> iq_buffer(5, ComplexType{});
+
+	processing::pipeline::applyPulsedInterference(iq_buffer, interference_log);
+
+	const std::vector<ComplexType> expected = {
+		ComplexType{0.0, 0.0},	ComplexType{1.0, 0.5},	ComplexType{2.0, -0.5},
+		ComplexType{13.0, 1.0}, ComplexType{20.0, 1.0},
+	};
+
+	REQUIRE(iq_buffer.size() == expected.size());
+	for (size_t i = 0; i < expected.size(); ++i)
+	{
+		REQUIRE_THAT(iq_buffer[i].real(), WithinAbs(expected[i].real(), 1e-12));
+		REQUIRE_THAT(iq_buffer[i].imag(), WithinAbs(expected[i].imag(), 1e-12));
+	}
+}

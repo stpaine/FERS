@@ -18,6 +18,8 @@ endif ()
 option(FERS_BUILD_SHARED_LIBS "Build the shared (.so/.dll) library" ON)
 option(FERS_BUILD_STATIC_LIBS "Build the static (.a) library" ON)
 option(FERS_BUILD_DOCS "Enable building Doxygen documentation" OFF)
+option(FERS_BUILD_TESTS "Build unit tests" ON)
+option(FERS_ENABLE_COVERAGE "Enable code coverage generation" OFF)
 
 # Ensure at least one library type is selected.
 if (NOT FERS_BUILD_SHARED_LIBS AND NOT FERS_BUILD_STATIC_LIBS)
