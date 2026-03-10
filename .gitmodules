@@ -2,10 +2,6 @@
 	path = packages/libfers/third_party/highfive
 	url = https://github.com/highfive-devs/highfive.git
 	branch = main
-[submodule "docs/doxygen-awesome-css"]
-	path = docs/doxygen-awesome-css
-	url = https://github.com/jothepro/doxygen-awesome-css.git
-	branch = main
 [submodule "packages/libfers/third_party/json"]
 	path = packages/libfers/third_party/json
 	url = https://github.com/nlohmann/json.git

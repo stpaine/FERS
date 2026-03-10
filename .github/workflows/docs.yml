@@ -28,8 +28,6 @@ jobs:
         steps:
             - name: Checkout repository
               uses: actions/checkout@v6
-              with:
-                  submodules: 'recursive' # Fetch doxygen-awesome-css submodule
 
             - name: Install dependencies
               run: |
