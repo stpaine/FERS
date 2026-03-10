@@ -54,6 +54,7 @@ The application is architected as a multi-modal "Workbench" to provide a clean, 
 This application is part of a monorepo that includes the core C++ `libfers` library. To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/davidbits/FERS/blob/master/README.md)**.
 
 Once the environment is set up, you can run the UI from the **repository root** with:
-`bash
-    pnpm ui:dev
-    `
+
+```bash
+bun ui:dev
+```

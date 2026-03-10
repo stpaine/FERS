@@ -24,56 +24,25 @@ including the official `fers-cli` and `fers-ui` applications.
 
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+)
 - **CMake** (3.22+)
-- **libhdf5** (HDF5 support)
-- **libxml2** (XML handling)
-- **HighFive**, **GeographicLib**, & **nlohmann/json** (included as git submodules)
+- **vcpkg** for C++ package management. All third-party libraries (like HDF5, libxml2, etc.) are managed through the `vcpkg.json` manifest at the repository root.
 - **Doxygen** & **Graphviz** (for documentation generation, optional)
-- **doxygen-awesome-css** (for enhanced Doxygen themes, optional)
 
 ## Building the Library and CLI
 
 The C++ components are built using CMake from the repository root. For a complete development setup guide, please refer to the **[root `README.md`](../../README.md)**.
 
-### 1. Install System Dependencies
+### 1. Configure and Build
 
-**On Ubuntu/Debian:**
-
-```bash
-sudo apt-get update && sudo apt-get install build-essential cmake libhdf5-dev libxml2-dev xxd doxygen graphviz
-```
-
-**On macOS (using Homebrew):**
-A modern LLVM toolchain is required, as the default system Clang may be outdated.
-
-```bash
-brew install cmake hdf5 libxml2 llvm doxygen graphviz
-```
-
-### 2. Configure and Build
-
-From the root of the repository, create a build directory and run CMake/make.
-
-**On Linux:**
+From the root of the repository, use the CMake presets to configure and build the project. This will automatically use `vcpkg` to manage dependencies.
 
 ```bash
 # From the root FERS directory
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+cmake --preset=default
+cmake --build build
 ```
 
-**On macOS:**
-You must point CMake to the Homebrew LLVM toolchain.
-
-```bash
-# From the FERS/ directory
-mkdir build && cd build
-CC=/usr/local/opt/llvm/bin/clang CXX=/usr/local/opt/llvm/bin/clang++ cmake ..
-make -j$(sysctl -n hw.ncpu)
-```
-
-The compiled artifacts will be located in the `build/` directory. Libraries (`.a`, `.so`) are in `libfers/`,
-and the `fers-cli` executable is in `fers-cli/`. DLLs on Windows will be placed in `bin/`.
+The compiled artifacts will be located in the `build/` directory. Libraries (`.a`, `.so`) are in `packages/libfers/`,
+and the `fers-cli` executable is in `packages/fers-cli/`. DLLs on Windows will be placed in `bin/`.
 
 ### Build Options
 
@@ -89,22 +58,23 @@ You can customize the build using the following CMake options:
 Example of a debug build that only creates a static library:
 
 ```bash
+# From the build directory
 cmake .. -DCMAKE_BUILD_TYPE=Debug -DFERS_BUILD_SHARED_LIBS=OFF
 ```
 
-### 3. Install (Optional)
+### 2. Install (Optional)
 
 You can install the libraries, headers, and CLI executable to your system.
 
 ```bash
 # From the build directory
-sudo make install
+sudo cmake --build . --target install
 sudo ldconfig # On Linux, to update the cache
 ```
 
 ## Documentation
 
-The source code documentation is automatically built and deployed to our [GitHub Pages site](https://davidbits.github.io/FERS/). If you wish to build it locally, you will need **Doxygen** and **Graphviz** installed. They are included in the dependency installation commands above.
+The source code documentation is automatically built and deployed to our [GitHub Pages site](https://davidbits.github.io/FERS/). If you wish to build it locally, you will need **Doxygen** and **Graphviz** installed.
 
 1. **Configure with documentation enabled:**
 
@@ -115,7 +85,7 @@ The source code documentation is automatically built and deployed to our [GitHub
 
 2. **Build the `doc` target:**
     ```bash
-    make doc
+    cmake --build . --target doc
     ```
 
 The HTML output will be generated in the `build/docs/html/` directory. You can open `index.html` in your browser to view the documentation.
