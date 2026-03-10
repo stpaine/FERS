@@ -43,8 +43,10 @@ export default function CameraManager({ controlsRef }: CameraManagerProps) {
             let hasPoints = false;
 
             platforms.forEach((platform) => {
-                (platform.pathPoints ?? []).forEach((point: THREE.Vector3) => {
-                    box.expandByPoint(point);
+                (platform.pathPoints ?? []).forEach((point) => {
+                    box.expandByPoint(
+                        new THREE.Vector3(point.x, point.y, point.z)
+                    );
                     hasPoints = true;
                 });
             });

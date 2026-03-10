@@ -55,7 +55,7 @@ Follow these steps to set up a development environment for building the C++ core
 Ensure you have the following tools installed on your system:
 
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+) and **CMake** (3.22+).
-- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment.
+- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment, or create a `.env` file at `packages/fers-ui/src-tauri/.env` containing `VCPKG_ROOT=/path/to/vcpkg`.
 - [**Bun**](https://bun.sh/).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
@@ -79,9 +79,9 @@ Husky.
 bun install
 ```
 
-### 4. Build the C++ Core
+### 4. Build the Standalone C++ Core (Optional for UI Developers)
 
-Configure and compile the C++ libraries using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies.
+If you are developing the C++ core or CLI independently of the UI, you can configure and compile the C++ libraries directly using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies.
 
 ```bash
 # From the root FERS directory
@@ -91,10 +91,11 @@ cmake --build build
 
 ### 5. Run the UI
 
-Navigate back to the root of the repository and start the development server.
+The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
+
+Navigate to the root of the repository and start the development server:
 
 ```bash
-# From the root FERS directory
 bun ui:dev
 ```
 

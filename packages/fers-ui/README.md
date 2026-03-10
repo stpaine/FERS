@@ -51,7 +51,15 @@ The application is architected as a multi-modal "Workbench" to provide a clean, 
 
 ## Getting Started
 
-This application is part of a monorepo that includes the core C++ `libfers` library. To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/davidbits/FERS/blob/master/README.md)**.
+This application is part of a monorepo that includes the core C++ `libfers` library. The UI build process is entirely self-contained: Cargo will automatically invoke CMake to compile the C++ backend in an isolated directory during the build.
+
+To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/davidbits/FERS/blob/master/README.md)**.
+
+**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set. You can set this globally in your shell, or create a `.env` file at `src-tauri/.env` with the path to your vcpkg installation:
+
+```env
+VCPKG_ROOT=/path/to/vcpkg
+```
 
 Once the environment is set up, you can run the UI from the **repository root** with:
 
