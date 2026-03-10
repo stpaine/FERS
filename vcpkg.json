@@ -1,0 +1,16 @@
+{
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+    "name": "fers",
+    "version": "1.0.0",
+    "dependencies": [
+        "catch2",
+        "geographiclib",
+        "highfive",
+        {
+            "name": "hdf5",
+            "features": ["cpp", "hl"]
+        },
+        "libxml2",
+        "nlohmann-json"
+    ]
+}

@@ -20,3 +20,5 @@ cmake-build-*/
 node_modules/
 
 .cache
+
+CMakeUserPresets.json
