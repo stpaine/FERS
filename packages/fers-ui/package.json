@@ -6,7 +6,7 @@
     "license": "GPL-2.0-only",
     "scripts": {
         "dev": "vite",
-        "build": "pnpm lint && tsc && vite build",
+        "build": "bun run lint && tsc && vite build",
         "preview": "vite preview",
         "tauri": "tauri",
         "lint": "eslint .",
@@ -58,7 +58,7 @@
         "typescript": "~5.9.3",
         "typescript-eslint": "^8.56.1",
         "vite": "^7.3.1",
-        "vite-tsconfig-paths": "^6.1.1"
-    },
-    "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017"
+        "vite-tsconfig-paths": "^6.1.1",
+        "@types/bun": "latest"
+    }
 }

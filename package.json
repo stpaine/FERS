@@ -1,17 +1,20 @@
 {
     "name": "fers-monorepo",
     "private": true,
+    "workspaces": [
+        "packages/*"
+    ],
     "scripts": {
         "prepare": "husky",
-        "ui:dev": "pnpm --filter fers-ui tauri dev --no-watch",
-        "ui:build": "pnpm --filter fers-ui tauri build",
-        "tauri": "pnpm --filter fers-ui tauri",
-        "format": "pnpm format:cpp && pnpm format:js && pnpm format:rust",
+        "ui:dev": "bun run --filter fers-ui tauri dev --no-watch",
+        "ui:build": "bun run --filter fers-ui tauri build",
+        "tauri": "bun run --filter fers-ui tauri",
+        "format": "bun run format:cpp && bun run format:js && bun run format:rust",
         "format:cpp": "git ls-files 'packages/**/*.cpp' 'packages/**/*.h' | xargs clang-format -i",
         "format:js": "prettier --write .",
         "format:rust": "cargo fmt --all",
-        "lint": "pnpm lint:js && pnpm lint:rust",
-        "lint:js": "pnpm --filter fers-ui lint",
+        "lint": "bun run lint:js && bun run lint:rust",
+        "lint:js": "bun run --filter fers-ui lint",
         "lint:rust": "cargo clippy --workspace -- -D warnings"
     },
     "devDependencies": {
@@ -31,6 +34,5 @@
             "cargo fmt --",
             "sh -c 'cargo clippy -p fers-ui --fix --allow-dirty --allow-staged -- -D warnings'"
         ]
-    },
-    "packageManager": "pnpm@10.30.0+sha512.2b5753de015d480eeb88f5b5b61e0051f05b4301808a82ec8b840c9d2adf7748eb352c83f5c1593ca703ff1017295bc3fdd3119abb9686efc96b9fcb18200937"
+    }
 }
