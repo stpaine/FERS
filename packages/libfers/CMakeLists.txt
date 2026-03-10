@@ -1,7 +1,5 @@
 project(libfers)
 
-include(FetchContent)
-
 # Helper function to apply common settings to a library target
 function(fers_configure_library_target target_name)
 	# Apply project-wide compiler warnings and flags
@@ -29,13 +27,10 @@ function(fers_configure_library_target target_name)
 		$<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>
 	)
 
-	target_include_directories(${target_name} PRIVATE
-		$<TARGET_PROPERTY:nlohmann_json::nlohmann_json,INTERFACE_INCLUDE_DIRECTORIES>
-	)
-
 	# --- Third-Party Dependencies ---
 	target_link_libraries(${target_name} PRIVATE
-		HighFive::HighFive
+		HighFive
+		nlohmann_json::nlohmann_json
 		GeographicLib::GeographicLib
 		LibXml2::LibXml2
 		${HDF5_C_LIBRARIES}
@@ -74,29 +69,10 @@ add_custom_target(generate_schemas ALL DEPENDS
 	${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
 )
 
-# --- Third-Party Dependencies ---
-add_subdirectory(third_party/highfive EXCLUDE_FROM_ALL)
-add_subdirectory(third_party/json EXCLUDE_FROM_ALL)
-
-set(BUILD_DOCUMENTATION OFF CACHE BOOL "Disable GeographicLib docs" FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "Disable GeographicLib tests" FORCE)
-set(BINDIR "" CACHE STRING "Disable GeographicLib tools" FORCE)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build GeographicLib as static" FORCE)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON CACHE BOOL "Build with PIC" FORCE)
-
-# Prevent the geographiclib tests from being used by the FERS build system, since geographiclib unconditionally
-# registers its tests via add_subdirectory(tests) and add_test due to an oversight in their CMakeLists.txt
-set(GL_DUMMY_TEST_FILE "${CMAKE_CURRENT_BINARY_DIR}/GeographicLib_Tests_Disabled.cmake")
-file(WRITE "${GL_DUMMY_TEST_FILE}" "message(STATUS \"GeographicLib tests disabled by FERS build system.\")")
-
-FetchContent_Declare(
-		GeographicLib
-		GIT_REPOSITORY https://github.com/geographiclib/geographiclib.git
-		GIT_TAG        r2.7
-		PATCH_COMMAND  ${CMAKE_COMMAND} -E copy "${GL_DUMMY_TEST_FILE}" "tests/CMakeLists.txt"
-)
-FetchContent_MakeAvailable(GeographicLib)
-
+# --- Third-Party Dependencies (vcpkg) ---
+find_package(HighFive CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
+find_package(GeographicLib CONFIG REQUIRED)
 find_package(LibXml2 REQUIRED)
 find_package(HDF5 COMPONENTS C HL REQUIRED)
 
@@ -132,10 +108,6 @@ add_library(fers::fers ALIAS libfers)
 source_group("Source Files" FILES ${LIBFERS_SOURCES})
 source_group("Header Files\\Public" FILES ${LIBFERS_PUBLIC_HEADERS})
 source_group("Header Files\\Private" FILES ${LIBFERS_PRIVATE_HEADERS})
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/third_party/json/include/nlohmann
-	DESTINATION include
-)
 
 # --- Installation ---
 if (FERS_BUILD_STATIC_LIBS)

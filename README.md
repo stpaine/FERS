@@ -55,73 +55,48 @@ Follow these steps to set up a development environment for building the C++ core
 Ensure you have the following tools installed on your system:
 
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+) and **CMake** (3.22+).
-- [**Node.js**](https://nodejs.org/) (v18+) and [**pnpm**](https://pnpm.io/).
+- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment, or create a `.env` file at `packages/fers-ui/src-tauri/.env` containing `VCPKG_ROOT=/path/to/vcpkg`.
+- [**Bun**](https://bun.sh/).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
 - [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
 
 ### 2. Clone the Repository
 
-Clone the repository and its submodules from the root of the monorepo.
+Clone the repository from the root of the monorepo.
 
 ```bash
-git clone --recursive https://github.com/davidbits/FERS.git
+git clone https://github.com/davidbits/FERS.git
 cd FERS
 ```
 
-### 3. Install System Dependencies (for C++ Core)
-
-**On Ubuntu/Debian:**
-
-```bash
-sudo apt-get update && sudo apt-get install build-essential cmake libhdf5-dev libxml2-dev xxd
-```
-
-**On macOS (using Homebrew):**
-
-```bash
-brew install cmake hdf5 libxml2 llvm
-```
-
-### 4. Install Node.js Dependencies
+### 3. Install Dependencies
 
 From the **root of the repository**, install all JavaScript dependencies. This also sets up pre-commit hooks using
 Husky.
 
 ```bash
-pnpm install
+bun install
 ```
 
-### 5. Build the C++ Core
+### 4. Build the Standalone C++ Core (Optional for UI Developers)
 
-Create a build directory and compile the C++ libraries using CMake.
-
-**On Linux:**
+If you are developing the C++ core or CLI independently of the UI, you can configure and compile the C++ libraries directly using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies.
 
 ```bash
 # From the root FERS directory
-mkdir build && cd build
-cmake ..
-make -j$(nproc)
+cmake --preset=release
+cmake --build build
 ```
 
-**On macOS:**
-You must point CMake to the Homebrew LLVM toolchain.
+### 5. Run the UI
+
+The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
+
+Navigate to the root of the repository and start the development server:
 
 ```bash
-# From the FERS/ directory
-mkdir build && cd build
-CC=/usr/local/opt/llvm/bin/clang CXX=/usr/local/opt/llvm/bin/clang++ cmake ..
-make -j$(sysctl -n hw.ncpu)
-```
-
-### 6. Run the UI
-
-Navigate back to the root of the repository and start the development server.
-
-```bash
-# From the root FERS directory
-pnpm ui:dev
+bun ui:dev
 ```
 
 ## Contributing

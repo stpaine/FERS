@@ -28,7 +28,7 @@ updates:
           - 'dependencies'
           - 'scope: ui'
 
-    # Maintain dependencies for npm (pnpm) across the monorepo
+    # Maintain dependencies for npm (bun) across the monorepo
     - package-ecosystem: 'npm'
       directory: '/'
       schedule:
@@ -40,24 +40,6 @@ updates:
           - 'dependencies'
           - 'scope: ui'
       groups:
-          # Group all npm dependencies into a single PR
           all-npm-dependencies:
-              patterns:
-                  - '*'
-
-    # Maintain dependencies for Git submodules
-    - package-ecosystem: 'gitsubmodule'
-      directory: '/'
-      schedule:
-          interval: 'weekly'
-      commit-message:
-          prefix: 'chore'
-          include: 'scope'
-      labels:
-          - 'dependencies'
-          - 'scope: core-simulator'
-      groups:
-          # Group all submodules into a single PR
-          all-submodules:
               patterns:
                   - '*'

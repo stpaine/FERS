@@ -1,13 +1,5 @@
-include(FetchContent)
+find_package(Catch2 CONFIG REQUIRED)
 
-FetchContent_Declare(
-		Catch2
-		GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-		GIT_TAG v3.13.0
-)
-FetchContent_MakeAvailable(Catch2)
-
-list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(CTest)
 include(Catch)
 
@@ -66,7 +58,6 @@ add_executable(libfers_tests
 
 target_include_directories(libfers_tests PRIVATE
 						  ${CMAKE_CURRENT_SOURCE_DIR}/../src
-						  ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/json/include
 						  ${HDF5_INCLUDE_DIRS})
 
 target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2 ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
