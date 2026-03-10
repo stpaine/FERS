@@ -22,3 +22,7 @@ node_modules/
 .cache
 
 CMakeUserPresets.json
+
+.python-version
+pyproject.toml
+uv.lock
