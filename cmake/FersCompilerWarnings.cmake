@@ -27,38 +27,38 @@ function(apply_fers_warnings TARGET_NAME)
 		-Wlogical-op
 	)
 
-	# --- Apply Flags Based on Compiler ---
-	if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-		target_compile_options(${TARGET_NAME} PRIVATE ${FERS_GCC_CLANG_WARNINGS})
-	elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-		# Add equivalent MSVC warnings if needed, e.g., /W4
-		target_compile_options(${TARGET_NAME} PRIVATE /W4)
-	endif()
+	target_compile_options(${TARGET_NAME} PRIVATE ${FERS_GCC_CLANG_WARNINGS})
 
 	# --- Common Flags ---
-	# Use generator expressions to apply flags conditionally.
 	target_compile_options(${TARGET_NAME} PRIVATE
-		# Enable threading support
-		$<$<CXX_COMPILER_ID:GNU>:-pthread>
-		# Performance-related math flags
-		-ffast-math
-		-fno-finite-math-only
+						   -pthread
+						   -ffast-math
+						   -fno-finite-math-only
 	)
-	target_link_libraries(${TARGET_NAME} PRIVATE
-		$<$<CXX_COMPILER_ID:GNU>:Threads::Threads>
-	)
-	target_compile_definitions(${TARGET_NAME} PRIVATE _REENTRANT)
+
+	if (UNIX)
+		target_compile_definitions(${TARGET_NAME} PRIVATE _REENTRANT)
+	endif ()
 
 	# --- Build-Type Specific Flags ---
-	# Debug flags
-	target_compile_options(${TARGET_NAME} PRIVATE
-		$<$<CONFIG:Debug>:-g>
-		$<$<CONFIG:Debug>:-O0>
-		$<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:GNU>>:-fprofile-arcs;-ftest-coverage>
-	)
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+		target_compile_options(${TARGET_NAME} PRIVATE -g -O0)
+	elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
+		target_compile_options(${TARGET_NAME} PRIVATE -O2)
+		target_link_options(${TARGET_NAME} PRIVATE -s)
+	elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+		target_compile_options(${TARGET_NAME} PRIVATE -O2 -g)
+	endif ()
 
-	# Release flags
-	target_compile_options(${TARGET_NAME} PRIVATE $<$<CONFIG:Release>:-O2>)
-	target_link_options(${TARGET_NAME} PRIVATE $<$<CONFIG:Release>:-s>)
+	# --- Sanitizer Detection ---
+	if (CMAKE_CXX_FLAGS MATCHES ".*-fsanitize=address.*")
+		target_compile_options(${TARGET_NAME} PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+		target_link_options(${TARGET_NAME} PRIVATE -fsanitize=address)
+	elseif (CMAKE_CXX_FLAGS MATCHES ".*-fsanitize=thread.*")
+		target_compile_options(${TARGET_NAME} PRIVATE -fsanitize=thread)
+		target_link_options(${TARGET_NAME} PRIVATE -fsanitize=thread)
+	endif ()
 
+	# --- Link Threads ---
+	target_link_libraries(${TARGET_NAME} PRIVATE Threads::Threads)
 endfunction()

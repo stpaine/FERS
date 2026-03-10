@@ -85,7 +85,7 @@ If you are developing the C++ core or CLI independently of the UI, you can confi
 
 ```bash
 # From the root FERS directory
-cmake --preset=default
+cmake --preset=release
 cmake --build build
 ```
 
