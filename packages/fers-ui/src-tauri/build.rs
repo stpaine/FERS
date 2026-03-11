@@ -100,6 +100,9 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", header_path.display());
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+    println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/src").display());
+    println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/include").display());
+    println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/CMakeLists.txt").display());
 
     let bindings = bindgen::Builder::default()
         .header(header_path.to_str().unwrap())
