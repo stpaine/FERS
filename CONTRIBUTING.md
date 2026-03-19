@@ -31,9 +31,9 @@ You can contribute in many ways:
 
 ## Reporting Bugs
 
-If you find a bug, please check the [existing issues](https://github.com/davidbits/FERS/issues) to see if it has
+If you find a bug, please check the [existing issues](https://github.com/stpaine/FERS/issues) to see if it has
 already been reported. If not,
-please [open a new bug report](https://github.com/davidbits/FERS/issues/new/choose).
+please [open a new bug report](https://github.com/stpaine/FERS/issues/new/choose).
 
 When filing a bug report, please include as many details as possible:
 
@@ -46,8 +46,8 @@ When filing a bug report, please include as many details as possible:
 ## Suggesting Enhancements
 
 If you have an idea for a new feature or an improvement, we'd love to hear about it! Please check
-the [existing issues and feature requests](https://github.com/davidbits/FERS/issues) first. If your idea is new,
-please [open a new feature request](https://github.com/davidbits/FERS/issues/new/choose).
+the [existing issues and feature requests](https://github.com/stpaine/FERS/issues) first. If your idea is new,
+please [open a new feature request](https://github.com/stpaine/FERS/issues/new/choose).
 
 Provide a clear description of the proposed enhancement and explain the problem it solves or the value it adds.
 
@@ -56,9 +56,9 @@ Provide a clear description of the proposed enhancement and explain the problem 
 Unsure where to begin contributing to FERS? You can start by looking through `good first issue` and `help wanted`
 issues:
 
-- [Good First Issues](https://github.com/davidbits/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) - issues
+- [Good First Issues](https://github.com/stpaine/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) - issues
   which should only require a few lines of code, and a test or two.
-- [Help Wanted Issues](https://github.com/davidbits/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) - issues which
+- [Help Wanted Issues](https://github.com/stpaine/FERS/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) - issues which
   should be a bit more involved than `good first issue` issues.
 
 ## Development Setup
@@ -66,25 +66,24 @@ issues:
 This is a monorepo containing two main packages. Please follow the setup instructions for the package you intend to work
 on.
 
-### Core Simulator (`fers`) Setup
+### Core Simulator (`libfers`) Setup
 
 The core simulator is written in C++.
 
-1. **Prerequisites**: Ensure you have a C++23 compiler, CMake, `libhdf5`, and `libxml2`.
-2. **Clone the repo**: `git clone --recursive https://github.com/davidbits/FERS.git`
-3. **Build**: Follow the detailed build instructions in the [`packages/fers/README.md`](packages/fers/README.md).
+1. **Prerequisites**: Ensure you have all prerequisities installed as outlined in the [README.md](README.md).
+2. **Clone the repo**: `git clone https://github.com/stpaine/FERS.git`
+3. **Build**: Follow the build instructions in the [`README.md`](README.md).
 
 ### User Interface (`fers-ui`) Setup
 
 The UI is a Tauri desktop application built with React and TypeScript.
 
-1. **Prerequisites**: Ensure you have Node.js, pnpm, and the Rust toolchain installed.
+1. **Prerequisites**: Ensure you have Node.js, bun, and the Rust toolchain installed.
 2. **Setup Tauri**: Follow the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/) for your OS.
 3. **Install & Run**:
     ```bash
-    cd packages/fers-ui
-    pnpm install
-    pnpm tauri dev
+    bun install
+    bun ui:dev
     ```
 
 For more details, see the [`packages/fers-ui/README.md`](packages/fers-ui/README.md).
@@ -93,14 +92,13 @@ For more details, see the [`packages/fers-ui/README.md`](packages/fers-ui/README
 
 1. Fork the repository and create your branch from `main`.
 2. If you've added code that should be tested, add tests.
-3. Ensure the test suite passes (`run_sim_tests.py` for `fers`, and relevant tests for `fers-ui`).
-4. Make sure your code lints and follows the style guides below.
-5. Open a pull request with a clear title and a detailed description of your changes. Link to any relevant issues.
-6. Be prepared to address feedback from the maintainers. The CI build must pass before a pull request can be merged.
+3. Make sure your code lints and follows the style guides below.
+4. Open a pull request with a clear title and a detailed description of your changes. Link to any relevant issues.
+5. Be prepared to address feedback from the maintainers. The CI build must pass before a pull request can be merged.
 
 ## Style Guides
 
-### C++ (`fers`) Style Guide
+### C++ (`libfers`) Style Guide
 
 Please adhere to the existing code style. We use `.clang-format` to enforce formatting.
 

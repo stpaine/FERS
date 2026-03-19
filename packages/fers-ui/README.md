@@ -3,7 +3,7 @@
 ![Framework](https://img.shields.io/badge/Framework-React-61DAFB?logo=react)
 ![Language](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript)
 ![Desktop App](https://img.shields.io/badge/Tauri-v2-FFC336)
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/davidbits/FERS/blob/master/LICENSE)
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/stpaine/FERS/blob/master/LICENSE)
 
 **fers-ui** is the official graphical user interface for the **Flexible Extensible Radar Simulator (FERS)**. It provides a professional-grade, visual workbench designed to streamline the entire simulation pipeline—from asset creation and scenario construction to simulation execution and results analysis. By offering an intuitive and powerful toolset, fers-ui dramatically improves the usability and accessibility of the core FERS engine.
 
@@ -53,7 +53,7 @@ The application is architected as a multi-modal "Workbench" to provide a clean, 
 
 This application is part of a monorepo that includes the core C++ `libfers` library. The UI build process is entirely self-contained: Cargo will automatically invoke CMake to compile the C++ backend in an isolated directory during the build.
 
-To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/davidbits/FERS/blob/master/README.md)**.
+To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/stpaine/FERS/blob/master/README.md)**.
 
 **Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set. You can set this globally in your shell, or create a `.env` file at `src-tauri/.env` with the path to your vcpkg installation:
 

@@ -1,7 +1,6 @@
 # libfers: The FERS Core Simulation Library
 
-[![Build Status](https://github.com/davidbits/FERS/actions/workflows/CMake.yml/badge.svg)](https://github.com/davidbits/FERS/actions/workflows/CMake.yml)
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/davidbits/FERS/blob/master/LICENSE)
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/stpaine/FERS/blob/master/LICENSE)
 
 **libfers** is the core C++ simulation engine for the **Flexible Extensible Radar Simulator (FERS)**. It contains all
 the logic for parsing scenarios, modeling physics, executing simulations, and processing output data.
@@ -33,24 +32,23 @@ The C++ components are built using CMake from the repository root. For a complet
 
 ### 1. Configure and Build
 
-From the root of the repository, use the CMake presets to configure and build the project. This will automatically use `vcpkg` to manage dependencies.
+From the root of the repository, use the CMake presets to configure and build the project. This will automatically use `vcpkg` to manage dependencies. Ensure to install [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash) before running the following commands.
 
 ```bash
 # From the root FERS directory
-cmake --preset=default
-cmake --build build
+cmake --preset=release
+cmake --build build --preset=release
 ```
 
-The compiled artifacts will be located in the `build/` directory. Libraries (`.a`, `.so`) are in `packages/libfers/`,
-and the `fers-cli` executable is in `packages/fers-cli/`. DLLs on Windows will be placed in `bin/`.
+The compiled artifacts will be located in the `build/release/` directory. Libraries (`.a`, `.so`) are in `build/release/packages/libfers/`,
+and the `fers-cli` executable is in `build/release/packages/fers-cli/`. DLLs on Windows will be placed in `build/release/bin/`.
 
 ### Build Options
 
-You can customize the build using the following CMake options:
+You can customize the build by passing CMake options alongside the preset:
 
 | Option                        | Description                                     | Default |
 | ----------------------------- | ----------------------------------------------- | ------- |
-| `-DCMAKE_BUILD_TYPE=Debug`    | Create a debug build with symbols.              | Release |
 | `-DFERS_BUILD_SHARED_LIBS=ON` | Build the shared library (`.so`/`.dll`).        | ON      |
 | `-DFERS_BUILD_STATIC_LIBS=ON` | Build the static library (`.a`).                | ON      |
 | `-DFERS_BUILD_DOCS=ON`        | Enable the `doc` target for Doxygen generation. | OFF     |
@@ -58,8 +56,9 @@ You can customize the build using the following CMake options:
 Example of a debug build that only creates a static library:
 
 ```bash
-# From the build directory
-cmake .. -DCMAKE_BUILD_TYPE=Debug -DFERS_BUILD_SHARED_LIBS=OFF
+# From the root FERS directory
+cmake --preset debug -DFERS_BUILD_SHARED_LIBS=OFF
+cmake --build --preset debug
 ```
 
 ### 2. Install (Optional)
@@ -67,8 +66,8 @@ cmake .. -DCMAKE_BUILD_TYPE=Debug -DFERS_BUILD_SHARED_LIBS=OFF
 You can install the libraries, headers, and CLI executable to your system.
 
 ```bash
-# From the build directory
-sudo cmake --build . --target install
+# From the root FERS directory
+sudo cmake --install build/release
 sudo ldconfig # On Linux, to update the cache
 ```
 
@@ -79,13 +78,13 @@ The source code documentation is automatically built and deployed to our [GitHub
 1. **Configure with documentation enabled:**
 
     ```bash
-    # From your build directory
-    cmake .. -DFERS_BUILD_DOCS=ON
+    # From the root FERS directory
+    cmake --preset release -DFERS_BUILD_DOCS=ON
     ```
 
 2. **Build the `doc` target:**
     ```bash
-    cmake --build . --target doc
+    cmake --build --preset release --target doc
     ```
 
-The HTML output will be generated in the `build/docs/html/` directory. You can open `index.html` in your browser to view the documentation.
+The HTML output will be generated in the `build/release/docs/html/` directory. You can open `index.html` in your browser to view the documentation.

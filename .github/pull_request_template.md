@@ -27,7 +27,6 @@ Please provide a detailed breakdown of the changes introduced in this pull reque
 
 Please describe the tests that you ran to verify your changes. Provide instructions so we can reproduce.
 
-- [ ] The full regression test suite (`run_sim_tests.py`) passes.
 - [ ] New unit tests have been added to cover the changes.
 - [ ] Manual verification steps:
     1. ...

@@ -2,10 +2,9 @@
 
 <!-- TODO: Build status should be present for both ui and core -->
 
-[![FERS Core CI](https://github.com/davidbits/FERS/actions/workflows/CMake.yml/badge.svg)](https://github.com/davidbits/FERS/actions/workflows/CMake.yml)
-[![Documentation](https://github.com/davidbits/FERS/actions/workflows/docs.yml/badge.svg)](https://github.com/davidbits/FERS/actions/workflows/docs.yml)
-[![GitHub issues](https://img.shields.io/github/issues/davidbits/FERS.svg)](https://github.com/davidbits/FERS/issues)
-[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/davidbits/FERS/blob/master/LICENSE)
+[![Documentation](https://github.com/stpaine/FERS/actions/workflows/docs.yml/badge.svg)](https://github.com/stpaine/FERS/actions/workflows/docs.yml)
+[![GitHub issues](https://img.shields.io/github/issues/stpaine/FERS.svg)](https://github.com/stpaine/FERS/issues)
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/stpaine/FERS/blob/master/LICENSE)
 
 ![Tech Stack](https://img.shields.io/badge/Core-C%2B%2B%2023-00599C?logo=cplusplus)
 ![Tech Stack](https://img.shields.io/badge/UI-Tauri%20%7C%20React-20232A?logo=react)
@@ -57,41 +56,49 @@ Ensure you have the following tools installed on your system:
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+) and **CMake** (3.22+).
 - [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment, or create a `.env` file at `packages/fers-ui/src-tauri/.env` containing `VCPKG_ROOT=/path/to/vcpkg`.
 - [**Bun**](https://bun.sh/).
+- [**Ninja**](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) (recommended for faster builds).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
 - [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
+- **Other notable dependencies (for linux):** `build-essential` and `pkg-config`
 
 ### 2. Clone the Repository
 
 Clone the repository from the root of the monorepo.
 
 ```bash
-git clone https://github.com/davidbits/FERS.git
+git clone https://github.com/stpaine/FERS.git
 cd FERS
 ```
 
 ### 3. Install Dependencies
 
 From the **root of the repository**, install all JavaScript dependencies. This also sets up pre-commit hooks using
-Husky.
+Husky. See the [bun.sh documentation](https://bun.com/docs/installation) for details on installing Bun.
 
 ```bash
 bun install
 ```
 
-### 4. Build the Standalone C++ Core (Optional for UI Developers)
+### 4. Build the Standalone C++ Core
 
-If you are developing the C++ core or CLI independently of the UI, you can configure and compile the C++ libraries directly using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies.
+You can configure and compile the C++ libraries directly using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies. Ensure to install [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash) before running the following commands.
 
 ```bash
 # From the root FERS directory
 cmake --preset=release
-cmake --build build
+cmake --build build --preset=release
 ```
 
 ### 5. Run the UI
 
 The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
+
+**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set in `PATH`. You can set this globally in your shell, or create a `.env` file at `src-tauri/.env` with the path to your vcpkg installation:
+
+```env
+VCPKG_ROOT=/path/to/vcpkg
+```
 
 Navigate to the root of the repository and start the development server:
 
@@ -113,16 +120,16 @@ installed.
 - Copyright (C) 2008-present FERS contributors (see [AUTHORS.md](AUTHORS.md)).
 
 This program is free software; you can redistribute it and/or modify it under the terms of the
-[GNU General Public License](https://github.com/davidbits/FERS/blob/master/LICENSE) as published by the Free
+[GNU General Public License](https://github.com/stpaine/FERS/blob/master/LICENSE) as published by the Free
 Software Foundation; version 2 of the License.
 
 This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See
-the [GNU General Public License](https://github.com/davidbits/FERS/blob/master/LICENSE) for
+the [GNU General Public License](https://github.com/stpaine/FERS/blob/master/LICENSE) for
 more details.
 
 You should have received a copy of
-the [GNU General Public License](https://github.com/davidbits/FERS/blob/master/LICENSE) along with this program;
+the [GNU General Public License](https://github.com/stpaine/FERS/blob/master/LICENSE) along with this program;
 if not, write to
 the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
@@ -165,3 +172,10 @@ The following notice was part of the original FERS distribution:
 
 > Should you wish to acquire a copy of FERS not covered by these terms, please contact the Department of
 > Electrical Engineering at the University of Cape Town.
+
+### Troubleshooting
+
+#### Common Issues
+
+1. `The system library glib-2.0 was not found` or similar errors related to system packages.
+    - Ensure you have installed the necessary Tauri prerequisites for your operating system. On Debian-based Linux distributions, you can install the required packages by following https://tauri.app/start/prerequisites/
