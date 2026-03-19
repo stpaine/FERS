@@ -1,0 +1,211 @@
+<!--
+  FERS XML simulation script Document Type Definition (DTD).
+
+  Copyright (C) 2006-2008 Marc Brooker.
+  Copyright (C) 2008-present FERS contributors (see AUTHORS.md).
+
+  This file is part of FERS. FERS is free software, licensed under the GPLv2.
+-->
+        <!-- Note: DTD cannot enforce the XSD's implicit requirement of "at least one of each" of waveform, timing, etc. in any order. -->
+        <!-- This model enforces that parameters is present, followed by at least one of the other main elements, preserving flexible ordering. -->
+        <!ELEMENT simulation (parameters, (waveform | timing | antenna | platform | include)+)>
+        <!ATTLIST simulation name CDATA #REQUIRED>
+
+        <!-- Simulation Parameters -->
+        <!ELEMENT parameters (starttime,endtime,rate,c?,simSamplingRate?,randomseed?,adc_bits?,oversample?,origin?,coordinatesystem?)>
+        <!-- Start time of simulation -->
+        <!ELEMENT starttime (#PCDATA)>
+        <!-- End time of simulation -->
+        <!ELEMENT endtime (#PCDATA)>
+        <!-- Propagation speed -->
+        <!ELEMENT c (#PCDATA)>
+        <!-- Fidelity of the underlying physics simulation (Hz) -->
+        <!ELEMENT simSamplingRate (#PCDATA)>
+        <!-- Override the rendering sample rate with the specified one (Hz) -->
+        <!ELEMENT rate (#PCDATA)>
+        <!-- Random seed for noise -->
+        <!ELEMENT randomseed (#PCDATA)>
+        <!-- ADC bits for resolution -->
+        <!ELEMENT adc_bits (#PCDATA)>
+        <!-- Oversampling factor -->
+        <!ELEMENT oversample (#PCDATA)>
+        <!-- Geodetic Origin for the simulation coordinate system (used for ENU frame) -->
+        <!ELEMENT origin EMPTY>
+        <!ATTLIST origin
+                latitude  CDATA #REQUIRED
+                longitude CDATA #REQUIRED
+                altitude  CDATA "0"
+                >
+        <!-- Coordinate System for the simulation input coordinates -->
+        <!ELEMENT coordinatesystem EMPTY>
+        <!ATTLIST coordinatesystem
+                frame      (ENU|UTM|ECEF) #REQUIRED
+                zone       CDATA          #IMPLIED
+                hemisphere (N|S)           #IMPLIED
+                >
+
+        <!-- Waveform definition -->
+        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw))>
+        <!ATTLIST waveform
+                name CDATA #REQUIRED>
+
+        <!-- Waveform power and carrier frequency -->
+        <!-- Pulse power (Watts) -->
+        <!ELEMENT power (#PCDATA)>
+        <!-- Carrier frequency (Hz) -->
+        <!ELEMENT carrier_frequency (#PCDATA)>
+
+        <!-- Waveform types -->
+        <!ELEMENT pulsed_from_file EMPTY>
+        <!ATTLIST pulsed_from_file filename CDATA #REQUIRED>
+        <!ELEMENT cw EMPTY>
+
+        <!-- Timing Source -->
+        <!ELEMENT timing (frequency,freq_offset?,random_freq_offset_stdev?,phase_offset?,random_phase_offset_stdev?,noise_entry*)>
+        <!-- Timing source. Sets frequency -->
+        <!ATTLIST timing
+                name CDATA #REQUIRED
+                synconpulse (true|false) "false">
+
+        <!-- Frequency (Hz) -->
+        <!ELEMENT frequency (#PCDATA)>
+
+        <!-- Noise Entry for timing -->
+        <!ELEMENT noise_entry (alpha,weight)>
+        <!-- Noise category alpha -->
+        <!ELEMENT alpha (#PCDATA)>
+        <!-- Weighting of noise in the category -->
+        <!ELEMENT weight (#PCDATA)>
+        <!-- Offset from system frequency -->
+        <!ELEMENT freq_offset (#PCDATA)>
+        <!-- Random frequency offset standard deviation -->
+        <!ELEMENT random_freq_offset_stdev (#PCDATA)>
+        <!-- Phase offset -->
+        <!ELEMENT phase_offset (#PCDATA)>
+        <!-- Random phase offset standard deviation -->
+        <!ELEMENT random_phase_offset_stdev (#PCDATA)>
+
+        <!-- Antenna -->
+        <!ELEMENT antenna (alpha?,beta?,gamma?,diameter?,azscale?,elscale?,efficiency?)>
+        <!ATTLIST antenna
+                name CDATA #REQUIRED
+                pattern CDATA #REQUIRED
+                filename CDATA #IMPLIED>
+
+        <!-- Parameters of antenna model -->
+        <!-- Element for beta -->
+        <!ELEMENT beta (#PCDATA)>
+        <!-- Element for gamma -->
+        <!ELEMENT gamma (#PCDATA)>
+        <!-- Diameter of the antenna -->
+        <!ELEMENT diameter (#PCDATA)>
+        <!-- Azimuth scale for a Gaussian pattern -->
+        <!ELEMENT azscale (#PCDATA)>
+        <!-- Elevation scale for Gaussian pattern -->
+        <!ELEMENT elscale (#PCDATA)>
+        <!-- The antenna efficiency factor -->
+        <!ELEMENT efficiency (#PCDATA)>
+
+        <!-- Platform -->
+        <!ELEMENT platform (motionpath,(rotationpath|fixedrotation),(monostatic|transmitter|receiver|target)*)>
+        <!ATTLIST platform
+                name CDATA #REQUIRED>
+
+        <!-- Motion paths and Position Waypoints -->
+        <!ELEMENT motionpath (positionwaypoint+)>
+        <!ATTLIST motionpath interpolation (static|linear|cubic) "static">
+
+        <!-- Position Waypoints -->
+        <!ELEMENT positionwaypoint (x,y,altitude,time)>
+        <!-- x position of waypoint -->
+        <!ELEMENT x (#PCDATA)>
+        <!-- y position of waypoint -->
+        <!ELEMENT y (#PCDATA)>
+        <!-- z (altitude) position of waypoint -->
+        <!ELEMENT altitude (#PCDATA)>
+        <!-- Time the platform is at the waypoint -->
+        <!ELEMENT time (#PCDATA)>
+
+        <!-- Constant Rate Rotation -->
+        <!ELEMENT fixedrotation (startazimuth,startelevation,azimuthrate,elevationrate)>
+        <!-- Azimuth at time 0 -->
+        <!ELEMENT startazimuth (#PCDATA)>
+        <!-- Elevation at time 0 -->
+        <!ELEMENT startelevation (#PCDATA)>
+        <!-- Rate of change of azimuth -->
+        <!ELEMENT azimuthrate (#PCDATA)>
+        <!-- Rate of change of elevation -->
+        <!ELEMENT elevationrate (#PCDATA)>
+
+        <!-- Rotation Paths and Waypoints -->
+        <!ELEMENT rotationpath (rotationwaypoint+)>
+        <!ATTLIST rotationpath interpolation (static|linear|cubic) #REQUIRED>
+        <!ELEMENT rotationwaypoint (azimuth,elevation,time)>
+        <!ELEMENT azimuth (#PCDATA)>
+        <!ELEMENT elevation (#PCDATA)>
+
+        <!-- Elements for defining radar operational modes -->
+        <!ELEMENT pulsed_mode (prf, window_skip?, window_length?)>
+        <!ELEMENT cw_mode EMPTY>
+
+        <!ELEMENT schedule (period+)>
+        <!ELEMENT period EMPTY>
+        <!ATTLIST period
+                start CDATA #REQUIRED
+                end CDATA #REQUIRED
+                >
+
+        <!-- Monostatic radar installations -->
+        <!ELEMENT monostatic ((pulsed_mode | cw_mode), noise_temp?, schedule?)>
+        <!ATTLIST monostatic
+                name CDATA #REQUIRED
+                antenna CDATA #REQUIRED
+                waveform CDATA #REQUIRED
+                timing CDATA #REQUIRED
+                nodirect (true|false) "false"
+                nopropagationloss (true|false) "false">
+        <!ELEMENT prf (#PCDATA)>
+        <!ELEMENT noise_temp (#PCDATA)>
+
+        <!-- Standalone Transmitter -->
+        <!ELEMENT transmitter ((pulsed_mode | cw_mode), schedule?)>
+        <!ATTLIST transmitter
+                name CDATA #REQUIRED
+                waveform CDATA #REQUIRED
+                antenna CDATA #REQUIRED
+                timing CDATA #REQUIRED>
+
+        <!-- Standalone Receiver -->
+        <!ELEMENT receiver ((pulsed_mode | cw_mode), noise_temp?, schedule?)>
+        <!ATTLIST receiver
+                name CDATA #REQUIRED
+                antenna CDATA #REQUIRED
+                timing CDATA #REQUIRED
+                nodirect (true|false) "false"
+                nopropagationloss (true|false) "false">
+        <!-- Time to skip after start of pulse before starting receiving (seconds) -->
+        <!ELEMENT window_skip (#PCDATA)>
+        <!-- Length of the range gate (seconds) -->
+        <!ELEMENT window_length (#PCDATA)>
+
+        <!-- Target -->
+        <!ELEMENT target (rcs,model?)>
+        <!ATTLIST target
+                name CDATA #REQUIRED>
+
+        <!-- RCS can either have a 'value' element or a 'filename' attribute -->
+        <!-- Target RCS -->
+        <!ELEMENT rcs (value?)>
+        <!ATTLIST rcs type CDATA #REQUIRED
+                filename CDATA #IMPLIED>
+
+        <!-- RCS value -->
+        <!ELEMENT value (#PCDATA)>
+
+        <!-- Model element with 'type' as an attribute and optional k element -->
+        <!ELEMENT model (k?)>
+        <!ATTLIST model type CDATA #REQUIRED>
+        <!ELEMENT k (#PCDATA)>
+
+        <!-- Include another XML file -->
+        <!ELEMENT include (#PCDATA)>

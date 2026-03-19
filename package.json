@@ -1,0 +1,38 @@
+{
+    "name": "fers-monorepo",
+    "private": true,
+    "workspaces": [
+        "packages/*"
+    ],
+    "scripts": {
+        "prepare": "husky",
+        "ui:dev": "bun run --filter fers-ui tauri dev --no-watch",
+        "ui:build": "bun run --filter fers-ui tauri build",
+        "tauri": "bun run --filter fers-ui tauri",
+        "format": "bun run format:cpp && bun run format:js && bun run format:rust",
+        "format:cpp": "git ls-files 'packages/**/*.cpp' 'packages/**/*.h' | xargs clang-format -i",
+        "format:js": "prettier --write .",
+        "format:rust": "cargo fmt --all",
+        "lint": "bun run lint:js && bun run lint:rust",
+        "lint:js": "bun run --filter fers-ui lint",
+        "lint:rust": "cargo clippy --workspace -- -D warnings"
+    },
+    "devDependencies": {
+        "eslint": "^9.39.2",
+        "husky": "^9.1.7",
+        "lint-staged": "^16.3.3",
+        "prettier": "^3.8.1"
+    },
+    "lint-staged": {
+        "*.{md,json,yml,yaml}": "prettier --write",
+        "packages/**/*.{cpp,h}": "clang-format -i",
+        "packages/fers-ui/src/**/*.{ts,tsx,js,jsx}": [
+            "prettier --write",
+            "eslint --fix --config packages/fers-ui/eslint.config.js"
+        ],
+        "packages/fers-ui/src-tauri/**/*.rs": [
+            "cargo fmt --",
+            "sh -c 'cargo clippy -p fers-ui --fix --allow-dirty --allow-staged -- -D warnings'"
+        ]
+    }
+}

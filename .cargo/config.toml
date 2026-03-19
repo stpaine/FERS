@@ -1,0 +1,3 @@
+[build]
+# Redirects the build output directory for the entire workspace.
+target-dir = "packages/fers-ui/src-tauri/target"

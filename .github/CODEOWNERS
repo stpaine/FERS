@@ -1,0 +1,34 @@
+# This file defines the individuals or teams responsible for code in the repository.
+# Pull requests that modify owned code will automatically request reviews from the owners.
+# The last matching pattern in this file takes the most precedence.
+
+#-----------------------------------------------------------------------
+# Global & Root Configuration
+#-----------------------------------------------------------------------
+# Owner for critical repo-wide configuration, community files, and CI/CD workflows.
+# This ensures changes to the contribution process or build system are reviewed.
+/.github/                               @davidbits
+.clang-format                           @davidbits
+.gitattributes                          @davidbits
+.gitignore                              @davidbits
+.gitmodules                             @davidbits
+LICENSE                                 @davidbits
+README.md                               @davidbits
+
+
+#-----------------------------------------------------------------------
+# Package Ownership
+#-----------------------------------------------------------------------
+
+# The core C++ radar simulation engine.
+# Includes all source code, CMake build files, and tests.
+/packages/fers/                         @davidbits
+
+# The Tauri/React graphical user interface.
+# Includes the frontend React code and the backend Rust/Tauri code.
+/packages/fers-ui/                      @davidbits
+
+# The shared XML schema.
+# Changes here can affect both the core simulator and the UI,
+# so they require careful review.
+/packages/schema/                       @davidbits

@@ -1,42 +1,51 @@
-CMAKE_MINIMUM_REQUIRED(VERSION 2.4)
+cmake_minimum_required(VERSION 3.22)
 
-PROJECT(fers)
+project(FERS
+	VERSION 1.0.0
+	DESCRIPTION "The Flexible Extensible Radar Simulator"
+	LANGUAGES CXX)
 
-SET(CMAKE_VERBOSE_MAKEFILE ON)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_BINARY_DIR}/config.h )
+# --- Project-wide Settings ---
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_VERBOSE_MAKEFILE ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON) # For simpler DLL exports
 
-#Check for build configuration 
-IF(NOT CMAKE_BUILD_TYPE)
-    MESSAGE(STATUS "No build configuration specified, defaulting to Release")
-    SET(CMAKE_BUILD_TYPE "Release")
-ENDIF()
+# --- Options and Build Type ---
+include(FersOptions)
 
+# --- Compiler Warnings and Flags ---
+include(FersCompilerWarnings)
 
-#Set compiler flags
-IF (CMAKE_COMPILER_IS_GNUCXX)
-   MESSAGE(STATUS "Setting general compiler flags for detected compiler: gnu-g++")	
-   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -pthread -ffast-math")
+# --- Testing ---
+if (FERS_BUILD_TESTS)
+	enable_testing()
+endif()
 
-    IF(CMAKE_BUILD_TYPE MATCHES "Release")
-    
-        MESSAGE(STATUS "Setting g++ flags for Release configuration")
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")   ## Optimize
-        SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -s")  ## Strip binary
-    
-        ELSEIF(CMAKE_BUILD_TYPE MATCHES "Debug")
-            MESSAGE(STATUS "Setting g++ flags for Debug configuration")
-    
-    ENDIF()
+if(FERS_ENABLE_COVERAGE)
+	if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+		message(STATUS "Enabling Code Coverage")
+		add_compile_options(-fprofile-arcs -ftest-coverage)
+		add_link_options(--coverage)
+	else()
+		message(WARNING "Code coverage is only supported for GCC and Clang")
+	endif()
+endif()
 
-ENDIF ()
+# --- macOS Specific Configuration ---
+if (APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+	message(STATUS "macOS with a modern toolchain (e.g., Homebrew LLVM) is recommended.")
+	message(STATUS "If you are not using the system compiler, please configure with:")
+	message(STATUS "  CC=/path/to/clang CXX=/path/to/clang++ cmake ..")
+	# link_directories(/usr/local/opt/llvm/lib/c++)
+endif ()
 
-#FERS is multithreaded, boost needs to be informed
-ADD_DEFINITIONS(-D_REENTRANT)
+# Add the subdirectory containing the C++ packages.
+add_subdirectory(packages)
 
-ADD_SUBDIRECTORY( fftwcpp )
-ADD_SUBDIRECTORY( src )
-
-ADD_SUBDIRECTORY( utilities )
-ADD_SUBDIRECTORY( test )
-
+# --- Documentation ---
+add_subdirectory(docs)

@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  XSD for FERS XML simulation script files.
+
+  Copyright (C) 2023-present FERS contributors (see AUTHORS.md).
+
+  This file is part of FERS. FERS is free software, licensed under the GPLv2.
+-->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+    <xs:element name="simulation">
+        <xs:complexType>
+            <xs:sequence>
+                <!-- First element must always be parameters, and only 1 allowed -->
+                <xs:element ref="parameters"/>
+
+                <!-- After parameters, the following elements can appear in any order -->
+                <xs:choice maxOccurs="unbounded">
+                    <!-- At least 1 pulse is required -->
+                    <xs:element ref="waveform"/>
+                    <!-- At least 1 timing is required -->
+                    <xs:element ref="timing"/>
+                    <!-- At least 1 antenna is required -->
+                    <xs:element ref="antenna"/>
+                    <!-- At least 1 platform is required -->
+                    <xs:element ref="platform"/>
+                    <!-- Any number of include elements is allowed -->
+                    <xs:element ref="include" minOccurs="0"/>
+                </xs:choice>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Parameters Element -->
+    <xs:element name="parameters">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="starttime" type="xs:string"/>
+                <xs:element name="endtime" type="xs:string"/>
+                <xs:element name="rate" type="xs:string"/>
+                <xs:element minOccurs="0" name="c" type="xs:string"/>
+                <xs:element minOccurs="0" name="simSamplingRate" type="xs:string"/>
+                <xs:element minOccurs="0" name="randomseed" type="xs:string"/>
+                <xs:element minOccurs="0" name="adc_bits" type="xs:string"/>
+                <xs:element minOccurs="0" name="oversample" type="xs:string"/>
+                <xs:element minOccurs="0" ref="origin"/>
+                <xs:element minOccurs="0" ref="coordinatesystem"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Geodetic Origin Element -->
+    <xs:element name="origin">
+        <xs:complexType>
+            <xs:attribute name="latitude" type="xs:double" use="required"/>
+            <xs:attribute name="longitude" type="xs:double" use="required"/>
+            <xs:attribute name="altitude" type="xs:double" default="0"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Coordinate System Element -->
+    <xs:element name="coordinatesystem">
+        <xs:complexType>
+            <xs:attribute name="frame" use="required">
+                <xs:simpleType>
+                    <xs:restriction base="xs:token">
+                        <xs:enumeration value="ENU"/>
+                        <xs:enumeration value="UTM"/>
+                        <xs:enumeration value="ECEF"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:attribute>
+            <xs:attribute name="zone" type="xs:integer"/>
+            <xs:attribute name="hemisphere">
+                <xs:simpleType>
+                    <xs:restriction base="xs:token">
+                        <xs:enumeration value="N"/>
+                        <xs:enumeration value="S"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="waveform">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="power" type="xs:string"/>
+                <xs:element name="carrier_frequency" type="xs:string"/>
+                <xs:choice>
+                    <xs:element name="pulsed_from_file">
+                        <xs:complexType>
+                            <xs:attribute name="filename" type="xs:string" use="required"/>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="cw">
+                        <xs:complexType/>
+                    </xs:element>
+                    <!-- Additional waveform types (e.g., FMCW) can be added here -->
+                </xs:choice>
+            </xs:sequence>
+            <xs:attribute name="name" type="xs:string" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Timing Source Element -->
+    <xs:element name="timing">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="frequency" type="xs:string"/>
+                <xs:element minOccurs="0" name="freq_offset" type="xs:string"/>
+                <xs:element minOccurs="0" name="random_freq_offset_stdev" type="xs:string"/>
+                <xs:element minOccurs="0" name="phase_offset" type="xs:string"/>
+                <xs:element minOccurs="0" name="random_phase_offset_stdev" type="xs:string"/>
+                <xs:element minOccurs="0" ref="noise_entry" maxOccurs="unbounded"/>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+            <xs:attribute name="synconpulse" default="false">
+                <xs:simpleType>
+                    <xs:restriction base="xs:token">
+                        <xs:enumeration value="true"/>
+                        <xs:enumeration value="false"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="noise_entry">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="alpha" type="xs:string"/>
+                <xs:element name="weight" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Antenna Element -->
+    <xs:element name="antenna">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element minOccurs="0" name="alpha" type="xs:string"/>
+                <xs:element minOccurs="0" name="beta" type="xs:string"/>
+                <xs:element minOccurs="0" name="gamma" type="xs:string"/>
+                <xs:element minOccurs="0" name="diameter" type="xs:string"/>
+                <xs:element minOccurs="0" name="azscale" type="xs:string"/>
+                <xs:element minOccurs="0" name="elscale" type="xs:string"/>
+                <xs:element minOccurs="0" name="efficiency" type="xs:string"/>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+            <xs:attribute name="pattern" use="required"/>
+            <xs:attribute name="filename"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Platform Element -->
+    <xs:element name="platform">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element ref="motionpath"/>
+                <xs:choice>
+                    <xs:element ref="rotationpath"/>
+                    <xs:element ref="fixedrotation"/>
+                </xs:choice>
+                <xs:choice minOccurs="0" maxOccurs="unbounded">
+                    <xs:element ref="monostatic"/>
+                    <xs:element ref="transmitter"/>
+                    <xs:element ref="receiver"/>
+                    <xs:element ref="target"/>
+                </xs:choice>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Motion paths and Position Waypoints -->
+    <xs:element name="motionpath">
+        <xs:complexType>
+            <xs:sequence>
+                <!-- At least 1 positionwaypoint, no max limit -->
+                <xs:element maxOccurs="unbounded" ref="positionwaypoint"/>
+            </xs:sequence>
+            <xs:attribute name="interpolation" default="static">
+                <xs:simpleType>
+                    <xs:restriction base="xs:token">
+                        <xs:enumeration value="static"/>
+                        <xs:enumeration value="linear"/>
+                        <xs:enumeration value="cubic"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Definition for positionwaypoint element -->
+    <xs:element name="positionwaypoint">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="x" type="xs:string"/>
+                <xs:element name="y" type="xs:string"/>
+                <xs:element name="altitude" type="xs:string"/>
+                <xs:element name="time" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Constant Rate Rotation -->
+    <xs:element name="fixedrotation">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="startazimuth" type="xs:string"/>
+                <xs:element name="startelevation" type="xs:string"/>
+                <xs:element name="azimuthrate" type="xs:string"/>
+                <xs:element name="elevationrate" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Rotation Paths and Waypoints -->
+    <xs:element name="rotationpath">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element maxOccurs="unbounded" ref="rotationwaypoint"/>
+            </xs:sequence>
+            <xs:attribute name="interpolation" use="required">
+                <xs:simpleType>
+                    <xs:restriction base="xs:token">
+                        <xs:enumeration value="static"/>
+                        <xs:enumeration value="linear"/>
+                        <xs:enumeration value="cubic"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:attribute>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="rotationwaypoint">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="azimuth" type="xs:string"/>
+                <xs:element name="elevation" type="xs:string"/>
+                <xs:element name="time" type="xs:string"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Schedule Element -->
+    <xs:element name="schedule">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element maxOccurs="unbounded" ref="period"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Period Element -->
+    <xs:element name="period">
+        <xs:complexType>
+            <xs:attribute name="start" type="xs:string" use="required"/>
+            <xs:attribute name="end" type="xs:string" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Monostatic radar installations -->
+    <xs:element name="monostatic">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:choice>
+                    <xs:element name="pulsed_mode">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="prf" type="xs:string"/>
+                                <xs:element name="window_skip" type="xs:string"/>
+                                <xs:element name="window_length" type="xs:string"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="cw_mode">
+                        <xs:complexType/>
+                    </xs:element>
+                </xs:choice>
+                <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
+                <xs:element minOccurs="0" ref="schedule"/>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="waveform" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
+            <xs:attribute name="nodirect" type="xs:boolean" default="false"/>
+            <xs:attribute name="nopropagationloss" type="xs:boolean" default="false"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Standalone Transmitter -->
+    <xs:element name="transmitter">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:choice>
+                    <xs:element name="pulsed_mode">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="prf" type="xs:string"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="cw_mode">
+                        <xs:complexType/>
+                    </xs:element>
+                </xs:choice>
+                <xs:element minOccurs="0" ref="schedule"/>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+            <xs:attribute name="waveform" type="xs:string" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Standalone Receiver -->
+    <xs:element name="receiver">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:choice>
+                    <xs:element name="pulsed_mode">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="prf" type="xs:string"/>
+                                <xs:element name="window_skip" type="xs:string"/>
+                                <xs:element name="window_length" type="xs:string"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="cw_mode">
+                        <xs:complexType/>
+                    </xs:element>
+                </xs:choice>
+                <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
+                <xs:element minOccurs="0" ref="schedule"/>
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+            <xs:attribute name="antenna" type="xs:string" use="required"/>
+            <xs:attribute name="timing" type="xs:string" use="required"/>
+            <xs:attribute name="nodirect" type="xs:boolean" default="false"/>
+            <xs:attribute name="nopropagationloss" type="xs:boolean" default="false"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Target -->
+    <xs:element name="target">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element ref="rcs"/>
+                <xs:element ref="model" minOccurs="0"/> <!-- model is optional -->
+            </xs:sequence>
+            <xs:attribute name="name" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="rcs">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="value" type="xs:string" minOccurs="0"/> <!-- value is optional -->
+            </xs:sequence>
+            <xs:attribute name="type" use="required"/>
+            <xs:attribute name="filename" type="xs:string"/> <!-- filename is optional -->
+        </xs:complexType>
+    </xs:element>
+
+    <xs:element name="model">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="k" type="xs:string" minOccurs="0"/> <!-- k is optional -->
+            </xs:sequence>
+            <xs:attribute name="type" use="required"/>
+        </xs:complexType>
+    </xs:element>
+
+    <!-- Include another XML file -->
+    <xs:element name="include" type="xs:string"/>
+</xs:schema>

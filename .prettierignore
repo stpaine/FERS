@@ -1,0 +1,30 @@
+# PNPM
+pnpm-lock.yaml
+
+# Build outputs
+build/
+dist/
+**/target/
+**/gen/
+**/docs/html/
+
+# C++ build artifacts
+**/cmake-build-*/
+
+# Submodules & third-party
+packages/libfers/third_party/
+docs/doxygen-awesome-css/
+
+# Tauri/Rust
+**/src-tauri/Cargo.lock
+
+# JS/TS
+**/node_modules/
+**/.vite/
+
+# Caches
+.eslintcache
+
+# OS-specific
+.DS_Store
+Thumbs.db

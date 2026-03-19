@@ -1,0 +1,507 @@
+// Tests for channel_model reflected-path calculations: solveRe and
+// calculateReflectedPathContribution. Verifies bistatic radar range equation,
+// propagation delay, phase shift, and RCS scaling against hand-calculated values.
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <chrono>
+#include <cmath>
+#include <memory>
+
+#include "antenna/antenna_factory.h"
+#include "core/config.h"
+#include "core/parameters.h"
+#include "math/coord.h"
+#include "math/geometry_ops.h"
+#include "radar/platform.h"
+#include "radar/receiver.h"
+#include "radar/target.h"
+#include "radar/transmitter.h"
+#include "signal/radar_signal.h"
+#include "simulation/channel_model.h"
+#include "timing/timing.h"
+
+using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
+
+namespace
+{
+	struct ParamGuard
+	{
+		params::Parameters saved;
+		ParamGuard() : saved(params::params) {}
+		~ParamGuard() { params::params = saved; }
+	};
+
+	void setupPlatform(radar::Platform& plat, const math::Vec3& pos)
+	{
+		plat.getMotionPath()->addCoord(math::Coord{pos, 0.0});
+		plat.getMotionPath()->finalize();
+		plat.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+		plat.getRotationPath()->finalize();
+	}
+}
+
+// =============================================================================
+// solveRe: Bistatic radar range equation
+// =============================================================================
+
+TEST_CASE("solveRe computes correct bistatic power for isotropic antennas", "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	// Setup: Tx at (0,0,0), Target at (500,0,0), Rx at (500,500,0)
+	// Carrier: 1 GHz, RCS: 10 m^2
+	// Bistatic: Pr/Pt = Gt * Gr * sigma * lambda^2 / (64 * pi^3 * R1^2 * R2^2)
+
+	const RealType c = params::c();
+	const RealType carrier = 1.0e9;
+	const RealType lambda = c / carrier;
+	const RealType rcs = 10.0;
+
+	const math::Vec3 tx_pos{0.0, 0.0, 0.0};
+	const math::Vec3 tgt_pos{500.0, 0.0, 0.0};
+	const math::Vec3 rx_pos{500.0, 500.0, 0.0};
+
+	const RealType r1 = (tgt_pos - tx_pos).length(); // 500 m
+	const RealType r2 = (rx_pos - tgt_pos).length(); // 500 m
+
+	const RealType expected_power = (rcs * lambda * lambda) / (64.0 * PI * PI * PI * r1 * r1 * r2 * r2);
+	const RealType expected_delay = (r1 + r2) / c;
+	const RealType expected_phase = -expected_delay * 2.0 * PI * carrier;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, tx_pos);
+
+	radar::Platform tgt_plat("tgt_plat");
+	setupPlatform(tgt_plat, tgt_pos);
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, rx_pos);
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::PULSED_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1e-6, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::PULSED_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget tgt(&tgt_plat, "tgt", rcs, 42);
+
+	simulation::ReResults results{};
+	const auto time = std::chrono::duration<RealType>(0.0);
+
+	simulation::solveRe(&tx, &rx, &tgt, time, &wave, results);
+
+	REQUIRE_THAT(results.power, WithinRel(expected_power, 1e-6));
+	REQUIRE_THAT(results.delay, WithinRel(expected_delay, 1e-9));
+	REQUIRE_THAT(results.phase, WithinRel(expected_phase, 1e-9));
+}
+
+TEST_CASE("solveRe power scales linearly with RCS", "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	// RCS is a linear multiplier in the bistatic equation
+	// Doubling RCS should double the power
+
+	const RealType carrier = 1.0e9;
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	// RCS = 5 m^2
+	radar::Platform tx_plat1("tx1");
+	setupPlatform(tx_plat1, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform tgt_plat1("tgt1");
+	setupPlatform(tgt_plat1, math::Vec3{1000.0, 0.0, 0.0});
+	radar::Platform rx_plat1("rx1");
+	setupPlatform(rx_plat1, math::Vec3{2000.0, 0.0, 0.0});
+
+	radar::Transmitter tx1(&tx_plat1, "tx1", radar::OperationMode::PULSED_MODE);
+	tx1.setAntenna(&iso_ant);
+	tx1.setTiming(timing);
+	auto sig1 = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave1("sig1", 1.0, carrier, 1e-6, std::move(sig1));
+	tx1.setSignal(&wave1);
+
+	radar::Receiver rx1(&rx_plat1, "rx1", 42, radar::OperationMode::PULSED_MODE);
+	rx1.setAntenna(&iso_ant);
+	rx1.setTiming(timing);
+
+	radar::IsoTarget tgt1(&tgt_plat1, "tgt1", 5.0, 42);
+
+	simulation::ReResults r1{};
+	simulation::solveRe(&tx1, &rx1, &tgt1, std::chrono::duration<RealType>(0.0), &wave1, r1);
+
+	// RCS = 10 m^2 (doubled)
+	radar::Platform tx_plat2("tx2");
+	setupPlatform(tx_plat2, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform tgt_plat2("tgt2");
+	setupPlatform(tgt_plat2, math::Vec3{1000.0, 0.0, 0.0});
+	radar::Platform rx_plat2("rx2");
+	setupPlatform(rx_plat2, math::Vec3{2000.0, 0.0, 0.0});
+
+	radar::Transmitter tx2(&tx_plat2, "tx2", radar::OperationMode::PULSED_MODE);
+	tx2.setAntenna(&iso_ant);
+	tx2.setTiming(timing);
+	auto sig2 = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave2("sig2", 1.0, carrier, 1e-6, std::move(sig2));
+	tx2.setSignal(&wave2);
+
+	radar::Receiver rx2(&rx_plat2, "rx2", 42, radar::OperationMode::PULSED_MODE);
+	rx2.setAntenna(&iso_ant);
+	rx2.setTiming(timing);
+
+	radar::IsoTarget tgt2(&tgt_plat2, "tgt2", 10.0, 42);
+
+	simulation::ReResults r2{};
+	simulation::solveRe(&tx2, &rx2, &tgt2, std::chrono::duration<RealType>(0.0), &wave2, r2);
+
+	REQUIRE_THAT(r2.power / r1.power, WithinRel(2.0, 1e-9));
+}
+
+TEST_CASE("solveRe delay is sum of Tx-Tgt and Tgt-Rx distances divided by c", "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	const RealType c = params::c();
+	const RealType carrier = 1.0e9;
+
+	// Collinear case: Tx at origin, Tgt at 1000 m, Rx at 3000 m
+	// r1 = 1000, r2 = 2000
+	const RealType r1 = 1000.0;
+	const RealType r2 = 2000.0;
+	const RealType expected_delay = (r1 + r2) / c;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});
+
+	radar::Platform tgt_plat("tgt_plat");
+	setupPlatform(tgt_plat, math::Vec3{r1, 0.0, 0.0});
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{r1 + r2, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::PULSED_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1e-6, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::PULSED_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget tgt(&tgt_plat, "tgt", 1.0, 42);
+
+	simulation::ReResults results{};
+	simulation::solveRe(&tx, &rx, &tgt, std::chrono::duration<RealType>(0.0), &wave, results);
+
+	REQUIRE_THAT(results.delay, WithinRel(expected_delay, 1e-9));
+}
+
+TEST_CASE("solveRe with noproploss flag ignores distance in power", "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	const RealType c = params::c();
+	const RealType carrier = 1.0e9;
+	const RealType lambda = c / carrier;
+	const RealType rcs = 10.0;
+
+	// With no_prop_loss: Pr/Pt = Gt * Gr * sigma * lambda^2 / (64 * pi^3) (no R terms)
+	const RealType expected_power = (rcs * lambda * lambda) / (64.0 * PI * PI * PI);
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});
+
+	radar::Platform tgt_plat("tgt_plat");
+	setupPlatform(tgt_plat, math::Vec3{2000.0, 0.0, 0.0});
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{2000.0, 3000.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::PULSED_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1e-6, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::PULSED_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+	rx.setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+
+	radar::IsoTarget tgt(&tgt_plat, "tgt", rcs, 42);
+
+	simulation::ReResults results{};
+	simulation::solveRe(&tx, &rx, &tgt, std::chrono::duration<RealType>(0.0), &wave, results);
+
+	REQUIRE_THAT(results.power, WithinRel(expected_power, 1e-6));
+}
+
+TEST_CASE("solveRe power follows R^-4 for monostatic geometry", "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	// For monostatic-like geometry (Tx and Rx co-located, target along x-axis):
+	// Pr/Pt = sigma * lambda^2 / (64 * pi^3 * R^4) for r1 = r2 = R
+	// Doubling R should reduce power by factor of 16
+
+	const RealType carrier = 1.0e9;
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	// R = 500 m
+	radar::Platform tx_plat1("tx1");
+	setupPlatform(tx_plat1, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_plat1("rx1");
+	setupPlatform(rx_plat1, math::Vec3{0.0, 0.1, 0.0}); // Slightly offset to avoid RangeError with target
+	radar::Platform tgt_plat1("tgt1");
+	setupPlatform(tgt_plat1, math::Vec3{500.0, 0.0, 0.0});
+
+	radar::Transmitter tx1(&tx_plat1, "tx1", radar::OperationMode::PULSED_MODE);
+	tx1.setAntenna(&iso_ant);
+	tx1.setTiming(timing);
+	auto sig1 = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave1("sig1", 1.0, carrier, 1e-6, std::move(sig1));
+	tx1.setSignal(&wave1);
+
+	radar::Receiver rx1(&rx_plat1, "rx1", 42, radar::OperationMode::PULSED_MODE);
+	rx1.setAntenna(&iso_ant);
+	rx1.setTiming(timing);
+
+	radar::IsoTarget tgt1(&tgt_plat1, "tgt1", 1.0, 42);
+
+	simulation::ReResults r1{};
+	simulation::solveRe(&tx1, &rx1, &tgt1, std::chrono::duration<RealType>(0.0), &wave1, r1);
+
+	// R = 1000 m (doubled)
+	radar::Platform tx_plat2("tx2");
+	setupPlatform(tx_plat2, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_plat2("rx2");
+	setupPlatform(rx_plat2, math::Vec3{0.0, 0.1, 0.0});
+	radar::Platform tgt_plat2("tgt2");
+	setupPlatform(tgt_plat2, math::Vec3{1000.0, 0.0, 0.0});
+
+	radar::Transmitter tx2(&tx_plat2, "tx2", radar::OperationMode::PULSED_MODE);
+	tx2.setAntenna(&iso_ant);
+	tx2.setTiming(timing);
+	auto sig2 = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave2("sig2", 1.0, carrier, 1e-6, std::move(sig2));
+	tx2.setSignal(&wave2);
+
+	radar::Receiver rx2(&rx_plat2, "rx2", 42, radar::OperationMode::PULSED_MODE);
+	rx2.setAntenna(&iso_ant);
+	rx2.setTiming(timing);
+
+	radar::IsoTarget tgt2(&tgt_plat2, "tgt2", 1.0, 42);
+
+	simulation::ReResults r2{};
+	simulation::solveRe(&tx2, &rx2, &tgt2, std::chrono::duration<RealType>(0.0), &wave2, r2);
+
+	// r1_near ~ 500, r2_near ~ 500 => power1 ~ sigma*lambda^2 / (64*pi^3 * 500^2 * 500^2)
+	// r1_far ~ 1000, r2_far ~ 1000 => power2 ~ sigma*lambda^2 / (64*pi^3 * 1000^2 * 1000^2)
+	// Ratio ≈ (1000^4) / (500^4) = 16
+	// Note: The Rx is offset by 0.1m, so this is approximately R^-4 but not exact
+	// We use a looser tolerance to account for the 0.1m offset
+	REQUIRE_THAT(r1.power / r2.power, WithinRel(16.0, 0.01));
+}
+
+// =============================================================================
+// calculateReflectedPathContribution: CW reflected path complex sample
+// =============================================================================
+
+TEST_CASE("calculateReflectedPathContribution amplitude matches bistatic equation with signal power",
+		  "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	const RealType c = params::c();
+	const RealType carrier = 1.0e9;
+	const RealType lambda = c / carrier;
+	const RealType rcs = 10.0;
+	const RealType power = 100.0;
+
+	const math::Vec3 tx_pos{0.0, 0.0, 0.0};
+	const math::Vec3 tgt_pos{1000.0, 0.0, 0.0};
+	const math::Vec3 rx_pos{1000.0, 1000.0, 0.0};
+
+	const RealType r1 = (tgt_pos - tx_pos).length();
+	const RealType r2 = (rx_pos - tgt_pos).length();
+
+	const RealType bistatic = (rcs * lambda * lambda) / (64.0 * PI * PI * PI * r1 * r1 * r2 * r2);
+	const RealType expected_amplitude = std::sqrt(power * bistatic);
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, tx_pos);
+
+	radar::Platform tgt_plat("tgt_plat");
+	setupPlatform(tgt_plat, tgt_pos);
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, rx_pos);
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", power, carrier, 1e-3, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget tgt(&tgt_plat, "tgt", rcs, 42);
+
+	const ComplexType result = simulation::calculateReflectedPathContribution(&tx, &rx, &tgt, 0.0);
+
+	REQUIRE_THAT(std::abs(result), WithinRel(expected_amplitude, 1e-6));
+}
+
+TEST_CASE("calculateReflectedPathContribution phase matches bistatic propagation delay",
+		  "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	const RealType c = params::c();
+	const RealType carrier = 1.0e9;
+
+	const math::Vec3 tx_pos{0.0, 0.0, 0.0};
+	const math::Vec3 tgt_pos{1000.0, 0.0, 0.0};
+	const math::Vec3 rx_pos{2000.0, 0.0, 0.0};
+
+	const RealType r1 = (tgt_pos - tx_pos).length();
+	const RealType r2 = (rx_pos - tgt_pos).length();
+	const RealType tau = (r1 + r2) / c;
+
+	// Expected phase = -2*pi*f*tau + timing_phase (0 for default timing)
+	const RealType expected_phase = -2.0 * PI * carrier * tau;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, tx_pos);
+
+	radar::Platform tgt_plat("tgt_plat");
+	setupPlatform(tgt_plat, tgt_pos);
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, rx_pos);
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1e-3, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget tgt(&tgt_plat, "tgt", 1.0, 42);
+
+	const ComplexType result = simulation::calculateReflectedPathContribution(&tx, &rx, &tgt, 0.0);
+	const RealType result_phase = std::arg(result);
+
+	// Wrap expected phase to [-pi, pi] for comparison
+	RealType wrapped = std::fmod(expected_phase, 2.0 * PI);
+	if (wrapped > PI)
+		wrapped -= 2.0 * PI;
+	if (wrapped < -PI)
+		wrapped += 2.0 * PI;
+
+	REQUIRE_THAT(result_phase, WithinAbs(wrapped, 1e-6));
+}
+
+TEST_CASE("solveRe with 3D geometry computes correct bistatic range", "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	const RealType c = params::c();
+	const RealType carrier = 2.0e9;
+	const RealType lambda = c / carrier;
+	const RealType rcs = 5.0;
+
+	// 3D positions
+	const math::Vec3 tx_pos{0.0, 0.0, 0.0};
+	const math::Vec3 tgt_pos{300.0, 400.0, 0.0}; // r1 = 500
+	const math::Vec3 rx_pos{300.0, 400.0, 600.0}; // r2 = 600
+
+	const RealType r1 = (tgt_pos - tx_pos).length();
+	const RealType r2 = (rx_pos - tgt_pos).length();
+
+	REQUIRE_THAT(r1, WithinAbs(500.0, 1e-9));
+	REQUIRE_THAT(r2, WithinAbs(600.0, 1e-9));
+
+	const RealType expected_power = (rcs * lambda * lambda) / (64.0 * PI * PI * PI * r1 * r1 * r2 * r2);
+	const RealType expected_delay = (r1 + r2) / c;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, tx_pos);
+
+	radar::Platform tgt_plat("tgt_plat");
+	setupPlatform(tgt_plat, tgt_pos);
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, rx_pos);
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::PULSED_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1e-6, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::PULSED_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget tgt(&tgt_plat, "tgt", rcs, 42);
+
+	simulation::ReResults results{};
+	simulation::solveRe(&tx, &rx, &tgt, std::chrono::duration<RealType>(0.0), &wave, results);
+
+	REQUIRE_THAT(results.power, WithinRel(expected_power, 1e-6));
+	REQUIRE_THAT(results.delay, WithinRel(expected_delay, 1e-9));
+}

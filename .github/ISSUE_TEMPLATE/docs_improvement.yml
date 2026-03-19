@@ -1,0 +1,33 @@
+---
+name: 📖 Documentation Improvement
+description: Report an issue or suggest an improvement for the documentation.
+title: '[Docs] <A brief title for the documentation change>'
+labels: ['type: documentation', 'status: triage']
+body:
+    - type: dropdown
+      id: scope
+      attributes:
+          label: Documentation Area
+          description: Which part of the documentation needs improvement?
+          options:
+              - Core Simulator Docs (C++ API, concepts)
+              - UI Docs (User guide, features)
+              - Project Docs (README, CONTRIBUTING, etc.)
+      validations:
+          required: true
+
+    - type: textarea
+      id: problem
+      attributes:
+          label: What is the problem with the current documentation?
+          description: Please describe what is unclear, missing, or incorrect. You can include links to the specific page or file.
+      validations:
+          required: true
+
+    - type: textarea
+      id: suggested-change
+      attributes:
+          label: What is your suggested improvement?
+          description: Please provide the corrected or new text, or describe the changes you'd like to see.
+      validations:
+          required: true

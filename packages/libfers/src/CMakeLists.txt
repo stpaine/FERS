@@ -1,0 +1,90 @@
+# This file is the central manifest for the libfers private implementation. It defines:
+#  - LIBFERS_PRIVATE_HEADERS: Headers used internally by the library.
+#  - LIBFERS_SOURCES: The implementation source files.
+
+# --- Private Headers ---
+set(LIBFERS_PRIVATE_HEADERS
+	${CMAKE_CURRENT_LIST_DIR}/radar/schedule_period.h
+	${CMAKE_CURRENT_LIST_DIR}/antenna/antenna_factory.h
+	${CMAKE_CURRENT_LIST_DIR}/core/config.h
+	${CMAKE_CURRENT_LIST_DIR}/math/coord.h
+	${CMAKE_CURRENT_LIST_DIR}/math/geometry_ops.h
+	${CMAKE_CURRENT_LIST_DIR}/core/logging.h
+	${CMAKE_CURRENT_LIST_DIR}/radar/object.h
+	${CMAKE_CURRENT_LIST_DIR}/core/parameters.h
+	${CMAKE_CURRENT_LIST_DIR}/math/path.h
+	${CMAKE_CURRENT_LIST_DIR}/radar/platform.h
+	${CMAKE_CURRENT_LIST_DIR}/core/portable_utils.h
+	${CMAKE_CURRENT_LIST_DIR}/radar/radar_obj.h
+	${CMAKE_CURRENT_LIST_DIR}/radar/receiver.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/response.h
+	${CMAKE_CURRENT_LIST_DIR}/math/rotation_path.h
+	${CMAKE_CURRENT_LIST_DIR}/radar/target.h
+	${CMAKE_CURRENT_LIST_DIR}/radar/transmitter.h
+	${CMAKE_CURRENT_LIST_DIR}/core/world.h
+	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer.h
+	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer_pipeline.h
+	${CMAKE_CURRENT_LIST_DIR}/core/rendering_job.h
+	${CMAKE_CURRENT_LIST_DIR}/core/simulation_state.h
+	${CMAKE_CURRENT_LIST_DIR}/core/sim_events.h
+	${CMAKE_CURRENT_LIST_DIR}/core/fers_context.h
+	${CMAKE_CURRENT_LIST_DIR}/core/sim_threading.h
+	${CMAKE_CURRENT_LIST_DIR}/simulation/channel_model.h
+	${CMAKE_CURRENT_LIST_DIR}/processing/signal_processor.h
+	${CMAKE_CURRENT_LIST_DIR}/core/thread_pool.h
+	${CMAKE_CURRENT_LIST_DIR}/interpolation/interpolation_filter.h
+	${CMAKE_CURRENT_LIST_DIR}/interpolation/interpolation_point.h
+	${CMAKE_CURRENT_LIST_DIR}/interpolation/interpolation_set.h
+	${CMAKE_CURRENT_LIST_DIR}/math/path_utils.h
+	${CMAKE_CURRENT_LIST_DIR}/noise/falpha_branch.h
+	${CMAKE_CURRENT_LIST_DIR}/noise/noise_generators.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/json_serializer.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/hdf5_handler.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/kml_generator.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/libxml_wrapper.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/waveform_factory.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser.h
+	${CMAKE_CURRENT_LIST_DIR}/signal/dsp_filters.h
+	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.h
+	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.h
+	${CMAKE_CURRENT_LIST_DIR}/timing/timing.h
+)
+
+# --- Source Files ---
+set(LIBFERS_SOURCES
+	${CMAKE_CURRENT_LIST_DIR}/radar/schedule_period.cpp
+	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer_pipeline.cpp
+	${CMAKE_CURRENT_LIST_DIR}/api.cpp
+	${CMAKE_CURRENT_LIST_DIR}/core/logging.cpp
+	${CMAKE_CURRENT_LIST_DIR}/core/sim_threading.cpp
+	${CMAKE_CURRENT_LIST_DIR}/simulation/channel_model.cpp
+	${CMAKE_CURRENT_LIST_DIR}/processing/signal_processor.cpp
+	${CMAKE_CURRENT_LIST_DIR}/core/thread_pool.cpp
+	${CMAKE_CURRENT_LIST_DIR}/core/world.cpp
+	${CMAKE_CURRENT_LIST_DIR}/antenna/antenna_factory.cpp
+	${CMAKE_CURRENT_LIST_DIR}/interpolation/interpolation_filter.cpp
+	${CMAKE_CURRENT_LIST_DIR}/interpolation/interpolation_set.cpp
+	${CMAKE_CURRENT_LIST_DIR}/math/geometry_ops.cpp
+	${CMAKE_CURRENT_LIST_DIR}/math/path.cpp
+	${CMAKE_CURRENT_LIST_DIR}/math/rotation_path.cpp
+	${CMAKE_CURRENT_LIST_DIR}/noise/falpha_branch.cpp
+	${CMAKE_CURRENT_LIST_DIR}/noise/noise_generators.cpp
+	${CMAKE_CURRENT_LIST_DIR}/radar/radar_obj.cpp
+	${CMAKE_CURRENT_LIST_DIR}/radar/receiver.cpp
+	${CMAKE_CURRENT_LIST_DIR}/radar/target.cpp
+	${CMAKE_CURRENT_LIST_DIR}/radar/transmitter.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/json_serializer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/hdf5_handler.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/kml_generator.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/libxml_wrapper.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/waveform_factory.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/response.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser.cpp
+	${CMAKE_CURRENT_LIST_DIR}/signal/dsp_filters.cpp
+	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.cpp
+	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.cpp
+	${CMAKE_CURRENT_LIST_DIR}/timing/timing.cpp
+)
