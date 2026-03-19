@@ -179,3 +179,16 @@ The following notice was part of the original FERS distribution:
 
 1. `The system library glib-2.0 was not found` or similar errors related to system packages.
     - Ensure you have installed the necessary Tauri prerequisites for your operating system. On Debian-based Linux distributions, you can install the required packages by following https://tauri.app/start/prerequisites/
+
+## ⚠️ Disclaimer & Development Status
+
+> [!WARNING]
+> Please be aware that FERS is currently undergoing a significant modernization and re-architecture. The `master` branch is under **heavy active development** and should be considered an **alpha-stage** project.
+
+This means:
+
+- **Stability:** Expect bugs, crashes, and incomplete features.
+- **Breaking Changes:** The C-API, JSON/XML schemas, and internal architecture are subject to change without notice as the new foundation is stabilized.
+- **Use Case:** This version is intended for development, testing, and community feedback. It is **not yet recommended for production or critical simulation work.**
+
+We welcome and appreciate community involvement. Please report any issues you encounter on our [GitHub Issues](https://github.com/stpaine/FERS/issues) page.
