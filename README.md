@@ -90,6 +90,11 @@ cmake --preset=release
 cmake --build --preset=release
 ```
 
+> [!TIP]
+> On Linux and macOS, you can install the built `fers-cli` release to your system using
+>
+> `cmake --install --preset=release`
+
 ### 5. Run the UI
 
 The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
