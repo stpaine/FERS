@@ -39,8 +39,8 @@ function(fers_configure_library_target target_name)
 	target_compile_definitions(${target_name} PRIVATE HAVE_LIBHDF5)
 
 	set_target_properties(${target_name} PROPERTIES
-		SOVERSION ${PROJECT_VERSION_MAJOR}
-		VERSION ${PROJECT_VERSION}
+		SOVERSION ${CMAKE_PROJECT_VERSION_MAJOR}
+		VERSION ${CMAKE_PROJECT_VERSION}
 	)
 endfunction()
 

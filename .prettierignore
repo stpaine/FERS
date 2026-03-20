@@ -1,6 +1,8 @@
 # PNPM
 pnpm-lock.yaml
 
+.venv
+
 # Build outputs
 build/
 dist/
