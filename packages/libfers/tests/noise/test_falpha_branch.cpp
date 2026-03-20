@@ -58,7 +58,7 @@ TEST_CASE("FAlphaBranch non-last branch matches upsampled pre-offset buffer", "[
 {
 	constexpr unsigned fint = 0;
 	constexpr RealType ffrac = 0.0;
-	constexpr RealType upsample_scale = std::pow(10.0, ffrac + fint + 0.5);
+	const RealType upsample_scale = std::pow(10.0, ffrac + fint + 0.5);
 
 	std::mt19937 rng_branch(77);
 	std::mt19937 rng_manual(77);

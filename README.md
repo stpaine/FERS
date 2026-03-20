@@ -87,8 +87,13 @@ You can configure and compile the C++ libraries directly using CMake presets. Th
 ```bash
 # From the root FERS directory
 cmake --preset=release
-cmake --build build --preset=release
+cmake --build --preset=release
 ```
+
+> [!TIP]
+> On Linux and macOS, you can install the built `fers-cli` release to your system using
+>
+> `cmake --install --preset=release`
 
 ### 5. Run the UI
 
@@ -101,6 +106,10 @@ VCPKG_ROOT=/path/to/vcpkg
 ```
 
 Navigate to the root of the repository and start the development server:
+
+> [!WARNING]
+> The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
+> In particular, there is a known issue causing WebGL context loss on macOS on launch. See https://github.com/davidbits/FERS/issues/181 for details.
 
 ```bash
 bun ui:dev

@@ -21,6 +21,7 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <vector>
 
 #include "core/config.h"
 #include "core/sim_id.h"

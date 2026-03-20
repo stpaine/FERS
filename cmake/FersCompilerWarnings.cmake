@@ -22,12 +22,18 @@ function(apply_fers_warnings TARGET_NAME)
 		-Wdouble-promotion
 		-Wformat=2
 		-Wmisleading-indentation
-		-Wduplicated-cond
-		-Wduplicated-branches
-		-Wlogical-op
 	)
 
 	target_compile_options(${TARGET_NAME} PRIVATE ${FERS_GCC_CLANG_WARNINGS})
+
+	# --- GCC-Specific Warnings ---
+	if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+		target_compile_options(${TARGET_NAME} PRIVATE
+							   -Wduplicated-cond
+							   -Wduplicated-branches
+							   -Wlogical-op
+		)
+	endif ()
 
 	# --- Common Flags ---
 	target_compile_options(${TARGET_NAME} PRIVATE
