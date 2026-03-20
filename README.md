@@ -87,7 +87,7 @@ You can configure and compile the C++ libraries directly using CMake presets. Th
 ```bash
 # From the root FERS directory
 cmake --preset=release
-cmake --build build --preset=release
+cmake --build --preset=release
 ```
 
 ### 5. Run the UI

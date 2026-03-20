@@ -62,6 +62,7 @@ fn main() {
     // for static libraries often omit transitive dependencies like szip and libaec.
     // Order is critical here: Dependents must appear BEFORE their dependencies.
     let vcpkg_libs = [
+        "Geographic",
         "GeographicLib",
         "hdf5_hl_cpp",
         "hdf5_cpp",
@@ -100,9 +101,13 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", header_path.display());
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+    println!("cargo:rerun-if-changed={}", repo_root.join("vcpkg.json").display());
     println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/src").display());
     println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/include").display());
-    println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/CMakeLists.txt").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        repo_root.join("packages/libfers/CMakeLists.txt").display()
+    );
 
     let bindings = bindgen::Builder::default()
         .header(header_path.to_str().unwrap())
