@@ -66,4 +66,6 @@ if (COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
 endif ()
 
-catch_discover_tests(libfers_tests)
+catch_discover_tests(libfers_tests
+					 DISCOVERY_MODE PRE_TEST
+)

@@ -32,20 +32,13 @@ jobs:
 
             - uses: lukka/get-cmake@latest
 
-            - uses: lukka/run-vcpkg@v11
-              with:
-                  runVcpkgInstall: false
-
             - name: Install build tools
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y \
-                    doxygen \
-                    graphviz \
-                    xxd
+                  sudo apt-get install -y doxygen graphviz
 
             - name: Configure CMake
-              run: cmake --preset release -DFERS_BUILD_DOCS=ON
+              run: cmake --preset release -DFERS_BUILD_DOCS=ON -DFERS_DOCS_ONLY=ON
 
             - name: Build documentation
               run: cmake --build --preset release --target doc

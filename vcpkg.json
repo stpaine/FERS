@@ -9,7 +9,7 @@
         "highfive",
         {
             "name": "hdf5",
-            "features": ["cpp", "hl"]
+            "features": ["hl"]
         },
         "libxml2",
         "nlohmann-json"

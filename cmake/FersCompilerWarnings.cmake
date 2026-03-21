@@ -37,24 +37,8 @@ function(apply_fers_warnings TARGET_NAME)
 
 	# --- Common Flags ---
 	target_compile_options(${TARGET_NAME} PRIVATE
-						   -pthread
-						   -ffast-math
 						   -fno-finite-math-only
 	)
-
-	if (UNIX)
-		target_compile_definitions(${TARGET_NAME} PRIVATE _REENTRANT)
-	endif ()
-
-	# --- Build-Type Specific Flags ---
-	if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-		target_compile_options(${TARGET_NAME} PRIVATE -g -O0)
-	elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
-		target_compile_options(${TARGET_NAME} PRIVATE -O2)
-		target_link_options(${TARGET_NAME} PRIVATE -s)
-	elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-		target_compile_options(${TARGET_NAME} PRIVATE -O2 -g)
-	endif ()
 
 	# --- Sanitizer Detection ---
 	if (CMAKE_CXX_FLAGS MATCHES ".*-fsanitize=address.*")

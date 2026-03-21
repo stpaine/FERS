@@ -2,7 +2,6 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 use std::env;
-use std::fs;
 use std::path::PathBuf;
 
 fn main() {
@@ -14,7 +13,20 @@ fn main() {
 
     // --- 1. Ensure VCPKG_ROOT is set ---
     let vcpkg_root = env::var("VCPKG_ROOT")
-        .expect("VCPKG_ROOT must be set in your environment or in packages/fers-ui/src-tauri/.env");
+        .or_else(|_| {
+            let home = env::var("HOME").unwrap_or_default();
+            let candidates = [
+                repo_root.join("vcpkg"),
+                repo_root.join("../vcpkg"),
+                PathBuf::from(home).join("vcpkg"),
+            ];
+            candidates
+                .into_iter()
+                .find(|p| p.exists())
+                .map(|p| p.to_string_lossy().into_owned())
+                .ok_or("VCPKG_ROOT not found")
+        })
+        .expect("VCPKG_ROOT must be set in your environment...");
 
     // --- 2. Invoke CMake to build libfers ---
     let mut config = cmake::Config::new(&repo_root);
@@ -35,20 +47,9 @@ fn main() {
     // --- 3. Locate vcpkg installed directory ---
     let vcpkg_installed_dir = build_dir.join("vcpkg_installed");
 
-    let mut triplet_dir = None;
-    if vcpkg_installed_dir.exists() {
-        for entry in fs::read_dir(&vcpkg_installed_dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.is_dir() && entry.file_name() != "vcpkg" {
-                triplet_dir = Some(path);
-                break;
-            }
-        }
-    }
-
-    let triplet_dir =
-        triplet_dir.expect("Could not find vcpkg triplet directory. Did CMake run successfully?");
+    let target = env::var("TARGET").unwrap();
+    let triplet = if target.contains("apple") { "x64-osx" } else { "x64-linux" };
+    let triplet_dir = vcpkg_installed_dir.join(triplet);
     let vcpkg_lib_dir = triplet_dir.join("lib");
 
     // --- 4. Link the libraries ---
@@ -64,8 +65,6 @@ fn main() {
     let vcpkg_libs = [
         "Geographic",
         "GeographicLib",
-        "hdf5_hl_cpp",
-        "hdf5_cpp",
         "hdf5_hl",
         "hdf5",
         "sz",

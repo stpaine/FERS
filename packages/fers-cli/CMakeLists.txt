@@ -18,7 +18,7 @@ target_include_directories(fers-cli PRIVATE
 )
 
 # Link against libfers.
-target_link_libraries(fers-cli PRIVATE fers::fers_static)
+target_link_libraries(fers-cli PRIVATE fers::fers)
 
 # --- Cross-Platform Relocatable RPATH ---
 set_target_properties(fers-cli PROPERTIES

@@ -66,3 +66,7 @@ Once the environment is set up, you can run the UI from the **repository root** 
 ```bash
 bun ui:dev
 ```
+
+> [!WARNING]
+> The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
+> In particular, there is a known issue causing WebGL context loss on macOS on launch. See https://github.com/davidbits/FERS/issues/181 for details.

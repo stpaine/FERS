@@ -56,7 +56,6 @@ Ensure you have the following tools installed on your system:
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+) and **CMake** (3.22+).
 - [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment, or create a `.env` file at `packages/fers-ui/src-tauri/.env` containing `VCPKG_ROOT=/path/to/vcpkg`.
 - [**Bun**](https://bun.sh/).
-- [**Ninja**](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages) (recommended for faster builds).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
 - [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).

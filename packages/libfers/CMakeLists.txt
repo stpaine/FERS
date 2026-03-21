@@ -7,40 +7,40 @@ function(fers_configure_library_target target_name)
 
 	# --- Source and Header Files ---
 	target_sources(${target_name} PRIVATE
-		${LIBFERS_SOURCES}
-		${LIBFERS_PUBLIC_HEADERS}
-		${LIBFERS_PRIVATE_HEADERS}
+				   ${LIBFERS_SOURCES}
+				   ${LIBFERS_PUBLIC_HEADERS}
+				   ${LIBFERS_PRIVATE_HEADERS}
 	)
 
 	# --- Include Directories ---
 	target_include_directories(${target_name} PUBLIC
-		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-		$<INSTALL_INTERFACE:include>
+							   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+							   $<INSTALL_INTERFACE:include>
 	)
 	target_include_directories(${target_name} PRIVATE
-		${CMAKE_CURRENT_SOURCE_DIR}/src
+							   ${CMAKE_CURRENT_SOURCE_DIR}/src
 	)
 
 	# --- Schema Headers ---
 	add_dependencies(${target_name} generate_schemas)
 	target_include_directories(${target_name} PRIVATE
-		$<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>
+							   $<BUILD_INTERFACE:${GENERATED_HEADERS_DIR}>
 	)
 
 	# --- Third-Party Dependencies ---
 	target_link_libraries(${target_name} PRIVATE
-		HighFive
-		nlohmann_json::nlohmann_json
-		GeographicLib::GeographicLib
-		LibXml2::LibXml2
-		${HDF5_C_LIBRARIES}
-		${HDF5_HL_LIBRARIES}
+						  HighFive
+						  nlohmann_json::nlohmann_json
+						  GeographicLib::GeographicLib
+						  LibXml2::LibXml2
+						  hdf5::hdf5
+						  hdf5::hdf5_hl
 	)
 	target_compile_definitions(${target_name} PRIVATE HAVE_LIBHDF5)
 
 	set_target_properties(${target_name} PROPERTIES
-		SOVERSION ${CMAKE_PROJECT_VERSION_MAJOR}
-		VERSION ${CMAKE_PROJECT_VERSION}
+						  SOVERSION ${CMAKE_PROJECT_VERSION_MAJOR}
+						  VERSION ${CMAKE_PROJECT_VERSION}
 	)
 endfunction()
 
@@ -54,19 +54,19 @@ set(SCHEMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../schema)
 set(GENERATED_HEADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated_headers)
 
 add_custom_command(
-	OUTPUT ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
-	COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_HEADERS_DIR}
-	COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.dtd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.dtd
-	COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.xsd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.xsd
-	COMMAND xxd -i fers-xml.dtd > ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
-	COMMAND xxd -i fers-xml.xsd > ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
-	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-	DEPENDS ${SCHEMA_DIR}/fers-xml.dtd ${SCHEMA_DIR}/fers-xml.xsd
-	COMMENT "Converting XML schema files to C headers"
+		OUTPUT ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+		COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_HEADERS_DIR}
+		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.dtd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.dtd
+		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.xsd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.xsd
+		COMMAND xxd -i fers-xml.dtd > ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
+		COMMAND xxd -i fers-xml.xsd > ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		DEPENDS ${SCHEMA_DIR}/fers-xml.dtd ${SCHEMA_DIR}/fers-xml.xsd
+		COMMENT "Converting XML schema files to C headers"
 )
 add_custom_target(generate_schemas ALL DEPENDS
-	${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
-	${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+				  ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
+				  ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
 )
 
 # --- Third-Party Dependencies (vcpkg) ---
@@ -112,28 +112,28 @@ source_group("Header Files\\Private" FILES ${LIBFERS_PRIVATE_HEADERS})
 # --- Installation ---
 if (FERS_BUILD_STATIC_LIBS)
 	install(TARGETS fers_static
-		EXPORT libfers-targets
-		ARCHIVE DESTINATION lib
+			EXPORT libfers-targets
+			ARCHIVE DESTINATION lib
 	)
 endif ()
 
 if (FERS_BUILD_SHARED_LIBS)
 	install(TARGETS fers_shared
-		EXPORT libfers-targets
-		LIBRARY DESTINATION lib
-		RUNTIME DESTINATION bin
-		ARCHIVE DESTINATION lib
+			EXPORT libfers-targets
+			LIBRARY DESTINATION lib
+			RUNTIME DESTINATION bin
+			ARCHIVE DESTINATION lib
 	)
 endif ()
 
 install(FILES ${LIBFERS_PUBLIC_HEADERS}
-	DESTINATION include/libfers
+		DESTINATION include/libfers
 )
 
 install(EXPORT libfers-targets
-	FILE libfers-config.cmake
-	NAMESPACE fers::
-	DESTINATION lib/cmake/libfers
+		FILE libfers-config.cmake
+		NAMESPACE fers::
+		DESTINATION lib/cmake/libfers
 )
 
 # --- Testing ---
