@@ -143,6 +143,7 @@ namespace interp
 			throw std::runtime_error("Requested delay filter value out of range");
 		}
 
+		// TODO: Investigate if OOB access can occur here
 		const auto filt = static_cast<unsigned>((delay + 1) * (_table_filters / 2.0));
 		return std::span{&_filter_table[filt * _length], static_cast<size_t>(_length)};
 	}

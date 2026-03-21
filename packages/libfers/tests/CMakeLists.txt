@@ -57,13 +57,22 @@ add_executable(libfers_tests
 )
 
 target_include_directories(libfers_tests PRIVATE
-						  ${CMAKE_CURRENT_SOURCE_DIR}/../src
-						  ${HDF5_INCLUDE_DIRS})
+						   ${CMAKE_CURRENT_SOURCE_DIR}/../src
+						   ${HDF5_INCLUDE_DIRS})
 
-target_link_libraries(libfers_tests PRIVATE Catch2::Catch2WithMain fers::fers LibXml2::LibXml2 ${HDF5_C_LIBRARIES} ${HDF5_HL_LIBRARIES})
+target_link_libraries(libfers_tests PRIVATE
+					  Catch2::Catch2WithMain
+					  fers::fers
+					  LibXml2::LibXml2
+					  # Using this format instead of hdf5::hdf5/hdf5::hdf5_hl due to macOS linking issues
+					  ${HDF5_C_LIBRARIES}
+					  ${HDF5_HL_LIBRARIES}
+)
 
 if (COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
 endif ()
 
-catch_discover_tests(libfers_tests)
+catch_discover_tests(libfers_tests
+					 DISCOVERY_MODE PRE_TEST
+)

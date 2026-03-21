@@ -7,54 +7,44 @@
     },
     "configurePresets": [
         {
-            "name": "base",
-            "hidden": true,
-            "generator": "Ninja",
-            "binaryDir": "${sourceDir}/build/${presetName}",
+            "name": "debug",
+            "displayName": "Debug (Make)",
+            "description": "Standard Debug build using Unix Makefiles",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
-            "name": "vcpkg",
-            "hidden": true,
-            "inherits": "base",
-            "cacheVariables": {
-                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-            }
-        },
-        {
-            "name": "debug",
-            "displayName": "Debug",
-            "description": "Standard Debug build",
-            "inherits": "vcpkg",
-            "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Debug"
-            }
-        },
-        {
             "name": "release",
-            "displayName": "Release",
-            "description": "Standard Release build (-O2 -s)",
-            "inherits": "vcpkg",
+            "displayName": "Release (Make)",
+            "description": "Standard Release build (-O2 -s) using Unix Makefiles",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "Release"
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
             "name": "relwithdebinfo",
-            "displayName": "RelWithDebInfo",
-            "description": "Release build with Debug symbols",
-            "inherits": "vcpkg",
+            "displayName": "RelWithDebInfo (Make)",
+            "description": "Release build with debug symbols using Unix Makefiles",
+            "generator": "Unix Makefiles",
+            "binaryDir": "${sourceDir}/build/relwithdebinfo",
             "cacheVariables": {
-                "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+                "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
             "name": "asan",
-            "displayName": "AddressSanitizer",
-            "description": "Debug build with AddressSanitizer enabled",
+            "displayName": "AddressSanitizer (Make)",
+            "description": "Debug build with AddressSanitizer enabled using Unix Makefiles",
             "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/asan",
             "cacheVariables": {
                 "CMAKE_C_FLAGS": "-fsanitize=address -fno-omit-frame-pointer",
                 "CMAKE_CXX_FLAGS": "-fsanitize=address -fno-omit-frame-pointer"
@@ -62,9 +52,10 @@
         },
         {
             "name": "tsan",
-            "displayName": "ThreadSanitizer",
-            "description": "Debug build with ThreadSanitizer enabled",
+            "displayName": "ThreadSanitizer (Make)",
+            "description": "Debug build with ThreadSanitizer enabled using Unix Makefiles",
             "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/tsan",
             "cacheVariables": {
                 "CMAKE_C_FLAGS": "-fsanitize=thread",
                 "CMAKE_CXX_FLAGS": "-fsanitize=thread"
@@ -72,9 +63,10 @@
         },
         {
             "name": "coverage",
-            "displayName": "Code Coverage",
-            "description": "Debug build with coverage generation enabled",
+            "displayName": "Code Coverage (Make)",
+            "description": "Debug build with coverage generation enabled using Unix Makefiles",
             "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/coverage",
             "cacheVariables": {
                 "FERS_ENABLE_COVERAGE": "ON"
             }

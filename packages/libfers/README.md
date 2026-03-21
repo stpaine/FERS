@@ -37,7 +37,7 @@ From the root of the repository, use the CMake presets to configure and build th
 ```bash
 # From the root FERS directory
 cmake --preset=release
-cmake --build build --preset=release
+cmake --build --preset=release
 ```
 
 The compiled artifacts will be located in the `build/release/` directory. Libraries (`.a`, `.so`) are in `build/release/packages/libfers/`,

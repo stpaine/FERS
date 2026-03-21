@@ -28,8 +28,8 @@ After a successful build, the executable can be found at `build/release/packages
 Run the simulator from the command line, providing the path to a scenario XML file and any desired options.
 
 ```bash
-# From the build/release/packages/ directory
-./fers-cli/fers-cli path/to/your/scenario.fersxml [options]
+# From the project root
+./build/release/packages/fers-cli/fers-cli path/to/your/scenario.fersxml [options]
 ```
 
 ### Options
@@ -47,6 +47,6 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 ### Example
 
 ```bash
-# From the build/packages directory
-./fers-cli/fers-cli example.fersxml --log-level=DEBUG -n=8
+# From the project root
+./build/release/packages/fers-cli/fers-cli example.fersxml --log-level=DEBUG -n=8
 ```

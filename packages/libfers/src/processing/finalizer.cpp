@@ -36,7 +36,13 @@ namespace processing
 		}
 
 		const auto hdf5_filename = std::format("{}_results.h5", receiver->getName());
-		HighFive::File h5_file(hdf5_filename, HighFive::File::Truncate);
+
+		std::unique_ptr<HighFive::File> h5_file;
+		{
+			std::lock_guard<std::mutex> lock(serial::hdf5_global_mutex);
+			h5_file = std::make_unique<HighFive::File>(hdf5_filename, HighFive::File::Truncate);
+		}
+
 		unsigned chunk_index = 0;
 
 		LOG(logging::Level::INFO, "Finalizer thread started for receiver '{}'. Outputting to '{}'.",
@@ -85,7 +91,7 @@ namespace processing
 
 			const RealType fullscale = pipeline::applyDownsamplingAndQuantization(window_buffer);
 
-			serial::addChunkToFile(h5_file, window_buffer, actual_start, fullscale, chunk_index++);
+			serial::addChunkToFile(*h5_file, window_buffer, actual_start, fullscale, chunk_index++);
 
 			if (reporter)
 			{
@@ -97,6 +103,12 @@ namespace processing
 					last_report_time = now;
 				}
 			}
+		}
+
+		{
+			// Safe destruction of the HDF5 object inside a lock
+			std::lock_guard<std::mutex> lock(serial::hdf5_global_mutex);
+			h5_file.reset();
 		}
 
 		if (reporter)
