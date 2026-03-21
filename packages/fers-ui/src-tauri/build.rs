@@ -5,9 +5,6 @@ use std::env;
 use std::path::PathBuf;
 
 fn main() {
-    // Load environment variables from .env file if it exists
-    dotenv::dotenv().ok();
-
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let repo_root = manifest_dir.join("../../..");
 

@@ -54,12 +54,12 @@ Follow these steps to set up a development environment for building the C++ core
 Ensure you have the following tools installed on your system:
 
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+) and **CMake** (3.22+).
-- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment, or create a `.env` file at `packages/fers-ui/src-tauri/.env` containing `VCPKG_ROOT=/path/to/vcpkg`.
+- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment.
 - [**Bun**](https://bun.sh/).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
 - [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
-- **Other notable dependencies (for linux):** `build-essential` and `pkg-config`
+- **Other notable dependencies (for linux):** `build-essential`, `pkg-config`, and `xxd`.
 
 ### 2. Clone the Repository
 
@@ -100,10 +100,11 @@ cmake --build --preset=release
 
 The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
 
-**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set in `PATH`. You can set this globally in your shell, or create a `.env` file at `src-tauri/.env` with the path to your vcpkg installation:
+**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set in `PATH`.
 
 ```env
-VCPKG_ROOT=/path/to/vcpkg
+export VCPKG_ROOT=/path/to/vcpkg
+export PATH=$VCPKG_ROOT:$PATH
 ```
 
 Navigate to the root of the repository and start the development server:

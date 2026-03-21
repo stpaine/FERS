@@ -55,10 +55,11 @@ This application is part of a monorepo that includes the core C++ `libfers` libr
 
 To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/stpaine/FERS/blob/master/README.md)**.
 
-**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set. You can set this globally in your shell, or create a `.env` file at `src-tauri/.env` with the path to your vcpkg installation:
+**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set.
 
 ```env
-VCPKG_ROOT=/path/to/vcpkg
+export VCPKG_ROOT=/path/to/vcpkg
+export PATH=$VCPKG_ROOT:$PATH
 ```
 
 Once the environment is set up, you can run the UI from the **repository root** with:
