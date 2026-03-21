@@ -33,7 +33,6 @@ fn main() {
     let vcpkg_toolchain = format!("{}/scripts/buildsystems/vcpkg.cmake", vcpkg_root);
 
     config
-        .generator("Ninja")
         .define("CMAKE_TOOLCHAIN_FILE", &vcpkg_toolchain)
         .define("FERS_BUILD_TESTS", "OFF")
         .define("FERS_BUILD_SHARED_LIBS", "OFF")
