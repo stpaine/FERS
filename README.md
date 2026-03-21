@@ -91,9 +91,11 @@ cmake --build --preset=release
 ```
 
 > [!TIP]
-> On Linux and macOS, you can install the built `fers-cli` release to your system using
+> On Linux and macOS, you can install the built `fers-cli` release to your system using:
 >
-> `cmake --install --preset=release`
+> `cmake --install build/release`
+>
+> This installs to `/usr/local` by default, which may require `sudo`.
 
 ### 5. Run the UI
 
