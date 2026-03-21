@@ -33,8 +33,9 @@ function(fers_configure_library_target target_name)
 						  nlohmann_json::nlohmann_json
 						  GeographicLib::GeographicLib
 						  LibXml2::LibXml2
-						  hdf5::hdf5
-						  hdf5::hdf5_hl
+						  # Using this format instead of hdf5::hdf5/hdf5::hdf5_hl due to macOS linking issues
+						  ${HDF5_C_LIBRARIES}
+						  ${HDF5_HL_LIBRARIES}
 	)
 	target_compile_definitions(${target_name} PRIVATE HAVE_LIBHDF5)
 
