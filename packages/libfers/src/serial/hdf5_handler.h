@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,11 @@ namespace HighFive
 
 namespace serial
 {
+	/**
+	 * @brief Global mutex to protect all HDF5 C-library calls, which are not thread-safe.
+	 */
+	extern std::mutex hdf5_global_mutex;
+
 	/**
 	 * @brief Adds a chunk of data to an HDF5 file.
 	 *

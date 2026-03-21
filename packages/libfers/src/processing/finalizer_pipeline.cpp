@@ -17,6 +17,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/hdf5_handler.h"
 #include "serial/response.h"
 #include "signal/dsp_filters.h"
 #include "simulation/channel_model.h"
@@ -121,6 +122,7 @@ namespace processing::pipeline
 	void exportCwToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
 						const RealType fullscale, const RealType ref_freq)
 	{
+		std::lock_guard<std::mutex> lock(serial::hdf5_global_mutex);
 		try
 		{
 			HighFive::File file(filename, HighFive::File::Truncate);
