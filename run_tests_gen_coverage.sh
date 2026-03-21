@@ -1,7 +1,7 @@
 #!/bin/bash
 
 cmake --preset=coverage
-cmake --build --preset coverage
+cmake --build --preset coverage -j12
 ctest --preset coverage -j12
 
 cd build/coverage || exit 1

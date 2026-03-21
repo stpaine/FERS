@@ -25,7 +25,6 @@
 #include <utility>
 #include <vector>
 
-// Generated headers
 #include "antenna/antenna_factory.h"
 #include "core/config.h"
 #include "core/logging.h"
