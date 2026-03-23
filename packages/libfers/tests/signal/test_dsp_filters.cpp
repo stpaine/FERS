@@ -61,10 +61,10 @@ TEST_CASE("FirFilter applies coefficients to complex samples", "[signal][dsp][fi
 	filter.filter(samples);
 
 	REQUIRE(samples.size() == 3);
-	REQUIRE_THAT(samples[0].real(), WithinAbs(2.0, 1e-12));
-	REQUIRE_THAT(samples[0].imag(), WithinAbs(2.0, 1e-12));
-	REQUIRE_THAT(samples[1].real(), WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(samples[1].imag(), WithinAbs(1.0, 1e-12));
+	REQUIRE_THAT(samples[0].real(), WithinAbs(1.0, 1e-12));
+	REQUIRE_THAT(samples[0].imag(), WithinAbs(1.0, 1e-12));
+	REQUIRE_THAT(samples[1].real(), WithinAbs(2.0, 1e-12));
+	REQUIRE_THAT(samples[1].imag(), WithinAbs(2.0, 1e-12));
 	REQUIRE_THAT(samples[2].real(), WithinAbs(0.0, 1e-12));
 	REQUIRE_THAT(samples[2].imag(), WithinAbs(0.0, 1e-12));
 }

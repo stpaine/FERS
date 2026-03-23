@@ -86,7 +86,7 @@ namespace fers_signal
 		const FirFilter filt(coeffs);
 		filt.filter(tmp);
 
-		const auto delay = filt_length / 2 - 1;
+		const auto delay = filt_length / 2;
 		std::ranges::copy_n(tmp.begin() + delay, size * ratio, out.begin());
 	}
 
@@ -164,7 +164,7 @@ namespace fers_signal
 			line[0] = sample;
 			ComplexType result{0.0, 0.0};
 
-			result = std::transform_reduce(line.rbegin(), line.rend(), _filter.begin(), ComplexType{0.0, 0.0},
+			result = std::transform_reduce(line.begin(), line.end(), _filter.begin(), ComplexType{0.0, 0.0},
 										   std::plus<ComplexType>{},
 										   [](const ComplexType& x, const RealType coeff) { return x * coeff; });
 

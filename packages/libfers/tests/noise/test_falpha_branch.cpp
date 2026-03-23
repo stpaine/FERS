@@ -68,14 +68,15 @@ TEST_CASE("FAlphaBranch non-last branch matches upsampled pre-offset buffer", "[
 
 	fers_signal::IirFilter highpass(kHighpassDen.data(), kHighpassNum.data(), kHighpassDen.size());
 	fers_signal::DecadeUpsampler upsampler;
-	std::normal_distribution<> dist(0.0, 1.0);
+	std::normal_distribution<> dist_main(0.0, 1.0);
+	std::normal_distribution<> dist_pre(0.0, 1.0);
 
 	std::vector<RealType> expected(20);
 	RealType offset_sample = 0.0;
 	for (size_t refill = 0; refill < 2; ++refill)
 	{
-		const RealType main_sample = dist(rng_manual);
-		const RealType pre_sample = dist(rng_manual);
+		const RealType main_sample = dist_main(rng_manual);
+		const RealType pre_sample = dist_pre(rng_manual);
 		if (refill == 0)
 		{
 			offset_sample = pre_sample;

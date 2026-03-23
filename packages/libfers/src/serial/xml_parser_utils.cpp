@@ -976,6 +976,8 @@ namespace serial::xml_parser_utils
 
 		parseParameters(root.childElement("parameters", 0), ctx.parameters);
 
+		params::params = ctx.parameters;
+
 		auto parseElements =
 			[](const XmlElement& root, const std::string& elementName, ParserContext& ctx, auto parseFunction)
 		{

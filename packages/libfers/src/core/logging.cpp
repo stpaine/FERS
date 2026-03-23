@@ -52,6 +52,7 @@ namespace logging
 			if (_log_file && _log_file->is_open())
 			{
 				*_log_file << oss.str();
+				_log_file->flush();
 			}
 		}
 	}
