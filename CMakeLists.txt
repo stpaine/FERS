@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 
+# --- Enforce macOS Deployment Target ---
+if (APPLE)
+	if (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+		set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version")
+	endif ()
+	# Ensure vcpkg also respects this deployment target
+	set(VCPKG_OSX_DEPLOYMENT_TARGET ${CMAKE_OSX_DEPLOYMENT_TARGET} CACHE STRING "")
+endif ()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # --- Options and Build Type ---

@@ -97,11 +97,13 @@ fn main() {
             config.define("CMAKE_OSX_ARCHITECTURES", arch);
         }
 
-        if let Some(deployment_target) =
-            env_var("MACOSX_DEPLOYMENT_TARGET").or_else(|| env_var("CMAKE_OSX_DEPLOYMENT_TARGET"))
-        {
-            config.define("CMAKE_OSX_DEPLOYMENT_TARGET", &deployment_target);
-        }
+        // Cargo and Tauri inject MACOSX_DEPLOYMENT_TARGET=10.13 into the build environment.
+        // We must explicitly override this for our C++ library to support std::filesystem (10.15+)
+        // and other modern features. We enforce 14.0 here.
+        let deployment_target = "14.0";
+        config.define("CMAKE_OSX_DEPLOYMENT_TARGET", deployment_target);
+        config.define("VCPKG_OSX_DEPLOYMENT_TARGET", deployment_target);
+        config.env("MACOSX_DEPLOYMENT_TARGET", deployment_target);
 
         if let Some(sysroot) = env_var("SDKROOT") {
             config.define("CMAKE_OSX_SYSROOT", &sysroot);
