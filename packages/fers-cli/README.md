@@ -48,5 +48,5 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 
 ```bash
 # From the project root
-./build/release/packages/fers-cli/fers-cli example.fersxml --log-level=DEBUG -n=8
+./build/release/packages/fers-cli/fers-cli examples/mixed_scenario/example.fersxml --log-level=INFO -n=8
 ```

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE simulation SYSTEM "fers-xml.dtd">
+<simulation name="ExampleMixedModeScenario">
+    <parameters>
+        <starttime>0.0</starttime>
+        <endtime>1.0</endtime>
+        <rate>10.0e6</rate>
+        <simSamplingRate>50.0e6</simSamplingRate>
+        <randomseed>12345</randomseed>
+    </parameters>
+
+    <!-- Common Assets -->
+    <antenna name="IsotropicAntenna" pattern="isotropic">
+        <efficiency>1.0</efficiency>
+    </antenna>
+
+    <!-- Pulsed Radar Components -->
+    <waveform name="PulsedWave">
+        <power>10000.0</power>
+        <carrier_frequency>10.0e9</carrier_frequency>
+        <pulsed_from_file filename="pulse.h5"/>
+    </waveform>
+
+    <timing name="PulsedTiming">
+        <frequency>10.0e9</frequency>
+    </timing>
+
+    <!-- CW Radar Components -->
+    <waveform name="CWWave">
+        <power>1000.0</power>
+        <carrier_frequency>5.0e9</carrier_frequency>
+        <cw/>
+    </waveform>
+
+    <timing name="CWTiming">
+        <frequency>5.0e9</frequency>
+    </timing>
+
+    <!-- Platforms -->
+    <platform name="PulsedRadarPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>0</x>
+                <y>0</y>
+                <altitude>0</altitude>
+                <time>0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0</startazimuth>
+            <startelevation>0</startelevation>
+            <azimuthrate>0</azimuthrate>
+            <elevationrate>0</elevationrate>
+        </fixedrotation>
+        <monostatic name="PulsedRadar" antenna="IsotropicAntenna" waveform="PulsedWave" timing="PulsedTiming"
+                    nodirect="true">
+            <pulsed_mode>
+                <prf>10000</prf>
+                <window_skip>1e-6</window_skip>
+                <window_length>50e-6</window_length>
+            </pulsed_mode>
+            <noise_temp>290</noise_temp>
+        </monostatic>
+    </platform>
+
+    <platform name="CWRadarPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>1000</x>
+                <y>0</y>
+                <altitude>0</altitude>
+                <time>0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0</startazimuth>
+            <startelevation>0</startelevation>
+            <azimuthrate>0</azimuthrate>
+            <elevationrate>0</elevationrate>
+        </fixedrotation>
+        <monostatic name="CWRadar" antenna="IsotropicAntenna" waveform="CWWave" timing="CWTiming" nodirect="true">
+            <cw_mode/>
+            <noise_temp>290</noise_temp>
+        </monostatic>
+    </platform>
+
+    <platform name="TargetPlatform">
+        <motionpath interpolation="linear">
+            <positionwaypoint>
+                <x>500</x>
+                <y>100</y>
+                <altitude>100</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+            <positionwaypoint>
+                <x>500</x>
+                <y>-100</y>
+                <altitude>100</altitude>
+                <time>1.0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0</startazimuth>
+            <startelevation>0</startelevation>
+            <azimuthrate>0</azimuthrate>
+            <elevationrate>0</elevationrate>
+        </fixedrotation>
+        <target name="SimpleTarget">
+            <rcs type="isotropic">
+                <value>1.0</value>
+            </rcs>
+        </target>
+    </platform>
+
+</simulation>
