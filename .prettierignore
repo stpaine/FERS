@@ -30,3 +30,6 @@ docs/doxygen-awesome-css/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+# Simulation artifacts
+*.h5

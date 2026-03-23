@@ -49,6 +49,8 @@ add_executable(libfers_tests
 			   serial/test_libxml_wrapper.cpp
 			   serial/test_hdf5_handler.cpp
 			   serial/test_waveform_factory.cpp
+			   serial/test_xml_parser.cpp
+			   serial/test_xml_parser_utils.cpp
 			   simulation/test_channel_model_helpers.cpp
 			   simulation/test_channel_model_direct.cpp
 			   simulation/test_channel_model_reflected.cpp
