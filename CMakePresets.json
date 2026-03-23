@@ -68,6 +68,7 @@
             "inherits": "debug",
             "binaryDir": "${sourceDir}/build/coverage",
             "cacheVariables": {
+                "FERS_BUILD_TESTS": "ON",
                 "FERS_ENABLE_COVERAGE": "ON"
             }
         }
