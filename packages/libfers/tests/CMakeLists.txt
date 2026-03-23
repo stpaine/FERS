@@ -60,9 +60,20 @@ target_include_directories(libfers_tests PRIVATE
 						   ${CMAKE_CURRENT_SOURCE_DIR}/../src
 						   ${HDF5_INCLUDE_DIRS})
 
+# --- macOS HDF5 ODR Violation ---
+# When HDF5 is built as a static library (vcpkg default), linking it into both
+# a shared libfers and the test executable creates two separate HDF5 global states.
+# By forcing the tests to link against the static libfers, we ensure HDF5 is
+# statically linked exactly once into the final test binary.
+if (TARGET fers::fers_static)
+	set(FERS_TEST_TARGET fers::fers_static)
+else ()
+	set(FERS_TEST_TARGET fers::fers)
+endif ()
+
 target_link_libraries(libfers_tests PRIVATE
 					  Catch2::Catch2WithMain
-					  fers::fers
+					  ${FERS_TEST_TARGET}
 					  LibXml2::LibXml2
 					  # Using this format instead of hdf5::hdf5/hdf5::hdf5_hl due to macOS linking issues
 					  ${HDF5_C_LIBRARIES}

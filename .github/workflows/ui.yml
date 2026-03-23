@@ -2,75 +2,75 @@
 name: UI CI
 
 on:
-  push:
-    branches: ['master']
-  pull_request:
-    branches: ['master']
+    push:
+        branches: ['master']
+    pull_request:
+        branches: ['master']
 
 # Cancel in-progress runs for the same branch/PR to save resources
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-  MACOSX_DEPLOYMENT_TARGET: '11.0'
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    MACOSX_DEPLOYMENT_TARGET: '14.0'
 
 jobs:
-  build-ui:
-    name: Build UI (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26]
+    build-ui:
+        name: Build UI (${{ matrix.os }})
+        runs-on: ${{ matrix.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26]
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xxd pkg-config build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev xdg-utils
+            - name: Install Linux dependencies
+              if: runner.os == 'Linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y xxd pkg-config build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev xdg-utils
 
-      - name: Get CMake
-        uses: lukka/get-cmake@latest
+            - name: Get CMake
+              uses: lukka/get-cmake@latest
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgDirectory: ${{ github.workspace }}/vcpkg
-          vcpkgJsonGlob: 'vcpkg.json'
+            - name: Setup vcpkg
+              uses: lukka/run-vcpkg@v11
+              with:
+                  vcpkgDirectory: ${{ github.workspace }}/vcpkg
+                  vcpkgJsonGlob: 'vcpkg.json'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
 
-      - name: Cache Bun dependencies
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+            - name: Cache Bun dependencies
+              uses: actions/cache@v5
+              with:
+                  path: ~/.bun/install/cache
+                  key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-bun-
 
-      - name: Install Rust toolchain
-        run: rustup show
+            - name: Install Rust toolchain
+              run: rustup show
 
-      - name: Rust Cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          # Targets the specific workspace directory mapped in your .cargo/config.toml
-          workspaces: 'packages/fers-ui/src-tauri -> target'
+            - name: Rust Cache
+              uses: Swatinem/rust-cache@v2
+              with:
+                  # Targets the specific workspace directory mapped in your .cargo/config.toml
+                  workspaces: 'packages/fers-ui/src-tauri -> target'
 
-      - name: Install JS Dependencies
-        run: bun install
+            - name: Install JS Dependencies
+              run: bun install
 
-      - name: Build UI
-        env:
-          # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
-          VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-        run: bun run ui:build
+            - name: Build UI
+              env:
+                  # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
+                  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+              run: bun run ui:build
