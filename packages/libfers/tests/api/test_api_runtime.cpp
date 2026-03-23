@@ -148,10 +148,18 @@ TEST_CASE("API run simulation accepts a minimal valid scenario", "[api][runtime]
 	api_test::Context context;
 	REQUIRE(context.get() != nullptr);
 
-	const auto output_path = std::filesystem::path("api_preview_rx_results.h5");
+	const std::string unique_rx_name =
+		"api_preview_rx_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+	const auto output_path = std::filesystem::path(unique_rx_name + "_results.h5");
 	api_test::ScopedPath output_guard(output_path);
 
-	const std::string xml = api_test::previewScenarioXml("Runtime Scenario");
+	std::string xml = api_test::previewScenarioXml("Runtime Scenario");
+	size_t pos = xml.find("api_preview_rx");
+	while (pos != std::string::npos)
+	{
+		xml.replace(pos, 14, unique_rx_name);
+		pos = xml.find("api_preview_rx", pos + unique_rx_name.length());
+	}
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 	REQUIRE(fers_run_simulation(context.get(), nullptr, nullptr) == 0);
 
@@ -167,10 +175,18 @@ TEST_CASE("API run simulation invokes progress callbacks with caller user data",
 	api_test::Context context;
 	REQUIRE(context.get() != nullptr);
 
-	const auto output_path = std::filesystem::path("api_preview_rx_results.h5");
+	const std::string unique_rx_name =
+		"api_preview_rx_cb_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+	const auto output_path = std::filesystem::path(unique_rx_name + "_results.h5");
 	api_test::ScopedPath output_guard(output_path);
 
-	const std::string xml = api_test::previewScenarioXml("Runtime Callback Scenario");
+	std::string xml = api_test::previewScenarioXml("Runtime Callback Scenario");
+	size_t pos = xml.find("api_preview_rx");
+	while (pos != std::string::npos)
+	{
+		xml.replace(pos, 14, unique_rx_name);
+		pos = xml.find("api_preview_rx", pos + unique_rx_name.length());
+	}
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
 	CallbackState state;

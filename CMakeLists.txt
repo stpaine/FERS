@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.22)
 
+# --- Enforce macOS Deployment Target ---
+if (APPLE)
+	if (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+		set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING "Minimum macOS version")
+	endif ()
+	# Ensure vcpkg also respects this deployment target
+	set(VCPKG_OSX_DEPLOYMENT_TARGET ${CMAKE_OSX_DEPLOYMENT_TARGET} CACHE STRING "")
+endif ()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # --- Options and Build Type ---
@@ -7,6 +16,9 @@ include(FersOptions)
 
 if (NOT FERS_DOCS_ONLY)
 	# Auto-detect vcpkg toolchain before project() so dependency resolution works in CLion and CLI.
+	# Note: when building via `cargo build` (the Tauri path), CMAKE_TOOLCHAIN_FILE is always passed
+	# explicitly by build.rs, so this block is effectively dead in that path. It is retained here
+	# for developers who invoke CMake directly (e.g. cmake --preset=release from the repo root).
 	if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 		set(_fers_vcpkg_candidates)
 
@@ -18,9 +30,7 @@ if (NOT FERS_DOCS_ONLY)
 			list(APPEND _fers_vcpkg_candidates "$ENV{HOME}/vcpkg")
 		endif ()
 
-		list(APPEND _fers_vcpkg_candidates
-			 "${CMAKE_SOURCE_DIR}/vcpkg"
-			 "${CMAKE_SOURCE_DIR}/../vcpkg")
+		list(APPEND _fers_vcpkg_candidates "${CMAKE_SOURCE_DIR}/vcpkg")
 
 		find_program(_fers_vcpkg_exe NAMES vcpkg)
 		if (_fers_vcpkg_exe)
@@ -65,7 +75,13 @@ if (NOT FERS_DOCS_ONLY)
 	set(CMAKE_CXX_EXTENSIONS OFF)
 	set(CMAKE_VERBOSE_MAKEFILE ON)
 	set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-	set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON) # For simpler DLL exports
+	# CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS simplifies DLL exports on Windows.
+	# macOS and Linux do not need this but it is harmless there.
+	# Windows is not a currently supported target but this flag is kept to ease
+	# a future port.
+	if (WIN32)
+		set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+	endif ()
 
 	# --- Compiler Warnings and Flags ---
 	include(FersCompilerWarnings)

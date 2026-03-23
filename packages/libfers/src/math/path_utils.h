@@ -196,10 +196,21 @@ void finalizeCubic(const std::vector<T>& coords, std::vector<T>& dd)
 		const RealType xrd = coords[i + 1].t - coords[i].t;
 		const RealType xld = coords[i].t - coords[i - 1].t;
 		const RealType iw = coords[i + 1].t - coords[i - 1].t;
+
+		if (iw <= EPSILON)
+		{
+			dd[i] = 0.0;
+			tmp[i] = 0.0;
+			continue;
+		}
+
+		const T yrd_xrd = (xrd <= EPSILON) ? (yrd * 0.0) : (yrd / xrd);
+		const T yld_xld = (xld <= EPSILON) ? (yld * 0.0) : (yld / xld);
+
 		const RealType si = xld / iw;
 		const T p = dd[i - 1] * si + 2.0;
 		dd[i] = (si - 1.0) / p;
-		tmp[i] = ((yrd / xrd - yld / xld) * 6.0 / iw - tmp[i - 1] * si) / p;
+		tmp[i] = ((yrd_xrd - yld_xld) * 6.0 / iw - tmp[i - 1] * si) / p;
 	}
 
 	for (int i = size - 2; i >= 0; --i)

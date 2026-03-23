@@ -11,11 +11,88 @@
 
 #include "libxml_wrapper.h"
 
+#include <cctype>
+#include <cstdarg>
+#include <format>
+#include <string>
+
 #include "libxml/encoding.h"
 #include "libxml/parser.h"
 #include "libxml/valid.h"
 #include "libxml/xmlIO.h"
+#include "libxml/xmlerror.h"
 #include "libxml/xmlschemas.h"
+
+namespace
+{
+	// Callback to capture libxml2 generic errors into a std::string
+	void libxmlGenericErrorCallback(void* ctx, const char* msg, ...)
+	{
+		auto* err_str = static_cast<std::string*>(ctx);
+		if (!err_str || !msg)
+		{
+			return;
+		}
+
+		char buf[1024];
+		va_list args;
+		va_start(args, msg);
+		vsnprintf(buf, sizeof(buf), msg, args);
+		va_end(args);
+
+		err_str->append(buf);
+	}
+
+	// Helper to produce an error box
+	std::string formatError(const std::string_view title, const std::string& rawErrors, const std::string_view hint)
+	{
+		std::string errors = rawErrors;
+
+		// Strip trailing newlines or whitespace
+		while (!errors.empty() && std::isspace(static_cast<unsigned char>(errors.back())))
+		{
+			errors.pop_back();
+		}
+
+		// Indent multiline errors to align nicely within the box
+		size_t pos = 0;
+		while ((pos = errors.find('\n', pos)) != std::string::npos)
+		{
+			errors.replace(pos, 1, "\n│      ");
+			pos += 8;
+		}
+
+		return std::format("\n"
+						   "┌─ {} \n"
+						   "│\n"
+						   "│ Error Details:\n"
+						   "│      {}\n"
+						   "│\n"
+						   "│ Hint: {}\n"
+						   "└────────────────────────────────────────────────────────────────────────────",
+						   title, errors.empty() ? "Unknown validation error." : errors, hint);
+	}
+
+	// Retrieves syntax and malformed document errors nicely
+	std::string getXmlLastErrorFormatted()
+	{
+		const xmlError* err = xmlGetLastError();
+		if (err && err->message)
+		{
+			std::string msg = err->message;
+			while (!msg.empty() && std::isspace(static_cast<unsigned char>(msg.back())))
+			{
+				msg.pop_back();
+			}
+			if (err->line > 0)
+			{
+				return std::format("Line {}: {}", err->line, msg);
+			}
+			return msg;
+		}
+		return "Syntax error or malformed XML.";
+	}
+}
 
 bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) const
 {
@@ -37,11 +114,20 @@ bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) 
 		throw XmlException("Failed to create validation context.");
 	}
 
+	// Bind our custom error handler into the DTD Validation Context
+	std::string dtdErrors;
+	validation_ctxt->userData = &dtdErrors;
+	validation_ctxt->error = libxmlGenericErrorCallback;
+	validation_ctxt->warning = libxmlGenericErrorCallback;
+
 	const bool is_valid = xmlValidateDtd(validation_ctxt.get(), _doc.get(), dtd);
 	xmlFreeDtd(dtd);
 
 	if (!is_valid)
 	{
+		std::string fancyError = formatError("XML DTD Validation Failed", dtdErrors,
+											 "Check your scenario XML tags and attributes against 'fers-xml.dtd'.");
+		LOG(logging::Level::ERROR, "{}", fancyError);
 		throw XmlException("XML failed DTD validation.");
 	}
 
@@ -58,10 +144,18 @@ bool XmlDocument::validateWithXsd(const std::span<const unsigned char> xsdData) 
 		throw XmlException("Failed to create schema parser context.");
 	}
 
+	// Bind custom error handler into the Schema Parse Context
+	std::string xsdParseErrors;
+	xmlSchemaSetParserErrors(schema_parser_ctxt.get(), libxmlGenericErrorCallback, libxmlGenericErrorCallback,
+							 &xsdParseErrors);
+
 	const std::unique_ptr<xmlSchema, decltype(&xmlSchemaFree)> schema(xmlSchemaParse(schema_parser_ctxt.get()),
 																	  xmlSchemaFree);
 	if (!schema)
 	{
+		std::string fancyError =
+			formatError("XSD Schema Parse Failed", xsdParseErrors, "The internal XSD schema is invalid.");
+		LOG(logging::Level::FATAL, "{}", fancyError);
 		throw XmlException("Failed to parse schema from memory.");
 	}
 
@@ -72,8 +166,16 @@ bool XmlDocument::validateWithXsd(const std::span<const unsigned char> xsdData) 
 		throw XmlException("Failed to create schema validation context.");
 	}
 
+	// Bind custom error handler into the Schema Validation Context
+	std::string xsdErrors;
+	xmlSchemaSetValidErrors(schema_valid_ctxt.get(), libxmlGenericErrorCallback, libxmlGenericErrorCallback,
+							&xsdErrors);
+
 	if (const bool is_valid = xmlSchemaValidateDoc(schema_valid_ctxt.get(), _doc.get()) == 0; !is_valid)
 	{
+		std::string fancyError = formatError("XML XSD Validation Failed", xsdErrors,
+											 "Check your scenario XML tags and attributes against 'fers-xml.xsd'.");
+		LOG(logging::Level::ERROR, "{}", fancyError);
 		throw XmlException("XML failed XSD validation.");
 	}
 
@@ -115,14 +217,32 @@ void removeIncludeElements(const XmlDocument& doc)
 
 bool XmlDocument::loadFile(const std::string_view filename)
 {
-	_doc.reset(xmlReadFile(filename.data(), nullptr, 0));
-	return _doc != nullptr;
+	xmlResetLastError();
+	// Pass NOERROR and NOWARNING to prevent default terminal spam, so we handle it cleanly
+	_doc.reset(xmlReadFile(filename.data(), nullptr, XML_PARSE_NOERROR | XML_PARSE_NOWARNING));
+	if (!_doc)
+	{
+		std::string fancyError =
+			formatError("XML Parsing Failed", getXmlLastErrorFormatted(), "Ensure the XML file is well-formed.");
+		LOG(logging::Level::ERROR, "{}", fancyError);
+		return false;
+	}
+	return true;
 }
 
 bool XmlDocument::loadString(const std::string& content)
 {
-	_doc.reset(xmlReadMemory(content.c_str(), static_cast<int>(content.length()), "in_memory.xml", nullptr, 0));
-	return _doc != nullptr;
+	xmlResetLastError();
+	_doc.reset(xmlReadMemory(content.c_str(), static_cast<int>(content.length()), "in_memory.xml", nullptr,
+							 XML_PARSE_NOERROR | XML_PARSE_NOWARNING));
+	if (!_doc)
+	{
+		std::string fancyError =
+			formatError("XML Parsing Failed", getXmlLastErrorFormatted(), "Ensure the XML string is well-formed.");
+		LOG(logging::Level::ERROR, "{}", fancyError);
+		return false;
+	}
+	return true;
 }
 
 std::string XmlDocument::dumpToString() const

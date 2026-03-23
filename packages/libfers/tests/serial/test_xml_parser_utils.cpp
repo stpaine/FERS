@@ -1,0 +1,574 @@
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
+#include <filesystem>
+#include <memory>
+#include <string>
+
+#include "antenna/antenna_factory.h"
+#include "core/parameters.h"
+#include "core/world.h"
+#include "radar/platform.h"
+#include "radar/receiver.h"
+#include "radar/target.h"
+#include "radar/transmitter.h"
+#include "serial/libxml_wrapper.h"
+#include "serial/xml_parser_utils.h"
+#include "signal/radar_signal.h"
+#include "timing/prototype_timing.h"
+
+using Catch::Matchers::ContainsSubstring;
+using Catch::Matchers::WithinAbs;
+
+namespace
+{
+	struct ParamGuard
+	{
+		params::Parameters saved;
+		ParamGuard() : saved(params::params) {}
+		~ParamGuard() { params::params = saved; }
+	};
+
+	XmlDocument loadXml(const std::string& xmlString)
+	{
+		XmlDocument doc;
+		REQUIRE(doc.loadString("<?xml version=\"1.0\" encoding=\"UTF-8\"?>" + xmlString));
+		return doc;
+	}
+
+	serial::xml_parser_utils::AssetLoaders createMockLoaders()
+	{
+		serial::xml_parser_utils::AssetLoaders loaders;
+		loaders.loadWaveform =
+			[](const std::string& name, const std::filesystem::path&, RealType power, RealType carrierFreq, SimId id)
+		{
+			auto sig = std::make_unique<fers_signal::CwSignal>();
+			return std::make_unique<fers_signal::RadarSignal>(name, power, carrierFreq, 1.0, std::move(sig), id);
+		};
+		loaders.loadXmlAntenna = [](const std::string& name, const std::string&, SimId id)
+		{ return std::make_unique<antenna::Isotropic>(name, id); };
+		loaders.loadH5Antenna = [](const std::string& name, const std::string&, SimId id)
+		{ return std::make_unique<antenna::Isotropic>(name, id); };
+		loaders.loadFileTarget =
+			[](radar::Platform* platform, const std::string& name, const std::string&, unsigned seed, SimId id)
+		{ return radar::createIsoTarget(platform, name, 1.0, seed, id); };
+		return loaders;
+	}
+}
+
+TEST_CASE("get_child_real_type extracts floating point values", "[serial][xml_parser_utils]")
+{
+	auto doc = loadXml("<root><val>3.14159</val></root>");
+	REQUIRE_THAT(serial::xml_parser_utils::get_child_real_type(doc.getRootElement(), "val"), WithinAbs(3.14159, 1e-5));
+
+	auto empty_doc = loadXml("<root><val></val></root>");
+	REQUIRE_THROWS_AS(serial::xml_parser_utils::get_child_real_type(empty_doc.getRootElement(), "val"), XmlException);
+
+	auto missing_doc = loadXml("<root></root>");
+	REQUIRE_THROWS_AS(serial::xml_parser_utils::get_child_real_type(missing_doc.getRootElement(), "val"), XmlException);
+}
+
+TEST_CASE("get_attribute_bool extracts boolean values safely", "[serial][xml_parser_utils]")
+{
+	auto doc = loadXml("<root flag_true=\"true\" flag_false=\"false\" flag_invalid=\"yes\"/>");
+	auto root = doc.getRootElement();
+
+	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_true", false) == true);
+	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_false", true) == false);
+	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_invalid", true) == false);
+	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "missing", true) == true); // Default fallback
+}
+
+TEST_CASE("resolve_reference_id maps string names to SimIds", "[serial][xml_parser_utils]")
+{
+	auto doc = loadXml("<root ref=\"target_a\"/>");
+	std::unordered_map<std::string, SimId> map = {{"target_a", 42}, {"target_b", 99}};
+
+	REQUIRE(serial::xml_parser_utils::resolve_reference_id(doc.getRootElement(), "ref", "owner", map) == 42);
+	REQUIRE_THROWS_AS(serial::xml_parser_utils::resolve_reference_id(doc.getRootElement(), "missing", "owner", map),
+					  XmlException);
+
+	auto bad_doc = loadXml("<root ref=\"unknown\"/>");
+	REQUIRE_THROWS_AS(serial::xml_parser_utils::resolve_reference_id(bad_doc.getRootElement(), "ref", "owner", map),
+					  XmlException);
+}
+
+TEST_CASE("parseSchedule handles valid and invalid periods", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 10.0);
+
+	auto doc = loadXml("<parent>"
+					   "  <schedule>"
+					   "    <period start=\"1.0\" end=\"2.0\"/>"
+					   "    <period start=\"bad\" end=\"3.0\"/>"
+					   "  </schedule>"
+					   "</parent>");
+
+	// The bad period should be caught and logged, but the valid one should be parsed
+	auto periods = serial::xml_parser_utils::parseSchedule(doc.getRootElement(), "test_owner", false);
+	REQUIRE(periods.size() == 1);
+	REQUIRE_THAT(periods[0].start, WithinAbs(1.0, 1e-5));
+	REQUIRE_THAT(periods[0].end, WithinAbs(2.0, 1e-5));
+}
+
+TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+
+	SECTION("Full parameters with UTM South")
+	{
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>1.5</starttime>"
+						   "  <endtime>10.0</endtime>"
+						   "  <rate>2000</rate>"
+						   "  <c>3e8</c>"
+						   "  <adc_bits>12</adc_bits>"
+						   "  <oversample>4</oversample>"
+						   "  <origin latitude=\"-33.0\" longitude=\"18.0\" altitude=\"100.0\"/>"
+						   "  <coordinatesystem frame=\"UTM\" zone=\"34\" hemisphere=\"S\"/>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE_THAT(p.start, WithinAbs(1.5, 1e-5));
+		REQUIRE_THAT(p.end, WithinAbs(10.0, 1e-5));
+		REQUIRE_THAT(p.rate, WithinAbs(2000.0, 1e-5));
+		REQUIRE_THAT(p.c, WithinAbs(3e8, 1e-5));
+		REQUIRE(p.adc_bits == 12);
+		REQUIRE(p.oversample_ratio == 4);
+		REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
+		REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
+		REQUIRE_THAT(p.origin_altitude, WithinAbs(100.0, 1e-5));
+		REQUIRE(p.coordinate_frame == params::CoordinateFrame::UTM);
+		REQUIRE(p.utm_zone == 34);
+		REQUIRE(p.utm_north_hemisphere == false);
+	}
+
+	SECTION("Optional parameters (simSamplingRate, randomseed) and ECEF")
+	{
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "  <simSamplingRate>500.0</simSamplingRate>"
+						   "  <randomseed>42</randomseed>"
+						   "  <coordinatesystem frame=\"ECEF\"/>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(500.0, 1e-5));
+		REQUIRE(p.random_seed.has_value());
+		REQUIRE(p.random_seed.value() == 42);
+		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
+	}
+
+	SECTION("UTM North Hemisphere")
+	{
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "  <coordinatesystem frame=\"UTM\" zone=\"34\" hemisphere=\"N\"/>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+		REQUIRE(p.coordinate_frame == params::CoordinateFrame::UTM);
+		REQUIRE(p.utm_north_hemisphere == true);
+	}
+
+	SECTION("ENU without origin logs warning but succeeds")
+	{
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "  <coordinatesystem frame=\"ENU\"/>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ENU);
+	}
+}
+
+TEST_CASE("parseParameters throws on invalid UTM zones", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+	auto doc = loadXml("<parameters>"
+					   "  <starttime>0</starttime>"
+					   "  <endtime>1</endtime>"
+					   "  <rate>1000</rate>"
+					   "  <coordinatesystem frame=\"UTM\" zone=\"99\" hemisphere=\"N\"/>"
+					   "</parameters>");
+	params::Parameters p;
+
+	// Should catch the exception internally and fallback to ENU
+	serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+	REQUIRE(p.coordinate_frame == params::CoordinateFrame::ENU);
+}
+
+TEST_CASE("parseWaveform handles CW and delegates file loading", "[serial][xml_parser_utils]")
+{
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+	ctx.parameters.start = 0;
+	ctx.parameters.end = 1;
+	ctx.loaders = createMockLoaders();
+
+	SECTION("CW Waveform")
+	{
+		auto doc = loadXml(
+			"<waveform name=\"cw1\"><power>10</power><carrier_frequency>1e9</carrier_frequency><cw/></waveform>");
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		REQUIRE(world.getWaveforms().size() == 1);
+		REQUIRE(world.getWaveforms().begin()->second->getName() == "cw1");
+	}
+
+	SECTION("Pulsed from file")
+	{
+		auto doc =
+			loadXml("<waveform name=\"p1\"><power>5</power><carrier_frequency>2e9</carrier_frequency><pulsed_from_file "
+					"filename=\"dummy.csv\"/></waveform>");
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		REQUIRE(world.getWaveforms().size() == 1);
+		REQUIRE(world.getWaveforms().begin()->second->getName() == "p1");
+	}
+}
+
+TEST_CASE("parseTiming extracts clock parameters and noise entries", "[serial][xml_parser_utils]")
+{
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+
+	auto doc = loadXml("<timing name=\"clk\" synconpulse=\"true\">"
+					   "  <frequency>1e6</frequency>"
+					   "  <freq_offset>10.0</freq_offset>"
+					   "  <phase_offset>3.14</phase_offset>"
+					   "  <noise_entry><alpha>1.0</alpha><weight>0.5</weight></noise_entry>"
+					   "  <noise_entry><alpha>2.0</alpha><weight>0.25</weight></noise_entry>"
+					   "</timing>");
+
+	serial::xml_parser_utils::parseTiming(doc.getRootElement(), ctx);
+	REQUIRE(world.getTimings().size() == 1);
+
+	auto* timing = world.getTimings().begin()->second.get();
+	REQUIRE(timing->getName() == "clk");
+	REQUIRE_THAT(timing->getFrequency(), WithinAbs(1e6, 1e-5));
+
+	REQUIRE(timing->getFreqOffset().has_value());
+	REQUIRE_THAT(timing->getFreqOffset().value(), WithinAbs(10.0, 1e-5));
+
+	REQUIRE(timing->getPhaseOffset().has_value());
+	REQUIRE_THAT(timing->getPhaseOffset().value(), WithinAbs(3.14, 1e-5));
+
+	REQUIRE(timing->getSyncOnPulse() == true);
+	// Noise entries are added internally, we just verify it didn't crash
+}
+
+TEST_CASE("parseAntenna instantiates correct antenna types", "[serial][xml_parser_utils]")
+{
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.loaders = createMockLoaders();
+
+	SECTION("Isotropic")
+	{
+		auto doc = loadXml("<antenna name=\"iso\" pattern=\"isotropic\"><efficiency>0.9</efficiency></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		REQUIRE(world.getAntennas().begin()->second->getEfficiencyFactor() == 0.9);
+	}
+
+	SECTION("Sinc")
+	{
+		auto doc = loadXml(
+			"<antenna name=\"sinc1\" pattern=\"sinc\"><alpha>1</alpha><beta>2</beta><gamma>3</gamma></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		auto* ant = dynamic_cast<antenna::Sinc*>(world.getAntennas().begin()->second.get());
+		REQUIRE(ant != nullptr);
+		REQUIRE(ant->getAlpha() == 1.0);
+	}
+
+	SECTION("Gaussian")
+	{
+		auto doc = loadXml(
+			"<antenna name=\"gauss\" pattern=\"gaussian\"><azscale>1.5</azscale><elscale>2.5</elscale></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		auto* ant = dynamic_cast<antenna::Gaussian*>(world.getAntennas().begin()->second.get());
+		REQUIRE(ant != nullptr);
+		REQUIRE_THAT(ant->getAzimuthScale(), WithinAbs(1.5, 1e-5));
+		REQUIRE_THAT(ant->getElevationScale(), WithinAbs(2.5, 1e-5));
+	}
+
+	SECTION("SquareHorn")
+	{
+		auto doc = loadXml("<antenna name=\"horn\" pattern=\"squarehorn\"><diameter>0.5</diameter></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		auto* ant = dynamic_cast<antenna::SquareHorn*>(world.getAntennas().begin()->second.get());
+		REQUIRE(ant != nullptr);
+		REQUIRE_THAT(ant->getDimension(), WithinAbs(0.5, 1e-5));
+	}
+
+	SECTION("Parabolic")
+	{
+		auto doc = loadXml("<antenna name=\"dish\" pattern=\"parabolic\"><diameter>2.0</diameter></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		auto* ant = dynamic_cast<antenna::Parabolic*>(world.getAntennas().begin()->second.get());
+		REQUIRE(ant != nullptr);
+		REQUIRE_THAT(ant->getDiameter(), WithinAbs(2.0, 1e-5));
+	}
+
+	SECTION("XML File")
+	{
+		auto doc = loadXml("<antenna name=\"xml_ant\" pattern=\"xml\" filename=\"dummy.xml\"></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		REQUIRE(world.getAntennas().begin()->second->getName() == "xml_ant");
+	}
+
+	SECTION("HDF5 File")
+	{
+		auto doc = loadXml("<antenna name=\"h5_ant\" pattern=\"file\" filename=\"dummy.h5\"></antenna>");
+		serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+		REQUIRE(world.getAntennas().begin()->second->getName() == "h5_ant");
+	}
+
+	SECTION("Unsupported pattern throws")
+	{
+		auto doc = loadXml("<antenna name=\"bad\" pattern=\"magic\"></antenna>");
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx), XmlException);
+	}
+}
+
+TEST_CASE("parseMotionPath handles all interpolation types", "[serial][xml_parser_utils]")
+{
+	radar::Platform platform("plat");
+
+	SECTION("Linear")
+	{
+		auto doc =
+			loadXml("<motionpath interpolation=\"linear\">"
+					"  <positionwaypoint><x>1</x><y>2</y><altitude>3</altitude><time>0</time></positionwaypoint>"
+					"  <positionwaypoint><x>4</x><y>5</y><altitude>6</altitude><time>10</time></positionwaypoint>"
+					"</motionpath>");
+		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_LINEAR);
+		REQUIRE_THAT(platform.getPosition(5.0).x, WithinAbs(2.5, 1e-5));
+	}
+
+	SECTION("Cubic")
+	{
+		auto doc = loadXml("<motionpath interpolation=\"cubic\">"
+						   "  <positionwaypoint><x>0</x><y>0</y><altitude>0</altitude><time>0</time></positionwaypoint>"
+						   "  <positionwaypoint><x>1</x><y>1</y><altitude>1</altitude><time>1</time></positionwaypoint>"
+						   "  <positionwaypoint><x>2</x><y>2</y><altitude>2</altitude><time>2</time></positionwaypoint>"
+						   "</motionpath>");
+		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_CUBIC);
+	}
+
+	SECTION("Unsupported defaults to static")
+	{
+		auto doc = loadXml("<motionpath interpolation=\"magic\"></motionpath>");
+		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_STATIC);
+	}
+}
+
+TEST_CASE("parseRotationPath handles all interpolation types", "[serial][xml_parser_utils]")
+{
+	radar::Platform platform("plat");
+
+	SECTION("Linear")
+	{
+		auto doc = loadXml(
+			"<rotationpath interpolation=\"linear\">"
+			"  <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
+			"  <rotationwaypoint><azimuth>10</azimuth><elevation>10</elevation><time>1</time></rotationwaypoint>"
+			"</rotationpath>");
+		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_LINEAR);
+	}
+
+	SECTION("Cubic")
+	{
+		auto doc = loadXml(
+			"<rotationpath interpolation=\"cubic\">"
+			"  <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
+			"  <rotationwaypoint><azimuth>10</azimuth><elevation>10</elevation><time>1</time></rotationwaypoint>"
+			"  <rotationwaypoint><azimuth>20</azimuth><elevation>20</elevation><time>2</time></rotationwaypoint>"
+			"</rotationpath>");
+		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CUBIC);
+	}
+}
+
+TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser_utils]")
+{
+	radar::Platform platform("plat");
+
+	SECTION("Valid")
+	{
+		auto doc = loadXml("<fixedrotation>"
+						   "  <startazimuth>90</startazimuth>"
+						   "  <startelevation>0</startelevation>"
+						   "  <azimuthrate>10</azimuthrate>"
+						   "  <elevationrate>5</elevationrate>"
+						   "</fixedrotation>");
+		serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform);
+
+		// 90 deg azimuth -> 0 rad (since az_rad = (90 - az_deg) * PI/180)
+		// rate 10 deg/s -> -10 * PI/180 rad/s
+		REQUIRE_THAT(platform.getRotation(1.0).azimuth, WithinAbs(-10.0 * PI / 180.0, 1e-5));
+		REQUIRE_THAT(platform.getRotation(1.0).elevation, WithinAbs(5.0 * PI / 180.0, 1e-5));
+	}
+
+	SECTION("Invalid throws")
+	{
+		auto doc = loadXml("<fixedrotation><startazimuth>90</startazimuth></fixedrotation>");
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform), XmlException);
+	}
+}
+
+TEST_CASE("parseTransmitter resolves references and builds object with schedule", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+	params::setRate(10000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	// Populate dependencies
+	auto wave =
+		std::make_unique<fers_signal::RadarSignal>("w1", 1.0, 1e9, 1.0, std::make_unique<fers_signal::CwSignal>(), 10);
+	auto ant = std::make_unique<antenna::Isotropic>("a1", 20);
+	auto tim = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	tim->setFrequency(1e6);
+
+	world.add(std::move(wave));
+	world.add(std::move(ant));
+	world.add(std::move(tim));
+
+	std::unordered_map<std::string, SimId> w_refs = {{"w1", 10}};
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	auto doc = loadXml("<transmitter name=\"tx1\" waveform=\"w1\" antenna=\"a1\" timing=\"t1\">"
+					   "  <pulsed_mode><prf>1000</prf></pulsed_mode>"
+					   "  <schedule><period start=\"0.1\" end=\"0.5\"/></schedule>"
+					   "</transmitter>");
+
+	auto* tx = serial::xml_parser_utils::parseTransmitter(doc.getRootElement(), &platform, ctx, refs);
+
+	REQUIRE(tx->getName() == "tx1");
+	REQUIRE(tx->getMode() == radar::OperationMode::PULSED_MODE);
+	REQUIRE_THAT(tx->getPrf(), WithinAbs(1000.0, 1e-5));
+	REQUIRE(tx->getSignal()->getName() == "w1");
+	REQUIRE(tx->getAntenna()->getName() == "a1");
+	REQUIRE(tx->getSchedule().size() == 1);
+}
+
+TEST_CASE("parseReceiver resolves references and builds object with flags and schedule", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+	params::setRate(10000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	auto ant = std::make_unique<antenna::Isotropic>("a1", 20);
+	auto tim = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	tim->setFrequency(1e6);
+	world.add(std::move(ant));
+	world.add(std::move(tim));
+
+	std::unordered_map<std::string, SimId> w_refs;
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	SECTION("Valid pulsed receiver with flags and schedule")
+	{
+		// Use a window_skip that is an exact multiple of the sample period (1/10000 = 1e-4)
+		// to avoid quantization down to 0.0
+		auto doc =
+			loadXml("<receiver name=\"rx1\" antenna=\"a1\" timing=\"t1\" nodirect=\"true\" nopropagationloss=\"true\">"
+					"  "
+					"<pulsed_mode><prf>1000</prf><window_length>1e-4</window_length><window_skip>2e-4</window_skip></"
+					"pulsed_mode>"
+					"  <schedule><period start=\"0.1\" end=\"0.5\"/></schedule>"
+					"</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+
+		REQUIRE(rx->getName() == "rx1");
+		REQUIRE(rx->getMode() == radar::OperationMode::PULSED_MODE);
+		REQUIRE_THAT(rx->getWindowPrf(), WithinAbs(1000.0, 1e-5));
+		REQUIRE_THAT(rx->getWindowLength(), WithinAbs(1e-4, 1e-9));
+		REQUIRE_THAT(rx->getWindowSkip(), WithinAbs(2e-4, 1e-9));
+		REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
+		REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
+		REQUIRE(rx->getSchedule().size() == 1);
+	}
+
+	SECTION("Invalid pulsed parameters throw")
+	{
+		auto doc1 = loadXml(
+			"<receiver name=\"rx1\" antenna=\"a1\" "
+			"timing=\"t1\"><pulsed_mode><prf>1000</prf><window_length>-1</window_length></pulsed_mode></receiver>");
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseReceiver(doc1.getRootElement(), &platform, ctx, refs),
+						  XmlException);
+
+		auto doc2 = loadXml(
+			"<receiver name=\"rx1\" antenna=\"a1\" "
+			"timing=\"t1\"><pulsed_mode><prf>-1000</prf><window_length>1e-4</window_length></pulsed_mode></receiver>");
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseReceiver(doc2.getRootElement(), &platform, ctx, refs),
+						  XmlException);
+
+		auto doc3 = loadXml("<receiver name=\"rx1\" antenna=\"a1\" "
+							"timing=\"t1\"><pulsed_mode><prf>1000</prf><window_length>1e-4</"
+							"window_length><window_skip>-1</window_skip></pulsed_mode></receiver>");
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseReceiver(doc3.getRootElement(), &platform, ctx, refs),
+						  XmlException);
+	}
+}
+
+TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
+{
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+	radar::Platform platform("plat");
+
+	auto doc = loadXml("<target name=\"tgt1\">"
+					   "  <rcs type=\"isotropic\"><value>10.0</value></rcs>"
+					   "  <model type=\"chisquare\"><k>2.0</k></model>"
+					   "</target>");
+
+	serial::xml_parser_utils::parseTarget(doc.getRootElement(), &platform, ctx);
+	REQUIRE(world.getTargets().size() == 1);
+
+	auto* tgt = world.getTargets().front().get();
+	auto* model = dynamic_cast<const radar::RcsChiSquare*>(tgt->getFluctuationModel());
+	REQUIRE(model != nullptr);
+	REQUIRE_THAT(model->getK(), WithinAbs(2.0, 1e-5));
+}

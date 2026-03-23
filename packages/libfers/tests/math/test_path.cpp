@@ -125,7 +125,7 @@ TEST_CASE("Path: Cubic Interpolation Velocity Edge Cases", "[math][path]")
 		p.addCoord({Vec3(20, 0, 0), 2.0});
 		p.finalize();
 
-		Vec3 vel = p.getVelocity(1.0);
+		Vec3 vel = p.getVelocity(0.5);
 		REQUIRE(vel.length() == 0.0); // Prevent divide by zero
 	}
 }

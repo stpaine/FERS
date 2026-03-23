@@ -1,7 +1,7 @@
 # The Flexible Extensible Radar Simulator
 
-<!-- TODO: Build status should be present for both ui and core -->
-
+[![Core CI](https://github.com/stpaine/FERS/actions/workflows/core.yml/badge.svg)](https://github.com/stpaine/FERS/actions/workflows/core.yml)
+[![UI CI](https://github.com/stpaine/FERS/actions/workflows/ui.yml/badge.svg)](https://github.com/stpaine/FERS/actions/workflows/ui.yml)
 [![Documentation](https://github.com/stpaine/FERS/actions/workflows/docs.yml/badge.svg)](https://github.com/stpaine/FERS/actions/workflows/docs.yml)
 [![GitHub issues](https://img.shields.io/github/issues/stpaine/FERS.svg)](https://github.com/stpaine/FERS/issues)
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/stpaine/FERS/blob/master/LICENSE)
