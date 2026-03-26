@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 import xml.etree.ElementTree as ET
 import argparse
 import sys
@@ -181,6 +180,11 @@ def migrate_xml(input_file, output_file):
             extract_and_append(child, new_wave, "carrier", "carrier_frequency")
 
             ptype = child.get("type")
+            if ptype == "continuous" or ptype == "cw":
+                print(
+                    f"\nWarning: <pulse name='{child.get('name')}'> has type='continuous'. FERS now has a native CW mode.")
+                print("\t Please consult the documentation on simulating continuous mode.")
+
             if ptype == "file":
                 pf = ET.SubElement(new_wave, "pulsed_from_file")
                 pf.set("filename", child.get("filename", ""))
@@ -273,6 +277,12 @@ def migrate_xml(input_file, output_file):
             for rn in child:
                 if rn.tag in ["monostatic", "transmitter", "receiver"]:
                     new_rn = ET.SubElement(new_plat, rn.tag)
+
+                    if rn.get("type") == "continuous" or rn.get("type") == "cw":
+                        print(
+                            f"\nWarning: <{rn.tag} name='{rn.get('name')}'> has type='continuous'. FERS now has a native CW mode.")
+                        print(
+                            "\t Please consult the documentation on simulating continuous mode.")
 
                     # Receivers do not have a waveform attribute in the new schema
                     if rn.tag == "receiver":

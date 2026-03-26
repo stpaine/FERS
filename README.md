@@ -117,6 +117,18 @@ Navigate to the root of the repository and start the development server:
 bun ui:dev
 ```
 
+## Using Old XML Scenarios
+
+The new FERS uses a different XML schema for scenarios than the original version
+(see https://github.com/stpaine/FERS/tree/526d412cbe06e6824c0ac9b35782dac09f726791).
+If you have existing scenarios in the old format, you can convert them to the new format using the `migrate_fers_xml.py`
+tool.
+
+```bash
+# From the root of the repository
+python3 migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
+```
+
 ## Contributing
 
 We welcome contributions to the FERS project! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide to get started.
