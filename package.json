@@ -13,7 +13,8 @@
         "format:cpp": "git ls-files 'packages/**/*.cpp' 'packages/**/*.h' | xargs clang-format -i",
         "format:js": "prettier --write .",
         "format:rust": "cargo fmt --all",
-        "lint": "bun run lint:js && bun run lint:rust",
+        "lint": "bun run lint:cpp && bun run lint:js && bun run lint:rust",
+        "lint:cpp": "run-clang-tidy -p build/debug/",
         "lint:js": "bun run --filter fers-ui lint",
         "lint:rust": "cargo clippy --workspace -- -D warnings"
     },
