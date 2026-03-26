@@ -4,6 +4,7 @@ include(CTest)
 include(Catch)
 
 add_executable(libfers_tests
+               test_main.cpp
 			   math/test_coord.cpp
 			   math/test_geometry_ops.cpp
 			   math/test_path.cpp
