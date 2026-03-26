@@ -51,6 +51,7 @@ add_executable(libfers_tests
 			   serial/test_waveform_factory.cpp
 			   serial/test_xml_parser.cpp
 			   serial/test_xml_parser_utils.cpp
+			   serial/test_json_serializer_stress.cpp
 			   simulation/test_channel_model_helpers.cpp
 			   simulation/test_channel_model_direct.cpp
 			   simulation/test_channel_model_reflected.cpp

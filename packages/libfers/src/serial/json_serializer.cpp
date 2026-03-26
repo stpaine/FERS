@@ -1028,14 +1028,22 @@ namespace serial
 							if (comp_json.contains("model"))
 							{
 								const auto& model_json = comp_json.at("model");
-								if (const auto model_type = model_json.at("type").get<std::string>();
-									model_type == "chisquare" || model_type == "gamma")
+								const auto model_type = model_json.at("type").get<std::string>();
+
+								if (model_type == "chisquare" || model_type == "gamma")
 								{
 									auto model = std::make_unique<radar::RcsChiSquare>(
 										world.getTargets().back()->getRngEngine(), model_json.at("k").get<RealType>());
 									world.getTargets().back()->setFluctuationModel(std::move(model));
 								}
-								// "constant" is the default, so no action is needed if that's the type.
+								else if (model_type == "constant")
+								{
+									world.getTargets().back()->setFluctuationModel(std::make_unique<radar::RcsConst>());
+								}
+								else
+								{
+									throw std::runtime_error("Unsupported fluctuation model type: " + model_type);
+								}
 							}
 						}
 						else if (comp_json_outer.contains("monostatic"))
