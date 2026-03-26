@@ -14,9 +14,10 @@
         "format:js": "prettier --write .",
         "format:rust": "cargo fmt --all",
         "lint": "bun run lint:cpp && bun run lint:js && bun run lint:rust",
-        "lint:cpp": "run-clang-tidy -p build/debug/",
+        "lint:cpp": "bun run build:cpp-debug && run-clang-tidy -p build/debug/",
         "lint:js": "bun run --filter fers-ui lint",
-        "lint:rust": "cargo clippy --workspace -- -D warnings"
+        "lint:rust": "cargo clippy --workspace -- -D warnings",
+        "build:cpp-debug": "cmake --preset=debug && cmake --build --preset=debug"
     },
     "devDependencies": {
         "eslint": "^9.39.2",

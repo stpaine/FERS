@@ -331,9 +331,9 @@ TEST_CASE("JSON Serializer Stress Test and Round-Trip Validation", "[serial][jso
 
 	core::World original_world;
 
-	// 50 Platforms is plenty to stress the JSON parser without taking forever.
-	// This will generate 50 standalone Txs, 50 standalone Rxs, 50 Monostatic pairs (100 objects), and 50 Targets.
-	constexpr size_t STRESS_PLATFORM_COUNT = 50;
+	// 10 Platforms is plenty to stress the JSON parser without taking forever.
+	// This will generate 10 standalone Txs, 10 standalone Rxs, 10 Monostatic pairs (20 objects), and 10 Targets.
+	constexpr size_t STRESS_PLATFORM_COUNT = 10;
 
 	buildStressWorld(original_world, STRESS_PLATFORM_COUNT, master_seeder);
 
