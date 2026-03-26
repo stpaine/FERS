@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import xml.etree.ElementTree as ET
 import argparse
 import sys
@@ -19,6 +20,89 @@ def indent(elem, level=0):
     else:
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
+
+
+def get_user_input(prompt_text, default_val):
+    """Gets user input with a fallback for non-interactive environments."""
+    try:
+        user_input = input(prompt_text).strip()
+        return user_input if user_input else default_val
+    except EOFError:
+        print(default_val)
+        return default_val
+
+
+def resolve_duplicate_names(root):
+    """
+    Scans the XML tree for duplicate names, prompts the user to rename them,
+    and updates any references to those names to maintain original usage.
+    """
+    definitions = {}
+    references = {}
+
+    # Pass 1: Collect all named elements and all references
+    for el in root.iter():
+        name = el.get("name")
+        if name is not None:
+            definitions.setdefault(name, []).append(el)
+
+        # Track attributes that reference other elements
+        for attr in ["pulse", "timing", "antenna"]:
+            val = el.get(attr)
+            if val is not None:
+                references.setdefault(val, []).append((el, attr))
+
+    used_names = set(definitions.keys())
+
+    # Pass 2: Resolve duplicates
+    for old_name, elements in definitions.items():
+        if len(elements) > 1:
+            print(f"\n[!] Duplicate name detected: '{old_name}' is used by {len(elements)} elements.")
+            used_names.remove(old_name)  # Will be replaced entirely
+            new_names = []
+
+            for i, el in enumerate(elements):
+                tag = el.tag
+                counter = i + 1
+                default_name = f"{old_name}{counter}"
+
+                # Ensure default name isn't already taken
+                while default_name in used_names:
+                    counter += 1
+                    default_name = f"{old_name}{counter}"
+
+                prompt = f"    Rename <{tag}> (occurrence {i + 1}) [{default_name}]: "
+                new_name = get_user_input(prompt, default_name)
+
+                # Ensure user's chosen name isn't already taken
+                while new_name in used_names:
+                    print(f"    Error: Name '{new_name}' is already in use. Choose another.")
+                    new_name = get_user_input(prompt, default_name)
+
+                el.set("name", new_name)
+                used_names.add(new_name)
+                new_names.append(new_name)
+
+            # Pass 3: Update references to the old name
+            refs = references.get(old_name, [])
+            if refs:
+                print(f"\n    [!] There are {len(refs)} references to '{old_name}'.")
+                for ref_el, attr in refs:
+                    ref_tag = ref_el.tag
+                    ref_name = ref_el.get("name", "<unnamed>")
+                    default_ref = new_names[0]
+
+                    print(f"    Element <{ref_tag} name='{ref_name}'> references {attr}='{old_name}'.")
+                    print(f"    Available options: {', '.join(new_names)}")
+
+                    prompt = f"    Update reference to [{default_ref}]: "
+                    chosen_ref = get_user_input(prompt, default_ref)
+
+                    while chosen_ref not in new_names:
+                        print(f"    Invalid choice. Must be one of: {', '.join(new_names)}")
+                        chosen_ref = get_user_input(prompt, default_ref)
+
+                    ref_el.set(attr, chosen_ref)
 
 
 def extract_and_append(old_parent, new_parent, old_tag, new_tag=None):
@@ -59,6 +143,9 @@ def migrate_xml(input_file, output_file):
         print("Error: Root element is not <simulation>.")
         sys.exit(1)
 
+    # Pre-process the XML to resolve duplicate names interactively
+    resolve_duplicate_names(old_root)
+
     new_root = ET.Element("simulation")
     new_root.set("name", old_root.get("name", "migrated_simulation"))
 
@@ -77,7 +164,7 @@ def migrate_xml(input_file, output_file):
         extract_and_append(old_params, new_params, "oversample")
 
         if old_params.find("export") is not None:
-            print("Notice: <export> element is deprecated and was removed.")
+            print("\nNotice: <export> element is deprecated and was removed.")
 
     # 2. Process other root children
     for child in old_root:
@@ -131,7 +218,7 @@ def migrate_xml(input_file, output_file):
 
             if child.get("module") or child.get("function"):
                 print(
-                    f"Warning: Python antennas (module/function) are deprecated. Removed from antenna '{child.get('name')}'.")
+                    f"\nWarning: Python antennas (module/function) are deprecated. Removed from antenna '{child.get('name')}'.")
 
             # Enforce strict XSD sequence order
             for prop in ["alpha", "beta", "gamma", "diameter", "azscale", "elscale", "efficiency"]:
@@ -149,7 +236,7 @@ def migrate_xml(input_file, output_file):
                 interp = old_mp.get("interpolation", "static")
                 if interp == "python":
                     print(
-                        f"Warning: Python interpolation is deprecated. Defaulting to 'static' for platform '{child.get('name')}'.")
+                        f"\nWarning: Python interpolation is deprecated. Defaulting to 'static' for platform '{child.get('name')}'.")
                     interp = "static"
                 new_mp.set("interpolation", interp)
 
@@ -187,6 +274,7 @@ def migrate_xml(input_file, output_file):
                 if rn.tag in ["monostatic", "transmitter", "receiver"]:
                     new_rn = ET.SubElement(new_plat, rn.tag)
 
+                    # Receivers do not have a waveform attribute in the new schema
                     if rn.tag == "receiver":
                         copy_attributes(rn, new_rn, drop_list=["type", "pulse"])
                     else:
@@ -228,7 +316,7 @@ def migrate_xml(input_file, output_file):
 
         # <multipath>
         elif child.tag == "multipath":
-            print("Notice: <multipath> element is no longer supported in the new schema and was removed.")
+            print("\nNotice: <multipath> element is no longer supported in the new schema and was removed.")
 
     # Pretty print the XML
     if hasattr(ET, "indent"):
@@ -239,7 +327,7 @@ def migrate_xml(input_file, output_file):
     # Write to file
     tree = ET.ElementTree(new_root)
     tree.write(output_file, encoding="UTF-8", xml_declaration=True)
-    print(f"Successfully migrated XML to {output_file}")
+    print(f"\nSuccessfully migrated XML to {output_file}")
 
 
 if __name__ == "__main__":
