@@ -47,9 +47,15 @@ TEST_CASE("Receiver basic accessors and flags", "[radar][receiver]")
 	rx.setActive(true);
 	REQUIRE(rx.isActive());
 
+	rx.setMode(radar::OperationMode::CW_MODE);
+	REQUIRE(rx.getMode() == radar::OperationMode::CW_MODE);
+
 	rx.setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
 	REQUIRE(rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 	REQUIRE_FALSE(rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
+
+	rx.clearFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+	REQUIRE_FALSE(rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 }
 
 TEST_CASE("Receiver noise temperature guards and aggregation", "[radar][receiver]")

@@ -293,6 +293,106 @@ TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 	}
 }
 
+TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[api][scenario]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::previewScenarioXml("Granular Update Preview");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	auto scenario = api_test::parseScenarioJson(context.get());
+
+	SECTION("Transmitter update")
+	{
+		auto tx = scenario["simulation"]["platforms"][0]["components"][0]["transmitter"];
+		uint64_t tx_id = api_test::parseId(tx["id"]);
+		tx["name"] = "UpdatedTx";
+		tx["pulsed_mode"] = {{"prf", 1250.0}};
+
+		REQUIRE(fers_update_transmitter_from_json(context.get(), tx_id, tx.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		auto updated_tx = updated["simulation"]["platforms"][0]["components"][0]["transmitter"];
+		REQUIRE(updated_tx["name"] == "UpdatedTx");
+		REQUIRE_THAT(updated_tx["pulsed_mode"]["prf"].get<double>(), Catch::Matchers::WithinAbs(1250.0, 1e-9));
+	}
+
+	SECTION("Receiver update")
+	{
+		auto rx = scenario["simulation"]["platforms"][1]["components"][0]["receiver"];
+		uint64_t rx_id = api_test::parseId(rx["id"]);
+		rx["name"] = "UpdatedRx";
+		rx["noise_temp"] = 400.0;
+
+		REQUIRE(fers_update_receiver_from_json(context.get(), rx_id, rx.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		auto updated_rx = updated["simulation"]["platforms"][1]["components"][0]["receiver"];
+		REQUIRE(updated_rx["name"] == "UpdatedRx");
+		REQUIRE_THAT(updated_rx["noise_temp"].get<double>(), Catch::Matchers::WithinAbs(400.0, 1e-9));
+	}
+
+	SECTION("Target update")
+	{
+		auto tgt = scenario["simulation"]["platforms"][2]["components"][0]["target"];
+		uint64_t tgt_id = api_test::parseId(tgt["id"]);
+		tgt["name"] = "UpdatedTgt";
+		tgt["rcs"]["value"] = 99.0;
+
+		REQUIRE(fers_update_target_from_json(context.get(), tgt_id, tgt.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		auto updated_tgt = updated["simulation"]["platforms"][2]["components"][0]["target"];
+		REQUIRE(updated_tgt["name"] == "UpdatedTgt");
+		REQUIRE_THAT(updated_tgt["rcs"]["value"].get<double>(), Catch::Matchers::WithinAbs(99.0, 1e-9));
+	}
+
+	SECTION("Timing update")
+	{
+		auto timing = scenario["simulation"]["timings"][0];
+		uint64_t timing_id = api_test::parseId(timing["id"]);
+		timing["name"] = "UpdatedTiming";
+		timing["frequency"] = 2e6;
+
+		REQUIRE(fers_update_timing_from_json(context.get(), timing_id, timing.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		auto updated_timing = updated["simulation"]["timings"][0];
+		REQUIRE(updated_timing["name"] == "UpdatedTiming");
+		REQUIRE_THAT(updated_timing["frequency"].get<double>(), Catch::Matchers::WithinAbs(2e6, 1e-9));
+	}
+}
+
+TEST_CASE("API granular updates modify specific objects (Monostatic Scenario)", "[api][scenario]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::monostaticPreviewScenarioXml("Granular Update Monostatic");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	auto scenario = api_test::parseScenarioJson(context.get());
+
+	SECTION("Monostatic update")
+	{
+		auto mono = scenario["simulation"]["platforms"][0]["components"][0]["monostatic"];
+		mono["name"] = "UpdatedMono";
+		mono["noise_temp"] = 500.0;
+
+		REQUIRE(fers_update_monostatic_from_json(context.get(), mono.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		auto updated_mono = updated["simulation"]["platforms"][0]["components"][0]["monostatic"];
+		REQUIRE(updated_mono["name"] == "UpdatedMono");
+		REQUIRE_THAT(updated_mono["noise_temp"].get<double>(), Catch::Matchers::WithinAbs(500.0, 1e-9));
+	}
+}
+
 TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 {
 	api_test::clearLastError();
@@ -309,6 +409,16 @@ TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 		REQUIRE(fers_update_antenna_from_json(context.get(), nullptr) == -1);
 		REQUIRE(fers_update_waveform_from_json(nullptr, "{}") == -1);
 		REQUIRE(fers_update_waveform_from_json(context.get(), nullptr) == -1);
+		REQUIRE(fers_update_transmitter_from_json(nullptr, 1, "{}") == -1);
+		REQUIRE(fers_update_transmitter_from_json(context.get(), 1, nullptr) == -1);
+		REQUIRE(fers_update_receiver_from_json(nullptr, 1, "{}") == -1);
+		REQUIRE(fers_update_receiver_from_json(context.get(), 1, nullptr) == -1);
+		REQUIRE(fers_update_target_from_json(nullptr, 1, "{}") == -1);
+		REQUIRE(fers_update_target_from_json(context.get(), 1, nullptr) == -1);
+		REQUIRE(fers_update_monostatic_from_json(nullptr, "{}") == -1);
+		REQUIRE(fers_update_monostatic_from_json(context.get(), nullptr) == -1);
+		REQUIRE(fers_update_timing_from_json(nullptr, 1, "{}") == -1);
+		REQUIRE(fers_update_timing_from_json(context.get(), 1, nullptr) == -1);
 	}
 
 	SECTION("Invalid JSON")
@@ -316,13 +426,24 @@ TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 		REQUIRE(fers_update_platform_from_json(context.get(), 1, "{bad") == 1);
 		REQUIRE(fers_update_antenna_from_json(context.get(), "{bad") == 1);
 		REQUIRE(fers_update_waveform_from_json(context.get(), "{bad") == 1);
+		REQUIRE(fers_update_transmitter_from_json(context.get(), 1, "{bad") == 1);
+		REQUIRE(fers_update_receiver_from_json(context.get(), 1, "{bad") == 1);
+		REQUIRE(fers_update_target_from_json(context.get(), 1, "{bad") == 1);
+		REQUIRE(fers_update_monostatic_from_json(context.get(), "{bad") == 1);
+		REQUIRE(fers_update_timing_from_json(context.get(), 1, "{bad") == 1);
 	}
 
-	SECTION("Platform not found")
+	SECTION("Object not found")
 	{
 		REQUIRE(fers_update_platform_from_json(context.get(), 999999, "{}") == 1);
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Platform not found"));
+
+		REQUIRE(fers_update_transmitter_from_json(context.get(), 999999, "{}") == 1);
+		REQUIRE(fers_update_receiver_from_json(context.get(), 999999, "{}") == 1);
+		REQUIRE(fers_update_target_from_json(context.get(), 999999, "{}") == 1);
+		REQUIRE(fers_update_monostatic_from_json(context.get(), "{\"tx_id\": 999999, \"rx_id\": 888888}") == 1);
+		REQUIRE(fers_update_timing_from_json(context.get(), 999999, "{}") == 1);
 	}
 }
 

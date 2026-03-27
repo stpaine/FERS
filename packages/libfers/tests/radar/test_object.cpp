@@ -43,6 +43,16 @@ TEST_CASE("Object exposes platform linkage and identity", "[radar][object]")
 	REQUIRE(object.getId() == 9001);
 }
 
+TEST_CASE("Object allows updating its name", "[radar][object]")
+{
+	radar::Platform platform("ObjectPlatform");
+	radar::Object object(&platform, "InitialName", ObjectType::Transmitter, 9001);
+
+	REQUIRE(object.getName() == "InitialName");
+	object.setName("UpdatedName");
+	REQUIRE(object.getName() == "UpdatedName");
+}
+
 TEST_CASE("Object delegates position and rotation to platform", "[radar][object]")
 {
 	radar::Platform platform("MovingPlatform");

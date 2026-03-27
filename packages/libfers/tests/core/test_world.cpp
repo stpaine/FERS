@@ -121,6 +121,66 @@ TEST_CASE("World finds platform by ID", "[core][world]")
 	REQUIRE(world.findPlatform(999) == nullptr);
 }
 
+TEST_CASE("World finds radar components by ID", "[core][world]")
+{
+	core::World world;
+	auto platform = std::make_unique<radar::Platform>("Plat", 1);
+	auto* plat_ptr = platform.get();
+	world.add(std::move(platform));
+
+	auto tx = std::make_unique<radar::Transmitter>(plat_ptr, "Tx", radar::OperationMode::PULSED_MODE, 101);
+	auto rx = std::make_unique<radar::Receiver>(plat_ptr, "Rx", 42, radar::OperationMode::PULSED_MODE, 202);
+	auto tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "Tgt", 1.0, 42, 303);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	auto* tgt_ptr = tgt.get();
+
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+	world.add(std::move(tgt));
+
+	REQUIRE(world.findTransmitter(101) == tx_ptr);
+	REQUIRE(world.findReceiver(202) == rx_ptr);
+	REQUIRE(world.findTarget(303) == tgt_ptr);
+
+	REQUIRE(world.findTransmitter(999) == nullptr);
+	REQUIRE(world.findReceiver(999) == nullptr);
+	REQUIRE(world.findTarget(999) == nullptr);
+}
+
+TEST_CASE("World replaces target", "[core][world]")
+{
+	core::World world;
+	auto platform = std::make_unique<radar::Platform>("Plat", 1);
+	auto* plat_ptr = platform.get();
+	world.add(std::move(platform));
+
+	// 1. Add initial target
+	auto old_tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "OldTgt", 1.0, 42, 100);
+	world.add(std::move(old_tgt));
+
+	REQUIRE(world.getTargets().size() == 1);
+	REQUIRE(world.findTarget(100)->getName() == "OldTgt");
+
+	// 2. Replace existing target
+	auto new_tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "NewTgt", 5.0, 42, 100);
+	auto* new_tgt_ptr = new_tgt.get();
+	world.replace(std::move(new_tgt));
+
+	REQUIRE(world.getTargets().size() == 1);
+	REQUIRE(world.findTarget(100) == new_tgt_ptr);
+	REQUIRE(world.findTarget(100)->getName() == "NewTgt");
+
+	// 3. Replace (add) non-existent target
+	auto another_tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "AnotherTgt", 10.0, 42, 200);
+	auto* another_tgt_ptr = another_tgt.get();
+	world.replace(std::move(another_tgt));
+
+	REQUIRE(world.getTargets().size() == 2);
+	REQUIRE(world.findTarget(200) == another_tgt_ptr);
+}
+
 TEST_CASE("World replaces antenna and updates dependent components", "[core][world]")
 {
 	core::World world;

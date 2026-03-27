@@ -50,3 +50,36 @@ TEST_CASE("PrototypeTiming manages offsets and noise parameters", "[timing][prot
 	REQUIRE_THAT(proto.getFreqOffset().value(), WithinAbs(0.25, 1e-12));
 	REQUIRE_THAT(proto.getPhaseOffset().value(), WithinAbs(-0.5, 1e-12));
 }
+
+TEST_CASE("PrototypeTiming allows clearing optional parameters and updating name", "[timing][prototype]")
+{
+	timing::PrototypeTiming proto("clock");
+
+	proto.setSyncOnPulse();
+	proto.setAlpha(2.0, 1.0);
+	proto.setFreqOffset(0.25);
+	proto.setPhaseOffset(-0.5);
+	proto.setRandomFreqOffsetStdev(0.1);
+	proto.setRandomPhaseOffsetStdev(0.2);
+
+	proto.clearSyncOnPulse();
+	proto.clearNoiseEntries();
+	proto.clearFreqOffset();
+	proto.clearPhaseOffset();
+	proto.clearRandomFreqOffsetStdev();
+	proto.clearRandomPhaseOffsetStdev();
+	proto.setName("UpdatedClock");
+
+	REQUIRE(proto.getName() == "UpdatedClock");
+	REQUIRE_FALSE(proto.getSyncOnPulse());
+	REQUIRE_FALSE(proto.getFreqOffset().has_value());
+	REQUIRE_FALSE(proto.getPhaseOffset().has_value());
+	REQUIRE_FALSE(proto.getRandomFreqOffsetStdev().has_value());
+	REQUIRE_FALSE(proto.getRandomPhaseOffsetStdev().has_value());
+
+	std::vector<RealType> alphas;
+	std::vector<RealType> weights;
+	proto.copyAlphas(alphas, weights);
+	REQUIRE(alphas.empty());
+	REQUIRE(weights.empty());
+}

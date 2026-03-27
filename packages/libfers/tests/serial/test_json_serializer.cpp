@@ -457,3 +457,163 @@ TEST_CASE("JSON: Monostatic Radar Serialization", "[serial][json]")
 		REQUIRE_THAT(pulsed_json["window_skip"].get<double>(), WithinAbs(2e-4, 1e-9));
 	}
 }
+
+TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][json]")
+{
+	ParamGuard guard;
+	params::setRate(10000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World w;
+	std::mt19937 seeder(42);
+
+	// Setup basic assets
+	auto wf = std::make_unique<fers_signal::RadarSignal>("wf1", 10.0, 1e9, 1.0,
+														 std::make_unique<fers_signal::CwSignal>(), 10);
+	w.add(std::move(wf));
+
+	auto ant = std::make_unique<antenna::Isotropic>("ant1", 20);
+	w.add(std::move(ant));
+
+	auto pt = std::make_unique<timing::PrototypeTiming>("tim1", 30);
+	pt->setFrequency(1e6);
+	w.add(std::move(pt));
+
+	auto p = std::make_unique<radar::Platform>("p1", 100);
+
+	auto tx = std::make_unique<radar::Transmitter>(p.get(), "tx1", radar::OperationMode::CW_MODE, 101);
+	auto rx = std::make_unique<radar::Receiver>(p.get(), "rx1", 42, radar::OperationMode::CW_MODE, 102);
+	auto tgt = radar::createIsoTarget(p.get(), "tgt1", 1.0, 42, 103);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	auto* tgt_ptr = tgt.get();
+
+	w.add(std::move(tx));
+	w.add(std::move(rx));
+	w.add(std::move(tgt));
+	w.add(std::move(p));
+
+	SECTION("Update Transmitter")
+	{
+		json j = {{"name", "tx_updated"}, {"pulsed_mode", {{"prf", 2000.0}}},
+				  {"waveform", 10},		  {"antenna", 20},
+				  {"timing", 30},		  {"schedule", json::array({{{"start", 0.1}, {"end", 0.5}}})}};
+		serial::update_transmitter_from_json(j, tx_ptr, w, seeder);
+
+		REQUIRE(tx_ptr->getName() == "tx_updated");
+		REQUIRE(tx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
+		REQUIRE_THAT(tx_ptr->getPrf(), WithinAbs(2000.0, 1e-9));
+		REQUIRE(tx_ptr->getSignal() != nullptr);
+		REQUIRE(tx_ptr->getAntenna() != nullptr);
+		REQUIRE(tx_ptr->getTiming() != nullptr);
+		REQUIRE(tx_ptr->getSchedule().size() == 1);
+	}
+
+	SECTION("Update Receiver")
+	{
+		json j = {{"name", "rx_updated"},
+				  {"pulsed_mode", {{"prf", 1250.0}, {"window_length", 1e-4}, {"window_skip", 1e-5}}},
+				  {"noise_temp", 400.0},
+				  {"nodirect", true},
+				  {"nopropagationloss", true},
+				  {"antenna", 20},
+				  {"timing", 30}};
+		serial::update_receiver_from_json(j, rx_ptr, w, seeder);
+
+		REQUIRE(rx_ptr->getName() == "rx_updated");
+		REQUIRE(rx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
+		REQUIRE_THAT(rx_ptr->getWindowPrf(), WithinAbs(1250.0, 1e-9));
+		REQUIRE_THAT(rx_ptr->getNoiseTemperature(), WithinAbs(400.0, 1e-9));
+		REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
+		REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
+	}
+
+	SECTION("Update Target")
+	{
+		json j = {{"name", "tgt_updated"},
+				  {"rcs", {{"type", "isotropic"}, {"value", 50.0}}},
+				  {"model", {{"type", "chisquare"}, {"k", 3.0}}}};
+		serial::update_target_from_json(j, tgt_ptr, w, seeder);
+
+		// Note: update_target_from_json replaces the target in the world.
+		// We need to find it again.
+		auto* new_tgt = w.findTarget(103);
+		REQUIRE(new_tgt != nullptr);
+		REQUIRE(new_tgt->getName() == "tgt_updated");
+		auto* iso_tgt = dynamic_cast<radar::IsoTarget*>(new_tgt);
+		REQUIRE(iso_tgt != nullptr);
+		REQUIRE_THAT(iso_tgt->getConstRcs(), WithinAbs(50.0, 1e-9));
+		REQUIRE(new_tgt->getFluctuationModel() != nullptr);
+	}
+
+	SECTION("Update Timing")
+	{
+		auto* pt_ptr = w.findTiming(30);
+		json j = {{"name", "tim_updated"},
+				  {"frequency", 2e6},
+				  {"synconpulse", true},
+				  {"freq_offset", 10.0},
+				  {"random_freq_offset_stdev", 2.0},
+				  {"phase_offset", 0.5},
+				  {"random_phase_offset_stdev", 0.1},
+				  {"noise_entries", json::array({{{"alpha", 1.0}, {"weight", 0.5}}})}};
+		serial::update_timing_from_json(j, pt_ptr);
+
+		REQUIRE(pt_ptr->getName() == "tim_updated");
+		REQUIRE_THAT(pt_ptr->getFrequency(), WithinAbs(2e6, 1e-9));
+		REQUIRE(pt_ptr->getSyncOnPulse() == true);
+		REQUIRE_THAT(pt_ptr->getFreqOffset().value(), WithinAbs(10.0, 1e-9));
+		REQUIRE_THAT(pt_ptr->getRandomFreqOffsetStdev().value(), WithinAbs(2.0, 1e-9));
+		REQUIRE_THAT(pt_ptr->getPhaseOffset().value(), WithinAbs(0.5, 1e-9));
+		REQUIRE_THAT(pt_ptr->getRandomPhaseOffsetStdev().value(), WithinAbs(0.1, 1e-9));
+
+		std::vector<RealType> alphas, weights;
+		pt_ptr->copyAlphas(alphas, weights);
+		REQUIRE(alphas.size() == 1);
+		REQUIRE_THAT(alphas[0], WithinAbs(1.0, 1e-9));
+	}
+}
+
+TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World w;
+	std::mt19937 seeder(42);
+
+	auto p = std::make_unique<radar::Platform>("p1", 100);
+	auto tx = std::make_unique<radar::Transmitter>(p.get(), "mono_tx", radar::OperationMode::CW_MODE, 101);
+	auto rx = std::make_unique<radar::Receiver>(p.get(), "mono_rx", 42, radar::OperationMode::CW_MODE, 102);
+
+	tx->setAttached(rx.get());
+	rx->setAttached(tx.get());
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	w.add(std::move(tx));
+	w.add(std::move(rx));
+	w.add(std::move(p));
+
+	json j = {
+		{"name", "mono_updated"}, {"tx_id", 101},
+		{"rx_id", 102},			  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1e-4}, {"window_skip", 0.0}}},
+		{"noise_temp", 300.0},	  {"nodirect", true}};
+
+	serial::update_monostatic_from_json(j, tx_ptr, rx_ptr, w, seeder);
+
+	REQUIRE(tx_ptr->getName() == "mono_updated");
+	REQUIRE(rx_ptr->getName() == "mono_updated");
+
+	REQUIRE(tx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
+	REQUIRE(rx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
+	REQUIRE_THAT(tx_ptr->getPrf(), WithinAbs(1000.0, 1e-9));
+	REQUIRE_THAT(rx_ptr->getWindowLength(), WithinAbs(1e-4, 1e-9));
+	REQUIRE_THAT(rx_ptr->getNoiseTemperature(), WithinAbs(300.0, 1e-9));
+	REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
+}
