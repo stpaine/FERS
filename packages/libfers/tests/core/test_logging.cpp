@@ -33,6 +33,7 @@ TEST_CASE("getLevelString maps levels", "[core][logging]")
 	REQUIRE(logging::getLevelString(logging::Level::WARNING) == "WARNING");
 	REQUIRE(logging::getLevelString(logging::Level::ERROR) == "ERROR");
 	REQUIRE(logging::getLevelString(logging::Level::FATAL) == "FATAL");
+	REQUIRE(logging::getLevelString(logging::Level::OFF) == "OFF");
 
 	const auto unknown = static_cast<logging::Level>(-1);
 	REQUIRE(logging::getLevelString(unknown) == "UNKNOWN");

@@ -69,6 +69,31 @@ TEST_CASE("FirFilter applies coefficients to complex samples", "[signal][dsp][fi
 	REQUIRE_THAT(samples[2].imag(), WithinAbs(0.0, 1e-12));
 }
 
+TEST_CASE("FirFilter scalar overload returns zero", "[signal][dsp][fir]")
+{
+	const std::vector<RealType> coeffs = {1.0, 2.0, 3.0};
+	fers_signal::FirFilter filter(coeffs);
+
+	REQUIRE_THAT(filter.filter(0.0), WithinAbs(0.0, 0.0));
+	REQUIRE_THAT(filter.filter(1.0), WithinAbs(0.0, 0.0));
+	REQUIRE_THAT(filter.filter(-7.5), WithinAbs(0.0, 0.0));
+}
+
+TEST_CASE("FirFilter real-span overload is a no-op", "[signal][dsp][fir]")
+{
+	const std::vector<RealType> coeffs = {1.0, 2.0, 3.0};
+	fers_signal::FirFilter filter(coeffs);
+
+	std::vector<RealType> samples = {1.0, -2.0, 3.5, 0.0};
+	const auto expected = samples;
+	filter.filter(samples);
+	REQUIRE(samples == expected);
+
+	std::vector<RealType> empty;
+	filter.filter(empty);
+	REQUIRE(empty.empty());
+}
+
 TEST_CASE("DecadeUpsampler rejects incorrect output size", "[signal][dsp][upsample]")
 {
 	fers_signal::DecadeUpsampler upsampler;
