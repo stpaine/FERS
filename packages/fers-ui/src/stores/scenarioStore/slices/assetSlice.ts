@@ -5,6 +5,8 @@ import { StateCreator } from 'zustand';
 import { ScenarioStore, AssetActions, Antenna } from '../types';
 import { defaultWaveform, defaultTiming, defaultAntenna } from '../defaults';
 import { generateSimId } from '../idUtils';
+import { invoke } from '@tauri-apps/api/core';
+import { cleanObject, serializeAntenna, serializeTiming } from '../serializers';
 
 export const createAssetSlice: StateCreator<
     ScenarioStore,
@@ -52,6 +54,17 @@ export const createAssetSlice: StateCreator<
                     weight: 0,
                 });
                 state.isDirty = true;
+                try {
+                    void invoke('update_item_from_json', {
+                        itemType: 'Timing',
+                        itemId: timing.id,
+                        json: JSON.stringify(
+                            cleanObject(serializeTiming(timing))
+                        ),
+                    });
+                } catch (e) {
+                    console.error('Granular sync failed:', e);
+                }
             }
         }),
     removeNoiseEntry: (timingId, entryId) =>
@@ -64,6 +77,17 @@ export const createAssetSlice: StateCreator<
                 if (index > -1) {
                     timing.noiseEntries.splice(index, 1);
                     state.isDirty = true;
+                    try {
+                        void invoke('update_item_from_json', {
+                            itemType: 'Timing',
+                            itemId: timing.id,
+                            json: JSON.stringify(
+                                cleanObject(serializeTiming(timing))
+                            ),
+                        });
+                    } catch (e) {
+                        console.error('Granular sync failed:', e);
+                    }
                 }
             }
         }),
@@ -127,5 +151,16 @@ export const createAssetSlice: StateCreator<
             }
             state.antennas[index] = newAntennaState;
             state.isDirty = true;
+            try {
+                void invoke('update_item_from_json', {
+                    itemType: 'Antenna',
+                    itemId: newAntennaState.id,
+                    json: JSON.stringify(
+                        cleanObject(serializeAntenna(newAntennaState))
+                    ),
+                });
+            } catch (e) {
+                console.error('Granular sync failed:', e);
+            }
         }),
 });

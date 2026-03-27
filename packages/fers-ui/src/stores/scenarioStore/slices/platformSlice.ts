@@ -11,6 +11,11 @@ import {
 } from '../types';
 import { createDefaultPlatform } from '../defaults';
 import { generateSimId } from '../idUtils';
+import {
+    cleanObject,
+    serializeComponentInner,
+    serializePlatform,
+} from '../serializers';
 
 const NUM_PATH_POINTS = 100;
 type InterpolationType = 'static' | 'linear' | 'cubic';
@@ -46,6 +51,17 @@ export const createPlatformSlice: StateCreator<
             // Defaults to empty components list
             state.platforms.push(newPlatform);
             state.isDirty = true;
+            try {
+                void invoke('update_item_from_json', {
+                    itemType: 'Platform',
+                    itemId: newPlatform.id,
+                    json: JSON.stringify(
+                        cleanObject(serializePlatform(newPlatform))
+                    ),
+                });
+            } catch (e) {
+                console.error('Granular sync failed:', e);
+            }
         }),
     addPositionWaypoint: (platformId) =>
         set((state) => {
@@ -59,6 +75,17 @@ export const createPlatformSlice: StateCreator<
                     time: 0,
                 });
                 state.isDirty = true;
+                try {
+                    void invoke('update_item_from_json', {
+                        itemType: 'Platform',
+                        itemId: platform.id,
+                        json: JSON.stringify(
+                            cleanObject(serializePlatform(platform))
+                        ),
+                    });
+                } catch (e) {
+                    console.error('Granular sync failed:', e);
+                }
             }
         }),
     removePositionWaypoint: (platformId, waypointId) =>
@@ -71,6 +98,17 @@ export const createPlatformSlice: StateCreator<
                 if (index > -1) {
                     platform.motionPath.waypoints.splice(index, 1);
                     state.isDirty = true;
+                    try {
+                        void invoke('update_item_from_json', {
+                            itemType: 'Platform',
+                            itemId: platform.id,
+                            json: JSON.stringify(
+                                cleanObject(serializePlatform(platform))
+                            ),
+                        });
+                    } catch (e) {
+                        console.error('Granular sync failed:', e);
+                    }
                 }
             }
         }),
@@ -85,6 +123,17 @@ export const createPlatformSlice: StateCreator<
                     time: 0,
                 });
                 state.isDirty = true;
+                try {
+                    void invoke('update_item_from_json', {
+                        itemType: 'Platform',
+                        itemId: platform.id,
+                        json: JSON.stringify(
+                            cleanObject(serializePlatform(platform))
+                        ),
+                    });
+                } catch (e) {
+                    console.error('Granular sync failed:', e);
+                }
             }
         }),
     removeRotationWaypoint: (platformId, waypointId) =>
@@ -100,6 +149,17 @@ export const createPlatformSlice: StateCreator<
                 if (index > -1) {
                     platform.rotation.waypoints.splice(index, 1);
                     state.isDirty = true;
+                    try {
+                        void invoke('update_item_from_json', {
+                            itemType: 'Platform',
+                            itemId: platform.id,
+                            json: JSON.stringify(
+                                cleanObject(serializePlatform(platform))
+                            ),
+                        });
+                    } catch (e) {
+                        console.error('Granular sync failed:', e);
+                    }
                 }
             }
         }),
@@ -224,6 +284,17 @@ export const createPlatformSlice: StateCreator<
                     delete component.rcs_k;
                 }
                 state.isDirty = true;
+                try {
+                    void invoke('update_item_from_json', {
+                        itemType: 'Target',
+                        itemId: component.id,
+                        json: JSON.stringify(
+                            cleanObject(serializeComponentInner(component))
+                        ),
+                    });
+                } catch (e) {
+                    console.error('Granular sync failed:', e);
+                }
             }
         }),
     fetchPlatformPath: async (platformId) => {

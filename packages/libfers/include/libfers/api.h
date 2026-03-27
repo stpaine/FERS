@@ -215,6 +215,49 @@ int fers_update_antenna_from_json(fers_context_t* context, const char* json);
  */
 int fers_update_waveform_from_json(fers_context_t* context, const char* json);
 
+/**
+ * @brief Updates a single transmitter from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the transmitter.
+ * @param json The JSON string for the transmitter.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_transmitter_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a single receiver from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the receiver.
+ * @param json The JSON string for the receiver.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_receiver_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a single target from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the target.
+ * @param json The JSON string for the target.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_target_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a monostatic radar from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the monostatic component.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_monostatic_from_json(fers_context_t* context, const char* json);
+
+/**
+ * @brief Updates a single timing source from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the timing source.
+ * @param json The JSON string for the timing source.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const char* json);
 
 // --- Error Handling ---
 

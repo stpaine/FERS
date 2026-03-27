@@ -99,6 +99,44 @@ namespace core
 		return nullptr;
 	}
 
+	Transmitter* World::findTransmitter(const SimId id)
+	{
+		for (auto& tx : _transmitters)
+			if (tx->getId() == id)
+				return tx.get();
+		return nullptr;
+	}
+
+	Receiver* World::findReceiver(const SimId id)
+	{
+		for (auto& rx : _receivers)
+			if (rx->getId() == id)
+				return rx.get();
+		return nullptr;
+	}
+
+	Target* World::findTarget(const SimId id)
+	{
+		for (auto& tgt : _targets)
+			if (tgt->getId() == id)
+				return tgt.get();
+		return nullptr;
+	}
+
+	void World::replace(std::unique_ptr<Target> target)
+	{
+		const SimId id = target->getId();
+		for (auto& t : _targets)
+		{
+			if (t->getId() == id)
+			{
+				t = std::move(target);
+				return;
+			}
+		}
+		_targets.push_back(std::move(target));
+	}
+
 	void World::replace(std::unique_ptr<Antenna> antenna)
 	{
 		const SimId id = antenna->getId();

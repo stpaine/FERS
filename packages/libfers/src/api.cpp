@@ -374,6 +374,136 @@ int fers_update_waveform_from_json(fers_context_t* context, const char* json)
 	}
 }
 
+int fers_update_transmitter_from_json(fers_context_t* context, uint64_t id, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto* tx = ctx->getWorld()->findTransmitter(id);
+		if (!tx)
+		{
+			last_error_message = "Transmitter not found";
+			return 1;
+		}
+		auto j = nlohmann::json::parse(json);
+		serial::update_transmitter_from_json(j, tx, *ctx->getWorld(), ctx->getMasterSeeder());
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_transmitter_from_json");
+		return 1;
+	}
+}
+
+int fers_update_receiver_from_json(fers_context_t* context, uint64_t id, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto* rx = ctx->getWorld()->findReceiver(id);
+		if (!rx)
+		{
+			last_error_message = "Receiver not found";
+			return 1;
+		}
+		auto j = nlohmann::json::parse(json);
+		serial::update_receiver_from_json(j, rx, *ctx->getWorld(), ctx->getMasterSeeder());
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_receiver_from_json");
+		return 1;
+	}
+}
+
+int fers_update_target_from_json(fers_context_t* context, uint64_t id, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto* tgt = ctx->getWorld()->findTarget(id);
+		if (!tgt)
+		{
+			last_error_message = "Target not found";
+			return 1;
+		}
+		auto j = nlohmann::json::parse(json);
+		serial::update_target_from_json(j, tgt, *ctx->getWorld(), ctx->getMasterSeeder());
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_target_from_json");
+		return 1;
+	}
+}
+
+int fers_update_monostatic_from_json(fers_context_t* context, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto j = nlohmann::json::parse(json);
+		uint64_t tx_id =
+			j.at("tx_id").is_string() ? std::stoull(j.at("tx_id").get<std::string>()) : j.at("tx_id").get<uint64_t>();
+		uint64_t rx_id =
+			j.at("rx_id").is_string() ? std::stoull(j.at("rx_id").get<std::string>()) : j.at("rx_id").get<uint64_t>();
+		auto* tx = ctx->getWorld()->findTransmitter(tx_id);
+		auto* rx = ctx->getWorld()->findReceiver(rx_id);
+		if (!tx || !rx)
+		{
+			last_error_message = "Monostatic components not found";
+			return 1;
+		}
+		serial::update_monostatic_from_json(j, tx, rx, *ctx->getWorld(), ctx->getMasterSeeder());
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_monostatic_from_json");
+		return 1;
+	}
+}
+
+int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto* timing = ctx->getWorld()->findTiming(id);
+		if (!timing)
+		{
+			last_error_message = "Timing not found";
+			return 1;
+		}
+		auto j = nlohmann::json::parse(json);
+		serial::update_timing_from_json(j, timing);
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_timing_from_json");
+		return 1;
+	}
+}
+
 int fers_update_scenario_from_json(fers_context_t* context, const char* scenario_json)
 {
 	last_error_message.clear();

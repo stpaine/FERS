@@ -519,6 +519,66 @@ impl FersContext {
         }
     }
 
+    /// Updates a single transmitter from JSON.
+    pub fn update_transmitter_from_json(&self, id_str: &str, json: &str) -> Result<(), String> {
+        let id = id_str.parse::<u64>().map_err(|e| format!("Invalid ID: {}", e))?;
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result =
+            unsafe { ffi::fers_update_transmitter_from_json(self.ptr, id, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
+    /// Updates a single receiver from JSON.
+    pub fn update_receiver_from_json(&self, id_str: &str, json: &str) -> Result<(), String> {
+        let id = id_str.parse::<u64>().map_err(|e| format!("Invalid ID: {}", e))?;
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_receiver_from_json(self.ptr, id, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
+    /// Updates a single target from JSON.
+    pub fn update_target_from_json(&self, id_str: &str, json: &str) -> Result<(), String> {
+        let id = id_str.parse::<u64>().map_err(|e| format!("Invalid ID: {}", e))?;
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_target_from_json(self.ptr, id, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
+    /// Updates a monostatic radar from JSON.
+    pub fn update_monostatic_from_json(&self, json: &str) -> Result<(), String> {
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_monostatic_from_json(self.ptr, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
+    /// Updates a single timing source from JSON.
+    pub fn update_timing_from_json(&self, id_str: &str, json: &str) -> Result<(), String> {
+        let id = id_str.parse::<u64>().map_err(|e| format!("Invalid ID: {}", e))?;
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_timing_from_json(self.ptr, id, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
     /// Runs the simulation defined in the context.
     ///
     /// This is a blocking call that executes the simulation on a separate thread pool

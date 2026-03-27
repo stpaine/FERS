@@ -420,9 +420,14 @@ fn update_item_from_json(
     let context = state.lock().map_err(|e| e.to_string())?;
     match item_type.as_str() {
         "Platform" => context.update_platform_from_json(&item_id, &json),
+        "Transmitter" => context.update_transmitter_from_json(&item_id, &json),
+        "Receiver" => context.update_receiver_from_json(&item_id, &json),
+        "Target" => context.update_target_from_json(&item_id, &json),
+        "Monostatic" => context.update_monostatic_from_json(&json),
         "Antenna" => context.update_antenna_from_json(&json),
         "Waveform" => context.update_waveform_from_json(&json),
-        _ => Ok(()), // Ignore unsupported granular types
+        "Timing" => context.update_timing_from_json(&item_id, &json),
+        _ => Ok(()),
     }
 }
 

@@ -135,6 +135,36 @@ namespace core
 		[[nodiscard]] radar::Platform* findPlatform(const SimId id);
 
 		/**
+		 * @brief Finds a transmitter by ID.
+		 *
+		 * @param id The ID of the transmitter to find.
+		 * @return A pointer to the Transmitter if found, or nullptr if not found.
+		 */
+		[[nodiscard]] radar::Transmitter* findTransmitter(const SimId id);
+
+		/**
+		 * @brief Finds a receiver by ID.
+		 *
+		 * @param id The ID of the receiver to find.
+		 * @return A pointer to the Receiver if found, or nullptr if not found.
+		 */
+		[[nodiscard]] radar::Receiver* findReceiver(const SimId id);
+
+		/**
+		 * @brief Finds a target by ID.
+		 *
+		 * @param id The ID of the target to find.
+		 * @return A pointer to the Target if found, or nullptr if not found.
+		 */
+		[[nodiscard]] radar::Target* findTarget(const SimId id);
+
+		/**
+		 * @brief Replaces an existing target, updating internal pointers.
+		 * @param target Unique pointer to the new target.
+		 */
+		void replace(std::unique_ptr<radar::Target> target);
+
+		/**
 		 * @brief Replaces an existing antenna, updating internal pointers.
 		 * @param antenna Unique pointer to the new antenna.
 		 */

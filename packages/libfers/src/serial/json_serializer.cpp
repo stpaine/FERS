@@ -243,24 +243,37 @@ namespace timing
 		{
 			pt.setSyncOnPulse();
 		}
+		else
+		{
+			pt.clearSyncOnPulse();
+		}
 
 		if (j.contains("freq_offset"))
 		{
 			pt.setFreqOffset(j.at("freq_offset").get<RealType>());
 		}
+		else
+			pt.clearFreqOffset();
 		if (j.contains("random_freq_offset_stdev"))
 		{
 			pt.setRandomFreqOffsetStdev(j.at("random_freq_offset_stdev").get<RealType>());
 		}
+		else
+			pt.clearRandomFreqOffsetStdev();
 		if (j.contains("phase_offset"))
 		{
 			pt.setPhaseOffset(j.at("phase_offset").get<RealType>());
 		}
+		else
+			pt.clearPhaseOffset();
 		if (j.contains("random_phase_offset_stdev"))
 		{
 			pt.setRandomPhaseOffsetStdev(j.at("random_phase_offset_stdev").get<RealType>());
 		}
+		else
+			pt.clearRandomPhaseOffsetStdev();
 
+		pt.clearNoiseEntries();
 		if (j.contains("noise_entries"))
 		{
 			for (const auto& entry : j.at("noise_entries"))
@@ -1135,6 +1148,229 @@ namespace serial
 			rot_path->finalize();
 			plat->setRotationPath(std::move(rot_path));
 		}
+	}
+
+	void update_transmitter_from_json(const nlohmann::json& j, radar::Transmitter* tx, core::World& world,
+									  std::mt19937& masterSeeder)
+	{
+		if (j.contains("name"))
+			tx->setName(j.at("name").get<std::string>());
+
+		if (j.contains("pulsed_mode"))
+		{
+			tx->setMode(radar::OperationMode::PULSED_MODE);
+			tx->setPrf(j.at("pulsed_mode").value("prf", 0.0));
+		}
+		else if (j.contains("cw_mode"))
+		{
+			tx->setMode(radar::OperationMode::CW_MODE);
+		}
+
+		if (j.contains("waveform"))
+			tx->setWave(world.findWaveform(parse_json_id(j, "waveform", "Transmitter")));
+		if (j.contains("antenna"))
+			tx->setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Transmitter")));
+		if (j.contains("timing"))
+		{
+			auto timing_id = parse_json_id(j, "timing", "Transmitter");
+			if (const auto timing_proto = world.findTiming(timing_id))
+			{
+				auto timing =
+					std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
+				timing->initializeModel(timing_proto);
+				tx->setTiming(timing);
+			}
+			else
+			{
+				tx->setTiming(nullptr);
+			}
+		}
+		if (j.contains("schedule"))
+		{
+			auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
+			RealType pri = 0.0;
+			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
+				pri = 1.0 / tx->getPrf();
+			tx->setSchedule(radar::processRawSchedule(std::move(raw), tx->getName(),
+													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri));
+		}
+	}
+
+	void update_receiver_from_json(const nlohmann::json& j, radar::Receiver* rx, core::World& world,
+								   std::mt19937& masterSeeder)
+	{
+		if (j.contains("name"))
+			rx->setName(j.at("name").get<std::string>());
+
+		if (j.contains("pulsed_mode"))
+		{
+			rx->setMode(radar::OperationMode::PULSED_MODE);
+			const auto& mode_json = j.at("pulsed_mode");
+			rx->setWindowProperties(mode_json.value("window_length", 0.0), mode_json.value("prf", 0.0),
+									mode_json.value("window_skip", 0.0));
+		}
+		else if (j.contains("cw_mode"))
+		{
+			rx->setMode(radar::OperationMode::CW_MODE);
+		}
+
+		if (j.contains("noise_temp"))
+			rx->setNoiseTemperature(j.value("noise_temp", 0.0));
+
+		if (j.contains("nodirect"))
+		{
+			if (j.value("nodirect", false))
+				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+			else
+				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		}
+		if (j.contains("nopropagationloss"))
+		{
+			if (j.value("nopropagationloss", false))
+				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+			else
+				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+		}
+
+		if (j.contains("antenna"))
+			rx->setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Receiver")));
+		if (j.contains("timing"))
+		{
+			auto timing_id = parse_json_id(j, "timing", "Receiver");
+			if (const auto timing_proto = world.findTiming(timing_id))
+			{
+				auto timing =
+					std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
+				timing->initializeModel(timing_proto);
+				rx->setTiming(timing);
+			}
+			else
+			{
+				rx->setTiming(nullptr);
+			}
+		}
+		if (j.contains("schedule"))
+		{
+			auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
+			RealType pri = 0.0;
+			if (rx->getMode() == radar::OperationMode::PULSED_MODE)
+				pri = 1.0 / rx->getWindowPrf();
+			rx->setSchedule(radar::processRawSchedule(std::move(raw), rx->getName(),
+													  rx->getMode() == radar::OperationMode::PULSED_MODE, pri));
+		}
+	}
+
+	void update_monostatic_from_json(const nlohmann::json& j, radar::Transmitter* tx, radar::Receiver* rx,
+									 core::World& world, std::mt19937& masterSeeder)
+	{
+		update_transmitter_from_json(j, tx, world, masterSeeder);
+
+		if (j.contains("name"))
+			rx->setName(j.at("name").get<std::string>());
+		rx->setMode(tx->getMode());
+		if (rx->getMode() == radar::OperationMode::PULSED_MODE && j.contains("pulsed_mode"))
+		{
+			const auto& mode_json = j.at("pulsed_mode");
+			rx->setWindowProperties(mode_json.value("window_length", 0.0), tx->getPrf(),
+									mode_json.value("window_skip", 0.0));
+		}
+		if (j.contains("noise_temp"))
+			rx->setNoiseTemperature(j.value("noise_temp", 0.0));
+		if (j.contains("nodirect"))
+		{
+			if (j.value("nodirect", false))
+				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+			else
+				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		}
+		if (j.contains("nopropagationloss"))
+		{
+			if (j.value("nopropagationloss", false))
+				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+			else
+				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+		}
+		if (j.contains("antenna"))
+			rx->setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Monostatic")));
+		if (j.contains("timing"))
+		{
+			auto timing_id = parse_json_id(j, "timing", "Monostatic");
+			if (const auto timing_proto = world.findTiming(timing_id))
+			{
+				auto rx_timing =
+					std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
+				rx_timing->initializeModel(timing_proto);
+				rx->setTiming(rx_timing);
+			}
+			else
+			{
+				rx->setTiming(nullptr);
+			}
+		}
+		if (j.contains("schedule"))
+		{
+			auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
+			RealType pri = 0.0;
+			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
+				pri = 1.0 / tx->getPrf();
+			auto processed_schedule = radar::processRawSchedule(
+				std::move(raw), tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
+			tx->setSchedule(processed_schedule);
+			rx->setSchedule(processed_schedule);
+		}
+	}
+
+	void update_target_from_json(const nlohmann::json& j, radar::Target* existing_tgt, core::World& world,
+								 std::mt19937& masterSeeder)
+	{
+		auto plat = existing_tgt->getPlatform();
+		const auto& rcs_json = j.at("rcs");
+		const auto rcs_type = rcs_json.at("type").get<std::string>();
+		std::unique_ptr<radar::Target> target_obj;
+
+		const auto target_id = existing_tgt->getId();
+		const auto name = j.value("name", existing_tgt->getName());
+
+		if (rcs_type == "isotropic")
+		{
+			target_obj = radar::createIsoTarget(plat, name, rcs_json.value("value", 1.0),
+												static_cast<unsigned>(masterSeeder()), target_id);
+		}
+		else if (rcs_type == "file")
+		{
+			const auto filename = rcs_json.value("filename", "");
+			target_obj =
+				radar::createFileTarget(plat, name, filename, static_cast<unsigned>(masterSeeder()), target_id);
+		}
+		else
+		{
+			throw std::runtime_error("Unsupported target RCS type: " + rcs_type);
+		}
+
+		if (j.contains("model"))
+		{
+			const auto& model_json = j.at("model");
+			const auto model_type = model_json.at("type").get<std::string>();
+			if (model_type == "chisquare" || model_type == "gamma")
+			{
+				auto model =
+					std::make_unique<radar::RcsChiSquare>(target_obj->getRngEngine(), model_json.value("k", 1.0));
+				target_obj->setFluctuationModel(std::move(model));
+			}
+			else if (model_type == "constant")
+			{
+				target_obj->setFluctuationModel(std::make_unique<radar::RcsConst>());
+			}
+		}
+
+		world.replace(std::move(target_obj));
+	}
+
+	void update_timing_from_json(const nlohmann::json& j, timing::PrototypeTiming* timing)
+	{
+		if (j.contains("name"))
+			timing->setName(j.at("name").get<std::string>());
+		timing::from_json(j, *timing);
 	}
 
 	nlohmann::json world_to_json(const core::World& world)
