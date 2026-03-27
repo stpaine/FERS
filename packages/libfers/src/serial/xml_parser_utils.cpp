@@ -949,7 +949,7 @@ namespace serial::xml_parser_utils
 		}
 
 		std::unordered_map<std::string, std::string> name_registry;
-		name_registry.reserve(64);
+		name_registry.reserve(64); // TODO: reserve 64?
 		const auto register_name = [&](const XmlElement& element, const std::string_view kind)
 		{
 			const std::string name = XmlElement::getSafeAttribute(element, "name");

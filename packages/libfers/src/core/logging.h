@@ -39,7 +39,8 @@ namespace logging
 		INFO, ///< Info level for informational messages.
 		WARNING, ///< Warning level for potentially harmful situations.
 		ERROR, ///< Error level for error events.
-		FATAL ///< Fatal level for severe error events.
+		FATAL, ///< Fatal level for severe error events.
+		OFF ///< Special level to disable all logging.
 	};
 
 	/**
@@ -134,6 +135,8 @@ namespace logging
 			return "ERROR";
 		case Level::FATAL:
 			return "FATAL";
+		case Level::OFF:
+			return "OFF";
 		default:
 			return "UNKNOWN";
 		}

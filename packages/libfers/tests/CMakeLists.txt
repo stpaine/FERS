@@ -4,6 +4,7 @@ include(CTest)
 include(Catch)
 
 add_executable(libfers_tests
+               test_main.cpp
 			   math/test_coord.cpp
 			   math/test_geometry_ops.cpp
 			   math/test_path.cpp
@@ -51,6 +52,11 @@ add_executable(libfers_tests
 			   serial/test_waveform_factory.cpp
 			   serial/test_xml_parser.cpp
 			   serial/test_xml_parser_utils.cpp
+			   serial/test_json_serializer_stress.cpp
+			   serial/test_json_serializer.cpp
+			   serial/test_xml_serializer.cpp
+			   serial/test_kml_generator.cpp
+			   serial/test_kml_generator_utils.cpp
 			   simulation/test_channel_model_helpers.cpp
 			   simulation/test_channel_model_direct.cpp
 			   simulation/test_channel_model_reflected.cpp

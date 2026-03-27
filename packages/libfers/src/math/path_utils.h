@@ -54,7 +54,7 @@ namespace math
 template <typename T>
 concept Interpolatable = requires(T a, T b, RealType t) {
 	{ a - b } -> std::same_as<T>;
-	{ a* t } -> std::same_as<T>;
+	{ a * t } -> std::same_as<T>;
 	{ a + b } -> std::same_as<T>;
 	{ a.t } -> std::convertible_to<RealType>;
 };
