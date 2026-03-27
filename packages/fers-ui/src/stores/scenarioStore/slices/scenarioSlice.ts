@@ -26,6 +26,14 @@ import {
     seedSimIdCounters,
     reserveSimId,
 } from '../idUtils';
+import {
+    serializePlatform,
+    serializeWaveform,
+    serializeTiming,
+    serializeAntenna,
+    serializeComponentInner,
+    cleanObject,
+} from '../serializers';
 
 // Define interfaces for the expected backend data structure.
 interface BackendObjectWithName {
@@ -203,75 +211,67 @@ export const createScenarioSlice: StateCreator<
                     if (
                         item.type === 'Platform' ||
                         item.type === 'Antenna' ||
-                        item.type === 'Waveform'
+                        item.type === 'Waveform' ||
+                        item.type === 'Timing'
                     ) {
                         try {
                             let jsonPayload: string | null = null;
-                            if (item.type === 'Platform') {
-                                const p = item as Platform;
-                                const backendRotation: Record<string, unknown> =
-                                    {};
-                                if (p.rotation.type === 'fixed') {
-                                    const r = p.rotation;
-                                    backendRotation.fixedrotation = {
-                                        interpolation: 'constant',
-                                        startazimuth: r.startAzimuth,
-                                        startelevation: r.startElevation,
-                                        azimuthrate: r.azimuthRate,
-                                        elevationrate: r.elevationRate,
-                                    };
-                                } else {
-                                    const r = p.rotation;
-                                    backendRotation.rotationpath = {
-                                        interpolation: r.interpolation,
-                                        rotationwaypoints: r.waypoints.map(
-                                            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                            ({ id, ...wp }) => wp
-                                        ),
-                                    };
+                            let targetItemType: string = item.type;
+                            let targetItemId = item.id;
+
+                            // Check if this is a component update (e.g., "components.0.prf")
+                            const componentMatch = propertyPath.match(
+                                /^components\.(\d+)(?:\.|$)/
+                            );
+                            if (item.type === 'Platform' && componentMatch) {
+                                const compIndex = parseInt(
+                                    componentMatch[1],
+                                    10
+                                );
+                                const component = (item as Platform).components[
+                                    compIndex
+                                ];
+                                if (component) {
+                                    jsonPayload = JSON.stringify(
+                                        cleanObject(
+                                            serializeComponentInner(component)
+                                        )
+                                    );
+                                    // Map frontend component type to backend expected type string
+                                    targetItemType =
+                                        component.type === 'monostatic'
+                                            ? 'Monostatic'
+                                            : component.type
+                                                  .charAt(0)
+                                                  .toUpperCase() +
+                                              component.type.slice(1);
+                                    targetItemId = component.id;
                                 }
-                                jsonPayload = JSON.stringify({
-                                    id: p.id,
-                                    name: p.name,
-                                    motionpath: {
-                                        interpolation:
-                                            p.motionPath.interpolation,
-                                        positionwaypoints:
-                                            p.motionPath.waypoints.map(
-                                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                                ({ id, ...wp }) => wp
-                                            ),
-                                    },
-                                    ...backendRotation,
-                                });
-                            } else if (item.type === 'Antenna') {
-                                const a = item as Antenna;
-                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                                const { type, meshScale, ...rest } = a;
-                                jsonPayload = JSON.stringify(rest);
-                            } else if (item.type === 'Waveform') {
-                                const w = item as Waveform;
-                                const waveformContent =
-                                    w.waveformType === 'cw'
-                                        ? { cw: {} }
-                                        : {
-                                              pulsed_from_file: {
-                                                  filename: w.filename,
-                                              },
-                                          };
-                                jsonPayload = JSON.stringify({
-                                    id: w.id,
-                                    name: w.name,
-                                    power: w.power,
-                                    carrier_frequency: w.carrier_frequency,
-                                    ...waveformContent,
-                                });
+                            } else {
+                                // Top-level item update
+                                if (item.type === 'Platform') {
+                                    jsonPayload = JSON.stringify(
+                                        serializePlatform(item as Platform)
+                                    );
+                                } else if (item.type === 'Antenna') {
+                                    jsonPayload = JSON.stringify(
+                                        serializeAntenna(item as Antenna)
+                                    );
+                                } else if (item.type === 'Waveform') {
+                                    jsonPayload = JSON.stringify(
+                                        serializeWaveform(item as Waveform)
+                                    );
+                                } else if (item.type === 'Timing') {
+                                    jsonPayload = JSON.stringify(
+                                        serializeTiming(item as Timing)
+                                    );
+                                }
                             }
 
                             if (jsonPayload) {
                                 void invoke('update_item_from_json', {
-                                    itemType: item.type,
-                                    itemId: item.id,
+                                    itemType: targetItemType,
+                                    itemId: targetItemId,
                                     json: jsonPayload,
                                 });
                             }
