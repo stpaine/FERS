@@ -102,39 +102,58 @@ namespace core
 	void World::replace(std::unique_ptr<Antenna> antenna)
 	{
 		const SimId id = antenna->getId();
-		const Antenna* old_ptr = _antennas.contains(id) ? _antennas[id].get() : nullptr;
 		const Antenna* new_ptr = antenna.get();
-		_antennas[id] = std::move(antenna);
+
+		std::unique_ptr<Antenna> old_owned;
+		const Antenna* old_ptr = nullptr;
+
+		if (auto it = _antennas.find(id); it != _antennas.end())
+		{
+			old_owned = std::move(it->second);
+			old_ptr = old_owned.get();
+			it->second = std::move(antenna);
+		}
+		else
+		{
+			_antennas[id] = std::move(antenna);
+		}
 
 		if (old_ptr && old_ptr != new_ptr)
 		{
 			for (auto& tx : _transmitters)
-			{
 				if (tx->getAntenna() == old_ptr)
 					tx->setAntenna(new_ptr);
-			}
+
 			for (auto& rx : _receivers)
-			{
 				if (rx->getAntenna() == old_ptr)
 					rx->setAntenna(new_ptr);
-			}
 		}
 	}
 
 	void World::replace(std::unique_ptr<RadarSignal> waveform)
 	{
 		const SimId id = waveform->getId();
-		const RadarSignal* old_ptr = _waveforms.contains(id) ? _waveforms[id].get() : nullptr;
 		RadarSignal* new_ptr = waveform.get();
-		_waveforms[id] = std::move(waveform);
+
+		std::unique_ptr<RadarSignal> old_owned;
+		const RadarSignal* old_ptr = nullptr;
+
+		if (auto it = _waveforms.find(id); it != _waveforms.end())
+		{
+			old_owned = std::move(it->second);
+			old_ptr = old_owned.get();
+			it->second = std::move(waveform);
+		}
+		else
+		{
+			_waveforms[id] = std::move(waveform);
+		}
 
 		if (old_ptr && old_ptr != new_ptr)
 		{
 			for (auto& tx : _transmitters)
-			{
 				if (tx->getSignal() == old_ptr)
 					tx->setSignal(new_ptr);
-			}
 		}
 	}
 
