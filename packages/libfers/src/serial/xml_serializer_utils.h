@@ -69,6 +69,10 @@ namespace serial::xml_serializer_utils
 			}
 			else
 			{
+				// This only executes if std::to_chars(...) returns ec != std::errc()
+				// which will practically never happen unless the output buffer is too small
+				// to hold the formatted value, or the standard library implementation fails
+				// to support/format the given floating-point value.
 				std::stringstream ss;
 				ss << std::setprecision(std::numeric_limits<T>::max_digits10) << value;
 				addChildWithText(parent, name, ss.str());
