@@ -1,19 +1,19 @@
 ---
 Checks: >
-  -*,
-  readability-function-cognitive-complexity,
-  readability-function-size
+    -*,
+    readability-function-cognitive-complexity,
+    readability-function-size
 
 HeaderFilterRegex: '^((?!build|deps|CMakeFiles).)*$'
 
 CheckOptions:
-  - key:   readability-function-cognitive-complexity.Threshold
-    value: 50
-  - key:   readability-function-size.LineThreshold
-    value: 150
-  - key:   readability-function-size.StatementThreshold
-    value: 150
-  - key:   readability-function-cognitive-complexity.DescribeBasicIncrements
-    value: true
-  - key:   readability-function-size.BranchThreshold
-    value: 20
+    - key: readability-function-cognitive-complexity.Threshold
+      value: 50
+    - key: readability-function-size.LineThreshold
+      value: 150
+    - key: readability-function-size.StatementThreshold
+      value: 150
+    - key: readability-function-cognitive-complexity.DescribeBasicIncrements
+      value: true
+    - key: readability-function-size.BranchThreshold
+      value: 20
