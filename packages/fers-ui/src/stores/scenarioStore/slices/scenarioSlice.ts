@@ -2,6 +2,7 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
+import { invoke } from '@tauri-apps/api/core';
 import {
     ScenarioStore,
     ScenarioActions,
@@ -196,6 +197,89 @@ export const createScenarioSlice: StateCreator<
                 if (item) {
                     setPropertyByPath(item, propertyPath, value);
                     state.isDirty = true;
+
+                    // Immediately trigger granular sync for high-performance features
+                    // except for complex topology changes which rely on full sync.
+                    if (
+                        item.type === 'Platform' ||
+                        item.type === 'Antenna' ||
+                        item.type === 'Waveform'
+                    ) {
+                        try {
+                            let jsonPayload: string | null = null;
+                            if (item.type === 'Platform') {
+                                const p = item as Platform;
+                                const backendRotation: Record<string, unknown> =
+                                    {};
+                                if (p.rotation.type === 'fixed') {
+                                    const r = p.rotation;
+                                    backendRotation.fixedrotation = {
+                                        interpolation: 'constant',
+                                        startazimuth: r.startAzimuth,
+                                        startelevation: r.startElevation,
+                                        azimuthrate: r.azimuthRate,
+                                        elevationrate: r.elevationRate,
+                                    };
+                                } else {
+                                    const r = p.rotation;
+                                    backendRotation.rotationpath = {
+                                        interpolation: r.interpolation,
+                                        rotationwaypoints: r.waypoints.map(
+                                            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                            ({ id, ...wp }) => wp
+                                        ),
+                                    };
+                                }
+                                jsonPayload = JSON.stringify({
+                                    id: p.id,
+                                    name: p.name,
+                                    motionpath: {
+                                        interpolation:
+                                            p.motionPath.interpolation,
+                                        positionwaypoints:
+                                            p.motionPath.waypoints.map(
+                                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                                ({ id, ...wp }) => wp
+                                            ),
+                                    },
+                                    ...backendRotation,
+                                });
+                            } else if (item.type === 'Antenna') {
+                                const a = item as Antenna;
+                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                                const { type, meshScale, ...rest } = a;
+                                jsonPayload = JSON.stringify(rest);
+                            } else if (item.type === 'Waveform') {
+                                const w = item as Waveform;
+                                const waveformContent =
+                                    w.waveformType === 'cw'
+                                        ? { cw: {} }
+                                        : {
+                                              pulsed_from_file: {
+                                                  filename: w.filename,
+                                              },
+                                          };
+                                jsonPayload = JSON.stringify({
+                                    id: w.id,
+                                    name: w.name,
+                                    power: w.power,
+                                    carrier_frequency: w.carrier_frequency,
+                                    ...waveformContent,
+                                });
+                            }
+
+                            if (jsonPayload) {
+                                void invoke('update_item_from_json', {
+                                    itemType: item.type,
+                                    itemId: item.id,
+                                    json: jsonPayload,
+                                });
+                            }
+                        } catch (e) {
+                            console.error('Granular sync failed:', e);
+                        }
+                    }
+
                     return;
                 }
             }

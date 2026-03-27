@@ -409,6 +409,23 @@ fn get_preview_links(
     state.lock().map_err(|e| e.to_string())?.calculate_preview_links(time)
 }
 
+/// Performs a granular state update on a specific simulation item via JSON.
+#[tauri::command]
+fn update_item_from_json(
+    item_type: String,
+    item_id: String,
+    json: String,
+    state: State<'_, FersState>,
+) -> Result<(), String> {
+    let context = state.lock().map_err(|e| e.to_string())?;
+    match item_type.as_str() {
+        "Platform" => context.update_platform_from_json(&item_id, &json),
+        "Antenna" => context.update_antenna_from_json(&json),
+        "Waveform" => context.update_waveform_from_json(&json),
+        _ => Ok(()), // Ignore unsupported granular types
+    }
+}
+
 /// Initializes and runs the Tauri application.
 ///
 /// This function is the main entry point for the desktop application. It performs
@@ -459,6 +476,7 @@ pub fn run() {
             get_interpolated_rotation_path,
             get_antenna_pattern,
             get_preview_links,
+            update_item_from_json,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

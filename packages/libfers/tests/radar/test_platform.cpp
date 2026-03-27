@@ -44,6 +44,15 @@ TEST_CASE("Platform exposes default paths and identity", "[radar][platform]")
 	REQUIRE(platform.getId() == 4242);
 }
 
+TEST_CASE("Platform allows updating its name", "[radar][platform]")
+{
+	radar::Platform platform("InitialName", 1);
+	REQUIRE(platform.getName() == "InitialName");
+
+	platform.setName("UpdatedName");
+	REQUIRE(platform.getName() == "UpdatedName");
+}
+
 TEST_CASE("Platform returns physically correct position and rotation", "[radar][platform]")
 {
 	radar::Platform platform("KinematicPlatform");

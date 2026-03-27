@@ -18,6 +18,18 @@
 #include <nlohmann/json.hpp>
 #include <random>
 
+namespace antenna
+{
+	class Antenna;
+}
+namespace fers_signal
+{
+	class RadarSignal;
+}
+namespace radar
+{
+	class Platform;
+}
 namespace core
 {
 	class World;
@@ -39,6 +51,21 @@ namespace serial
 	 * @return A nlohmann::json object representing the world.
 	 */
 	nlohmann::json world_to_json(const core::World& world);
+
+	/**
+	 * @brief Updates a platform's motion and rotation paths from JSON.
+	 */
+	void update_platform_paths_from_json(const nlohmann::json& j, radar::Platform* plat);
+
+	/**
+	 * @brief Parses an Antenna from JSON.
+	 */
+	std::unique_ptr<antenna::Antenna> parse_antenna_from_json(const nlohmann::json& j);
+
+	/**
+	 * @brief Parses a Waveform from JSON.
+	 */
+	std::unique_ptr<fers_signal::RadarSignal> parse_waveform_from_json(const nlohmann::json& j);
 
 	/**
 	 * @brief Deserializes a nlohmann::json object and reconstructs the simulation world.

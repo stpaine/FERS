@@ -21,6 +21,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 
+#include "antenna/antenna_factory.h"
 #include "core/fers_context.h"
 #include "core/sim_threading.h"
 #include "core/thread_pool.h"
@@ -28,6 +29,7 @@
 #include "serial/kml_generator.h"
 #include "serial/xml_parser.h"
 #include "serial/xml_serializer.h"
+#include "signal/radar_signal.h"
 #include "simulation/channel_model.h"
 
 // The fers_context struct is defined here as an alias for our C++ class.
@@ -294,6 +296,81 @@ char* fers_get_scenario_as_xml(fers_context_t* context)
 	{
 		handle_api_exception(e, "fers_get_scenario_as_xml");
 		return nullptr;
+	}
+}
+
+int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto* p = ctx->getWorld()->findPlatform(id);
+		if (!p)
+		{
+			last_error_message = "Platform not found";
+			return 1;
+		}
+		auto j = nlohmann::json::parse(json);
+		serial::update_platform_paths_from_json(j, p);
+		if (j.contains("name"))
+		{
+			p->setName(j.at("name").get<std::string>());
+		}
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_platform_from_json");
+		return 1;
+	}
+}
+
+int fers_update_antenna_from_json(fers_context_t* context, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto j = nlohmann::json::parse(json);
+		auto ant = serial::parse_antenna_from_json(j);
+		if (ant)
+		{
+			ctx->getWorld()->replace(std::move(ant));
+		}
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_antenna_from_json");
+		return 1;
+	}
+}
+
+int fers_update_waveform_from_json(fers_context_t* context, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto j = nlohmann::json::parse(json);
+		auto wf = serial::parse_waveform_from_json(j);
+		if (wf)
+		{
+			ctx->getWorld()->replace(std::move(wf));
+		}
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_waveform_from_json");
+		return 1;
 	}
 }
 

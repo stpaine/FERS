@@ -190,6 +190,31 @@ char* fers_get_scenario_as_xml(fers_context_t* context);
  */
 int fers_update_scenario_from_json(fers_context_t* context, const char* scenario_json);
 
+/**
+ * @brief Updates a single platform's paths and name from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the platform.
+ * @param json The JSON string for the platform.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a single antenna from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the antenna.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_antenna_from_json(fers_context_t* context, const char* json);
+
+/**
+ * @brief Updates a single waveform from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the waveform.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_waveform_from_json(fers_context_t* context, const char* json);
+
 
 // --- Error Handling ---
 

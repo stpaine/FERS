@@ -1057,39 +1057,7 @@ namespace
 		const auto platform_id = parse_json_id(plat_json, "id", "Platform");
 		auto plat = std::make_unique<radar::Platform>(name, platform_id);
 
-		// Paths
-		if (plat_json.contains("motionpath"))
-		{
-			auto path = std::make_unique<math::Path>();
-			plat_json.at("motionpath").get_to(*path);
-			plat->setMotionPath(std::move(path));
-		}
-		if (plat_json.contains("rotationpath"))
-		{
-			auto rot_path = std::make_unique<math::RotationPath>();
-			plat_json.at("rotationpath").get_to(*rot_path);
-			plat->setRotationPath(std::move(rot_path));
-		}
-		else if (plat_json.contains("fixedrotation"))
-		{
-			// This logic reconstructs a constant-rate rotation path from the
-			// JSON representation that corresponds to the <fixedrotation> XML element.
-			auto rot_path = std::make_unique<math::RotationPath>();
-			const auto& fixed_json = plat_json.at("fixedrotation");
-			const RealType start_az_deg = fixed_json.at("startazimuth").get<RealType>();
-			const RealType start_el_deg = fixed_json.at("startelevation").get<RealType>();
-			const RealType rate_az_deg_s = fixed_json.at("azimuthrate").get<RealType>();
-			const RealType rate_el_deg_s = fixed_json.at("elevationrate").get<RealType>();
-
-			math::RotationCoord start, rate;
-			start.azimuth = (90.0 - start_az_deg) * (PI / 180.0);
-			start.elevation = start_el_deg * (PI / 180.0);
-			rate.azimuth = -rate_az_deg_s * (PI / 180.0);
-			rate.elevation = rate_el_deg_s * (PI / 180.0);
-			rot_path->setConstantRate(start, rate);
-			rot_path->finalize();
-			plat->setRotationPath(std::move(rot_path));
-		}
+		serial::update_platform_paths_from_json(plat_json, plat.get());
 
 		// Components - Strict array format
 		if (plat_json.contains("components"))
@@ -1121,6 +1089,54 @@ namespace
 
 namespace serial
 {
+	std::unique_ptr<antenna::Antenna> parse_antenna_from_json(const nlohmann::json& j)
+	{
+		std::unique_ptr<antenna::Antenna> ant;
+		antenna::from_json(j, ant);
+		return ant;
+	}
+
+	std::unique_ptr<fers_signal::RadarSignal> parse_waveform_from_json(const nlohmann::json& j)
+	{
+		std::unique_ptr<fers_signal::RadarSignal> wf;
+		fers_signal::from_json(j, wf);
+		return wf;
+	}
+
+	void update_platform_paths_from_json(const nlohmann::json& j, radar::Platform* plat)
+	{
+		if (j.contains("motionpath"))
+		{
+			auto path = std::make_unique<math::Path>();
+			j.at("motionpath").get_to(*path);
+			plat->setMotionPath(std::move(path));
+		}
+		if (j.contains("rotationpath"))
+		{
+			auto rot_path = std::make_unique<math::RotationPath>();
+			j.at("rotationpath").get_to(*rot_path);
+			plat->setRotationPath(std::move(rot_path));
+		}
+		else if (j.contains("fixedrotation"))
+		{
+			auto rot_path = std::make_unique<math::RotationPath>();
+			const auto& fixed_json = j.at("fixedrotation");
+			const RealType start_az_deg = fixed_json.at("startazimuth").get<RealType>();
+			const RealType start_el_deg = fixed_json.at("startelevation").get<RealType>();
+			const RealType rate_az_deg_s = fixed_json.at("azimuthrate").get<RealType>();
+			const RealType rate_el_deg_s = fixed_json.at("elevationrate").get<RealType>();
+
+			math::RotationCoord start, rate;
+			start.azimuth = (90.0 - start_az_deg) * (PI / 180.0);
+			start.elevation = start_el_deg * (PI / 180.0);
+			rate.azimuth = -rate_az_deg_s * (PI / 180.0);
+			rate.elevation = rate_el_deg_s * (PI / 180.0);
+			rot_path->setConstantRate(start, rate);
+			rot_path->finalize();
+			plat->setRotationPath(std::move(rot_path));
+		}
+	}
+
 	nlohmann::json world_to_json(const core::World& world)
 	{
 		nlohmann::json sim_json;

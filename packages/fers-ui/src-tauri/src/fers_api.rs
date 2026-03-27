@@ -485,6 +485,40 @@ impl FersContext {
         }
     }
 
+    /// Updates a single platform's paths and name from JSON.
+    pub fn update_platform_from_json(&self, id_str: &str, json: &str) -> Result<(), String> {
+        let id = id_str.parse::<u64>().map_err(|e| format!("Invalid ID: {}", e))?;
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_platform_from_json(self.ptr, id, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
+    /// Updates a single antenna from JSON.
+    pub fn update_antenna_from_json(&self, json: &str) -> Result<(), String> {
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_antenna_from_json(self.ptr, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
+    /// Updates a single waveform from JSON.
+    pub fn update_waveform_from_json(&self, json: &str) -> Result<(), String> {
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_waveform_from_json(self.ptr, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
     /// Runs the simulation defined in the context.
     ///
     /// This is a blocking call that executes the simulation on a separate thread pool
@@ -817,16 +851,43 @@ mod tests {
     /// A minimal, valid FERS JSON scenario that the core engine can parse.
     fn minimal_valid_json() -> &'static str {
         r#"{
-            "simulation": {
-                "parameters": {
-                    "starttime": 0.0,
-                    "endtime": 1.0,
-                    "rate": 1000.0,
-                    "origin": { "latitude": 0.0, "longitude": 0.0, "altitude": 0.0 },
-                    "coordinatesystem": { "frame": "ENU" }
+                "simulation": {
+                    "parameters": {
+                        "starttime": 0.0,
+                        "endtime": 1.0,
+                        "rate": 1000.0,
+                        "origin": { "latitude": 0.0, "longitude": 0.0, "altitude": 0.0 },
+                        "coordinatesystem": { "frame": "ENU" }
+                    }
                 }
-            }
-        }"#
+            }"#
+    }
+
+    /// A scenario with assets and platforms for testing granular updates.
+    fn scenario_with_assets_json() -> &'static str {
+        r#"{
+                "simulation": {
+                    "parameters": {
+                        "starttime": 0.0, "endtime": 1.0, "rate": 1000.0,
+                        "origin": { "latitude": 0.0, "longitude": 0.0, "altitude": 0.0 },
+                        "coordinatesystem": { "frame": "ENU" }
+                    },
+                    "waveforms": [
+                        { "id": 10, "name": "w1", "power": 1000.0, "carrier_frequency": 1e9, "cw": {} }
+                    ],
+                    "antennas": [
+                        { "id": 20, "name": "a1", "pattern": "isotropic" }
+                    ],
+                    "platforms": [
+                        {
+                            "id": 100, "name": "tx_plat",
+                            "motionpath": { "interpolation": "static", "positionwaypoints": [ { "time": 0.0, "x": 0.0, "y": 0.0, "altitude": 0.0 } ] },
+                            "rotationpath": { "interpolation": "static", "rotationwaypoints": [ { "time": 0.0, "azimuth": 0.0, "elevation": 0.0 } ] },
+                            "components": []
+                        }
+                    ]
+                }
+            }"#
     }
 
     #[test]
@@ -991,7 +1052,50 @@ mod tests {
     }
 
     #[test]
-    fn test_get_antenna_pattern_success() {
+    fn test_granular_updates() {
+        let context = FersContext::new().unwrap();
+        context.update_scenario_from_json(scenario_with_assets_json()).unwrap();
+
+        // Platform update
+        let plat_json = r#"{
+                "id": 100,
+                "name": "UpdatedPlatform",
+                "motionpath": { "interpolation": "static", "positionwaypoints": [] },
+                "rotationpath": { "interpolation": "static", "rotationwaypoints": [] }
+            }"#;
+        let result = context.update_platform_from_json("100", plat_json);
+        assert!(result.is_ok(), "Failed to update platform: {:?}", result.err());
+
+        // Antenna update
+        let ant_json =
+            r#"{ "id": 20, "name": "UpdatedAntenna", "pattern": "isotropic", "efficiency": 0.5 }"#;
+        let result = context.update_antenna_from_json(ant_json);
+        assert!(result.is_ok(), "Failed to update antenna: {:?}", result.err());
+
+        // Waveform update
+        let wf_json = r#"{ "id": 10, "name": "UpdatedWaveform", "power": 500.0, "carrier_frequency": 1e9, "cw": {} }"#;
+        let result = context.update_waveform_from_json(wf_json);
+        assert!(result.is_ok(), "Failed to update waveform: {:?}", result.err());
+
+        // Verify changes
+        let updated_scenario = context.get_scenario_as_json().unwrap();
+        assert!(updated_scenario.contains("UpdatedPlatform"));
+        assert!(updated_scenario.contains("UpdatedAntenna"));
+        assert!(updated_scenario.contains("UpdatedWaveform"));
+    }
+
+    #[test]
+    fn test_granular_updates_invalid() {
+        let context = FersContext::new().unwrap();
+        context.update_scenario_from_json(scenario_with_assets_json()).unwrap();
+
+        assert!(context.update_platform_from_json("999", "{}").is_err());
+        assert!(context.update_antenna_from_json("{bad").is_err());
+        assert!(context.update_waveform_from_json("{bad").is_err());
+    }
+
+    #[test]
+    fn test_calculate_preview_links_success() {
         let context = FersContext::new().unwrap();
         let scenario = r#"{
             "simulation": {

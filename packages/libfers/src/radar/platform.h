@@ -110,6 +110,13 @@ namespace radar
 		 */
 		void setMotionPath(std::unique_ptr<math::Path> path) noexcept { _motion_path = std::move(path); }
 
+		/**
+		 * @brief Sets the name of the platform.
+		 *
+		 * @param name The new name of the platform.
+		 */
+		void setName(std::string name) noexcept { _name = std::move(name); }
+
 	private:
 		std::unique_ptr<math::Path> _motion_path; ///< The motion path of the platform.
 		std::unique_ptr<math::RotationPath> _rotation_path; ///< The rotation path of the platform.

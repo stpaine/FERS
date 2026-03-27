@@ -45,6 +45,38 @@ namespace
 	};
 }
 
+TEST_CASE("JSON: Granular parsing of Antenna and Waveform", "[serial][json]")
+{
+	ParamGuard guard;
+
+	SECTION("Parse Antenna")
+	{
+		json ant_json = {{"id", 123}, {"name", "TestAntenna"}, {"pattern", "isotropic"}, {"efficiency", 0.85}};
+
+		auto ant = serial::parse_antenna_from_json(ant_json);
+		REQUIRE(ant != nullptr);
+		REQUIRE(ant->getId() == 123);
+		REQUIRE(ant->getName() == "TestAntenna");
+		REQUIRE_THAT(ant->getEfficiencyFactor(), WithinAbs(0.85, 1e-9));
+	}
+
+	SECTION("Parse Waveform")
+	{
+		json wf_json = {{"id", 456},
+						{"name", "TestWaveform"},
+						{"power", 500.0},
+						{"carrier_frequency", 2e9},
+						{"cw", json::object()}};
+
+		auto wf = serial::parse_waveform_from_json(wf_json);
+		REQUIRE(wf != nullptr);
+		REQUIRE(wf->getId() == 456);
+		REQUIRE(wf->getName() == "TestWaveform");
+		REQUIRE_THAT(wf->getPower(), WithinAbs(500.0, 1e-9));
+		REQUIRE_THAT(wf->getCarrier(), WithinAbs(2e9, 1e-9));
+	}
+}
+
 TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 {
 	ParamGuard guard;

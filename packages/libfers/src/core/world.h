@@ -127,6 +127,26 @@ namespace core
 		[[nodiscard]] timing::PrototypeTiming* findTiming(const SimId id);
 
 		/**
+		 * @brief Finds a platform by ID.
+		 *
+		 * @param id The ID of the platform to find.
+		 * @return A pointer to the Platform if found, or nullptr if not found.
+		 */
+		[[nodiscard]] radar::Platform* findPlatform(const SimId id);
+
+		/**
+		 * @brief Replaces an existing antenna, updating internal pointers.
+		 * @param antenna Unique pointer to the new antenna.
+		 */
+		void replace(std::unique_ptr<antenna::Antenna> antenna);
+
+		/**
+		 * @brief Replaces an existing waveform, updating internal pointers.
+		 * @param waveform Unique pointer to the new waveform.
+		 */
+		void replace(std::unique_ptr<fers_signal::RadarSignal> waveform);
+
+		/**
 		 * @brief Retrieves the list of platforms.
 		 *
 		 * @return A const reference to a vector of unique pointers to Platform objects.

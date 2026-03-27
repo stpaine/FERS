@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <filesystem>
 #include <libfers/api.h>
@@ -237,6 +238,92 @@ TEST_CASE("API KML generation reports non-creatable output paths", "[api][scenar
 	api_test::ApiString error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
 	REQUIRE_THAT(error.str(), ContainsSubstring("KML generation failed"));
+}
+
+TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::minimalScenarioXml("Granular Update Test");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	auto scenario = api_test::parseScenarioJson(context.get());
+
+	SECTION("Platform update")
+	{
+		auto plat = scenario["simulation"]["platforms"][0];
+		uint64_t plat_id = api_test::parseId(plat["id"]);
+		plat["name"] = "UpdatedPlatform";
+
+		REQUIRE(fers_update_platform_from_json(context.get(), plat_id, plat.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		REQUIRE(updated["simulation"]["platforms"][0]["name"] == "UpdatedPlatform");
+	}
+
+	SECTION("Antenna update")
+	{
+		auto ant = scenario["simulation"]["antennas"][0];
+		ant["name"] = "UpdatedAntenna";
+		ant["efficiency"] = 0.5;
+
+		REQUIRE(fers_update_antenna_from_json(context.get(), ant.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		REQUIRE(updated["simulation"]["antennas"][0]["name"] == "UpdatedAntenna");
+		REQUIRE_THAT(updated["simulation"]["antennas"][0]["efficiency"].get<double>(),
+					 Catch::Matchers::WithinAbs(0.5, 1e-9));
+	}
+
+	SECTION("Waveform update")
+	{
+		auto wf = scenario["simulation"]["waveforms"][0];
+		wf["name"] = "UpdatedWaveform";
+		wf["power"] = 999.0;
+
+		REQUIRE(fers_update_waveform_from_json(context.get(), wf.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		REQUIRE(updated["simulation"]["waveforms"][0]["name"] == "UpdatedWaveform");
+		REQUIRE_THAT(updated["simulation"]["waveforms"][0]["power"].get<double>(),
+					 Catch::Matchers::WithinAbs(999.0, 1e-9));
+	}
+}
+
+TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
+{
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+	const std::string xml = api_test::minimalScenarioXml();
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	SECTION("Null context or JSON")
+	{
+		REQUIRE(fers_update_platform_from_json(nullptr, 1, "{}") == -1);
+		REQUIRE(fers_update_platform_from_json(context.get(), 1, nullptr) == -1);
+		REQUIRE(fers_update_antenna_from_json(nullptr, "{}") == -1);
+		REQUIRE(fers_update_antenna_from_json(context.get(), nullptr) == -1);
+		REQUIRE(fers_update_waveform_from_json(nullptr, "{}") == -1);
+		REQUIRE(fers_update_waveform_from_json(context.get(), nullptr) == -1);
+	}
+
+	SECTION("Invalid JSON")
+	{
+		REQUIRE(fers_update_platform_from_json(context.get(), 1, "{bad") == 1);
+		REQUIRE(fers_update_antenna_from_json(context.get(), "{bad") == 1);
+		REQUIRE(fers_update_waveform_from_json(context.get(), "{bad") == 1);
+	}
+
+	SECTION("Platform not found")
+	{
+		REQUIRE(fers_update_platform_from_json(context.get(), 999999, "{}") == 1);
+		api_test::ApiString error = api_test::lastError();
+		REQUIRE_THAT(error.str(), ContainsSubstring("Platform not found"));
+	}
 }
 
 TEST_CASE("API XML JSON round-trip keeps the context usable", "[api][scenario]")
