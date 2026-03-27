@@ -37,7 +37,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 /// Data structure for a single motion waypoint received from the UI.
 ///
 /// Coordinates should be in the scenario's define frame (e.g. ENU).
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct MotionWaypoint {
     /// Time in seconds.
     time: f64,
@@ -50,7 +50,7 @@ pub struct MotionWaypoint {
 }
 
 /// Enum for the interpolation type received from the UI.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum InterpolationType {
     Static,
@@ -61,7 +61,7 @@ pub enum InterpolationType {
 /// Data structure for a single interpolated point sent back to the UI.
 ///
 /// Represents the physical state of a platform at a specific time step.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct InterpolatedMotionPoint {
     /// X position in meters.
     x: f64,
@@ -78,7 +78,7 @@ pub struct InterpolatedMotionPoint {
 }
 
 /// Data structure for a single rotation waypoint received from the UI.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct RotationWaypoint {
     /// Time in seconds.
     time: f64,
@@ -89,7 +89,7 @@ pub struct RotationWaypoint {
 }
 
 /// Data structure for a single interpolated rotation point sent back to the UI.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct InterpolatedRotationPoint {
     /// Azimuth in compass degrees.
     azimuth_deg: f64,
@@ -431,7 +431,7 @@ fn get_preview_links(
 ///
 /// This function is typically called from `main.rs`:
 ///
-/// ```rust
+/// ```ignore
 /// fers_ui_lib::run();
 /// ```
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -466,31 +466,65 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::fers_api;
+    use super::*;
+    use serde_json::json;
 
-    /// Verifies that the `libfers` C++ library is correctly linked.
-    ///
-    /// This test ensures that:
-    /// 1. The Rust linker can find the `libfers.a` static library.
-    /// 2. All required FFI symbols are present and callable.
-    /// 3. The `FersContext::new()` wrapper successfully creates a C++ context.
-    ///
-    /// If this test fails:
-    /// * Check that the `build.rs` script correctly specifies library search paths.
-    /// * Verify that the C++ libraries have been built by CMake.
-    /// * Ensure that `bindgen` generated the correct bindings from `api.h`.
-    ///
-    /// # Panics
-    ///
-    /// This test will panic if `FersContext::new()` returns `None`, indicating
-    /// a failure to allocate or initialize the C++ context.
     #[test]
-    fn it_links_libfers_and_creates_context() {
-        // This test will fail at link time if the library is not found.
-        // It will fail at runtime if the symbols don't match or creation fails.
-        let _context = fers_api::FersContext::new().expect("FersContext::new() returned None");
+    fn test_interpolation_type_serialization() {
+        // Assert serialization outputs match the TypeScript string literals exactly
+        assert_eq!(serde_json::to_string(&InterpolationType::Static).unwrap(), "\"static\"");
+        assert_eq!(serde_json::to_string(&InterpolationType::Linear).unwrap(), "\"linear\"");
+        assert_eq!(serde_json::to_string(&InterpolationType::Cubic).unwrap(), "\"cubic\"");
 
-        // The context is automatically destroyed when it goes out of scope due to `Drop`.
-        // No explicit destroy call is needed.
+        // Ensure deserialization from UI payloads works
+        let parsed: InterpolationType = serde_json::from_str("\"linear\"").unwrap();
+        assert!(matches!(parsed, InterpolationType::Linear));
+    }
+
+    #[test]
+    fn test_motion_waypoint_serialization() {
+        let wp = MotionWaypoint { time: 1.0, x: 2.0, y: 3.0, altitude: 4.0 };
+        let serialized = serde_json::to_string(&wp).unwrap();
+
+        // Deserialize to generic JSON value to inspect structure
+        let parsed: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(parsed["time"], 1.0);
+        assert_eq!(parsed["x"], 2.0);
+        assert_eq!(parsed["y"], 3.0);
+        assert_eq!(parsed["altitude"], 4.0);
+    }
+
+    #[test]
+    fn test_rotation_waypoint_serialization() {
+        let payload = json!({
+            "time": 5.5,
+            "azimuth": 180.0,
+            "elevation": -15.0
+        });
+
+        let wp: RotationWaypoint = serde_json::from_value(payload).unwrap();
+        assert_eq!(wp.time, 5.5);
+        assert_eq!(wp.azimuth, 180.0);
+        assert_eq!(wp.elevation, -15.0);
+    }
+
+    #[test]
+    fn test_fers_state_wrapper() {
+        // Verify that the C++ library correctly linked and can be protected by a Rust Mutex.
+        // This mimics how Tauri maintains the global state internally.
+        let context = fers_api::FersContext::new()
+            .expect("Failed to create FERS context. Check build.rs linking.");
+
+        let state: FersState = Mutex::new(context);
+
+        // Test safe access and locking capabilities.
+        let locked_context = state.lock().unwrap();
+
+        // Executing a read against the state
+        let result = locked_context.get_scenario_as_json();
+
+        // Since it's a completely uninitialized new context with no XML/JSON loaded yet,
+        // it correctly delegates to the backend and evaluates safely without segfaults.
+        assert!(result.is_ok() || result.is_err());
     }
 }

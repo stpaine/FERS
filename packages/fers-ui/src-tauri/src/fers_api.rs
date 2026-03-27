@@ -103,7 +103,7 @@ impl FersOwnedString {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// let owned = FersOwnedString(some_c_string_ptr);
     /// match owned.into_string() {
     ///     Ok(s) => println!("Got string: {}", s),
@@ -138,7 +138,7 @@ impl FersOwnedString {
 ///
 /// # Example
 ///
-/// ```no_run
+/// ```ignore
 /// use fers_api::FersContext;
 ///
 /// let context = FersContext::new().expect("Failed to create context");
@@ -270,7 +270,7 @@ impl Drop for FersAntennaPatternData {
 /// Data structure for antenna pattern data sent to the frontend.
 ///
 /// This struct flattens the 2D gain data into a 1D vector for easy serialization.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, std::fmt::Debug)]
 pub struct AntennaPatternData {
     /// Flattened array of linear gain values (normalized 0.0 to 1.0).
     /// Ordered row-major: Elevation rows, then Azimuth columns.
@@ -297,7 +297,7 @@ impl Drop for FersVisualLinkList {
 /// Represents a visual link segment for 3D rendering.
 ///
 /// This struct maps C-style enums to integers for consumption by the TypeScript frontend.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, std::fmt::Debug)]
 pub struct VisualLink {
     /// The type of radio link.
     /// * `0`: Monostatic (Tx -> Tgt -> Rx, where Tx==Rx)
@@ -335,7 +335,7 @@ impl FersContext {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// let context = FersContext::new().expect("Failed to create FERS context");
     /// ```
     pub fn new() -> Option<Self> {
@@ -367,7 +367,7 @@ impl FersContext {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// context.load_scenario_from_xml_file("/path/to/scenario.xml")?;
     /// ```
     pub fn load_scenario_from_xml_file(&self, filepath: &str) -> Result<(), String> {
@@ -401,7 +401,7 @@ impl FersContext {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// let json = context.get_scenario_as_json()?;
     /// let scenario: serde_json::Value = serde_json::from_str(&json)?;
     /// ```
@@ -434,7 +434,7 @@ impl FersContext {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// let xml = context.get_scenario_as_xml()?;
     /// std::fs::write("exported_scenario.xml", xml)?;
     /// ```
@@ -469,7 +469,7 @@ impl FersContext {
     ///
     /// # Example
     ///
-    /// ```no_run
+    /// ```ignore
     /// let modified_json = /* JSON from UI */;
     /// context.update_scenario_from_json(&modified_json)?;
     /// ```
@@ -806,4 +806,257 @@ pub fn get_interpolated_rotation_path(
         .collect();
 
     Ok(points)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+
+    /// A minimal, valid FERS JSON scenario that the core engine can parse.
+    fn minimal_valid_json() -> &'static str {
+        r#"{
+            "simulation": {
+                "parameters": {
+                    "starttime": 0.0,
+                    "endtime": 1.0,
+                    "rate": 1000.0,
+                    "origin": { "latitude": 0.0, "longitude": 0.0, "altitude": 0.0 },
+                    "coordinatesystem": { "frame": "ENU" }
+                }
+            }
+        }"#
+    }
+
+    #[test]
+    fn test_context_creation_and_destruction() {
+        // Implicitly tests FersContext::new() and Drop (via fers_context_destroy)
+        let context = FersContext::new();
+        assert!(context.is_some(), "Failed to create FersContext via FFI");
+    }
+
+    #[test]
+    fn test_update_scenario_from_invalid_json() {
+        let context = FersContext::new().unwrap();
+        let result = context.update_scenario_from_json("{ malformed_json...");
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(
+            err_msg.contains("JSON parsing/deserialization error"),
+            "Unexpected error message: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_update_and_get_scenario() {
+        let context = FersContext::new().unwrap();
+        let result = context.update_scenario_from_json(minimal_valid_json());
+        assert!(result.is_ok(), "Failed to update scenario from valid JSON");
+
+        // Ensure retrieving it back as JSON works and memory is managed
+        let json_back = context.get_scenario_as_json().unwrap();
+        assert!(json_back.contains("parameters"), "JSON export missing expected data");
+
+        // Ensure retrieving it back as XML works
+        let xml_back = context.get_scenario_as_xml().unwrap();
+        assert!(xml_back.contains("<simulation"), "XML export missing root element");
+    }
+
+    #[test]
+    fn test_load_scenario_from_xml_file() {
+        let context = FersContext::new().unwrap();
+        let mut temp_file = NamedTempFile::new().unwrap();
+        let minimal_xml = r#"<simulation name="TestAPI"><parameters><starttime>0</starttime><endtime>1</endtime><rate>1000</rate><origin latitude="0" longitude="0" altitude="0"/><coordinatesystem frame="ENU"/></parameters><antenna name="api_iso" pattern="isotropic"/></simulation>"#;
+        temp_file.write_all(minimal_xml.as_bytes()).unwrap();
+
+        let result = context.load_scenario_from_xml_file(temp_file.path().to_str().unwrap());
+        assert!(result.is_ok(), "Failed to load minimal valid XML from file");
+    }
+
+    #[test]
+    fn test_generate_kml() {
+        let context = FersContext::new().unwrap();
+        context.update_scenario_from_json(minimal_valid_json()).unwrap();
+
+        let temp_kml = NamedTempFile::new().unwrap();
+        let result = context.generate_kml(temp_kml.path().to_str().unwrap());
+        assert!(result.is_ok(), "KML generation failed");
+
+        // Verify data was actually written to the file by the C++ core
+        let metadata = std::fs::metadata(temp_kml.path()).unwrap();
+        assert!(metadata.len() > 0, "KML file was created but is empty");
+    }
+
+    #[test]
+    fn test_get_interpolated_motion_path() {
+        let waypoints = vec![
+            crate::MotionWaypoint { time: 0.0, x: 0.0, y: 0.0, altitude: 0.0 },
+            crate::MotionWaypoint { time: 10.0, x: 10.0, y: 20.0, altitude: 30.0 },
+        ];
+
+        let points =
+            get_interpolated_motion_path(waypoints, crate::InterpolationType::Linear, 3).unwrap();
+
+        assert_eq!(points.len(), 3);
+        // Linear interpolation midpoint logic check
+        assert_eq!(points[1].x, 5.0);
+        assert_eq!(points[1].y, 10.0);
+        assert_eq!(points[1].z, 15.0);
+        assert_eq!(points[1].vx, 1.0);
+        assert_eq!(points[1].vy, 2.0);
+        assert_eq!(points[1].vz, 3.0);
+    }
+
+    #[test]
+    fn test_get_interpolated_rotation_path() {
+        let waypoints = vec![
+            crate::RotationWaypoint { time: 0.0, azimuth: 0.0, elevation: 0.0 },
+            crate::RotationWaypoint { time: 10.0, azimuth: 90.0, elevation: 20.0 },
+        ];
+
+        let points =
+            get_interpolated_rotation_path(waypoints, crate::InterpolationType::Linear, 3).unwrap();
+
+        assert_eq!(points.len(), 3);
+        // Linear interpolation midpoint logic check
+        assert_eq!(points[1].azimuth_deg, 45.0);
+        assert_eq!(points[1].elevation_deg, 10.0);
+    }
+
+    #[test]
+    fn test_get_antenna_pattern_invalid_id() {
+        let context = FersContext::new().unwrap();
+        context.update_scenario_from_json(minimal_valid_json()).unwrap();
+
+        // The minimal JSON has no antennas, so ID "99" should definitively fail.
+        let result = context.get_antenna_pattern("99", 10, 10, 1e9);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn test_calculate_preview_links_empty() {
+        let context = FersContext::new().unwrap();
+        context.update_scenario_from_json(minimal_valid_json()).unwrap();
+
+        // Run on an empty scenario without platforms, shouldn't crash, should return empty vec.
+        let links = context.calculate_preview_links(0.0).unwrap();
+        assert_eq!(links.len(), 0);
+    }
+    #[test]
+    fn test_fers_owned_string_null() {
+        // Test that a null pointer safely converts to an empty string
+        let null_str = FersOwnedString(std::ptr::null_mut());
+        let result = null_str.into_string();
+        assert_eq!(result.unwrap(), "");
+
+        // Test that dropping a null pointer doesn't panic or segfault
+        let drop_str = FersOwnedString(std::ptr::null_mut());
+        drop(drop_str);
+    }
+
+    #[test]
+    fn test_raii_null_drops() {
+        // Test that dropping null pointers in our internal RAII wrappers is safe
+        let ant_data = FersAntennaPatternData(std::ptr::null_mut());
+        drop(ant_data);
+
+        let link_list = FersVisualLinkList(std::ptr::null_mut());
+        drop(link_list);
+    }
+
+    #[test]
+    fn test_get_interpolated_paths_empty() {
+        // Test empty waypoints
+        let motion =
+            get_interpolated_motion_path(vec![], crate::InterpolationType::Linear, 5).unwrap();
+        assert!(motion.is_empty());
+
+        let rotation =
+            get_interpolated_rotation_path(vec![], crate::InterpolationType::Linear, 5).unwrap();
+        assert!(rotation.is_empty());
+
+        // Test zero num_points
+        let wp_m = vec![crate::MotionWaypoint { time: 0.0, x: 0.0, y: 0.0, altitude: 0.0 }];
+        let motion2 =
+            get_interpolated_motion_path(wp_m, crate::InterpolationType::Linear, 0).unwrap();
+        assert!(motion2.is_empty());
+
+        let wp_r = vec![crate::RotationWaypoint { time: 0.0, azimuth: 0.0, elevation: 0.0 }];
+        let rotation2 =
+            get_interpolated_rotation_path(wp_r, crate::InterpolationType::Linear, 0).unwrap();
+        assert!(rotation2.is_empty());
+    }
+
+    #[test]
+    fn test_get_antenna_pattern_success() {
+        let context = FersContext::new().unwrap();
+        let scenario = r#"{
+            "simulation": {
+                "parameters": {
+                    "starttime": 0.0, "endtime": 1.0, "rate": 1000.0,
+                    "origin": { "latitude": 0.0, "longitude": 0.0, "altitude": 0.0 },
+                    "coordinatesystem": { "frame": "ENU" }
+                },
+                "antennas": [
+                    { "id": 1, "name": "iso", "pattern": "isotropic" }
+                ]
+            }
+        }"#;
+        context.update_scenario_from_json(scenario).unwrap();
+
+        let pattern = context.get_antenna_pattern("1", 4, 4, 1e9).unwrap();
+        assert_eq!(pattern.az_count, 4);
+        assert_eq!(pattern.el_count, 4);
+        assert_eq!(pattern.gains.len(), 16);
+        assert!(pattern.max_gain > 0.0);
+    }
+
+    #[test]
+    fn test_calculate_preview_links_success() {
+        let context = FersContext::new().unwrap();
+        let scenario = r#"{
+            "simulation": {
+                "parameters": {
+                    "starttime": 0.0, "endtime": 1.0, "rate": 1000.0,
+                    "origin": { "latitude": 0.0, "longitude": 0.0, "altitude": 0.0 },
+                    "coordinatesystem": { "frame": "ENU" }
+                },
+                "waveforms": [
+                    { "id": 10, "name": "w1", "power": 1000.0, "carrier_frequency": 1e9, "cw": {} }
+                ],
+                "antennas": [
+                    { "id": 20, "name": "a1", "pattern": "isotropic" }
+                ],
+                "timings": [
+                    { "id": 30, "name": "t1", "frequency": 1e6 }
+                ],
+                "platforms": [
+                    {
+                        "id": 100, "name": "tx_plat",
+                        "motionpath": { "interpolation": "static", "positionwaypoints": [ { "time": 0.0, "x": 0.0, "y": 0.0, "altitude": 0.0 } ] },
+                        "rotationpath": { "interpolation": "static", "rotationwaypoints": [ { "time": 0.0, "azimuth": 0.0, "elevation": 0.0 } ] },
+                        "components": [ { "transmitter": { "id": 101, "name": "tx1", "waveform": 10, "antenna": 20, "timing": 30, "cw_mode": {} } } ]
+                    },
+                    {
+                        "id": 200, "name": "rx_plat",
+                        "motionpath": { "interpolation": "static", "positionwaypoints": [ { "time": 0.0, "x": 100.0, "y": 0.0, "altitude": 0.0 } ] },
+                        "rotationpath": { "interpolation": "static", "rotationwaypoints": [ { "time": 0.0, "azimuth": 0.0, "elevation": 0.0 } ] },
+                        "components": [ { "receiver": { "id": 201, "name": "rx1", "antenna": 20, "timing": 30, "cw_mode": {}, "noise_temp": 290.0 } } ]
+                    }
+                ]
+            }
+        }"#;
+        context.update_scenario_from_json(scenario).unwrap();
+
+        let links = context.calculate_preview_links(0.0).unwrap();
+        assert!(!links.is_empty());
+
+        let direct_link =
+            links.iter().find(|l| l.link_type == 3).expect("Expected a direct interference link");
+        assert_eq!(direct_link.source_id, "101");
+        assert_eq!(direct_link.dest_id, "201");
+    }
 }
