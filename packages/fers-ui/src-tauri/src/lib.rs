@@ -427,6 +427,7 @@ fn update_item_from_json(
         "Antenna" => context.update_antenna_from_json(&json),
         "Waveform" => context.update_waveform_from_json(&json),
         "Timing" => context.update_timing_from_json(&item_id, &json),
+        "GlobalParameters" => context.update_parameters_from_json(&json),
         _ => Ok(()),
     }
 }

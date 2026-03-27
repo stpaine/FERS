@@ -58,6 +58,9 @@ export function AntennaPatternMesh({
     const userScale = antenna?.meshScale ?? 1.0;
     const groupRef = useRef<THREE.Group>(null!);
 
+    // Create a stable hash of the antenna's properties to trigger real-time updates
+    const antennaHash = JSON.stringify(antenna);
+
     // Apply dynamic scaling hook
     useDynamicScale(groupRef, { baseScale: userScale });
 
@@ -137,7 +140,7 @@ export function AntennaPatternMesh({
             // Clear data on cleanup to prevent "stale" patterns flashing when switching configurations
             setPatternData(null);
         };
-    }, [antennaIdStr, frequency, backendVersion]);
+    }, [antennaIdStr, frequency, antennaHash, backendVersion]);
 
     const geometry = useMemo(() => {
         if (!patternData) return new THREE.BufferGeometry();

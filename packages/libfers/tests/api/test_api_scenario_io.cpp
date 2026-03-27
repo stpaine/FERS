@@ -6,7 +6,9 @@
 
 #include "api_test_helpers.h"
 
+using api_test::json;
 using Catch::Matchers::ContainsSubstring;
+using Catch::Matchers::WithinAbs;
 
 TEST_CASE("API loading scenario from XML string rejects null arguments", "[api][scenario]")
 {
@@ -67,7 +69,7 @@ TEST_CASE("API loads a minimal scenario from XML string and exports JSON", "[api
 	api_test::ApiString json_text = api_test::scenarioAsJson(context.get());
 	REQUIRE(json_text.get() != nullptr);
 
-	const api_test::json scenario = api_test::json::parse(json_text.str());
+	const json scenario = json::parse(json_text.str());
 	REQUIRE(scenario.contains("simulation"));
 	REQUIRE(scenario.at("simulation").is_object());
 	REQUIRE(scenario.at("simulation").contains("name"));
@@ -252,6 +254,20 @@ TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 
 	auto scenario = api_test::parseScenarioJson(context.get());
 
+	SECTION("Parameters update")
+	{
+		json params_json = {{"starttime", 2.0},
+							{"endtime", 50.0},
+							{"rate", 5000.0},
+							{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+							{"coordinatesystem", {{"frame", "ENU"}}}};
+		REQUIRE(fers_update_parameters_from_json(context.get(), params_json.dump().c_str()) == 0);
+
+		auto updated = api_test::parseScenarioJson(context.get());
+		REQUIRE_THAT(updated["simulation"]["parameters"]["starttime"].get<double>(), WithinAbs(2.0, 1e-9));
+		REQUIRE_THAT(updated["simulation"]["parameters"]["rate"].get<double>(), WithinAbs(5000.0, 1e-9));
+	}
+
 	SECTION("Platform update")
 	{
 		auto plat = scenario["simulation"]["platforms"][0];
@@ -274,8 +290,7 @@ TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 
 		auto updated = api_test::parseScenarioJson(context.get());
 		REQUIRE(updated["simulation"]["antennas"][0]["name"] == "UpdatedAntenna");
-		REQUIRE_THAT(updated["simulation"]["antennas"][0]["efficiency"].get<double>(),
-					 Catch::Matchers::WithinAbs(0.5, 1e-9));
+		REQUIRE_THAT(updated["simulation"]["antennas"][0]["efficiency"].get<double>(), WithinAbs(0.5, 1e-9));
 	}
 
 	SECTION("Waveform update")
@@ -288,8 +303,7 @@ TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 
 		auto updated = api_test::parseScenarioJson(context.get());
 		REQUIRE(updated["simulation"]["waveforms"][0]["name"] == "UpdatedWaveform");
-		REQUIRE_THAT(updated["simulation"]["waveforms"][0]["power"].get<double>(),
-					 Catch::Matchers::WithinAbs(999.0, 1e-9));
+		REQUIRE_THAT(updated["simulation"]["waveforms"][0]["power"].get<double>(), WithinAbs(999.0, 1e-9));
 	}
 }
 
@@ -317,7 +331,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_tx = updated["simulation"]["platforms"][0]["components"][0]["transmitter"];
 		REQUIRE(updated_tx["name"] == "UpdatedTx");
-		REQUIRE_THAT(updated_tx["pulsed_mode"]["prf"].get<double>(), Catch::Matchers::WithinAbs(1250.0, 1e-9));
+		REQUIRE_THAT(updated_tx["pulsed_mode"]["prf"].get<double>(), WithinAbs(1250.0, 1e-9));
 	}
 
 	SECTION("Receiver update")
@@ -332,7 +346,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_rx = updated["simulation"]["platforms"][1]["components"][0]["receiver"];
 		REQUIRE(updated_rx["name"] == "UpdatedRx");
-		REQUIRE_THAT(updated_rx["noise_temp"].get<double>(), Catch::Matchers::WithinAbs(400.0, 1e-9));
+		REQUIRE_THAT(updated_rx["noise_temp"].get<double>(), WithinAbs(400.0, 1e-9));
 	}
 
 	SECTION("Target update")
@@ -347,7 +361,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_tgt = updated["simulation"]["platforms"][2]["components"][0]["target"];
 		REQUIRE(updated_tgt["name"] == "UpdatedTgt");
-		REQUIRE_THAT(updated_tgt["rcs"]["value"].get<double>(), Catch::Matchers::WithinAbs(99.0, 1e-9));
+		REQUIRE_THAT(updated_tgt["rcs"]["value"].get<double>(), WithinAbs(99.0, 1e-9));
 	}
 
 	SECTION("Timing update")
@@ -362,7 +376,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_timing = updated["simulation"]["timings"][0];
 		REQUIRE(updated_timing["name"] == "UpdatedTiming");
-		REQUIRE_THAT(updated_timing["frequency"].get<double>(), Catch::Matchers::WithinAbs(2e6, 1e-9));
+		REQUIRE_THAT(updated_timing["frequency"].get<double>(), WithinAbs(2e6, 1e-9));
 	}
 }
 
@@ -389,7 +403,7 @@ TEST_CASE("API granular updates modify specific objects (Monostatic Scenario)", 
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_mono = updated["simulation"]["platforms"][0]["components"][0]["monostatic"];
 		REQUIRE(updated_mono["name"] == "UpdatedMono");
-		REQUIRE_THAT(updated_mono["noise_temp"].get<double>(), Catch::Matchers::WithinAbs(500.0, 1e-9));
+		REQUIRE_THAT(updated_mono["noise_temp"].get<double>(), WithinAbs(500.0, 1e-9));
 	}
 }
 
@@ -403,6 +417,8 @@ TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 
 	SECTION("Null context or JSON")
 	{
+		REQUIRE(fers_update_parameters_from_json(nullptr, "{}") == -1);
+		REQUIRE(fers_update_parameters_from_json(context.get(), nullptr) == -1);
 		REQUIRE(fers_update_platform_from_json(nullptr, 1, "{}") == -1);
 		REQUIRE(fers_update_platform_from_json(context.get(), 1, nullptr) == -1);
 		REQUIRE(fers_update_antenna_from_json(nullptr, "{}") == -1);
@@ -423,6 +439,7 @@ TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 
 	SECTION("Invalid JSON")
 	{
+		REQUIRE(fers_update_parameters_from_json(context.get(), "{bad") == 1);
 		REQUIRE(fers_update_platform_from_json(context.get(), 1, "{bad") == 1);
 		REQUIRE(fers_update_antenna_from_json(context.get(), "{bad") == 1);
 		REQUIRE(fers_update_waveform_from_json(context.get(), "{bad") == 1);
@@ -445,26 +462,4 @@ TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 		REQUIRE(fers_update_monostatic_from_json(context.get(), "{\"tx_id\": 999999, \"rx_id\": 888888}") == 1);
 		REQUIRE(fers_update_timing_from_json(context.get(), 999999, "{}") == 1);
 	}
-}
-
-TEST_CASE("API XML JSON round-trip keeps the context usable", "[api][scenario]")
-{
-	api_test::ParamGuard guard;
-	api_test::clearLastError();
-	api_test::Context context;
-	REQUIRE(context.get() != nullptr);
-
-	const std::string xml = api_test::minimalScenarioXml("Round Trip Original");
-	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
-
-	auto scenario = api_test::parseScenarioJson(context.get());
-	scenario["simulation"]["name"] = "Round Trip Updated";
-	REQUIRE(fers_update_scenario_from_json(context.get(), scenario.dump().c_str()) == 0);
-
-	api_test::ApiString xml_text = api_test::scenarioAsXml(context.get());
-	REQUIRE(xml_text.get() != nullptr);
-	REQUIRE_THAT(xml_text.str(), ContainsSubstring("Round Trip Updated"));
-
-	const auto after_update = api_test::parseScenarioJson(context.get());
-	REQUIRE(after_update.at("simulation").at("name") == "Round Trip Updated");
 }

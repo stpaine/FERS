@@ -200,6 +200,14 @@ int fers_update_scenario_from_json(fers_context_t* context, const char* scenario
 int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json);
 
 /**
+ * @brief Updates the global simulation parameters from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the parameters.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_parameters_from_json(fers_context_t* context, const char* json);
+
+/**
  * @brief Updates a single antenna from JSON without full context recreation.
  * @param context A valid `fers_context_t` handle.
  * @param json The JSON string for the antenna.

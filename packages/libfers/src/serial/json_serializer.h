@@ -75,6 +75,16 @@ namespace serial
 	std::unique_ptr<fers_signal::RadarSignal> parse_waveform_from_json(const nlohmann::json& j);
 
 	/**
+	 * @brief Updates global simulation parameters from JSON.
+	 */
+	void update_parameters_from_json(const nlohmann::json& j, std::mt19937& masterSeeder);
+
+	/**
+	 * @brief Updates an antenna from JSON without full context recreation.
+	 */
+	void update_antenna_from_json(const nlohmann::json& j, antenna::Antenna* ant, core::World& world);
+
+	/**
 	 * @brief Updates a transmitter from JSON without full context recreation.
 	 */
 	void update_transmitter_from_json(const nlohmann::json& j, radar::Transmitter* tx, core::World& world,

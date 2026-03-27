@@ -125,7 +125,7 @@ namespace radar
 		 * @param seed The seed for the target's internal random number generator.
 		 */
 		Target(Platform* platform, std::string name, const unsigned seed, const SimId id = 0) :
-			Object(platform, std::move(name), ObjectType::Target, id), _rng(seed)
+			Object(platform, std::move(name), ObjectType::Target, id), _rng(seed), _seed(seed)
 		{
 		}
 
@@ -166,9 +166,17 @@ namespace radar
 		 */
 		[[nodiscard]] const RcsModel* getFluctuationModel() const { return _model.get(); }
 
+		/**
+		 * @brief Gets the initial seed used for the target's RNG.
+		 *
+		 * @return The initial seed value.
+		 */
+		[[nodiscard]] unsigned getSeed() const noexcept { return _seed; }
+
 	protected:
 		std::unique_ptr<RcsModel> _model{nullptr}; ///< The RCS fluctuation model for the target.
 		std::mt19937 _rng; ///< Per-object random number generator for statistical independence.
+		unsigned _seed; ///< The initial seed for the RNG.
 	};
 
 	/**

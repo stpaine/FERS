@@ -1116,6 +1116,77 @@ namespace serial
 		return wf;
 	}
 
+	void update_parameters_from_json(const nlohmann::json& j, std::mt19937& masterSeeder)
+	{
+		nlohmann::json sim;
+		sim["parameters"] = j;
+		parse_parameters(sim, masterSeeder);
+	}
+
+	void update_antenna_from_json(const nlohmann::json& j, antenna::Antenna* ant, core::World& world)
+	{
+		auto new_pattern = j.value("pattern", "isotropic");
+		bool type_changed = false;
+
+		if (new_pattern == "isotropic" && !dynamic_cast<antenna::Isotropic*>(ant))
+			type_changed = true;
+		else if (new_pattern == "sinc" && !dynamic_cast<antenna::Sinc*>(ant))
+			type_changed = true;
+		else if (new_pattern == "gaussian" && !dynamic_cast<antenna::Gaussian*>(ant))
+			type_changed = true;
+		else if (new_pattern == "squarehorn" && !dynamic_cast<antenna::SquareHorn*>(ant))
+			type_changed = true;
+		else if (new_pattern == "parabolic" && !dynamic_cast<antenna::Parabolic*>(ant))
+			type_changed = true;
+		else if (new_pattern == "xml" && !dynamic_cast<antenna::XmlAntenna*>(ant))
+			type_changed = true;
+		else if (new_pattern == "file" && !dynamic_cast<antenna::H5Antenna*>(ant))
+			type_changed = true;
+
+		if (type_changed)
+		{
+			world.replace(parse_antenna_from_json(j));
+			return;
+		}
+
+		ant->setName(j.at("name").get<std::string>());
+		ant->setEfficiencyFactor(j.value("efficiency", 1.0));
+
+		if (auto* sinc = dynamic_cast<antenna::Sinc*>(ant))
+		{
+			sinc->setAlpha(j.value("alpha", 1.0));
+			sinc->setBeta(j.value("beta", 1.0));
+			sinc->setGamma(j.value("gamma", 2.0));
+		}
+		else if (auto* gauss = dynamic_cast<antenna::Gaussian*>(ant))
+		{
+			gauss->setAzimuthScale(j.value("azscale", 1.0));
+			gauss->setElevationScale(j.value("elscale", 1.0));
+		}
+		else if (auto* horn = dynamic_cast<antenna::SquareHorn*>(ant))
+		{
+			horn->setDimension(j.value("diameter", 0.5));
+		}
+		else if (auto* para = dynamic_cast<antenna::Parabolic*>(ant))
+		{
+			para->setDiameter(j.value("diameter", 0.5));
+		}
+		else if (auto* xml = dynamic_cast<antenna::XmlAntenna*>(ant))
+		{
+			if (xml->getFilename() != j.value("filename", ""))
+			{
+				world.replace(parse_antenna_from_json(j));
+			}
+		}
+		else if (auto* h5 = dynamic_cast<antenna::H5Antenna*>(ant))
+		{
+			if (h5->getFilename() != j.value("filename", ""))
+			{
+				world.replace(parse_antenna_from_json(j));
+			}
+		}
+	}
+
 	void update_platform_paths_from_json(const nlohmann::json& j, radar::Platform* plat)
 	{
 		if (j.contains("motionpath"))
@@ -1151,7 +1222,7 @@ namespace serial
 	}
 
 	void update_transmitter_from_json(const nlohmann::json& j, radar::Transmitter* tx, core::World& world,
-									  std::mt19937& masterSeeder)
+									  std::mt19937& /*masterSeeder*/)
 	{
 		if (j.contains("name"))
 			tx->setName(j.at("name").get<std::string>());
@@ -1167,22 +1238,36 @@ namespace serial
 		}
 
 		if (j.contains("waveform"))
-			tx->setWave(world.findWaveform(parse_json_id(j, "waveform", "Transmitter")));
+		{
+			auto id = parse_json_id(j, "waveform", "Transmitter");
+			auto* wf = world.findWaveform(id);
+			if (!wf)
+				throw std::runtime_error("Waveform ID " + std::to_string(id) + " not found.");
+			tx->setWave(wf);
+		}
+
 		if (j.contains("antenna"))
-			tx->setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Transmitter")));
+		{
+			auto id = parse_json_id(j, "antenna", "Transmitter");
+			auto* ant = world.findAntenna(id);
+			if (!ant)
+				throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
+			tx->setAntenna(ant);
+		}
+
 		if (j.contains("timing"))
 		{
 			auto timing_id = parse_json_id(j, "timing", "Transmitter");
 			if (const auto timing_proto = world.findTiming(timing_id))
 			{
-				auto timing =
-					std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
+				unsigned seed = tx->getTiming() ? tx->getTiming()->getSeed() : 0;
+				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
 				timing->initializeModel(timing_proto);
 				tx->setTiming(timing);
 			}
 			else
 			{
-				tx->setTiming(nullptr);
+				throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
 			}
 		}
 		if (j.contains("schedule"))
@@ -1197,7 +1282,7 @@ namespace serial
 	}
 
 	void update_receiver_from_json(const nlohmann::json& j, radar::Receiver* rx, core::World& world,
-								   std::mt19937& masterSeeder)
+								   std::mt19937& /*masterSeeder*/)
 	{
 		if (j.contains("name"))
 			rx->setName(j.at("name").get<std::string>());
@@ -1233,20 +1318,27 @@ namespace serial
 		}
 
 		if (j.contains("antenna"))
-			rx->setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Receiver")));
+		{
+			auto id = parse_json_id(j, "antenna", "Receiver");
+			auto* ant = world.findAntenna(id);
+			if (!ant)
+				throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
+			rx->setAntenna(ant);
+		}
+
 		if (j.contains("timing"))
 		{
 			auto timing_id = parse_json_id(j, "timing", "Receiver");
 			if (const auto timing_proto = world.findTiming(timing_id))
 			{
-				auto timing =
-					std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
+				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
+				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
 				timing->initializeModel(timing_proto);
 				rx->setTiming(timing);
 			}
 			else
 			{
-				rx->setTiming(nullptr);
+				throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
 			}
 		}
 		if (j.contains("schedule"))
@@ -1297,8 +1389,8 @@ namespace serial
 			auto timing_id = parse_json_id(j, "timing", "Monostatic");
 			if (const auto timing_proto = world.findTiming(timing_id))
 			{
-				auto rx_timing =
-					std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
+				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
+				auto rx_timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
 				rx_timing->initializeModel(timing_proto);
 				rx->setTiming(rx_timing);
 			}
@@ -1321,7 +1413,7 @@ namespace serial
 	}
 
 	void update_target_from_json(const nlohmann::json& j, radar::Target* existing_tgt, core::World& world,
-								 std::mt19937& masterSeeder)
+								 std::mt19937& /*masterSeeder*/)
 	{
 		auto plat = existing_tgt->getPlatform();
 		const auto& rcs_json = j.at("rcs");
@@ -1330,17 +1422,16 @@ namespace serial
 
 		const auto target_id = existing_tgt->getId();
 		const auto name = j.value("name", existing_tgt->getName());
+		unsigned seed = existing_tgt->getSeed();
 
 		if (rcs_type == "isotropic")
 		{
-			target_obj = radar::createIsoTarget(plat, name, rcs_json.value("value", 1.0),
-												static_cast<unsigned>(masterSeeder()), target_id);
+			target_obj = radar::createIsoTarget(plat, name, rcs_json.value("value", 1.0), seed, target_id);
 		}
 		else if (rcs_type == "file")
 		{
 			const auto filename = rcs_json.value("filename", "");
-			target_obj =
-				radar::createFileTarget(plat, name, filename, static_cast<unsigned>(masterSeeder()), target_id);
+			target_obj = radar::createFileTarget(plat, name, filename, seed, target_id);
 		}
 		else
 		{

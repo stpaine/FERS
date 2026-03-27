@@ -107,6 +107,13 @@ namespace antenna
 		 */
 		void setEfficiencyFactor(RealType loss) noexcept;
 
+		/**
+		 * @brief Sets the name of the antenna.
+		 *
+		 * @param name The new name of the antenna.
+		 */
+		void setName(std::string name) noexcept { _name = std::move(name); }
+
 	protected:
 		/**
 		 * @brief Computes the angle between the input and reference angles.
@@ -215,6 +222,27 @@ namespace antenna
 		[[nodiscard]] RealType getGain(const math::SVec3& angle, const math::SVec3& refangle,
 									   RealType wavelength) const noexcept override;
 
+		/**
+		 * @brief Sets the alpha parameter of the sinc function.
+		 *
+		 * @param alpha The new alpha parameter.
+		 */
+		void setAlpha(RealType alpha) noexcept { _alpha = alpha; }
+
+		/**
+		 * @brief Sets the beta parameter of the sinc function.
+		 *
+		 * @param beta The new beta parameter.
+		 */
+		void setBeta(RealType beta) noexcept { _beta = beta; }
+
+		/**
+		 * @brief Sets the gamma parameter of the sinc function.
+		 *
+		 * @param gamma The new gamma parameter.
+		 */
+		void setGamma(RealType gamma) noexcept { _gamma = gamma; }
+
 	private:
 		RealType _alpha; ///< Parameter defining the shape of the gain pattern.
 		RealType _beta; ///< Parameter defining the shape of the gain pattern.
@@ -269,6 +297,20 @@ namespace antenna
 		/** @brief Gets the elevation scale factor. */
 		[[nodiscard]] RealType getElevationScale() const noexcept { return _elscale; }
 
+		/**
+		 * @brief Sets the azimuth scale factor of the Gaussian function.
+		 *
+		 * @param azscale The new azimuth scale factor.
+		 */
+		void setAzimuthScale(RealType azscale) noexcept { _azscale = azscale; }
+
+		/**
+		 * @brief Sets the elevation scale factor of the Gaussian function.
+		 *
+		 * @param elscale The new elevation scale factor.
+		 */
+		void setElevationScale(RealType elscale) noexcept { _elscale = elscale; }
+
 	private:
 		RealType _azscale; ///< Azimuth scale factor.
 		RealType _elscale; ///< Elevation scale factor.
@@ -318,6 +360,13 @@ namespace antenna
 		/** @brief Gets the dimension of the square horn. */
 		[[nodiscard]] RealType getDimension() const noexcept { return _dimension; }
 
+		/**
+		 * @brief Sets the dimension of the square horn.
+		 *
+		 * @param dimension The new dimension of the square horn.
+		 */
+		void setDimension(RealType dimension) noexcept { _dimension = dimension; }
+
 	private:
 		RealType _dimension; ///< Dimension of the square horn.
 	};
@@ -365,6 +414,13 @@ namespace antenna
 
 		/** @brief Gets the diameter of the parabolic reflector. */
 		[[nodiscard]] RealType getDiameter() const noexcept { return _diameter; }
+
+		/**
+		 * @brief Sets the diameter of the parabolic reflector.
+		 *
+		 * @param diameter The new diameter of the parabolic reflector.
+		 */
+		void setDiameter(RealType diameter) noexcept { _diameter = diameter; }
 
 	private:
 		RealType _diameter; ///< Diameter of the parabolic reflector.

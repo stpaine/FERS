@@ -484,7 +484,12 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	auto tx = std::make_unique<radar::Transmitter>(p.get(), "tx1", radar::OperationMode::CW_MODE, 101);
 	auto rx = std::make_unique<radar::Receiver>(p.get(), "rx1", 42, radar::OperationMode::CW_MODE, 102);
-	auto tgt = radar::createIsoTarget(p.get(), "tgt1", 1.0, 42, 103);
+	auto tgt = radar::createIsoTarget(p.get(), "tgt1", 1.0, 54321, 103); // Explicit seed 54321
+
+	// Give tx and rx an initial timing object to verify seed preservation
+	auto initial_timing = std::make_shared<timing::Timing>("tim1", 12345, 30);
+	tx->setTiming(initial_timing);
+	rx->setTiming(initial_timing);
 
 	auto* tx_ptr = tx.get();
 	auto* rx_ptr = rx.get();
@@ -494,6 +499,45 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 	w.add(std::move(rx));
 	w.add(std::move(tgt));
 	w.add(std::move(p));
+
+	SECTION("Update Parameters")
+	{
+		json j = {{"starttime", 1.0},
+				  {"endtime", 20.0},
+				  {"rate", 2000.0},
+				  {"origin", {{"latitude", 10.0}, {"longitude", 20.0}, {"altitude", 30.0}}},
+				  {"coordinatesystem", {{"frame", "ECEF"}}}};
+		serial::update_parameters_from_json(j, seeder);
+
+		REQUIRE_THAT(params::startTime(), WithinAbs(1.0, 1e-9));
+		REQUIRE_THAT(params::endTime(), WithinAbs(20.0, 1e-9));
+		REQUIRE_THAT(params::rate(), WithinAbs(2000.0, 1e-9));
+		REQUIRE(params::coordinateFrame() == params::CoordinateFrame::ECEF);
+	}
+
+	SECTION("Update Antenna In-Place")
+	{
+		auto* ant_ptr = w.findAntenna(20);
+		json j = {{"id", 20}, {"name", "ant_updated"}, {"pattern", "isotropic"}, {"efficiency", 0.5}};
+		serial::update_antenna_from_json(j, ant_ptr, w);
+
+		REQUIRE(ant_ptr->getName() == "ant_updated");
+		REQUIRE_THAT(ant_ptr->getEfficiencyFactor(), WithinAbs(0.5, 1e-9));
+	}
+
+	SECTION("Update Antenna Replacement")
+	{
+		auto* ant_ptr = w.findAntenna(20);
+		json j = {{"id", 20},	 {"name", "ant_replaced"}, {"pattern", "sinc"}, {"alpha", 1.0}, {"beta", 2.0},
+				  {"gamma", 3.0}};
+		serial::update_antenna_from_json(j, ant_ptr, w);
+
+		auto* new_ant = w.findAntenna(20);
+		REQUIRE(new_ant != nullptr);
+		REQUIRE(new_ant != ant_ptr); // Pointer changed
+		REQUIRE(new_ant->getName() == "ant_replaced");
+		REQUIRE(dynamic_cast<antenna::Sinc*>(new_ant) != nullptr);
+	}
 
 	SECTION("Update Transmitter")
 	{
@@ -508,6 +552,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 		REQUIRE(tx_ptr->getSignal() != nullptr);
 		REQUIRE(tx_ptr->getAntenna() != nullptr);
 		REQUIRE(tx_ptr->getTiming() != nullptr);
+		REQUIRE(tx_ptr->getTiming()->getSeed() == 12345); // Seed preserved
 		REQUIRE(tx_ptr->getSchedule().size() == 1);
 	}
 
@@ -528,6 +573,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 		REQUIRE_THAT(rx_ptr->getNoiseTemperature(), WithinAbs(400.0, 1e-9));
 		REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
+		REQUIRE(rx_ptr->getTiming()->getSeed() == 12345); // Seed preserved
 	}
 
 	SECTION("Update Target")
@@ -542,6 +588,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 		auto* new_tgt = w.findTarget(103);
 		REQUIRE(new_tgt != nullptr);
 		REQUIRE(new_tgt->getName() == "tgt_updated");
+		REQUIRE(new_tgt->getSeed() == 54321); // Seed preserved
 		auto* iso_tgt = dynamic_cast<radar::IsoTarget*>(new_tgt);
 		REQUIRE(iso_tgt != nullptr);
 		REQUIRE_THAT(iso_tgt->getConstRcs(), WithinAbs(50.0, 1e-9));
@@ -586,12 +633,29 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	core::World w;
 	std::mt19937 seeder(42);
 
+	auto pt = std::make_unique<timing::PrototypeTiming>("tim1", 30);
+	pt->setFrequency(1e6);
+	w.add(std::move(pt));
+
+	auto ant = std::make_unique<antenna::Isotropic>("ant1", 20);
+	w.add(std::move(ant));
+
+	auto wf = std::make_unique<fers_signal::RadarSignal>("wf1", 10.0, 1e9, 1.0,
+														 std::make_unique<fers_signal::CwSignal>(), 10);
+	w.add(std::move(wf));
+
 	auto p = std::make_unique<radar::Platform>("p1", 100);
 	auto tx = std::make_unique<radar::Transmitter>(p.get(), "mono_tx", radar::OperationMode::CW_MODE, 101);
 	auto rx = std::make_unique<radar::Receiver>(p.get(), "mono_rx", 42, radar::OperationMode::CW_MODE, 102);
 
 	tx->setAttached(rx.get());
 	rx->setAttached(tx.get());
+
+	// Initialize with existing timing
+	auto initial_timing = std::make_shared<timing::Timing>("tim1", 12345, 30);
+	initial_timing->initializeModel(w.findTiming(30));
+	tx->setTiming(initial_timing);
+	rx->setTiming(initial_timing);
 
 	auto* tx_ptr = tx.get();
 	auto* rx_ptr = rx.get();
@@ -600,10 +664,15 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	w.add(std::move(rx));
 	w.add(std::move(p));
 
-	json j = {
-		{"name", "mono_updated"}, {"tx_id", 101},
-		{"rx_id", 102},			  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1e-4}, {"window_skip", 0.0}}},
-		{"noise_temp", 300.0},	  {"nodirect", true}};
+	json j = {{"name", "mono_updated"},
+			  {"tx_id", 101},
+			  {"rx_id", 102},
+			  {"waveform", 10},
+			  {"antenna", 20},
+			  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1e-4}, {"window_skip", 0.0}}},
+			  {"noise_temp", 300.0},
+			  {"nodirect", true},
+			  {"timing", 30}};
 
 	serial::update_monostatic_from_json(j, tx_ptr, rx_ptr, w, seeder);
 
@@ -616,4 +685,6 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	REQUIRE_THAT(rx_ptr->getWindowLength(), WithinAbs(1e-4, 1e-9));
 	REQUIRE_THAT(rx_ptr->getNoiseTemperature(), WithinAbs(300.0, 1e-9));
 	REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
+	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
+	REQUIRE(rx_ptr->getTiming()->getSeed() == 12345);
 }

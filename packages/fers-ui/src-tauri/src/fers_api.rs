@@ -497,6 +497,17 @@ impl FersContext {
         }
     }
 
+    /// Updates the global simulation parameters from JSON.
+    pub fn update_parameters_from_json(&self, json: &str) -> Result<(), String> {
+        let c_json = CString::new(json).map_err(|e| e.to_string())?;
+        let result = unsafe { ffi::fers_update_parameters_from_json(self.ptr, c_json.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
     /// Updates a single antenna from JSON.
     pub fn update_antenna_from_json(&self, json: &str) -> Result<(), String> {
         let c_json = CString::new(json).map_err(|e| e.to_string())?;

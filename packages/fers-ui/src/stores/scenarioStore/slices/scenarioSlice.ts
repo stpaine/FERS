@@ -32,8 +32,13 @@ import {
     serializeTiming,
     serializeAntenna,
     serializeComponentInner,
+    serializeGlobalParameters,
     cleanObject,
 } from '../serializers';
+
+// Module-level queue to guarantee FIFO execution of granular syncs
+// preventing out-of-order race conditions across the FFI boundary.
+let granularSyncQueue: Promise<void> = Promise.resolve();
 
 // Define interfaces for the expected backend data structure.
 interface BackendObjectWithName {
@@ -176,6 +181,10 @@ export const createScenarioSlice: StateCreator<
         }),
     updateItem: (itemId, propertyPath, value) =>
         set((state) => {
+            let targetItemType = '';
+            let targetItemId = '';
+            let jsonPayload: string | null = null;
+
             if (itemId === 'global-parameters') {
                 setPropertyByPath(state.globalParameters, propertyPath, value);
 
@@ -190,36 +199,36 @@ export const createScenarioSlice: StateCreator<
                 }
 
                 state.isDirty = true;
-                return;
-            }
-            const collections = [
-                'waveforms',
-                'timings',
-                'antennas',
-                'platforms',
-            ] as const;
-            for (const key of collections) {
-                const item = state[key].find(
-                    (i: { id: string }) => i.id === itemId
+
+                targetItemType = 'GlobalParameters';
+                targetItemId = itemId;
+                jsonPayload = JSON.stringify(
+                    serializeGlobalParameters(state.globalParameters)
                 );
-                if (item) {
-                    setPropertyByPath(item, propertyPath, value);
-                    state.isDirty = true;
+            } else {
+                const collections = [
+                    'waveforms',
+                    'timings',
+                    'antennas',
+                    'platforms',
+                ] as const;
 
-                    // Immediately trigger granular sync for high-performance features
-                    // except for complex topology changes which rely on full sync.
-                    if (
-                        item.type === 'Platform' ||
-                        item.type === 'Antenna' ||
-                        item.type === 'Waveform' ||
-                        item.type === 'Timing'
-                    ) {
-                        try {
-                            let jsonPayload: string | null = null;
-                            let targetItemType: string = item.type;
-                            let targetItemId = item.id;
+                for (const key of collections) {
+                    const item = state[key].find(
+                        (i: { id: string }) => i.id === itemId
+                    );
+                    if (item) {
+                        setPropertyByPath(item, propertyPath, value);
+                        state.isDirty = true;
 
-                            // Check if this is a component update (e.g., "components.0.prf")
+                        // Immediately trigger granular sync for high-performance features
+                        // except for complex topology changes which rely on full sync.
+                        if (
+                            item.type === 'Platform' ||
+                            item.type === 'Antenna' ||
+                            item.type === 'Waveform' ||
+                            item.type === 'Timing'
+                        ) {
                             const componentMatch = propertyPath.match(
                                 /^components\.(\d+)(?:\.|$)/
                             );
@@ -248,7 +257,8 @@ export const createScenarioSlice: StateCreator<
                                     targetItemId = component.id;
                                 }
                             } else {
-                                // Top-level item update
+                                targetItemType = item.type;
+                                targetItemId = item.id;
                                 if (item.type === 'Platform') {
                                     jsonPayload = JSON.stringify(
                                         serializePlatform(item as Platform)
@@ -267,21 +277,25 @@ export const createScenarioSlice: StateCreator<
                                     );
                                 }
                             }
-
-                            if (jsonPayload) {
-                                void invoke('update_item_from_json', {
-                                    itemType: targetItemType,
-                                    itemId: targetItemId,
-                                    json: jsonPayload,
-                                });
-                            }
-                        } catch (e) {
-                            console.error('Granular sync failed:', e);
                         }
+                        break;
                     }
-
-                    return;
                 }
+            }
+
+            if (jsonPayload) {
+                // Chain the promise to guarantee sequential execution
+                granularSyncQueue = granularSyncQueue
+                    .then(() =>
+                        invoke<void>('update_item_from_json', {
+                            itemType: targetItemType,
+                            itemId: targetItemId,
+                            json: jsonPayload!,
+                        })
+                    )
+                    .catch((e) => {
+                        console.error('Granular sync failed:', e);
+                    });
             }
         }),
     removeItem: (itemId) =>

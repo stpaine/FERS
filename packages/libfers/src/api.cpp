@@ -328,6 +328,25 @@ int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const c
 	}
 }
 
+int fers_update_parameters_from_json(fers_context_t* context, const char* json)
+{
+	last_error_message.clear();
+	if (!context || !json)
+		return -1;
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		auto j = nlohmann::json::parse(json);
+		serial::update_parameters_from_json(j, ctx->getMasterSeeder());
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_update_parameters_from_json");
+		return 1;
+	}
+}
+
 int fers_update_antenna_from_json(fers_context_t* context, const char* json)
 {
 	last_error_message.clear();
@@ -337,11 +356,14 @@ int fers_update_antenna_from_json(fers_context_t* context, const char* json)
 	try
 	{
 		auto j = nlohmann::json::parse(json);
-		auto ant = serial::parse_antenna_from_json(j);
-		if (ant)
+		auto id = j.at("id").is_string() ? std::stoull(j.at("id").get<std::string>()) : j.at("id").get<uint64_t>();
+		auto* ant = ctx->getWorld()->findAntenna(id);
+		if (!ant)
 		{
-			ctx->getWorld()->replace(std::move(ant));
+			last_error_message = "Antenna not found";
+			return 1;
 		}
+		serial::update_antenna_from_json(j, ant, *ctx->getWorld());
 		return 0;
 	}
 	catch (const std::exception& e)
