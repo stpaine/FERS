@@ -46,6 +46,7 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/serial/waveform_factory.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser_utils.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer_utils.h
 	${CMAKE_CURRENT_LIST_DIR}/signal/dsp_filters.h
 	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.h
@@ -85,6 +86,7 @@ set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/serial/response.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser_utils.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer_utils.cpp
 	${CMAKE_CURRENT_LIST_DIR}/signal/dsp_filters.cpp
 	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.cpp
 	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.cpp
