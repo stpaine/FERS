@@ -17,8 +17,8 @@
         "lint:cpp": "bun run build:cpp-debug && bun run clangtidy:run",
         "lint:js": "bun run --filter fers-ui lint",
         "lint:rust": "cargo clippy --workspace -- -D warnings",
-        "build:cpp-debug": "cmake --preset=debug && cmake --build --preset=debug",
-        "coverage:cpp": "bash run_tests_gen_coverage.sh",
+        "build:cpp-debug": "cmake --preset=debug && cmake --build --preset=debug --parallel",
+        "coverage:cpp": "bash scripts/run_tests_gen_coverage.sh",
         "coverage:rust": "cargo tarpaulin --package fers-ui --out Html",
         "clangtidy:run": "run-clang-tidy -p build/debug/ -export-fixes fixes.yaml"
     },
