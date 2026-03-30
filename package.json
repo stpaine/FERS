@@ -14,12 +14,13 @@
         "format:js": "prettier --write .",
         "format:rust": "cargo fmt --all",
         "lint": "bun run lint:cpp && bun run lint:js && bun run lint:rust",
-        "lint:cpp": "bun run build:cpp-debug && run-clang-tidy -p build/debug/",
+        "lint:cpp": "bun run build:cpp-debug && bun run clangtidy:run",
         "lint:js": "bun run --filter fers-ui lint",
         "lint:rust": "cargo clippy --workspace -- -D warnings",
         "build:cpp-debug": "cmake --preset=debug && cmake --build --preset=debug",
         "coverage:cpp": "bash run_tests_gen_coverage.sh",
-        "coverage:rust": "cargo tarpaulin --package fers-ui --out Html"
+        "coverage:rust": "cargo tarpaulin --package fers-ui --out Html",
+        "clangtidy:run": "run-clang-tidy -p build/debug/ -export-fixes fixes.yaml"
     },
     "devDependencies": {
         "eslint": "^9.39.2",
@@ -35,8 +36,7 @@
             "eslint --fix --config packages/fers-ui/eslint.config.js"
         ],
         "packages/fers-ui/src-tauri/**/*.rs": [
-            "cargo fmt --",
-            "sh -c 'cargo clippy -p fers-ui --fix --allow-dirty --allow-staged -- -D warnings'"
+            "cargo fmt --"
         ]
     }
 }

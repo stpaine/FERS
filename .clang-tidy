@@ -1,19 +1,502 @@
+# .clang-tidy — FERS C++ linting configuration
+#
+# Scope:  packages/fers-cli  +  packages/libfers only.
+# Stack:  C++23, CMake, vcpkg, HighFive/HDF5, libxml2, nlohmann-json,
+#         GeographicLib, POSIX threads, signal processing / radar math.
+#
+# Run:
+#   run-clang-tidy -p build/debug/ \
+#     packages/fers-cli/ packages/libfers/
+#
+# ── NOT enabled (intentional exclusions) ────────────────────────────────────
+#
+#  Irrelevant stacks:
+#    abseil-*, altera-*, android-*, boost-*, darwin-*, fuchsia-*,
+#    google-*, hicpp-*, linuxkernel-*, llvm-*, llvmlibc-*,
+#    mpi-*, objc-*, openmp-*, zircon-*
+#
+#  Too noisy for scientific / DSP code:
+#    readability-magic-numbers, cppcoreguidelines-avoid-magic-numbers
+#      — Every signal processing file legitimately uses constants like
+#        0.5, M_PI, 1e-9, 44100, 1024, etc.
+#    readability-identifier-naming
+#      — Naming enforced via code review; clang-tidy breaks on math
+#        single-letter variables (x, y, z, dt, fs, Q, N) when naming
+#        rules are applied uniformly.
+#    bugprone-easily-swappable-parameters
+#      — DSP/geometry functions regularly have (double x, double y,
+#        double z) and similar; this fires relentlessly.
+#    readability-suspicious-call-argument
+#      — Same problem: mathematical APIs trigger it constantly.
+#
+#  C interop (libxml2 / HDF5 C API):
+#    cppcoreguidelines-avoid-c-arrays
+#    cppcoreguidelines-pro-bounds-pointer-arithmetic
+#      — Both C libraries pass raw arrays and pointer offsets through
+#        their public APIs. Suppressing on every call site is worse.
+#
+#  Subjective or redundant:
+#    modernize-use-trailing-return-type   — style preference
+#    cert-*                               — covered by bugprone-* +
+#                                           cppcoreguidelines-*
+#    hicpp-*                              — covered by the above
+#    misc-include-cleaner                 — too noisy with transitive
+#                                           third-party includes
+#
+# ── Suppression guide ────────────────────────────────────────────────────────
+#
+#  Single line:   // NOLINT(check-name)
+#  Next line:     // NOLINTNEXTLINE(check-name)
+#  Block:         // NOLINTBEGIN(check-name)
+#                 ...
+#                 // NOLINTEND(check-name)
+#
+#  C-API call sites (libxml2, HDF5):
+#    // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
+#  Deliberate raw arrays:
+#    // NOLINT(modernize-avoid-bind)
+#  Large algorithm functions that exceed size limits by design — add a
+#  rationale comment so reviewers can assess it:
+#    // NOLINT(readability-function-size) — FFT butterfly kernel: ...
+# ─────────────────────────────────────────────────────────────────────────────
 ---
-Checks: >
+Checks: >-
     -*,
+    bugprone-argument-comment,
+    bugprone-assert-side-effect,
+    bugprone-bool-pointer-implicit-conversion,
+    bugprone-copy-constructor-init,
+    bugprone-dangling-handle,
+    bugprone-dynamic-static-initializers,
+    bugprone-forward-declaration-namespace,
+    bugprone-forwarding-reference-overload,
+    bugprone-implicit-widening-of-multiplication-result,
+    bugprone-incorrect-roundings,
+    bugprone-infinite-loop,
+    bugprone-integer-division,
+    bugprone-misplaced-operator-in-strlen-in-alloc,
+    bugprone-misplaced-widening-cast,
+    bugprone-move-forwarding-reference,
+    bugprone-multi-level-implicit-pointer-conversion,
+    bugprone-multiple-statement-macro,
+    bugprone-no-escape,
+    bugprone-not-null-terminated-result,
+    bugprone-optional-value-conversion,
+    bugprone-parent-virtual-call,
+    bugprone-redundant-branch-condition,
+    bugprone-reserved-identifier,
+    bugprone-signal-handler,
+    bugprone-signed-char-misuse,
+    bugprone-sizeof-container,
+    bugprone-sizeof-expression,
+    bugprone-string-constructor,
+    bugprone-string-integer-assignment,
+    bugprone-string-literal-with-embedded-null,
+    bugprone-stringview-nullptr,
+    bugprone-suspicious-enum-usage,
+    bugprone-suspicious-include,
+    bugprone-suspicious-memory-comparison,
+    bugprone-suspicious-memset-usage,
+    bugprone-suspicious-missing-comma,
+    bugprone-suspicious-realloc-usage,
+    bugprone-suspicious-semicolon,
+    bugprone-suspicious-string-compare,
+    bugprone-swapped-arguments,
+    bugprone-terminating-continue,
+    bugprone-throw-keyword-missing,
+    bugprone-too-small-loop-variable,
+    bugprone-unchecked-optional-access,
+    bugprone-undefined-memory-manipulation,
+    bugprone-unhandled-exception-at-new,
+    bugprone-unhandled-self-assignment,
+    bugprone-unused-local-non-trivial-variable,
+    bugprone-unused-raii,
+    bugprone-unused-return-value,
+    bugprone-use-after-move,
+    bugprone-virtual-near-miss,
+    clang-analyzer-core.CallAndMessage,
+    clang-analyzer-core.DivideZero,
+    clang-analyzer-core.NonNullParamChecker,
+    clang-analyzer-core.NullDereference,
+    clang-analyzer-core.StackAddressEscape,
+    clang-analyzer-core.UndefinedBinaryOperatorResult,
+    clang-analyzer-core.VLASize,
+    clang-analyzer-core.uninitialized.ArraySubscript,
+    clang-analyzer-core.uninitialized.Assign,
+    clang-analyzer-core.uninitialized.Branch,
+    clang-analyzer-core.uninitialized.CapturedBlockVariable,
+    clang-analyzer-core.uninitialized.UndefReturn,
+    clang-analyzer-cplusplus.InnerPointer,
+    clang-analyzer-cplusplus.Move,
+    clang-analyzer-cplusplus.NewDelete,
+    clang-analyzer-cplusplus.NewDeleteLeaks,
+    clang-analyzer-cplusplus.PlacementNew,
+    clang-analyzer-cplusplus.PureVirtualCall,
+    clang-analyzer-cplusplus.STLAlgorithmModeling,
+    clang-analyzer-cplusplus.SelfAssignment,
+    clang-analyzer-cplusplus.SmartPtr,
+    clang-analyzer-deadcode.DeadStores,
+    clang-analyzer-security.FloatLoopCounter,
+    clang-analyzer-security.insecureAPI.UncheckedReturn,
+    clang-analyzer-security.insecureAPI.getpw,
+    clang-analyzer-security.insecureAPI.gets,
+    clang-analyzer-security.insecureAPI.mkstemp,
+    clang-analyzer-security.insecureAPI.mktemp,
+    clang-analyzer-security.insecureAPI.rand,
+    clang-analyzer-security.insecureAPI.strcpy,
+    clang-analyzer-unix.API,
+    clang-analyzer-unix.Malloc,
+    clang-analyzer-unix.MallocSizeof,
+    clang-analyzer-unix.MismatchedDeallocator,
+    clang-analyzer-unix.StdCLibraryFunctions,
+    clang-analyzer-unix.Vfork,
+    clang-analyzer-unix.cstring.BadSizeArg,
+    clang-analyzer-unix.cstring.NullArg,
+    concurrency-mt-unsafe,
+    cppcoreguidelines-avoid-goto,
+    cppcoreguidelines-init-variables,
+    cppcoreguidelines-interfaces-global-prefers-pure-functions,
+    cppcoreguidelines-missing-std-forward,
+    cppcoreguidelines-narrowing-conversions,
+    cppcoreguidelines-no-malloc,
+    cppcoreguidelines-no-suspend-with-lock,
+    cppcoreguidelines-owning-memory,
+    cppcoreguidelines-prefer-member-initializer,
+    cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+    cppcoreguidelines-pro-bounds-constant-array-index,
+    cppcoreguidelines-pro-type-const-cast,
+    cppcoreguidelines-pro-type-cstyle-cast,
+    cppcoreguidelines-pro-type-member-init,
+    cppcoreguidelines-pro-type-reinterpret-cast,
+    cppcoreguidelines-pro-type-static-cast-downcast,
+    cppcoreguidelines-rvalue-reference-param-not-moved,
+    cppcoreguidelines-slicing,
+    cppcoreguidelines-special-member-functions,
+    misc-const-correctness,
+    misc-coroutine-hostile-raii,
+    misc-misleading-identifier,
+    misc-misplaced-const,
+    misc-non-copyable-objects,
+    misc-redundant-expression,
+    misc-throw-by-value-catch-by-reference,
+    misc-uniqueptr-reset-release,
+    misc-unused-parameters,
+    misc-use-internal-linkage,
+    modernize-avoid-bind,
+    modernize-loop-convert,
+    modernize-make-shared,
+    modernize-make-unique,
+    modernize-min-max-use-initializer-list,
+    modernize-pass-by-value,
+    modernize-replace-auto-ptr,
+    modernize-type-traits,
+    modernize-use-auto,
+    modernize-use-bool-literals,
+    modernize-use-default-member-init,
+    modernize-use-emplace,
+    modernize-use-nodiscard,
+    modernize-use-noexcept,
+    modernize-use-nullptr,
+    modernize-use-override,
+    modernize-use-ranges,
+    modernize-use-scoped-lock,
+    modernize-use-using,
+    performance-avoid-endl,
+    performance-enum-size,
+    performance-faster-string-find,
+    performance-for-range-copy,
+    performance-implicit-conversion-in-loop,
+    performance-inefficient-algorithm,
+    performance-inefficient-string-concatenation,
+    performance-inefficient-vector-operation,
+    performance-move-const-arg,
+    performance-move-constructor-init,
+    performance-no-automatic-move,
+    performance-no-int-to-ptr,
+    performance-trivially-destructible,
+    performance-type-promotion-in-math-fn,
+    performance-unnecessary-copy-initialization,
+    performance-unnecessary-value-param,
+    portability-simd-intrinsics,
+    readability-const-return-type,
+    readability-container-data-pointer,
+    readability-container-size-empty,
+    readability-delete-null-pointer,
+    readability-else-after-return,
+    readability-enum-initial-value,
     readability-function-cognitive-complexity,
-    readability-function-size
+    readability-function-size,
+    readability-implicit-bool-conversion,
+    readability-inconsistent-declaration-parameter-name,
+    readability-make-member-function-const,
+    readability-misleading-indentation,
+    readability-qualified-auto,
+    readability-redundant-access-specifiers,
+    readability-redundant-casting,
+    readability-redundant-control-flow,
+    readability-redundant-declaration,
+    readability-redundant-preprocessor,
+    readability-redundant-smartptr-get,
+    readability-redundant-string-init,
+    readability-simplify-boolean-expr,
+    readability-simplify-subscript-expr,
+    readability-static-accessed-through-instance,
+    readability-static-definition-in-anonymous-namespace,
+    readability-string-compare,
+    readability-use-std-min-max
 
-HeaderFilterRegex: '^((?!build|deps|CMakeFiles).)*$'
+# Chosen Ignored Checks:
+# readability-identifier-length
+# bugprone-exception-escape
+# readability-avoid-const-params-in-decls
+# readability-redundant-member-init
+# readability-named-parameter
+
+# Only surface diagnostics from project-owned headers.
+# Excludes: build artifacts, vcpkg_installed, generated_headers, third-party
+# sources that leak into translation units via transitive #includes.
+HeaderFilterRegex: '^.*/packages/(fers-cli|libfers)/(src|include)/.*$'
+
+# Never surface warnings from <system> or vcpkg headers —
+# they appear as noise during clang-analyzer deep passes.
+SystemHeaders: false
+
+# ── WarningsAsErrors ─────────────────────────────────────────────────────────
+# Recommended for CI (uncomment in core.yml, not here, to keep local
+# development comfortable while keeping the gate strict):
+#
+#   WarningsAsErrors: >-
+#       bugprone-use-after-move,
+#       clang-analyzer-cplusplus.NewDeleteLeaks,
+#       clang-analyzer-core.NullDereference,
+#       cppcoreguidelines-narrowing-conversions,
+#       cppcoreguidelines-pro-type-reinterpret-cast,
+#       misc-const-correctness
+# ─────────────────────────────────────────────────────────────────────────────
 
 CheckOptions:
-    - key: readability-function-cognitive-complexity.Threshold
-      value: 50
-    - key: readability-function-size.LineThreshold
-      value: 150
-    - key: readability-function-size.StatementThreshold
-      value: 150
-    - key: readability-function-cognitive-complexity.DescribeBasicIncrements
-      value: true
-    - key: readability-function-size.BranchThreshold
-      value: 20
+    # ── readability-function-cognitive-complexity ──────────────────────────────
+    # Default is 25 — every radar/DSP function trips it. 50 is the right ceiling
+    # for a simulation codebase. Functions that exceed it are candidates for
+    # decomposition, not blanket suppression.
+    readability-function-cognitive-complexity.Threshold: 50
+    readability-function-cognitive-complexity.DescribeBasicIncrements: true
+    readability-function-cognitive-complexity.IgnoreMacros: false
+
+    # ── readability-function-size ─────────────────────────────────────────────
+    # 150 lines is firm. Signal-processing kernels approach this naturally; the
+    # limit prevents gradual bloat. NestingThreshold: 6 catches deeply nested
+    # state machines that are better modelled as tables or sub-functions.
+    readability-function-size.LineThreshold: 150
+    readability-function-size.StatementThreshold: 150
+    readability-function-size.BranchThreshold: 20
+    readability-function-size.NestingThreshold: 6
+    readability-function-size.ParameterThreshold: 8
+    readability-function-size.CountMemberInitAsStmt: 'true'
+
+    # ── readability-identifier-length ─────────────────────────────────────────
+    # Scientific code is exempt from the 3-char minimum for well-understood
+    # single-letter names. i/j/k loop counters are always fine (length 1).
+    # x/y/z are allowed as variable names (geometry, signal samples, coords).
+    # n is allowed as a parameter (count/size idiom).
+    #readability-identifier-length.MinimumVariableNameLength: 2
+    #readability-identifier-length.MinimumParameterNameLength: 2
+    #readability-identifier-length.MinimumLoopCounterNameLength: 1
+    #readability-identifier-length.MinimumExceptionNameLength: 2
+    #readability-identifier-length.IgnoredLoopCounterNames: '^[ijk_]$'
+    #readability-identifier-length.IgnoredVariableNames: '^[xyz_]$'
+    #readability-identifier-length.IgnoredParameterNames: '^[nxy]$'
+
+    # ── readability-qualified-auto ────────────────────────────────────────────
+    # auto* p = ... should become const auto* when the pointed-to object is not
+    # modified. Prevents accidental mutation through an auto pointer.
+    readability-qualified-auto.AddConstToQualified: true
+
+    # ── readability-implicit-bool-conversion ──────────────────────────────────
+    # Require explicit casts for int→bool and pointer→bool.
+    # Both are common accidental bugs in simulation loop guards.
+    readability-implicit-bool-conversion.AllowIntegerConditions: false
+    readability-implicit-bool-conversion.AllowPointerConditions: false
+
+    # ── readability-else-after-return ─────────────────────────────────────────
+    readability-else-after-return.WarnOnConditionVariables: true
+    # WarnOnUnfixable: false — clang-tidy cannot always auto-fix; keep it quiet
+    # when the diagnostic would be actionless noise.
+    readability-else-after-return.WarnOnUnfixable: false
+
+    # ── readability-simplify-boolean-expr ────────────────────────────────────
+    readability-simplify-boolean-expr.SimplifyDeMorgan: true
+    readability-simplify-boolean-expr.SimplifyDeMorganRelaxed: false
+    readability-simplify-boolean-expr.ChainedConditionalReturn: false
+    readability-simplify-boolean-expr.ChainedConditionalAssignment: false
+
+    # ── modernize-use-auto ────────────────────────────────────────────────────
+    # Only replace an explicit type with auto when the type name is ≥8 chars.
+    # This keeps int, bool, double, size_t, float explicit and replaces
+    # std::unique_ptr<...>, std::unordered_map<...>::iterator, etc.
+    modernize-use-auto.MinTypeNameLength: 8
+    modernize-use-auto.RemoveStars: false
+
+    # ── modernize-use-default-member-init ────────────────────────────────────
+    # Prefer brace-init (= false → = { } is intentionally off for primitives).
+    modernize-use-default-member-init.UseAssignment: false
+    modernize-use-default-member-init.IgnoreMacros: true
+
+    # ── modernize-loop-convert ────────────────────────────────────────────────
+    # reasonable: skip conversions where semantics are ambiguous.
+    # lower_case: generated variable names match the project snake_case style.
+    modernize-loop-convert.MinConfidence: reasonable
+    modernize-loop-convert.NamingStyle: lower_case
+    modernize-loop-convert.MaxCopySize: '16'
+
+    # ── modernize-make-unique / make-shared ───────────────────────────────────
+    modernize-make-unique.IgnoreMacros: true
+    modernize-make-unique.IgnoreDefaultInitialization: 1
+    modernize-make-shared.IgnoreMacros: true
+    modernize-make-shared.IgnoreDefaultInitialization: 1
+
+    # ── modernize-use-emplace ─────────────────────────────────────────────────
+    modernize-use-emplace.ContainersWithPushBack: '::std::vector;::std::list;::std::deque'
+    modernize-use-emplace.ContainersWithPushFront: '::std::forward_list;::std::list;::std::deque'
+    modernize-use-emplace.ContainersWithPush: '::std::stack;::std::queue;::std::priority_queue'
+    modernize-use-emplace.IgnoreImplicitConstructors: false
+
+    # ── modernize-use-override ────────────────────────────────────────────────
+    # Destructors must also carry override — omitting it is a common oversight.
+    modernize-use-override.IgnoreDestructors: false
+    modernize-use-override.AllowOverrideAndFinal: false
+    modernize-use-override.IgnoreTemplateInstantiations: 'false'
+
+    # ── modernize-use-noexcept ────────────────────────────────────────────────
+    # Allow noexcept(false) as a valid spelling (needed when porting throw()).
+    modernize-use-noexcept.UseNoexceptFalse: 'true'
+
+    # ── cppcoreguidelines-special-member-functions ────────────────────────────
+    # AllowSoleDefaultDtor: pure-interface classes typically only declare
+    #   `virtual ~Foo() = default;`. Don't require them to define copy/move.
+    # AllowMissingMoveFunctionsWhenCopyIsDeleted: move-only types (non-copyable
+    #   handles, thread objects) only need the two move operations.
+    cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
+    cppcoreguidelines-special-member-functions.AllowMissingMoveFunctions: false
+    cppcoreguidelines-special-member-functions.AllowMissingMoveFunctionsWhenCopyIsDeleted: true
+    cppcoreguidelines-special-member-functions.AllowImplicitlyDeletedCopyOrMove: 'false'
+    cppcoreguidelines-special-member-functions.IgnoreMacros: 'true'
+
+    # ── cppcoreguidelines-narrowing-conversions ───────────────────────────────
+    # Simulation code is full of double→float reductions and size_t→int indices.
+    # All four categories are enabled; suppress deliberately at the call site
+    # with a static_cast and a comment explaining the precision trade-off.
+    cppcoreguidelines-narrowing-conversions.WarnOnEquivalentBitWidth: true
+    cppcoreguidelines-narrowing-conversions.WarnOnFloatingPointNarrowingConversion: true
+    cppcoreguidelines-narrowing-conversions.WarnOnIntegerNarrowingConversion: true
+    cppcoreguidelines-narrowing-conversions.WarnOnIntegerToFloatingPointNarrowingConversion: true
+    cppcoreguidelines-narrowing-conversions.WarnWithinTemplateInstantiation: false
+
+    # ── cppcoreguidelines-pro-type-member-init ────────────────────────────────
+    cppcoreguidelines-pro-type-member-init.IgnoreArrays: false
+
+    # ── cppcoreguidelines-no-suspend-with-lock ────────────────────────────────
+    # Catches coroutine co_await inside a locked scope — relevant if coroutines
+    # are introduced into the simulation pipeline later.
+    cppcoreguidelines-no-suspend-with-lock.LockGuards: >-
+        ::std::unique_lock;::std::scoped_lock;::std::shared_lock;::std::lock_guard
+
+    # ── cppcoreguidelines-owning-memory ───────────────────────────────────────
+    # Teach clang-tidy that the C-library resource functions used by the
+    # libxml2/HDF5 wrappers are raw-ownership producers/consumers.
+    cppcoreguidelines-owning-memory.LegacyResourceProducers: >-
+        ::malloc;::aligned_alloc;::realloc;::calloc;::fopen;::freopen;::tmpfile
+    cppcoreguidelines-owning-memory.LegacyResourceConsumers: >-
+        ::free;::realloc;::freopen;::fclose
+
+    # ── misc-const-correctness ────────────────────────────────────────────────
+    # Audit values, references, and pointer-types for missing const.
+    # WarnPointersAsValues: off — const T* vs T* const is context-dependent
+    # enough that auto-fix creates more noise than signal.
+    misc-const-correctness.AnalyzeValues: true
+    misc-const-correctness.AnalyzeReferences: true
+    misc-const-correctness.AnalyzePointers: 'true'
+    misc-const-correctness.WarnPointersAsValues: false
+    misc-const-correctness.WarnPointersAsPointers: 'true'
+    misc-const-correctness.TransformValues: true
+    misc-const-correctness.TransformReferences: true
+    misc-const-correctness.TransformPointersAsPointers: 'true'
+
+    # ── misc-unused-parameters ────────────────────────────────────────────────
+    # StrictMode: off — virtual overrides often have parameters that are
+    # intentionally unused in a particular derived class.
+    misc-unused-parameters.StrictMode: false
+    misc-unused-parameters.IgnoreVirtual: 'false'
+
+    # ── misc-use-internal-linkage ─────────────────────────────────────────────
+    # Prefer `static` over anonymous namespaces for file-scope definitions
+    # (consistent with the rest of the LLVM-adjacent style used here).
+    misc-use-internal-linkage.FixMode: UseStatic
+
+    # ── misc-throw-by-value-catch-by-reference ────────────────────────────────
+    misc-throw-by-value-catch-by-reference.CheckThrowTemporaries: true
+    misc-throw-by-value-catch-by-reference.WarnOnLargeObjects: 'false'
+
+    # ── bugprone-sizeof-expression ────────────────────────────────────────────
+    # WarnOnSizeOfPointer: on — a very frequent bug in C-API wrapper code
+    # (sizeof(ptr) instead of sizeof(*ptr) or sizeof(ElementType)).
+    bugprone-sizeof-expression.WarnOnSizeOfPointer: 'true'
+    bugprone-sizeof-expression.WarnOnSizeOfConstant: true
+    bugprone-sizeof-expression.WarnOnSizeOfCompareToConstant: true
+    bugprone-sizeof-expression.WarnOnSizeOfInLoopTermination: 'true'
+    bugprone-sizeof-expression.WarnOnSizeOfIntegerExpression: false
+    bugprone-sizeof-expression.WarnOnOffsetDividedBySizeOf: 'true'
+
+    # ── bugprone-assert-side-effect ───────────────────────────────────────────
+    # Include Catch2 macros so REQUIRE/CHECK in test code is also checked.
+    bugprone-assert-side-effect.AssertMacros: 'assert,REQUIRE,CHECK'
+    bugprone-assert-side-effect.CheckFunctionCalls: false
+
+    # ── bugprone-implicit-widening-of-multiplication-result ───────────────────
+    # Radar range/sample index arithmetic frequently multiplies two 32-bit
+    # quantities whose product overflows int before being stored in int64_t.
+    # Require an explicit cast rather than relying on implicit widening.
+    bugprone-implicit-widening-of-multiplication-result.UseCXXStaticCastsInCppSources: true
+    bugprone-implicit-widening-of-multiplication-result.UseCXXHeadersInCppSources: true
+    bugprone-implicit-widening-of-multiplication-result.IgnoreConstantIntExpr: 'false'
+
+    # ── bugprone-string-constructor ───────────────────────────────────────────
+    bugprone-string-constructor.WarnOnLargeLength: true
+    bugprone-string-constructor.LargeLengthThreshold: 8388608
+
+    # ── bugprone-unchecked-optional-access ───────────────────────────────────
+    # Leave smart-pointer derefs out of scope — IgnoreSmartPointerDereference
+    # reduces false positives from patterns like optional<unique_ptr<T>>.
+    bugprone-unchecked-optional-access.IgnoreSmartPointerDereference: 'false'
+
+    # ── bugprone-unused-local-non-trivial-variable ───────────────────────────
+    # Extend the default set to catch RAII lock guards and paths accidentally
+    # created but never used.
+    bugprone-unused-local-non-trivial-variable.IncludeTypes: >-
+        ::std::.*mutex;::std::future;::std::basic_string;::std::basic_regex;
+        ::std::basic_istringstream;::std::basic_stringstream;::std::bitset;
+        ::std::filesystem::path
+
+    # ── performance-for-range-copy ────────────────────────────────────────────
+    # WarnOnAllAutoCopies: off — only warn when the copy is clearly avoidable,
+    # not every auto variable in a range-for.
+    performance-for-range-copy.WarnOnAllAutoCopies: false
+
+    # ── performance-unnecessary-value-param ───────────────────────────────────
+    performance-unnecessary-value-param.IgnoreCoroutines: 'true'
+
+    # ── performance-type-promotion-in-math-fn ────────────────────────────────
+    # Critical for signal processing: sinf(x) with a double x silently promotes
+    # to sin(double), throwing away the float fast-path. Flag all such calls.
+    performance-type-promotion-in-math-fn.IncludeStyle: llvm
+
+    # ── concurrency-mt-unsafe ────────────────────────────────────────────────
+    # any: check both POSIX and non-POSIX MT-unsafe functions.
+    # Relevant: sim_threading, thread_pool, channel_model multi-thread paths.
+    concurrency-mt-unsafe.FunctionSet: any
+
+    # ── portability-simd-intrinsics ───────────────────────────────────────────
+    # Suggest std::experimental::simd alternatives when platform intrinsics
+    # are used. Only advisory — suppress if a specific intrinsic is chosen
+    # for a measured performance reason.
+    portability-simd-intrinsics.Suggest: false
