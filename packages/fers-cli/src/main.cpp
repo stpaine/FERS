@@ -22,7 +22,7 @@
 // --- Shim to restore LOG() functionality via C-API ---
 namespace logging
 {
-	inline std::string getLevelString(fers_log_level_t l)
+	static inline std::string getLevelString(fers_log_level_t l)
 	{
 		switch (l)
 		{
@@ -64,7 +64,7 @@ int main(const int argc, char* argv[])
 			config_result.error() != "No arguments provided.")
 		{
 			// Use basic stderr here because logging isn't configured yet
-			std::cerr << "[ERROR] Argument parsing error: " << config_result.error() << std::endl;
+			std::cerr << "[ERROR] Argument parsing error: " << config_result.error() << '\n';
 			return 1;
 		}
 		return 0;
@@ -78,7 +78,7 @@ int main(const int argc, char* argv[])
 	{
 		// If we can't configure logging, we must print to stderr manually
 		char* err = fers_get_last_error_message();
-		std::cerr << "[ERROR] Failed to configure logging: " << (err ? err : "Unknown error") << std::endl;
+		std::cerr << "[ERROR] Failed to configure logging: " << ((err != nullptr) ? err : "Unknown error") << '\n';
 		fers_free_string(err);
 		return 1;
 	}
@@ -91,7 +91,7 @@ int main(const int argc, char* argv[])
 
 	// Create a simulation context using the C-API
 	fers_context_t* context = fers_context_create();
-	if (!context)
+	if (context == nullptr)
 	{
 		LOG(FERS_LOG_FATAL, "Failed to create FERS simulation context.");
 		return 1;

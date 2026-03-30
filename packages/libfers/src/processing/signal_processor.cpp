@@ -64,10 +64,7 @@ namespace
 		const auto array = resp->renderBinary(prate, psize, fracDelay);
 		int start_sample = static_cast<int>(std::round(rate * (resp->startTime() - start)));
 		const unsigned roffset = start_sample < 0 ? -start_sample : 0;
-		if (start_sample < 0)
-		{
-			start_sample = 0;
-		}
+		start_sample = std::max(start_sample, 0);
 
 		for (unsigned i = roffset; i < psize && i + start_sample < localWindowSize; ++i)
 		{

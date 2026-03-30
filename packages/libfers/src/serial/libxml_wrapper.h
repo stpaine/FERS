@@ -86,7 +86,7 @@ public:
 	 */
 	[[nodiscard]] std::string getText() const
 	{
-		if (!_node)
+		if (_node == nullptr)
 		{
 			return "";
 		}
@@ -163,12 +163,12 @@ public:
 	 */
 	[[nodiscard]] XmlElement childElement(const std::string_view name = "", const unsigned index = 0) const noexcept
 	{
-		if (!_node)
+		if (_node == nullptr)
 		{
 			return XmlElement(nullptr);
 		}
 		unsigned count = 0;
-		for (auto* child = _node->children; child; child = child->next)
+		for (auto* child = _node->children; child != nullptr; child = child->next)
 		{
 			if (child->type == XML_ELEMENT_NODE && (name.empty() || name == reinterpret_cast<const char*>(child->name)))
 			{
@@ -296,7 +296,7 @@ public:
 			throw std::runtime_error("Document not loaded");
 		}
 		const xmlNode* root = xmlDocGetRootElement(_doc.get());
-		if (!root)
+		if (root == nullptr)
 		{
 			throw std::runtime_error("Root element not found");
 		}

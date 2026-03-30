@@ -45,7 +45,7 @@ namespace logging
 
 			std::ostringstream oss;
 			oss << "[" << getCurrentTimestamp() << "] " << "[" << std::setw(7) << std::left << getLevelString(level)
-				<< "] " << "[" << std::setw(30) << std::left << file_line << "] " << message << std::endl;
+				<< "] " << "[" << std::setw(30) << std::left << file_line << "] " << message << '\n';
 
 			std::cerr << oss.str();
 

@@ -84,16 +84,15 @@ namespace
 	 */
 	std::expected<void, std::string> handleLogFile(const std::string& arg, core::Config& config) noexcept
 	{
-		if (std::string log_file_path = arg.substr(11); isValidLogFileExtension(log_file_path))
+		std::string log_file_path = arg.substr(11);
+		if (isValidLogFileExtension(log_file_path))
 		{
 			config.log_file = log_file_path;
 			return {};
 		}
-		else
-		{
-			std::cerr << "[ERROR] Invalid log file extension. Must be .log or .txt\n";
-			return std::unexpected("Invalid log file extension: " + log_file_path);
-		}
+
+		std::cerr << "[ERROR] Invalid log file extension. Must be .log or .txt\n";
+		return std::unexpected("Invalid log file extension: " + log_file_path);
 	}
 
 	/**
@@ -225,7 +224,7 @@ Make sure the script file follows the correct format to avoid errors.
 | Version 1.0.0                                  |
 | Author: Marc Brooker                           |
 \------------------------------------------------/
-)" << std::endl;
+)" << '\n';
 	}
 
 	std::expected<Config, std::string> parseArguments(const int argc, char* argv[]) noexcept

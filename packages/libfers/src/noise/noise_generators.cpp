@@ -41,13 +41,13 @@ namespace noise
 			std::vector<FAlphaBranch*> flushbranches;
 			FAlphaBranch* branch = _topbranch.get();
 
-			for (int i = 0; i < skip_branches && branch; ++i)
+			for (int i = 0; i < skip_branches && (branch != nullptr); ++i)
 			{
 				flushbranches.push_back(branch);
 				branch = branch->getPre();
 			}
 
-			if (branch)
+			if (branch != nullptr)
 			{
 				const auto reduced_samples = samples / static_cast<long long>(std::pow(10.0, skip_branches));
 				for (long long i = 0; i < reduced_samples; ++i)
@@ -87,7 +87,7 @@ namespace noise
 		std::vector<FAlphaBranch*> branches;
 		FAlphaBranch* branch = _topbranch.get();
 
-		while (branch)
+		while (branch != nullptr)
 		{
 			branches.push_back(branch);
 			branch = branch->getPre();

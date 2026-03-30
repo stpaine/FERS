@@ -104,7 +104,7 @@ namespace serial::xml_serializer_utils
 		addChildWithNumber(parent, "power", waveform.getPower());
 		addChildWithNumber(parent, "carrier_frequency", waveform.getCarrier());
 
-		if (dynamic_cast<const fers_signal::CwSignal*>(waveform.getSignal()))
+		if (dynamic_cast<const fers_signal::CwSignal*>(waveform.getSignal()) != nullptr)
 		{
 			(void)parent.addChild("cw"); // Empty element
 		}
@@ -273,8 +273,8 @@ namespace serial::xml_serializer_utils
 	{
 		const XmlElement tx_elem = parent.addChild("transmitter");
 		tx_elem.setAttribute("name", tx.getName());
-		tx_elem.setAttribute("waveform", tx.getSignal() ? tx.getSignal()->getName() : "");
-		tx_elem.setAttribute("antenna", tx.getAntenna() ? tx.getAntenna()->getName() : "");
+		tx_elem.setAttribute("waveform", (tx.getSignal() != nullptr) ? tx.getSignal()->getName() : "");
+		tx_elem.setAttribute("antenna", (tx.getAntenna() != nullptr) ? tx.getAntenna()->getName() : "");
 		tx_elem.setAttribute("timing", tx.getTiming() ? tx.getTiming()->getName() : "");
 
 		if (tx.getMode() == radar::OperationMode::PULSED_MODE)
@@ -294,7 +294,7 @@ namespace serial::xml_serializer_utils
 	{
 		const XmlElement rx_elem = parent.addChild("receiver");
 		rx_elem.setAttribute("name", rx.getName());
-		rx_elem.setAttribute("antenna", rx.getAntenna() ? rx.getAntenna()->getName() : "");
+		rx_elem.setAttribute("antenna", (rx.getAntenna() != nullptr) ? rx.getAntenna()->getName() : "");
 		rx_elem.setAttribute("timing", rx.getTiming() ? rx.getTiming()->getName() : "");
 		setAttributeFromBool(rx_elem, "nodirect", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		setAttributeFromBool(rx_elem, "nopropagationloss", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
@@ -323,8 +323,8 @@ namespace serial::xml_serializer_utils
 	{
 		const XmlElement mono_elem = parent.addChild("monostatic");
 		mono_elem.setAttribute("name", tx.getName());
-		mono_elem.setAttribute("antenna", tx.getAntenna() ? tx.getAntenna()->getName() : "");
-		mono_elem.setAttribute("waveform", tx.getSignal() ? tx.getSignal()->getName() : "");
+		mono_elem.setAttribute("antenna", (tx.getAntenna() != nullptr) ? tx.getAntenna()->getName() : "");
+		mono_elem.setAttribute("waveform", (tx.getSignal() != nullptr) ? tx.getSignal()->getName() : "");
 		mono_elem.setAttribute("timing", tx.getTiming() ? tx.getTiming()->getName() : "");
 		setAttributeFromBool(mono_elem, "nodirect", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		setAttributeFromBool(mono_elem, "nopropagationloss", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
@@ -391,7 +391,7 @@ namespace serial::xml_serializer_utils
 		{
 			if (tx->getPlatform() == &platform)
 			{
-				if (tx->getAttached())
+				if (tx->getAttached() != nullptr)
 				{
 					serializeMonostatic(*tx, *dynamic_cast<const radar::Receiver*>(tx->getAttached()), parent);
 				}
@@ -404,7 +404,7 @@ namespace serial::xml_serializer_utils
 
 		for (const auto& rx : world.getReceivers())
 		{
-			if (rx->getPlatform() == &platform && !rx->getAttached())
+			if (rx->getPlatform() == &platform && (rx->getAttached() == nullptr))
 			{
 				serializeReceiver(*rx, parent);
 			}

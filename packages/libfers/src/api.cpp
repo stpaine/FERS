@@ -10,6 +10,7 @@
  * creation/destruction, exception catching, error reporting, and type casting.
  */
 
+#include <algorithm>
 #include <core/logging.h>
 #include <core/parameters.h>
 #include <core/sim_id.h>
@@ -81,7 +82,7 @@ fers_context_t* fers_context_create()
 
 void fers_context_destroy(fers_context_t* context)
 {
-	if (!context)
+	if (context == nullptr)
 	{
 		return;
 	}
@@ -116,7 +117,7 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 	try
 	{
 		logging::logger.setLevel(map_level(level));
-		if (log_file_path && *log_file_path)
+		if ((log_file_path != nullptr) && ((*log_file_path) != 0))
 		{
 			auto result = logging::logger.logToFile(log_file_path);
 			if (!result)
@@ -136,7 +137,7 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 
 void fers_log(fers_log_level_t level, const char* message)
 {
-	if (!message)
+	if (message == nullptr)
 		return;
 	// We pass a default source_location because C-API calls don't provide C++ source info
 	logging::logger.log(map_level(level), message, std::source_location::current());
@@ -164,7 +165,7 @@ int fers_set_thread_count(unsigned num_threads)
 int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_filepath, const int validate)
 {
 	last_error_message.clear();
-	if (!context || !xml_filepath)
+	if ((context == nullptr) || (xml_filepath == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or xml_filepath is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -204,7 +205,7 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 int fers_load_scenario_from_xml_string(fers_context_t* context, const char* xml_content, const int validate)
 {
 	last_error_message.clear();
-	if (!context || !xml_content)
+	if ((context == nullptr) || (xml_content == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or xml_content is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -245,7 +246,7 @@ int fers_load_scenario_from_xml_string(fers_context_t* context, const char* xml_
 char* fers_get_scenario_as_json(fers_context_t* context)
 {
 	last_error_message.clear();
-	if (!context)
+	if (context == nullptr)
 	{
 		last_error_message = "Invalid context provided to fers_get_scenario_as_json.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -272,7 +273,7 @@ char* fers_get_scenario_as_json(fers_context_t* context)
 char* fers_get_scenario_as_xml(fers_context_t* context)
 {
 	last_error_message.clear();
-	if (!context)
+	if (context == nullptr)
 	{
 		last_error_message = "Invalid context provided to fers_get_scenario_as_xml.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -302,13 +303,13 @@ char* fers_get_scenario_as_xml(fers_context_t* context)
 int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
 		auto* p = ctx->getWorld()->findPlatform(id);
-		if (!p)
+		if (p == nullptr)
 		{
 			last_error_message = "Platform not found";
 			return 1;
@@ -331,7 +332,7 @@ int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const c
 int fers_update_parameters_from_json(fers_context_t* context, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
@@ -350,7 +351,7 @@ int fers_update_parameters_from_json(fers_context_t* context, const char* json)
 int fers_update_antenna_from_json(fers_context_t* context, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
@@ -358,7 +359,7 @@ int fers_update_antenna_from_json(fers_context_t* context, const char* json)
 		auto j = nlohmann::json::parse(json);
 		auto id = j.at("id").is_string() ? std::stoull(j.at("id").get<std::string>()) : j.at("id").get<uint64_t>();
 		auto* ant = ctx->getWorld()->findAntenna(id);
-		if (!ant)
+		if (ant == nullptr)
 		{
 			last_error_message = "Antenna not found";
 			return 1;
@@ -376,7 +377,7 @@ int fers_update_antenna_from_json(fers_context_t* context, const char* json)
 int fers_update_waveform_from_json(fers_context_t* context, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
@@ -399,13 +400,13 @@ int fers_update_waveform_from_json(fers_context_t* context, const char* json)
 int fers_update_transmitter_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
 		auto* tx = ctx->getWorld()->findTransmitter(id);
-		if (!tx)
+		if (tx == nullptr)
 		{
 			last_error_message = "Transmitter not found";
 			return 1;
@@ -424,13 +425,13 @@ int fers_update_transmitter_from_json(fers_context_t* context, uint64_t id, cons
 int fers_update_receiver_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
 		auto* rx = ctx->getWorld()->findReceiver(id);
-		if (!rx)
+		if (rx == nullptr)
 		{
 			last_error_message = "Receiver not found";
 			return 1;
@@ -449,13 +450,13 @@ int fers_update_receiver_from_json(fers_context_t* context, uint64_t id, const c
 int fers_update_target_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
 		auto* tgt = ctx->getWorld()->findTarget(id);
-		if (!tgt)
+		if (tgt == nullptr)
 		{
 			last_error_message = "Target not found";
 			return 1;
@@ -474,7 +475,7 @@ int fers_update_target_from_json(fers_context_t* context, uint64_t id, const cha
 int fers_update_monostatic_from_json(fers_context_t* context, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
@@ -486,7 +487,7 @@ int fers_update_monostatic_from_json(fers_context_t* context, const char* json)
 			j.at("rx_id").is_string() ? std::stoull(j.at("rx_id").get<std::string>()) : j.at("rx_id").get<uint64_t>();
 		auto* tx = ctx->getWorld()->findTransmitter(tx_id);
 		auto* rx = ctx->getWorld()->findReceiver(rx_id);
-		if (!tx || !rx)
+		if ((tx == nullptr) || (rx == nullptr))
 		{
 			last_error_message = "Monostatic components not found";
 			return 1;
@@ -504,13 +505,13 @@ int fers_update_monostatic_from_json(fers_context_t* context, const char* json)
 int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
-	if (!context || !json)
+	if ((context == nullptr) || (json == nullptr))
 		return -1;
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
 		auto* timing = ctx->getWorld()->findTiming(id);
-		if (!timing)
+		if (timing == nullptr)
 		{
 			last_error_message = "Timing not found";
 			return 1;
@@ -529,7 +530,7 @@ int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const cha
 int fers_update_scenario_from_json(fers_context_t* context, const char* scenario_json)
 {
 	last_error_message.clear();
-	if (!context || !scenario_json)
+	if ((context == nullptr) || (scenario_json == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or scenario_json is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -574,7 +575,7 @@ char* fers_get_last_error_message()
 
 void fers_free_string(char* str)
 {
-	if (str)
+	if (str != nullptr)
 	{
 		free(str);
 	}
@@ -583,7 +584,7 @@ void fers_free_string(char* str)
 int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callback, void* user_data)
 {
 	last_error_message.clear();
-	if (!context)
+	if (context == nullptr)
 	{
 		last_error_message = "Invalid context provided to fers_run_simulation.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -595,7 +596,7 @@ int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callba
 	// Wrap the C-style callback in a std::function for easier use in C++.
 	// This also handles the case where the callback is null.
 	std::function<void(const std::string&, int, int)> progress_fn;
-	if (callback)
+	if (callback != nullptr)
 	{
 		progress_fn = [callback, user_data](const std::string& msg, const int current, const int total)
 		{ callback(msg.c_str(), current, total, user_data); };
@@ -619,14 +620,14 @@ int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callba
 int fers_generate_kml(const fers_context_t* context, const char* output_kml_filepath)
 {
 	last_error_message.clear();
-	if (!context || !output_kml_filepath)
+	if ((context == nullptr) || (output_kml_filepath == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or output_kml_filepath is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
 		return -1;
 	}
 
-	auto* ctx = reinterpret_cast<const FersContext*>(context);
+	const auto* ctx = reinterpret_cast<const FersContext*>(context);
 
 	try
 	{
@@ -682,7 +683,7 @@ fers_interpolated_path_t* fers_get_interpolated_motion_path(const fers_motion_wa
 															const size_t num_points)
 {
 	last_error_message.clear();
-	if (!waypoints || waypoint_count == 0 || num_points == 0)
+	if ((waypoints == nullptr) || waypoint_count == 0 || num_points == 0)
 	{
 		last_error_message = "Invalid arguments: waypoints cannot be null and counts must be > 0.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -752,7 +753,7 @@ fers_interpolated_path_t* fers_get_interpolated_motion_path(const fers_motion_wa
 
 void fers_free_interpolated_motion_path(fers_interpolated_path_t* path)
 {
-	if (path)
+	if (path != nullptr)
 	{
 		delete[] path->points;
 		delete path;
@@ -765,7 +766,7 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 																	   const size_t num_points)
 {
 	last_error_message.clear();
-	if (!waypoints || waypoint_count == 0 || num_points == 0)
+	if ((waypoints == nullptr) || waypoint_count == 0 || num_points == 0)
 	{
 		last_error_message = "Invalid arguments: waypoints cannot be null and counts must be > 0.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -845,7 +846,7 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 
 void fers_free_interpolated_rotation_path(fers_interpolated_rotation_path_t* path)
 {
-	if (path)
+	if (path != nullptr)
 	{
 		delete[] path->points;
 		delete path;
@@ -859,7 +860,7 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 													  const double frequency_hz)
 {
 	last_error_message.clear();
-	if (!context || az_samples < 2 || el_samples < 2)
+	if ((context == nullptr) || az_samples < 2 || el_samples < 2)
 	{
 		last_error_message = "Invalid arguments: context must be non-null and sample counts must be >= 2.";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -871,7 +872,7 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 		const auto* ctx = reinterpret_cast<const FersContext*>(context);
 		antenna::Antenna* ant = ctx->getWorld()->findAntenna(static_cast<SimId>(antenna_id));
 
-		if (!ant)
+		if (ant == nullptr)
 		{
 			last_error_message = "Antenna ID '" + std::to_string(antenna_id) + "' not found in the world.";
 			LOG(logging::Level::ERROR, last_error_message);
@@ -913,10 +914,7 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 				const math::SVec3 sample_angle(1.0, azimuth, elevation);
 				const RealType gain = ant->getGain(sample_angle, ref_angle, wavelength);
 				data->gains[i * az_samples + j] = gain;
-				if (gain > max_gain)
-				{
-					max_gain = gain;
-				}
+				max_gain = std::max(gain, max_gain);
 			}
 		}
 
@@ -942,7 +940,7 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 
 void fers_free_antenna_pattern_data(fers_antenna_pattern_data_t* data)
 {
-	if (data)
+	if (data != nullptr)
 	{
 		delete[] data->gains;
 		delete data;
@@ -954,7 +952,7 @@ void fers_free_antenna_pattern_data(fers_antenna_pattern_data_t* data)
 fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* context, const double time)
 {
 	last_error_message.clear();
-	if (!context)
+	if (context == nullptr)
 	{
 		last_error_message = "Invalid context passed to fers_calculate_preview_links";
 		LOG(logging::Level::ERROR, last_error_message);
@@ -1022,7 +1020,7 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 
 void fers_free_preview_links(fers_visual_link_list_t* list)
 {
-	if (list)
+	if (list != nullptr)
 	{
 		delete[] list->links;
 		delete list;

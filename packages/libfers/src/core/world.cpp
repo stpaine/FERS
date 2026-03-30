@@ -156,7 +156,7 @@ namespace core
 			_antennas[id] = std::move(antenna);
 		}
 
-		if (old_ptr && old_ptr != new_ptr)
+		if ((old_ptr != nullptr) && old_ptr != new_ptr)
 		{
 			for (auto& tx : _transmitters)
 				if (tx->getAntenna() == old_ptr)
@@ -187,7 +187,7 @@ namespace core
 			_waveforms[id] = std::move(waveform);
 		}
 
-		if (old_ptr && old_ptr != new_ptr)
+		if ((old_ptr != nullptr) && old_ptr != new_ptr)
 		{
 			for (auto& tx : _transmitters)
 				if (tx->getSignal() == old_ptr)

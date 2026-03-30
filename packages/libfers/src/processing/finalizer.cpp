@@ -39,7 +39,7 @@ namespace processing
 
 		std::unique_ptr<HighFive::File> h5_file;
 		{
-			std::lock_guard<std::mutex> lock(serial::hdf5_global_mutex);
+			std::scoped_lock lock(serial::hdf5_global_mutex);
 			h5_file = std::make_unique<HighFive::File>(hdf5_filename, HighFive::File::Truncate);
 		}
 
@@ -107,7 +107,7 @@ namespace processing
 
 		{
 			// Safe destruction of the HDF5 object inside a lock
-			std::lock_guard<std::mutex> lock(serial::hdf5_global_mutex);
+			std::scoped_lock lock(serial::hdf5_global_mutex);
 			h5_file.reset();
 		}
 

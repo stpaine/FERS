@@ -227,11 +227,11 @@ namespace serial::kml_generator_utils
 		bool has_transmitter = false;
 		for (const auto* obj : objects)
 		{
-			if (dynamic_cast<const radar::Receiver*>(obj))
+			if (dynamic_cast<const radar::Receiver*>(obj) != nullptr)
 			{
 				has_receiver = true;
 			}
-			if (dynamic_cast<const radar::Transmitter*>(obj))
+			if (dynamic_cast<const radar::Transmitter*>(obj) != nullptr)
 			{
 				has_transmitter = true;
 			}
@@ -252,7 +252,7 @@ namespace serial::kml_generator_utils
 	{
 		for (const auto* obj : objects)
 		{
-			if (const auto r = dynamic_cast<const radar::Radar*>(obj))
+			if (const auto* const r = dynamic_cast<const radar::Radar*>(obj))
 			{
 				return r;
 			}
@@ -347,12 +347,12 @@ namespace serial::kml_generator_utils
 							const KmlContext& ctx, const std::string& indent)
 	{
 		const antenna::Antenna* ant = radar->getAntenna();
-		if (!ant || platform->getMotionPath()->getCoords().empty())
+		if ((ant == nullptr) || platform->getMotionPath()->getCoords().empty())
 		{
 			return;
 		}
 
-		if (dynamic_cast<const antenna::Isotropic*>(ant))
+		if (dynamic_cast<const antenna::Isotropic*>(ant) != nullptr)
 		{
 			const math::Vec3 initial_pos = platform->getMotionPath()->getCoords().front().pos;
 			generateIsotropicAntennaKml(out, initial_pos, ctx, indent);
@@ -364,7 +364,7 @@ namespace serial::kml_generator_utils
 			std::optional<double> wavelength;
 			if (const auto* tx = dynamic_cast<const radar::Transmitter*>(radar))
 			{
-				if (tx->getSignal())
+				if (tx->getSignal() != nullptr)
 				{
 					wavelength = ctx.parameters.c / tx->getSignal()->getCarrier();
 				}
@@ -373,7 +373,7 @@ namespace serial::kml_generator_utils
 			{
 				if (const auto* attached_tx = dynamic_cast<const radar::Transmitter*>(rx->getAttached()))
 				{
-					if (attached_tx->getSignal())
+					if (attached_tx->getSignal() != nullptr)
 					{
 						wavelength = ctx.parameters.c / attached_tx->getSignal()->getCarrier();
 					}
@@ -402,7 +402,8 @@ namespace serial::kml_generator_utils
 					angle_3db_drop_deg = findSquareHorn3DbDropAngle(squarehorn_ant, *wavelength);
 				}
 			}
-			else if (dynamic_cast<const antenna::XmlAntenna*>(ant) || dynamic_cast<const antenna::H5Antenna*>(ant))
+			else if ((dynamic_cast<const antenna::XmlAntenna*>(ant) != nullptr) ||
+					 (dynamic_cast<const antenna::H5Antenna*>(ant) != nullptr))
 			{
 				LOG(logging::Level::INFO,
 					"KML visualization for antenna '{}' ('{}') is symbolic. "

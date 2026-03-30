@@ -17,6 +17,7 @@
 #include <cmath>
 #include <complex>
 #include <numeric>
+#include <ranges>
 #include <stdexcept>
 
 #include "core/parameters.h"
@@ -170,7 +171,7 @@ namespace fers_signal
 
 			sample = result;
 
-			std::rotate(line.rbegin(), line.rbegin() + 1, line.rend());
+			std::ranges::rotate(std::views::reverse(line), line.rbegin() + 1);
 		}
 	}
 

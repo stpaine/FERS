@@ -600,7 +600,7 @@ namespace serial::xml_parser_utils
 		const SimId waveform_id =
 			resolve_reference_id(transmitter, "waveform", "transmitter '" + name + "'", *refs.waveforms);
 		fers_signal::RadarSignal* wave = ctx.world->findWaveform(waveform_id);
-		if (!wave)
+		if (wave == nullptr)
 		{
 			throw XmlException("Waveform ID '" + std::to_string(waveform_id) + "' not found for transmitter '" + name +
 							   "'");
@@ -615,7 +615,7 @@ namespace serial::xml_parser_utils
 		const SimId antenna_id =
 			resolve_reference_id(transmitter, "antenna", "transmitter '" + name + "'", *refs.antennas);
 		const antenna::Antenna* ant = ctx.world->findAntenna(antenna_id);
-		if (!ant)
+		if (ant == nullptr)
 		{
 			throw XmlException("Antenna ID '" + std::to_string(antenna_id) + "' not found for transmitter '" + name +
 							   "'");
@@ -625,7 +625,7 @@ namespace serial::xml_parser_utils
 		const SimId timing_id =
 			resolve_reference_id(transmitter, "timing", "transmitter '" + name + "'", *refs.timings);
 		const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
-		if (!proto)
+		if (proto == nullptr)
 		{
 			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for transmitter '" + name +
 							   "'");
@@ -659,7 +659,7 @@ namespace serial::xml_parser_utils
 
 		const SimId ant_id = resolve_reference_id(receiver, "antenna", "receiver '" + name + "'", *refs.antennas);
 		const antenna::Antenna* antenna = ctx.world->findAntenna(ant_id);
-		if (!antenna)
+		if (antenna == nullptr)
 		{
 			throw XmlException("Antenna ID '" + std::to_string(ant_id) + "' not found for receiver '" + name + "'");
 		}
@@ -703,7 +703,7 @@ namespace serial::xml_parser_utils
 
 		const SimId timing_id = resolve_reference_id(receiver, "timing", "receiver '" + name + "'", *refs.timings);
 		const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
-		if (!proto)
+		if (proto == nullptr)
 		{
 			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for receiver '" + name + "'");
 		}

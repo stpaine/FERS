@@ -23,7 +23,7 @@ extern "C" {
  */
 struct fers_context;
 
-typedef struct fers_context fers_context_t;
+typedef struct fers_context fers_context_t; // NOLINT(*-use-using)
 
 /**
  * @brief A function pointer type for progress reporting callbacks.
@@ -37,7 +37,8 @@ typedef struct fers_context fers_context_t;
  * @param user_data An opaque pointer passed back to the caller, useful for
  *                  maintaining state (e.g., a class instance or application handle).
  */
-typedef void (*fers_progress_callback_t)(const char* message, int current, int total, void* user_data);
+typedef void (*fers_progress_callback_t)(const char* message, int current, int total,
+										 void* user_data); // NOLINT(*-use-using)
 
 
 // --- Context Lifecycle ---
@@ -73,7 +74,7 @@ void fers_context_destroy(fers_context_t* context);
 /**
  * @brief Log levels for the FERS library.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_LOG_TRACE,
 	FERS_LOG_DEBUG,
@@ -344,7 +345,7 @@ int fers_generate_kml(const fers_context_t* context, const char* output_kml_file
  * The data is structured as a flat array in row-major order (elevation rows, then azimuth columns).
  * @note The `gains` array must be freed using `fers_free_antenna_pattern_data`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double* gains; // Flat array of gain values [el_count * az_count]
 	size_t az_count; // Number of samples along azimuth (-180 to +180 deg)
@@ -389,7 +390,7 @@ void fers_free_antenna_pattern_data(fers_antenna_pattern_data_t* data);
  * This enum provides a language-agnostic way to specify the desired
  * interpolation algorithm when calling the path generation functions.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_INTERP_STATIC,
 	FERS_INTERP_LINEAR,
@@ -400,7 +401,7 @@ typedef enum
  * @brief Represents a single waypoint for a motion path.
  * Coordinates are in the scenario's defined coordinate system (e.g., ENU meters).
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double time; /**< Time in seconds. */
 	double x; /**< X coordinate in meters (East in ENU). */
@@ -412,7 +413,7 @@ typedef struct
  * @brief Represents a single waypoint for a rotation path.
  * Angles are in compass degrees (CW from North).
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double time; /**< Time in seconds. */
 	double azimuth_deg; /**< Azimuth angle in compass degrees (0=North, 90=East). */
@@ -423,7 +424,7 @@ typedef struct
  * @brief Represents a single interpolated point on a motion path.
  * Includes position and velocity in the scenario's coordinate frame.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double x; /**< X position in meters. */
 	double y; /**< Y position in meters. */
@@ -437,7 +438,7 @@ typedef struct
  * @brief Represents a single interpolated point on a rotation path.
  * Angles are in compass degrees (CW from North).
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double azimuth_deg; /**< Azimuth angle in compass degrees. */
 	double elevation_deg; /**< Elevation angle in degrees. */
@@ -448,7 +449,7 @@ typedef struct
  * @brief A container for an array of interpolated motion path points.
  * @note The `points` array must be freed using `fers_free_interpolated_motion_path`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_interpolated_point_t* points;
 	size_t count;
@@ -458,7 +459,7 @@ typedef struct
  * @brief A container for an array of interpolated rotation path points.
  * @note The `points` array must be freed using `fers_free_interpolated_rotation_path`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_interpolated_rotation_point_t* points;
 	size_t count;
@@ -516,7 +517,7 @@ void fers_free_interpolated_rotation_path(fers_interpolated_rotation_path_t* pat
 /**
  * @brief Quality of the radio link based on SNR.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_LINK_STRONG, // SNR > 0 dB
 	FERS_LINK_WEAK // SNR < 0 dB (Geometric possibility but sub-noise)
@@ -525,7 +526,7 @@ typedef enum
 /**
  * @brief Type of visual link to render.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_LINK_MONOSTATIC, // Combined Tx/Rx path
 	FERS_LINK_BISTATIC_TX_TGT, // Illuminator path
@@ -537,7 +538,7 @@ typedef enum
  * @brief Represents a single renderable line segment metadata.
  * Geometry is resolved client-side.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_link_type_t type; /**< Type of the link (Monostatic, Bistatic, etc.). */
 	fers_link_quality_t quality; /**< Signal quality (Strong/Weak). */
@@ -551,7 +552,7 @@ typedef struct
  * @brief A container for a list of visual links.
  * @note The `links` array is owned by this struct and must be freed using `fers_free_preview_links`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_visual_link_t* links;
 	size_t count;

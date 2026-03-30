@@ -35,26 +35,25 @@ namespace
 		{
 			return std::unexpected("Modified Bessel approximation only valid for x > 0");
 		}
-		if (RealType t = x / 3.75; t <= 1.0)
+		RealType t = x / 3.75;
+		if (t <= 1.0)
 		{
 			t *= t;
 			return 1.0 +
 				t * (3.5156229 + t * (3.0899424 + t * (1.2067492 + t * (0.2659732 + t * (0.0360768 + t * 0.0045813)))));
 		}
-		else
-		{
-			const RealType i0 = 0.39894228 +
-				t *
-					(0.01328592 +
-					 t *
-						 (0.00225319 +
-						  t *
-							  (-0.00157565 +
-							   t *
-								   (0.00916281 +
-									t * (-0.02057706 + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377)))))));
-			return i0 * std::exp(x) / std::sqrt(x);
-		}
+
+		const RealType i0 = 0.39894228 +
+			t *
+				(0.01328592 +
+				 t *
+					 (0.00225319 +
+					  t *
+						  (-0.00157565 +
+						   t *
+							   (0.00916281 +
+								t * (-0.02057706 + t * (0.02635537 + t * (-0.01647633 + t * 0.00392377)))))));
+		return i0 * std::exp(x) / std::sqrt(x);
 	}
 }
 
@@ -72,26 +71,24 @@ namespace interp
 		{
 			return 0;
 		}
-		if (auto bessel = besselI0(_beta * std::sqrt(1 - std::pow((x - _alpha) / _alpha, 2))); bessel)
+		auto bessel = besselI0(_beta * std::sqrt(1 - std::pow((x - _alpha) / _alpha, 2)));
+		if (bessel)
 		{
 			return *bessel / _bessel_beta;
 		}
-		else
-		{
-			return std::unexpected(bessel.error());
-		}
+
+		return std::unexpected(bessel.error());
 	}
 
 	std::expected<RealType, std::string> InterpFilter::interpFilter(const RealType x) const noexcept
 	{
-		if (auto kaiser = kaiserWinCompute(x + _alpha); kaiser)
+		auto kaiser = kaiserWinCompute(x + _alpha);
+		if (kaiser)
 		{
 			return *kaiser * sinc(x);
 		}
-		else
-		{
-			return std::unexpected(kaiser.error());
-		}
+
+		return std::unexpected(kaiser.error());
 	}
 
 	InterpFilter::InterpFilter()

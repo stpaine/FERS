@@ -84,21 +84,24 @@ namespace
 
 namespace math
 {
-	void to_json(nlohmann::json& j, const Vec3& v) { j = {{"x", v.x}, {"y", v.y}, {"z", v.z}}; }
+	void to_json(nlohmann::json& j, const Vec3& v)
+	{
+		j = {{"x", v.x}, {"y", v.y}, {"z", v.z}};
+	} // NOLINT(*-use-internal-linkage)
 
-	void from_json(const nlohmann::json& j, Vec3& v)
+	void from_json(const nlohmann::json& j, Vec3& v) // NOLINT(*-use-internal-linkage)
 	{
 		j.at("x").get_to(v.x);
 		j.at("y").get_to(v.y);
 		j.at("z").get_to(v.z);
 	}
 
-	void to_json(nlohmann::json& j, const Coord& c)
+	void to_json(nlohmann::json& j, const Coord& c) // NOLINT(*-use-internal-linkage)
 	{
 		j = {{"time", c.t}, {"x", c.pos.x}, {"y", c.pos.y}, {"altitude", c.pos.z}};
 	}
 
-	void from_json(const nlohmann::json& j, Coord& c)
+	void from_json(const nlohmann::json& j, Coord& c) // NOLINT(*-use-internal-linkage)
 	{
 		j.at("time").get_to(c.t);
 		j.at("x").get_to(c.pos.x);
@@ -106,7 +109,7 @@ namespace math
 		j.at("altitude").get_to(c.pos.z);
 	}
 
-	void to_json(nlohmann::json& j, const RotationCoord& rc)
+	void to_json(nlohmann::json& j, const RotationCoord& rc) // NOLINT(*-use-internal-linkage)
 	{
 		// The internal engine uses mathematical angles (radians, CCW from East),
 		// but the UI and XML format use compass degrees (CW from North).
@@ -117,7 +120,7 @@ namespace math
 		j = {{"time", rc.t}, {"azimuth", az_deg}, {"elevation", el_deg}};
 	}
 
-	void from_json(const nlohmann::json& j, RotationCoord& rc)
+	void from_json(const nlohmann::json& j, RotationCoord& rc) // NOLINT(*-use-internal-linkage)
 	{
 		j.at("time").get_to(rc.t);
 		const RealType az_deg = j.at("azimuth").get<RealType>();
@@ -135,12 +138,12 @@ namespace math
 								  {Path::InterpType::INTERP_LINEAR, "linear"},
 								  {Path::InterpType::INTERP_CUBIC, "cubic"}})
 
-	void to_json(nlohmann::json& j, const Path& p)
+	void to_json(nlohmann::json& j, const Path& p) // NOLINT(*-use-internal-linkage)
 	{
 		j = {{"interpolation", p.getType()}, {"positionwaypoints", p.getCoords()}};
 	}
 
-	void from_json(const nlohmann::json& j, Path& p)
+	void from_json(const nlohmann::json& j, Path& p) // NOLINT(*-use-internal-linkage)
 	{
 		p.setInterp(j.at("interpolation").get<Path::InterpType>());
 		for (const auto waypoints = j.at("positionwaypoints").get<std::vector<Coord>>(); const auto& wp : waypoints)
@@ -157,7 +160,7 @@ namespace math
 								  {RotationPath::InterpType::INTERP_LINEAR, "linear"},
 								  {RotationPath::InterpType::INTERP_CUBIC, "cubic"}})
 
-	void to_json(nlohmann::json& j, const RotationPath& p)
+	void to_json(nlohmann::json& j, const RotationPath& p) // NOLINT(*-use-internal-linkage)
 	{
 		j["interpolation"] = p.getType();
 		// This logic exists to map the two different rotation definitions from the
@@ -183,7 +186,7 @@ namespace math
 		}
 	}
 
-	void from_json(const nlohmann::json& j, RotationPath& p)
+	void from_json(const nlohmann::json& j, RotationPath& p) // NOLINT(*-use-internal-linkage)
 	{
 		p.setInterp(j.at("interpolation").get<RotationPath::InterpType>());
 		for (const auto waypoints = j.at("rotationwaypoints").get<std::vector<RotationCoord>>();
@@ -198,7 +201,7 @@ namespace math
 
 namespace timing
 {
-	void to_json(nlohmann::json& j, const PrototypeTiming& pt)
+	void to_json(nlohmann::json& j, const PrototypeTiming& pt) // NOLINT(*-use-internal-linkage)
 	{
 		j = nlohmann::json{{"id", sim_id_to_json(pt.getId())},
 						   {"name", pt.getName()},
@@ -236,7 +239,7 @@ namespace timing
 		}
 	}
 
-	void from_json(const nlohmann::json& j, PrototypeTiming& pt)
+	void from_json(const nlohmann::json& j, PrototypeTiming& pt) // NOLINT(*-use-internal-linkage)
 	{
 		pt.setFrequency(j.at("frequency").get<RealType>());
 		if (j.value("synconpulse", false))
@@ -286,13 +289,13 @@ namespace timing
 
 namespace fers_signal
 {
-	void to_json(nlohmann::json& j, const RadarSignal& rs)
+	void to_json(nlohmann::json& j, const RadarSignal& rs) // NOLINT(*-use-internal-linkage)
 	{
 		j = nlohmann::json{{"id", sim_id_to_json(rs.getId())},
 						   {"name", rs.getName()},
 						   {"power", rs.getPower()},
 						   {"carrier_frequency", rs.getCarrier()}};
-		if (dynamic_cast<const CwSignal*>(rs.getSignal()))
+		if (dynamic_cast<const CwSignal*>(rs.getSignal()) != nullptr)
 		{
 			j["cw"] = nlohmann::json::object();
 		}
@@ -310,7 +313,7 @@ namespace fers_signal
 		}
 	}
 
-	void from_json(const nlohmann::json& j, std::unique_ptr<RadarSignal>& rs)
+	void from_json(const nlohmann::json& j, std::unique_ptr<RadarSignal>& rs) // NOLINT(*-use-internal-linkage)
 	{
 		const auto name = j.at("name").get<std::string>();
 		const auto id = parse_json_id(j, "id", "waveform");
@@ -343,7 +346,7 @@ namespace fers_signal
 
 namespace antenna
 {
-	void to_json(nlohmann::json& j, const Antenna& a)
+	void to_json(nlohmann::json& j, const Antenna& a) // NOLINT(*-use-internal-linkage)
 	{
 		j = {{"id", sim_id_to_json(a.getId())}, {"name", a.getName()}, {"efficiency", a.getEfficiencyFactor()}};
 
@@ -386,7 +389,7 @@ namespace antenna
 		}
 	}
 
-	void from_json(const nlohmann::json& j, std::unique_ptr<Antenna>& ant)
+	void from_json(const nlohmann::json& j, std::unique_ptr<Antenna>& ant) // NOLINT(*-use-internal-linkage)
 	{
 		const auto name = j.at("name").get<std::string>();
 		const auto id = parse_json_id(j, "id", "Antenna");
@@ -445,20 +448,23 @@ namespace antenna
 
 namespace radar
 {
-	void to_json(nlohmann::json& j, const SchedulePeriod& p) { j = {{"start", p.start}, {"end", p.end}}; }
+	void to_json(nlohmann::json& j, const SchedulePeriod& p)
+	{
+		j = {{"start", p.start}, {"end", p.end}};
+	} // NOLINT(*-use-internal-linkage)
 
-	void from_json(const nlohmann::json& j, SchedulePeriod& p)
+	void from_json(const nlohmann::json& j, SchedulePeriod& p) // NOLINT(*-use-internal-linkage)
 	{
 		j.at("start").get_to(p.start);
 		j.at("end").get_to(p.end);
 	}
 
-	void to_json(nlohmann::json& j, const Transmitter& t)
+	void to_json(nlohmann::json& j, const Transmitter& t) // NOLINT(*-use-internal-linkage)
 	{
 		j = nlohmann::json{{"id", sim_id_to_json(t.getId())},
 						   {"name", t.getName()},
-						   {"waveform", sim_id_to_json(t.getSignal() ? t.getSignal()->getId() : 0)},
-						   {"antenna", sim_id_to_json(t.getAntenna() ? t.getAntenna()->getId() : 0)},
+						   {"waveform", sim_id_to_json((t.getSignal() != nullptr) ? t.getSignal()->getId() : 0)},
+						   {"antenna", sim_id_to_json((t.getAntenna() != nullptr) ? t.getAntenna()->getId() : 0)},
 						   {"timing", sim_id_to_json(t.getTiming() ? t.getTiming()->getId() : 0)}};
 
 		if (t.getMode() == OperationMode::PULSED_MODE)
@@ -475,12 +481,12 @@ namespace radar
 		}
 	}
 
-	void to_json(nlohmann::json& j, const Receiver& r)
+	void to_json(nlohmann::json& j, const Receiver& r) // NOLINT(*-use-internal-linkage)
 	{
 		j = nlohmann::json{{"id", sim_id_to_json(r.getId())},
 						   {"name", r.getName()},
 						   {"noise_temp", r.getNoiseTemperature()},
-						   {"antenna", sim_id_to_json(r.getAntenna() ? r.getAntenna()->getId() : 0)},
+						   {"antenna", sim_id_to_json((r.getAntenna() != nullptr) ? r.getAntenna()->getId() : 0)},
 						   {"timing", sim_id_to_json(r.getTiming() ? r.getTiming()->getId() : 0)},
 						   {"nodirect", r.checkFlag(Receiver::RecvFlag::FLAG_NODIRECT)},
 						   {"nopropagationloss", r.checkFlag(Receiver::RecvFlag::FLAG_NOPROPLOSS)}};
@@ -500,7 +506,7 @@ namespace radar
 		}
 	}
 
-	void to_json(nlohmann::json& j, const Target& t)
+	void to_json(nlohmann::json& j, const Target& t) // NOLINT(*-use-internal-linkage)
 	{
 		j["id"] = sim_id_to_json(t.getId());
 		j["name"] = t.getName();
@@ -534,7 +540,7 @@ namespace radar
 		}
 	}
 
-	void to_json(nlohmann::json& j, const Platform& p)
+	void to_json(nlohmann::json& j, const Platform& p) // NOLINT(*-use-internal-linkage)
 	{
 		j = {{"id", sim_id_to_json(p.getId())}, {"name", p.getName()}, {"motionpath", *p.getMotionPath()}};
 
@@ -557,7 +563,7 @@ namespace params
 								  {CoordinateFrame::UTM, "UTM"},
 								  {CoordinateFrame::ECEF, "ECEF"}})
 
-	void to_json(nlohmann::json& j, const Parameters& p)
+	void to_json(nlohmann::json& j, const Parameters& p) // NOLINT(*-use-internal-linkage)
 	{
 		j = nlohmann::json{{"starttime", p.start},
 						   {"endtime", p.end},
@@ -583,7 +589,7 @@ namespace params
 		}
 	}
 
-	void from_json(const nlohmann::json& j, Parameters& p)
+	void from_json(const nlohmann::json& j, Parameters& p) // NOLINT(*-use-internal-linkage)
 	{
 		p.start = j.at("starttime").get<RealType>();
 		p.end = j.at("endtime").get<RealType>();
@@ -629,8 +635,10 @@ namespace
 					monostatic_comp["name"] = t->getName();
 					monostatic_comp["tx_id"] = sim_id_to_json(t->getId());
 					monostatic_comp["rx_id"] = sim_id_to_json(t->getAttached()->getId());
-					monostatic_comp["waveform"] = sim_id_to_json(t->getSignal() ? t->getSignal()->getId() : 0);
-					monostatic_comp["antenna"] = sim_id_to_json(t->getAntenna() ? t->getAntenna()->getId() : 0);
+					monostatic_comp["waveform"] =
+						sim_id_to_json((t->getSignal() != nullptr) ? t->getSignal()->getId() : 0);
+					monostatic_comp["antenna"] =
+						sim_id_to_json((t->getAntenna() != nullptr) ? t->getAntenna()->getId() : 0);
 					monostatic_comp["timing"] = sim_id_to_json(t->getTiming() ? t->getTiming()->getId() : 0);
 
 					if (const auto* recv = dynamic_cast<const radar::Receiver*>(t->getAttached()))
@@ -775,19 +783,19 @@ namespace
 		const auto timing_id = parse_json_id(comp_json, "timing", "Transmitter");
 		const auto antenna_id = parse_json_id(comp_json, "antenna", "Transmitter");
 
-		if (!world.findWaveform(wave_id))
+		if (world.findWaveform(wave_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid waveform '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("waveform", ""));
 			return;
 		}
-		if (!world.findTiming(timing_id))
+		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid timing source '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
 			return;
 		}
-		if (!world.findAntenna(antenna_id))
+		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid antenna '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
@@ -807,7 +815,7 @@ namespace
 		trans->setWave(world.findWaveform(wave_id));
 		trans->setAntenna(world.findAntenna(antenna_id));
 
-		if (const auto timing_proto = world.findTiming(timing_id))
+		if (auto* const timing_proto = world.findTiming(timing_id))
 		{
 			const auto timing =
 				std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
@@ -838,14 +846,14 @@ namespace
 		const auto timing_id = parse_json_id(comp_json, "timing", "Receiver");
 		const auto antenna_id = parse_json_id(comp_json, "antenna", "Receiver");
 
-		if (!world.findTiming(timing_id))
+		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Receiver '{}': Missing or invalid timing source '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
 			return;
 		}
 
-		if (!world.findAntenna(antenna_id))
+		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Receiver '{}': Missing or invalid antenna '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
@@ -869,7 +877,7 @@ namespace
 
 		recv->setAntenna(world.findAntenna(antenna_id));
 
-		if (const auto timing_proto = world.findTiming(timing_id))
+		if (auto* const timing_proto = world.findTiming(timing_id))
 		{
 			const auto timing =
 				std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
@@ -968,19 +976,19 @@ namespace
 		const auto timing_id = parse_json_id(comp_json, "timing", "Monostatic");
 		const auto antenna_id = parse_json_id(comp_json, "antenna", "Monostatic");
 
-		if (!world.findWaveform(wave_id))
+		if (world.findWaveform(wave_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid waveform '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("waveform", ""));
 			return;
 		}
-		if (!world.findTiming(timing_id))
+		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid timing source '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
 			return;
 		}
-		if (!world.findAntenna(antenna_id))
+		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid antenna '{}'.",
 				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
@@ -1000,8 +1008,8 @@ namespace
 
 		trans->setWave(world.findWaveform(wave_id));
 		trans->setAntenna(world.findAntenna(antenna_id));
-		const auto tx_timing_proto = world.findTiming(timing_id);
-		if (tx_timing_proto)
+		auto* const tx_timing_proto = world.findTiming(timing_id);
+		if (tx_timing_proto != nullptr)
 		{
 			const auto tx_timing =
 				std::make_shared<timing::Timing>(tx_timing_proto->getName(), masterSeeder(), tx_timing_proto->getId());
@@ -1023,8 +1031,8 @@ namespace
 		recv->setNoiseTemperature(comp_json.value("noise_temp", 0.0));
 
 		recv->setAntenna(world.findAntenna(antenna_id));
-		const auto rx_timing_proto = world.findTiming(timing_id);
-		if (rx_timing_proto)
+		auto* const rx_timing_proto = world.findTiming(timing_id);
+		if (rx_timing_proto != nullptr)
 		{
 			const auto rx_timing =
 				std::make_shared<timing::Timing>(rx_timing_proto->getName(), masterSeeder(), rx_timing_proto->getId());
@@ -1128,19 +1136,19 @@ namespace serial
 		auto new_pattern = j.value("pattern", "isotropic");
 		bool type_changed = false;
 
-		if (new_pattern == "isotropic" && !dynamic_cast<antenna::Isotropic*>(ant))
+		if (new_pattern == "isotropic" && (dynamic_cast<antenna::Isotropic*>(ant) == nullptr))
 			type_changed = true;
-		else if (new_pattern == "sinc" && !dynamic_cast<antenna::Sinc*>(ant))
+		else if (new_pattern == "sinc" && (dynamic_cast<antenna::Sinc*>(ant) == nullptr))
 			type_changed = true;
-		else if (new_pattern == "gaussian" && !dynamic_cast<antenna::Gaussian*>(ant))
+		else if (new_pattern == "gaussian" && (dynamic_cast<antenna::Gaussian*>(ant) == nullptr))
 			type_changed = true;
-		else if (new_pattern == "squarehorn" && !dynamic_cast<antenna::SquareHorn*>(ant))
+		else if (new_pattern == "squarehorn" && (dynamic_cast<antenna::SquareHorn*>(ant) == nullptr))
 			type_changed = true;
-		else if (new_pattern == "parabolic" && !dynamic_cast<antenna::Parabolic*>(ant))
+		else if (new_pattern == "parabolic" && (dynamic_cast<antenna::Parabolic*>(ant) == nullptr))
 			type_changed = true;
-		else if (new_pattern == "xml" && !dynamic_cast<antenna::XmlAntenna*>(ant))
+		else if (new_pattern == "xml" && (dynamic_cast<antenna::XmlAntenna*>(ant) == nullptr))
 			type_changed = true;
-		else if (new_pattern == "file" && !dynamic_cast<antenna::H5Antenna*>(ant))
+		else if (new_pattern == "file" && (dynamic_cast<antenna::H5Antenna*>(ant) == nullptr))
 			type_changed = true;
 
 		if (type_changed)
@@ -1241,7 +1249,7 @@ namespace serial
 		{
 			auto id = parse_json_id(j, "waveform", "Transmitter");
 			auto* wf = world.findWaveform(id);
-			if (!wf)
+			if (wf == nullptr)
 				throw std::runtime_error("Waveform ID " + std::to_string(id) + " not found.");
 			tx->setWave(wf);
 		}
@@ -1250,7 +1258,7 @@ namespace serial
 		{
 			auto id = parse_json_id(j, "antenna", "Transmitter");
 			auto* ant = world.findAntenna(id);
-			if (!ant)
+			if (ant == nullptr)
 				throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
 			tx->setAntenna(ant);
 		}
@@ -1258,7 +1266,7 @@ namespace serial
 		if (j.contains("timing"))
 		{
 			auto timing_id = parse_json_id(j, "timing", "Transmitter");
-			if (const auto timing_proto = world.findTiming(timing_id))
+			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
 				unsigned seed = tx->getTiming() ? tx->getTiming()->getSeed() : 0;
 				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
@@ -1321,7 +1329,7 @@ namespace serial
 		{
 			auto id = parse_json_id(j, "antenna", "Receiver");
 			auto* ant = world.findAntenna(id);
-			if (!ant)
+			if (ant == nullptr)
 				throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
 			rx->setAntenna(ant);
 		}
@@ -1329,7 +1337,7 @@ namespace serial
 		if (j.contains("timing"))
 		{
 			auto timing_id = parse_json_id(j, "timing", "Receiver");
-			if (const auto timing_proto = world.findTiming(timing_id))
+			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
 				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
 				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
@@ -1387,7 +1395,7 @@ namespace serial
 		if (j.contains("timing"))
 		{
 			auto timing_id = parse_json_id(j, "timing", "Monostatic");
-			if (const auto timing_proto = world.findTiming(timing_id))
+			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
 				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
 				auto rx_timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
@@ -1415,7 +1423,7 @@ namespace serial
 	void update_target_from_json(const nlohmann::json& j, radar::Target* existing_tgt, core::World& world,
 								 std::mt19937& /*masterSeeder*/)
 	{
-		auto plat = existing_tgt->getPlatform();
+		auto* plat = existing_tgt->getPlatform();
 		const auto& rcs_json = j.at("rcs");
 		const auto rcs_type = rcs_json.at("type").get<std::string>();
 		std::unique_ptr<radar::Target> target_obj;

@@ -85,7 +85,7 @@ namespace radar
 		 * @param flag The flag to check.
 		 * @return True if the flag is set, false otherwise.
 		 */
-		[[nodiscard]] bool checkFlag(RecvFlag flag) const noexcept { return _flags & static_cast<int>(flag); }
+		[[nodiscard]] bool checkFlag(RecvFlag flag) const noexcept { return (_flags & static_cast<int>(flag)) != 0; }
 
 		/**
 		 * @brief Retrieves the unique ID of the receiver.

@@ -336,7 +336,7 @@ namespace simulation
 		}
 
 		const RealType tau = link.dist / params::c();
-		const auto signal = trans->getSignal();
+		auto* const signal = trans->getSignal();
 		const RealType carrier_freq = signal->getCarrier();
 		const RealType lambda = params::c() / carrier_freq;
 
@@ -390,7 +390,7 @@ namespace simulation
 		}
 
 		const RealType tau = (link_tx_tgt.dist + link_tgt_rx.dist) / params::c();
-		const auto signal = trans->getSignal();
+		auto* const signal = trans->getSignal();
 		const RealType carrier_freq = signal->getCarrier();
 		const RealType lambda = params::c() / carrier_freq;
 
@@ -452,7 +452,7 @@ namespace simulation
 		const auto sample_time_chrono = std::chrono::duration<RealType>(1.0 / params::simSamplingRate());
 		const int point_count = static_cast<int>(std::ceil(signal->getLength() / sample_time_chrono.count()));
 
-		if (targ && point_count == 0)
+		if ((targ != nullptr) && point_count == 0)
 		{
 			LOG(Level::FATAL, "No time points are available for execution!");
 			throw std::runtime_error("No time points are available for execution!");
@@ -468,7 +468,7 @@ namespace simulation
 					i < point_count ? start_time_chrono + i * sample_time_chrono : end_time_chrono;
 
 				ReResults results{};
-				if (targ)
+				if (targ != nullptr)
 				{
 					solveRe(trans, recv, targ, current_time, signal, results);
 				}
@@ -510,8 +510,8 @@ namespace simulation
 
 			const auto p_tx = tx->getPosition(time);
 			const auto* waveform = tx->getSignal();
-			const RealType pt = waveform ? waveform->getPower() : 0.0;
-			const RealType lambda = waveform ? (params::c() / waveform->getCarrier()) : lambda_default;
+			const RealType pt = (waveform != nullptr) ? waveform->getPower() : 0.0;
+			const RealType lambda = (waveform != nullptr) ? (params::c() / waveform->getCarrier()) : lambda_default;
 
 			// --- PRE-CALCULATE ILLUMINATOR PATHS (Tx -> Tgt) ---
 			// These depend only on the Transmitter and Targets. We calculate them once per Tx

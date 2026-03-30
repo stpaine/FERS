@@ -29,7 +29,7 @@ namespace
 	void libxmlGenericErrorCallback(void* ctx, const char* msg, ...)
 	{
 		auto* err_str = static_cast<std::string*>(ctx);
-		if (!err_str || !msg)
+		if ((err_str == nullptr) || (msg == nullptr))
 		{
 			return;
 		}
@@ -49,7 +49,7 @@ namespace
 		std::string errors = rawErrors;
 
 		// Strip trailing newlines or whitespace
-		while (!errors.empty() && std::isspace(static_cast<unsigned char>(errors.back())))
+		while (!errors.empty() && (std::isspace(static_cast<unsigned char>(errors.back())) != 0))
 		{
 			errors.pop_back();
 		}
@@ -77,10 +77,10 @@ namespace
 	std::string getXmlLastErrorFormatted()
 	{
 		const xmlError* err = xmlGetLastError();
-		if (err && err->message)
+		if ((err != nullptr) && (err->message != nullptr))
 		{
 			std::string msg = err->message;
-			while (!msg.empty() && std::isspace(static_cast<unsigned char>(msg.back())))
+			while (!msg.empty() && (std::isspace(static_cast<unsigned char>(msg.back())) != 0))
 			{
 				msg.pop_back();
 			}
@@ -101,7 +101,7 @@ bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) 
 					  xmlParserInputBufferCreateMem(reinterpret_cast<const char*>(dtdData.data()),
 													static_cast<int>(dtdData.size()), XML_CHAR_ENCODING_UTF8),
 					  XML_CHAR_ENCODING_UTF8);
-	if (!dtd)
+	if (dtd == nullptr)
 	{
 		throw XmlException("Failed to parse DTD from memory.");
 	}
@@ -120,7 +120,7 @@ bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) 
 	validation_ctxt->error = libxmlGenericErrorCallback;
 	validation_ctxt->warning = libxmlGenericErrorCallback;
 
-	const bool is_valid = xmlValidateDtd(validation_ctxt.get(), _doc.get(), dtd);
+	const bool is_valid = xmlValidateDtd(validation_ctxt.get(), _doc.get(), dtd) != 0;
 	xmlFreeDtd(dtd);
 
 	if (!is_valid)
@@ -187,7 +187,7 @@ void mergeXmlDocuments(const XmlDocument& mainDoc, const XmlDocument& includedDo
 	const XmlElement main_root = mainDoc.getRootElement();
 	const XmlElement included_root = includedDoc.getRootElement();
 
-	for (xmlNodePtr child = included_root.getNode()->children; child; child = child->next)
+	for (xmlNodePtr child = included_root.getNode()->children; child != nullptr; child = child->next)
 	{
 		if (child->type == XML_ELEMENT_NODE)
 		{
@@ -255,7 +255,7 @@ std::string XmlDocument::dumpToString() const
 	xmlChar* buffer = nullptr;
 	int size = 0;
 	xmlDocDumpFormatMemory(_doc.get(), &buffer, &size, 1);
-	if (!buffer)
+	if (buffer == nullptr)
 	{
 		LOG(logging::Level::ERROR, "Failed to dump XML document to memory buffer.");
 		return "";

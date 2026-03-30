@@ -55,8 +55,7 @@ namespace radar
 		}
 
 		// 2. Sort by start time
-		std::sort(valid_periods.begin(), valid_periods.end(),
-				  [](const auto& a, const auto& b) { return a.start < b.start; });
+		std::ranges::sort(valid_periods, [](const auto& a, const auto& b) { return a.start < b.start; });
 
 		// 3. Merge overlapping intervals
 		std::vector<SchedulePeriod> merged;

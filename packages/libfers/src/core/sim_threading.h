@@ -77,7 +77,7 @@ namespace core
 		{
 			if (_callback)
 			{
-				std::lock_guard<std::mutex> lock(_mutex);
+				std::scoped_lock lock(_mutex);
 				_callback(msg, current, total);
 			}
 		}
