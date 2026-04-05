@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Line, Html } from '@react-three/drei';
+import { Box, Tooltip, Typography } from '@mui/material';
+import { Html, Line } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
+import { invoke } from '@tauri-apps/api/core';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
-    useScenarioStore,
-    Platform,
     calculateInterpolatedPosition,
+    Platform,
+    useScenarioStore,
 } from '@/stores/scenarioStore';
-import { Tooltip, Box, Typography } from '@mui/material';
 import { fersColors } from '@/theme';
 
 const TYPE_MAP = ['monostatic', 'illuminator', 'scattered', 'direct'] as const;
@@ -197,6 +197,8 @@ export default function LinkVisualizer() {
     const currentTime = useScenarioStore((state) => state.currentTime);
     const platforms = useScenarioStore((state) => state.platforms);
     const visibility = useScenarioStore((state) => state.visibility);
+    const isSimulating = useScenarioStore((state) => state.isSimulating);
+    const isGeneratingKml = useScenarioStore((state) => state.isGeneratingKml);
     const {
         showLinkLabels,
         showLinkMonostatic,
@@ -222,6 +224,13 @@ export default function LinkVisualizer() {
             isMountedRef.current = false;
         };
     }, []);
+
+    // Clear stale links when a backend operation holds the mutex
+    useEffect(() => {
+        if (isSimulating || isGeneratingKml) {
+            setLinkMetadata([]);
+        }
+    }, [isSimulating, isGeneratingKml]);
 
     // Build a lookup map: Component Name -> Parent Platform
     const componentToPlatform = useMemo(() => {
@@ -252,7 +261,12 @@ export default function LinkVisualizer() {
         const state = useScenarioStore.getState();
 
         // 1. Concurrency & Sync Checks
-        if (state.isBackendSyncing || isFetchingRef.current) {
+        if (
+            state.isSimulating ||
+            state.isGeneratingKml ||
+            state.isBackendSyncing ||
+            isFetchingRef.current
+        ) {
             return;
         }
 

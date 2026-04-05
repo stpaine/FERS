@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import React, { useState, useEffect, useRef } from 'react';
+import MapIcon from '@mui/icons-material/Map';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import {
     Box,
-    Typography,
-    Grid,
-    Card,
-    CardContent,
-    CardActions,
     Button,
+    Card,
+    CardActions,
+    CardContent,
     CircularProgress,
     Fade,
+    Grid,
     LinearProgress,
     List,
     ListItem,
     ListItemText,
+    Typography,
 } from '@mui/material';
-import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
-import MapIcon from '@mui/icons-material/Map';
-import { useScenarioStore } from '@/stores/scenarioStore';
 import { invoke } from '@tauri-apps/api/core';
-import { save } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event';
+import { save } from '@tauri-apps/plugin-dialog';
+import React, { useEffect, useRef, useState } from 'react';
+import { useScenarioStore } from '@/stores/scenarioStore';
 
 interface ProgressState {
     message: string;
@@ -33,8 +33,11 @@ interface ProgressState {
 export const SimulationView = React.memo(function SimulationView() {
     const isSimulating = useScenarioStore((state) => state.isSimulating);
     const setIsSimulating = useScenarioStore((state) => state.setIsSimulating);
+    const isGeneratingKml = useScenarioStore((state) => state.isGeneratingKml);
+    const setIsGeneratingKml = useScenarioStore(
+        (state) => state.setIsGeneratingKml
+    );
     const showError = useScenarioStore((state) => state.showError);
-    const [isGeneratingKml, setIsGeneratingKml] = useState(false);
 
     // Use a Ref to store incoming data to avoid triggering re-renders on every event
     const progressRef = useRef<Record<string, ProgressState>>({});

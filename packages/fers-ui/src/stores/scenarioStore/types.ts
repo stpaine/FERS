@@ -3,20 +3,20 @@
 
 import { z } from 'zod';
 import {
-    GlobalParametersSchema,
-    WaveformSchema,
-    TimingSchema,
     AntennaSchema,
-    PlatformSchema,
-    ScenarioDataSchema,
-    NoiseEntrySchema,
-    PositionWaypointSchema,
-    RotationWaypointSchema,
-    PlatformComponentSchema,
     FixedRotationSchema,
-    RotationPathSchema,
+    GlobalParametersSchema,
     MotionPathSchema,
+    NoiseEntrySchema,
+    PlatformComponentSchema,
+    PlatformSchema,
+    PositionWaypointSchema,
+    RotationPathSchema,
+    RotationWaypointSchema,
+    ScenarioDataSchema,
     SchedulePeriodSchema,
+    TimingSchema,
+    WaveformSchema,
 } from '../scenarioSchema';
 
 // --- Zod Inferred Types ---
@@ -105,6 +105,7 @@ export type ScenarioState = ScenarioData & {
     currentTime: number;
     targetPlaybackDuration: number | null;
     isSimulating: boolean;
+    isGeneratingKml: boolean;
     isBackendSyncing: boolean;
     backendVersion: number;
     errorSnackbar: {
@@ -165,6 +166,7 @@ export type PlaybackActions = {
     setCurrentTime: (time: number | ((prevTime: number) => number)) => void;
     setTargetPlaybackDuration: (duration: number | null) => void;
     setIsSimulating: (isSimulating: boolean) => void;
+    setIsGeneratingKml: (isGeneratingKml: boolean) => void;
 };
 
 export type ErrorActions = {

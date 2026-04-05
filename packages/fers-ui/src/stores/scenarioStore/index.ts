@@ -3,12 +3,13 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { ScenarioStore } from './types';
 import { defaultGlobalParameters } from './defaults';
 import { createAssetSlice } from './slices/assetSlice';
 import { createBackendSlice } from './slices/backendSlice';
 import { createPlatformSlice } from './slices/platformSlice';
 import { createScenarioSlice } from './slices/scenarioSlice';
+import { ScenarioStore } from './types';
+
 export * from './types';
 export * from './utils';
 
@@ -27,6 +28,7 @@ export const useScenarioStore = create<ScenarioStore>()(
         currentTime: 0,
         targetPlaybackDuration: null,
         isSimulating: false,
+        isGeneratingKml: false,
         isBackendSyncing: false,
         backendVersion: 0,
         errorSnackbar: {
@@ -73,6 +75,7 @@ export const useScenarioStore = create<ScenarioStore>()(
                     duration !== null && duration > 0 ? duration : null,
             }),
         setIsSimulating: (isSimulating) => set({ isSimulating }),
+        setIsGeneratingKml: (isGeneratingKml) => set({ isGeneratingKml }),
 
         frameScene: () =>
             set({

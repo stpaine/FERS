@@ -380,12 +380,10 @@ fn get_antenna_pattern(
     frequency: f64,
     state: State<'_, FersState>,
 ) -> Result<fers_api::AntennaPatternData, String> {
-    state.lock().map_err(|e| e.to_string())?.get_antenna_pattern(
-        &antenna_id,
-        az_samples,
-        el_samples,
-        frequency,
-    )
+    match state.try_lock() {
+        Ok(context) => context.get_antenna_pattern(&antenna_id, az_samples, el_samples, frequency),
+        Err(_) => Err("Backend is busy with another operation".to_string()),
+    }
 }
 
 /// Calculates visual radio links between platforms at a specific time.
@@ -406,7 +404,10 @@ fn get_preview_links(
     time: f64,
     state: State<'_, FersState>,
 ) -> Result<Vec<fers_api::VisualLink>, String> {
-    state.lock().map_err(|e| e.to_string())?.calculate_preview_links(time)
+    match state.try_lock() {
+        Ok(context) => context.calculate_preview_links(time),
+        Err(_) => Ok(vec![]), // backend is busy (simulation/KML running); return empty and retry next frame
+    }
 }
 
 /// Performs a granular state update on a specific simulation item via JSON.
