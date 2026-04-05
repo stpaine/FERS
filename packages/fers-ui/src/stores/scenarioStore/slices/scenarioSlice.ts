@@ -2,43 +2,40 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
-import { invoke } from '@tauri-apps/api/core';
-import {
-    ScenarioStore,
-    ScenarioActions,
-    GlobalParameters,
-    Waveform,
-    Timing,
-    Antenna,
-    Platform,
-    MotionPath,
-    FixedRotation,
-    RotationPath,
-    PlatformComponent,
-    ScenarioData,
-} from '../types';
-import { createDefaultPlatform, defaultGlobalParameters } from '../defaults';
-import { setPropertyByPath } from '../utils';
 import { ScenarioDataSchema } from '../../scenarioSchema';
+import { createDefaultPlatform, defaultGlobalParameters } from '../defaults';
 import {
     generateSimId,
     normalizeSimId,
-    seedSimIdCounters,
     reserveSimId,
+    seedSimIdCounters,
 } from '../idUtils';
 import {
-    serializePlatform,
-    serializeWaveform,
-    serializeTiming,
+    cleanObject,
     serializeAntenna,
     serializeComponentInner,
     serializeGlobalParameters,
-    cleanObject,
+    serializePlatform,
+    serializeTiming,
+    serializeWaveform,
 } from '../serializers';
-
-// Module-level queue to guarantee FIFO execution of granular syncs
-// preventing out-of-order race conditions across the FFI boundary.
-let granularSyncQueue: Promise<void> = Promise.resolve();
+import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import {
+    Antenna,
+    FixedRotation,
+    GlobalParameters,
+    MotionPath,
+    Platform,
+    PlatformComponent,
+    RotationPath,
+    ScenarioActions,
+    ScenarioData,
+    ScenarioStore,
+    Timing,
+    Waveform,
+} from '../types';
+import { setPropertyByPath } from '../utils';
+import { buildScenarioJson } from './backendSlice';
 
 // Define interfaces for the expected backend data structure.
 interface BackendObjectWithName {
@@ -125,7 +122,7 @@ export const createScenarioSlice: StateCreator<
     [['zustand/immer', never]],
     [],
     ScenarioActions
-> = (set) => ({
+> = (set, get) => ({
     selectItem: (itemId) =>
         set((state) => {
             if (!itemId) {
@@ -179,12 +176,12 @@ export const createScenarioSlice: StateCreator<
             state.selectedItemId = itemId;
             state.selectedComponentId = null;
         }),
-    updateItem: (itemId, propertyPath, value) =>
-        set((state) => {
-            let targetItemType = '';
-            let targetItemId = '';
-            let jsonPayload: string | null = null;
+    updateItem: (itemId, propertyPath, value) => {
+        let targetItemType = '';
+        let targetItemId = '';
+        let jsonPayload: string | null = null;
 
+        set((state) => {
             if (itemId === 'global-parameters') {
                 setPropertyByPath(state.globalParameters, propertyPath, value);
 
@@ -205,100 +202,84 @@ export const createScenarioSlice: StateCreator<
                 jsonPayload = JSON.stringify(
                     serializeGlobalParameters(state.globalParameters)
                 );
-            } else {
-                const collections = [
-                    'waveforms',
-                    'timings',
-                    'antennas',
-                    'platforms',
-                ] as const;
+                return;
+            }
 
-                for (const key of collections) {
-                    const item = state[key].find(
-                        (i: { id: string }) => i.id === itemId
-                    );
-                    if (item) {
-                        setPropertyByPath(item, propertyPath, value);
-                        state.isDirty = true;
+            const collections = [
+                'waveforms',
+                'timings',
+                'antennas',
+                'platforms',
+            ] as const;
 
-                        // Immediately trigger granular sync for high-performance features
-                        // except for complex topology changes which rely on full sync.
-                        if (
-                            item.type === 'Platform' ||
-                            item.type === 'Antenna' ||
-                            item.type === 'Waveform' ||
-                            item.type === 'Timing'
-                        ) {
-                            const componentMatch = propertyPath.match(
-                                /^components\.(\d+)(?:\.|$)/
-                            );
-                            if (item.type === 'Platform' && componentMatch) {
-                                const compIndex = parseInt(
-                                    componentMatch[1],
-                                    10
-                                );
-                                const component = (item as Platform).components[
-                                    compIndex
-                                ];
-                                if (component) {
-                                    jsonPayload = JSON.stringify(
-                                        cleanObject(
-                                            serializeComponentInner(component)
-                                        )
-                                    );
-                                    // Map frontend component type to backend expected type string
-                                    targetItemType =
-                                        component.type === 'monostatic'
-                                            ? 'Monostatic'
-                                            : component.type
-                                                  .charAt(0)
-                                                  .toUpperCase() +
-                                              component.type.slice(1);
-                                    targetItemId = component.id;
-                                }
-                            } else {
-                                targetItemType = item.type;
-                                targetItemId = item.id;
-                                if (item.type === 'Platform') {
-                                    jsonPayload = JSON.stringify(
-                                        serializePlatform(item as Platform)
-                                    );
-                                } else if (item.type === 'Antenna') {
-                                    jsonPayload = JSON.stringify(
-                                        serializeAntenna(item as Antenna)
-                                    );
-                                } else if (item.type === 'Waveform') {
-                                    jsonPayload = JSON.stringify(
-                                        serializeWaveform(item as Waveform)
-                                    );
-                                } else if (item.type === 'Timing') {
-                                    jsonPayload = JSON.stringify(
-                                        serializeTiming(item as Timing)
-                                    );
-                                }
-                            }
-                        }
-                        break;
-                    }
+            for (const key of collections) {
+                const item = state[key].find(
+                    (i: { id: string }) => i.id === itemId
+                );
+                if (!item) continue;
+
+                setPropertyByPath(item, propertyPath, value);
+                state.isDirty = true;
+
+                if (
+                    item.type !== 'Platform' &&
+                    item.type !== 'Antenna' &&
+                    item.type !== 'Waveform' &&
+                    item.type !== 'Timing'
+                ) {
+                    return;
                 }
-            }
 
-            if (jsonPayload) {
-                // Chain the promise to guarantee sequential execution
-                granularSyncQueue = granularSyncQueue
-                    .then(() =>
-                        invoke<void>('update_item_from_json', {
-                            itemType: targetItemType,
-                            itemId: targetItemId,
-                            json: jsonPayload!,
-                        })
-                    )
-                    .catch((e) => {
-                        console.error('Granular sync failed:', e);
-                    });
+                const componentMatch = propertyPath.match(
+                    /^components\.(\d+)(?:\.|$)/
+                );
+                if (item.type === 'Platform' && componentMatch) {
+                    const compIndex = parseInt(componentMatch[1], 10);
+                    const component = (item as Platform).components[compIndex];
+                    if (component) {
+                        jsonPayload = JSON.stringify(
+                            cleanObject(serializeComponentInner(component))
+                        );
+                        // Map frontend component type to backend expected type string
+                        targetItemType =
+                            component.type === 'monostatic'
+                                ? 'Monostatic'
+                                : component.type.charAt(0).toUpperCase() +
+                                  component.type.slice(1);
+                        targetItemId = component.id;
+                    }
+                    return;
+                }
+
+                targetItemType = item.type;
+                targetItemId = item.id;
+                if (item.type === 'Platform') {
+                    jsonPayload = JSON.stringify(
+                        serializePlatform(item as Platform)
+                    );
+                } else if (item.type === 'Antenna') {
+                    jsonPayload = JSON.stringify(
+                        serializeAntenna(item as Antenna)
+                    );
+                } else if (item.type === 'Waveform') {
+                    jsonPayload = JSON.stringify(
+                        serializeWaveform(item as Waveform)
+                    );
+                } else if (item.type === 'Timing') {
+                    jsonPayload = JSON.stringify(
+                        serializeTiming(item as Timing)
+                    );
+                }
+                return;
             }
-        }),
-    removeItem: (itemId) =>
+        });
+
+        if (jsonPayload) {
+            void enqueueGranularSync(targetItemType, targetItemId, jsonPayload);
+        }
+    },
+    removeItem: (itemId) => {
+        let removed = false;
         set((state) => {
             if (!itemId) return;
             const collections = [
@@ -320,11 +301,17 @@ export const createScenarioSlice: StateCreator<
                         state.selectedComponentId = null;
                     }
                     state.isDirty = true;
+                    removed = true;
                     return;
                 }
             }
-        }),
-    resetScenario: () =>
+        });
+        if (removed) {
+            // libfers has no granular remove API — full sync is required.
+            void enqueueFullSync(() => buildScenarioJson(get()));
+        }
+    },
+    resetScenario: () => {
         set({
             globalParameters: defaultGlobalParameters,
             waveforms: [],
@@ -335,7 +322,9 @@ export const createScenarioSlice: StateCreator<
             selectedComponentId: null,
             isDirty: false,
             currentTime: defaultGlobalParameters.start,
-        }),
+        });
+        void enqueueFullSync(() => buildScenarioJson(get()));
+    },
     loadScenario: (backendData: unknown) => {
         try {
             if (typeof backendData !== 'object' || backendData === null) {

@@ -133,27 +133,3 @@ export const useScenarioStore = create<ScenarioStore>()(
             })),
     }))
 );
-
-let debounceTimer: ReturnType<typeof setTimeout>;
-
-useScenarioStore.subscribe((state, prevState) => {
-    // Check for structural changes in the scenario data using reference equality.
-    // Immer ensures that if data changes, the array/object reference changes.
-    const hasStructuralChanges =
-        state.platforms !== prevState.platforms ||
-        state.antennas !== prevState.antennas ||
-        state.waveforms !== prevState.waveforms ||
-        state.timings !== prevState.timings ||
-        state.globalParameters !== prevState.globalParameters;
-
-    // We only trigger sync if data changed AND we aren't currently simulating/playing
-    // (though simulation usually locks UI, checking prevents edge cases).
-    if (hasStructuralChanges && !state.isSimulating) {
-        if (debounceTimer) clearTimeout(debounceTimer);
-
-        debounceTimer = setTimeout(() => {
-            // Trigger the sync action defined in backendSlice
-            void state.syncBackend();
-        }, 500);
-    }
-});

@@ -1,16 +1,37 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { StateCreator } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import { ScenarioStore, BackendActions } from '../types';
+import { StateCreator } from 'zustand';
 import {
-    serializePlatform,
-    serializeWaveform,
-    serializeTiming,
     serializeAntenna,
     serializeGlobalParameters,
+    serializePlatform,
+    serializeTiming,
+    serializeWaveform,
 } from '../serializers';
+import { enqueueFullSync } from '../syncQueue';
+import { BackendActions, ScenarioState, ScenarioStore } from '../types';
+
+/**
+ * Build the full scenario JSON payload expected by the `update_scenario_from_json`
+ * Tauri command. Extracted from `syncBackend` so the sync queue can capture a
+ * snapshot at task-execution time rather than enqueue time.
+ */
+export function buildScenarioJson(state: ScenarioState): string {
+    const { globalParameters, waveforms, timings, antennas, platforms } = state;
+    const scenarioJson = {
+        simulation: {
+            name: globalParameters.simulation_name,
+            parameters: serializeGlobalParameters(globalParameters),
+            waveforms: waveforms.map(serializeWaveform),
+            timings: timings.map(serializeTiming),
+            antennas: antennas.map(serializeAntenna),
+            platforms: platforms.map(serializePlatform),
+        },
+    };
+    return JSON.stringify(scenarioJson, null, 2);
+}
 
 export const createBackendSlice: StateCreator<
     ScenarioStore,
@@ -20,39 +41,13 @@ export const createBackendSlice: StateCreator<
 > = (set, get) => ({
     syncBackend: async () => {
         set({ isBackendSyncing: true });
-        const { globalParameters, waveforms, timings, antennas, platforms } =
-            get();
-
-        const backendPlatforms = platforms.map(serializePlatform);
-        const backendWaveforms = waveforms.map(serializeWaveform);
-        const backendTimings = timings.map(serializeTiming);
-        const backendAntennas = antennas.map(serializeAntenna);
-        const gp_params = serializeGlobalParameters(globalParameters);
-
-        const scenarioJson = {
-            simulation: {
-                name: globalParameters.simulation_name,
-                parameters: gp_params,
-                waveforms: backendWaveforms,
-                timings: backendTimings,
-                antennas: backendAntennas,
-                platforms: backendPlatforms,
-            },
-        };
-
         try {
-            const jsonPayload = JSON.stringify(scenarioJson, null, 2);
-            await invoke('update_scenario_from_json', {
-                json: jsonPayload,
-            });
-            console.log('Successfully synced state to backend.');
-
+            await enqueueFullSync(() => buildScenarioJson(get()));
             set((state) => {
                 state.isBackendSyncing = false;
                 state.backendVersion += 1;
             });
         } catch (error) {
-            console.error('Failed to sync state to backend:', error);
             set({ isBackendSyncing: false });
             throw error;
         }

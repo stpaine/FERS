@@ -1,14 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { StateCreator } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
-import {
-    ScenarioStore,
-    PlatformActions,
-    Platform,
-    PlatformComponent,
-} from '../types';
+import { StateCreator } from 'zustand';
 import { createDefaultPlatform } from '../defaults';
 import { generateSimId } from '../idUtils';
 import {
@@ -16,6 +10,14 @@ import {
     serializeComponentInner,
     serializePlatform,
 } from '../serializers';
+import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import {
+    Platform,
+    PlatformActions,
+    PlatformComponent,
+    ScenarioStore,
+} from '../types';
+import { buildScenarioJson } from './backendSlice';
 
 const NUM_PATH_POINTS = 100;
 type InterpolationType = 'static' | 'linear' | 'cubic';
@@ -33,13 +35,26 @@ interface InterpolatedRotationPoint {
     elevation_deg: number;
 }
 
+function syncPlatformGranular(
+    getFn: () => ScenarioStore,
+    platformId: string
+): void {
+    const platform = getFn().platforms.find((p) => p.id === platformId);
+    if (!platform) return;
+    void enqueueGranularSync(
+        'Platform',
+        platform.id,
+        JSON.stringify(cleanObject(serializePlatform(platform)))
+    );
+}
+
 export const createPlatformSlice: StateCreator<
     ScenarioStore,
     [['zustand/immer', never]],
     [],
     PlatformActions
 > = (set, get) => ({
-    addPlatform: () =>
+    addPlatform: () => {
         set((state) => {
             const id = generateSimId('Platform');
             const newName = `Platform ${state.platforms.length + 1}`;
@@ -51,19 +66,12 @@ export const createPlatformSlice: StateCreator<
             // Defaults to empty components list
             state.platforms.push(newPlatform);
             state.isDirty = true;
-            try {
-                void invoke('update_item_from_json', {
-                    itemType: 'Platform',
-                    itemId: newPlatform.id,
-                    json: JSON.stringify(
-                        cleanObject(serializePlatform(newPlatform))
-                    ),
-                });
-            } catch (e) {
-                console.error('Granular sync failed:', e);
-            }
-        }),
-    addPositionWaypoint: (platformId) =>
+        });
+        // libfers has no granular add API for Platforms — full sync is required.
+        void enqueueFullSync(() => buildScenarioJson(get()));
+    },
+    addPositionWaypoint: (platformId) => {
+        let touched = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             if (platform) {
@@ -75,20 +83,13 @@ export const createPlatformSlice: StateCreator<
                     time: 0,
                 });
                 state.isDirty = true;
-                try {
-                    void invoke('update_item_from_json', {
-                        itemType: 'Platform',
-                        itemId: platform.id,
-                        json: JSON.stringify(
-                            cleanObject(serializePlatform(platform))
-                        ),
-                    });
-                } catch (e) {
-                    console.error('Granular sync failed:', e);
-                }
+                touched = true;
             }
-        }),
-    removePositionWaypoint: (platformId, waypointId) =>
+        });
+        if (touched) syncPlatformGranular(get, platformId);
+    },
+    removePositionWaypoint: (platformId, waypointId) => {
+        let touched = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             if (platform && platform.motionPath.waypoints.length > 1) {
@@ -98,21 +99,14 @@ export const createPlatformSlice: StateCreator<
                 if (index > -1) {
                     platform.motionPath.waypoints.splice(index, 1);
                     state.isDirty = true;
-                    try {
-                        void invoke('update_item_from_json', {
-                            itemType: 'Platform',
-                            itemId: platform.id,
-                            json: JSON.stringify(
-                                cleanObject(serializePlatform(platform))
-                            ),
-                        });
-                    } catch (e) {
-                        console.error('Granular sync failed:', e);
-                    }
+                    touched = true;
                 }
             }
-        }),
-    addRotationWaypoint: (platformId) =>
+        });
+        if (touched) syncPlatformGranular(get, platformId);
+    },
+    addRotationWaypoint: (platformId) => {
+        let touched = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             if (platform?.rotation.type === 'path') {
@@ -123,20 +117,13 @@ export const createPlatformSlice: StateCreator<
                     time: 0,
                 });
                 state.isDirty = true;
-                try {
-                    void invoke('update_item_from_json', {
-                        itemType: 'Platform',
-                        itemId: platform.id,
-                        json: JSON.stringify(
-                            cleanObject(serializePlatform(platform))
-                        ),
-                    });
-                } catch (e) {
-                    console.error('Granular sync failed:', e);
-                }
+                touched = true;
             }
-        }),
-    removeRotationWaypoint: (platformId, waypointId) =>
+        });
+        if (touched) syncPlatformGranular(get, platformId);
+    },
+    removeRotationWaypoint: (platformId, waypointId) => {
+        let touched = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             if (
@@ -149,21 +136,14 @@ export const createPlatformSlice: StateCreator<
                 if (index > -1) {
                     platform.rotation.waypoints.splice(index, 1);
                     state.isDirty = true;
-                    try {
-                        void invoke('update_item_from_json', {
-                            itemType: 'Platform',
-                            itemId: platform.id,
-                            json: JSON.stringify(
-                                cleanObject(serializePlatform(platform))
-                            ),
-                        });
-                    } catch (e) {
-                        console.error('Granular sync failed:', e);
-                    }
+                    touched = true;
                 }
             }
-        }),
-    addPlatformComponent: (platformId, componentType) =>
+        });
+        if (touched) syncPlatformGranular(get, platformId);
+    },
+    addPlatformComponent: (platformId, componentType) => {
+        let added = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             if (!platform) return;
@@ -251,8 +231,16 @@ export const createPlatformSlice: StateCreator<
             }
             platform.components.push(newComponent);
             state.isDirty = true;
-        }),
-    removePlatformComponent: (platformId, componentId) =>
+            added = true;
+        });
+        if (added) {
+            // Components (Transmitter/Receiver/Target/Monostatic) are independent
+            // backend objects with their own IDs; there is no granular add API.
+            void enqueueFullSync(() => buildScenarioJson(get()));
+        }
+    },
+    removePlatformComponent: (platformId, componentId) => {
+        let removed = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             if (platform) {
@@ -265,10 +253,17 @@ export const createPlatformSlice: StateCreator<
                         state.selectedComponentId = null;
                     }
                     state.isDirty = true;
+                    removed = true;
                 }
             }
-        }),
-    setPlatformRcsModel: (platformId, componentId, newModel) =>
+        });
+        if (removed) {
+            // libfers has no granular remove API — full sync is required.
+            void enqueueFullSync(() => buildScenarioJson(get()));
+        }
+    },
+    setPlatformRcsModel: (platformId, componentId, newModel) => {
+        let touched = false;
         set((state) => {
             const platform = state.platforms.find((p) => p.id === platformId);
             const component = platform?.components.find(
@@ -284,19 +279,25 @@ export const createPlatformSlice: StateCreator<
                     delete component.rcs_k;
                 }
                 state.isDirty = true;
-                try {
-                    void invoke('update_item_from_json', {
-                        itemType: 'Target',
-                        itemId: component.id,
-                        json: JSON.stringify(
-                            cleanObject(serializeComponentInner(component))
-                        ),
-                    });
-                } catch (e) {
-                    console.error('Granular sync failed:', e);
-                }
+                touched = true;
             }
-        }),
+        });
+        if (touched) {
+            const platform = get().platforms.find((p) => p.id === platformId);
+            const component = platform?.components.find(
+                (c) => c.id === componentId
+            );
+            if (component) {
+                void enqueueGranularSync(
+                    'Target',
+                    component.id,
+                    JSON.stringify(
+                        cleanObject(serializeComponentInner(component))
+                    )
+                );
+            }
+        }
+    },
     fetchPlatformPath: async (platformId) => {
         const { platforms, showError } = get();
         const platform = platforms.find((p) => p.id === platformId);

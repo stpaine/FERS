@@ -2,19 +2,20 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
-import { ScenarioStore, AssetActions, Antenna } from '../types';
-import { defaultWaveform, defaultTiming, defaultAntenna } from '../defaults';
+import { defaultAntenna, defaultTiming, defaultWaveform } from '../defaults';
 import { generateSimId } from '../idUtils';
-import { invoke } from '@tauri-apps/api/core';
 import { cleanObject, serializeAntenna, serializeTiming } from '../serializers';
+import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import { Antenna, AssetActions, ScenarioStore } from '../types';
+import { buildScenarioJson } from './backendSlice';
 
 export const createAssetSlice: StateCreator<
     ScenarioStore,
     [['zustand/immer', never]],
     [],
     AssetActions
-> = (set) => ({
-    addWaveform: () =>
+> = (set, get) => ({
+    addWaveform: () => {
         set((state) => {
             const id = generateSimId('Waveform');
             state.waveforms.push({
@@ -23,8 +24,11 @@ export const createAssetSlice: StateCreator<
                 name: `Waveform ${state.waveforms.length + 1}`,
             });
             state.isDirty = true;
-        }),
-    addTiming: () =>
+        });
+        // libfers has no granular add API for Waveforms — full sync is required.
+        void enqueueFullSync(() => buildScenarioJson(get()));
+    },
+    addTiming: () => {
         set((state) => {
             const id = generateSimId('Timing');
             state.timings.push({
@@ -33,8 +37,11 @@ export const createAssetSlice: StateCreator<
                 name: `Timing ${state.timings.length + 1}`,
             });
             state.isDirty = true;
-        }),
-    addAntenna: () =>
+        });
+        // libfers has no granular add API for Timings — full sync is required.
+        void enqueueFullSync(() => buildScenarioJson(get()));
+    },
+    addAntenna: () => {
         set((state) => {
             const id = generateSimId('Antenna');
             state.antennas.push({
@@ -43,8 +50,12 @@ export const createAssetSlice: StateCreator<
                 name: `Antenna ${state.antennas.length + 1}`,
             });
             state.isDirty = true;
-        }),
-    addNoiseEntry: (timingId) =>
+        });
+        // libfers has no granular add API for Antennas — full sync is required.
+        void enqueueFullSync(() => buildScenarioJson(get()));
+    },
+    addNoiseEntry: (timingId) => {
+        let touched = false;
         set((state) => {
             const timing = state.timings.find((t) => t.id === timingId);
             if (timing) {
@@ -54,20 +65,22 @@ export const createAssetSlice: StateCreator<
                     weight: 0,
                 });
                 state.isDirty = true;
-                try {
-                    void invoke('update_item_from_json', {
-                        itemType: 'Timing',
-                        itemId: timing.id,
-                        json: JSON.stringify(
-                            cleanObject(serializeTiming(timing))
-                        ),
-                    });
-                } catch (e) {
-                    console.error('Granular sync failed:', e);
-                }
+                touched = true;
             }
-        }),
-    removeNoiseEntry: (timingId, entryId) =>
+        });
+        if (touched) {
+            const timing = get().timings.find((t) => t.id === timingId);
+            if (timing) {
+                void enqueueGranularSync(
+                    'Timing',
+                    timing.id,
+                    JSON.stringify(cleanObject(serializeTiming(timing)))
+                );
+            }
+        }
+    },
+    removeNoiseEntry: (timingId, entryId) => {
+        let touched = false;
         set((state) => {
             const timing = state.timings.find((t) => t.id === timingId);
             if (timing) {
@@ -77,21 +90,23 @@ export const createAssetSlice: StateCreator<
                 if (index > -1) {
                     timing.noiseEntries.splice(index, 1);
                     state.isDirty = true;
-                    try {
-                        void invoke('update_item_from_json', {
-                            itemType: 'Timing',
-                            itemId: timing.id,
-                            json: JSON.stringify(
-                                cleanObject(serializeTiming(timing))
-                            ),
-                        });
-                    } catch (e) {
-                        console.error('Granular sync failed:', e);
-                    }
+                    touched = true;
                 }
             }
-        }),
-    setAntennaPattern: (antennaId, newPattern) =>
+        });
+        if (touched) {
+            const timing = get().timings.find((t) => t.id === timingId);
+            if (timing) {
+                void enqueueGranularSync(
+                    'Timing',
+                    timing.id,
+                    JSON.stringify(cleanObject(serializeTiming(timing)))
+                );
+            }
+        }
+    },
+    setAntennaPattern: (antennaId, newPattern) => {
+        let touched = false;
         set((state) => {
             const index = state.antennas.findIndex((a) => a.id === antennaId);
             if (index === -1) return;
@@ -151,16 +166,17 @@ export const createAssetSlice: StateCreator<
             }
             state.antennas[index] = newAntennaState;
             state.isDirty = true;
-            try {
-                void invoke('update_item_from_json', {
-                    itemType: 'Antenna',
-                    itemId: newAntennaState.id,
-                    json: JSON.stringify(
-                        cleanObject(serializeAntenna(newAntennaState))
-                    ),
-                });
-            } catch (e) {
-                console.error('Granular sync failed:', e);
+            touched = true;
+        });
+        if (touched) {
+            const antenna = get().antennas.find((a) => a.id === antennaId);
+            if (antenna) {
+                void enqueueGranularSync(
+                    'Antenna',
+                    antenna.id,
+                    JSON.stringify(cleanObject(serializeAntenna(antenna)))
+                );
             }
-        }),
+        }
+    },
 });
