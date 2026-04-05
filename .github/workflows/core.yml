@@ -39,6 +39,12 @@ jobs:
             - name: Get CMake
               uses: lukka/get-cmake@latest
 
+            - name: Verify build tools
+              shell: bash
+              run: |
+                  cmake --version
+                  ninja --version
+
             - name: Setup ccache
               uses: hendrikmuhs/ccache-action@v1.2
               with:
@@ -51,8 +57,18 @@ jobs:
               run: |
                   echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
                   echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
                   # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
                   echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
+                  mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+
+            - name: Cache vcpkg downloads
+              uses: actions/cache@v5
+              with:
+                  path: ${{ github.workspace }}/.cache/vcpkg/downloads
+                  key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-vcpkg-downloads-
 
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
@@ -63,13 +79,26 @@ jobs:
                   doNotCache: false
 
             - name: Configure CMake (coverage)
-              run: cmake --preset=coverage
+              shell: bash
+              run: |
+                  for attempt in 1 2 3; do
+                      if cmake --fresh --preset=coverage-ci; then
+                          exit 0
+                      fi
+
+                      if [ "$attempt" -eq 3 ]; then
+                          exit 1
+                      fi
+
+                      echo "CMake configure failed on attempt $attempt. Retrying in 15 seconds..."
+                      sleep 15
+                  done
 
             - name: Build (coverage)
-              run: cmake --build --preset=coverage
+              run: cmake --build --preset=coverage-ci --parallel
 
             - name: Run Tests
-              run: ctest --preset=coverage --output-on-failure
+              run: ctest --preset=coverage-ci --output-on-failure
 
             - name: ccache stats
               if: always()
