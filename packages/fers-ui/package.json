@@ -9,10 +9,10 @@
         "build": "bun run lint && tsc && vite build",
         "preview": "vite preview",
         "tauri": "tauri",
-        "lint": "eslint .",
-        "lint:fix": "eslint . --fix",
-        "format": "prettier --write .",
-        "format:check": "prettier --check ."
+        "lint": "biome lint .",
+        "lint:fix": "biome lint --write .",
+        "format": "biome format --write .",
+        "format:check": "biome format ."
     },
     "peerDependencies": {
         "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
@@ -42,23 +42,14 @@
         "zustand": "^5.0.11"
     },
     "devDependencies": {
-        "@eslint/js": "^9.39.2",
         "@tauri-apps/cli": "^2.10.1",
+        "@types/bun": "^1.3.10",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.183.1",
         "@vitejs/plugin-react": "^5.1.4",
-        "eslint": "^9.39.2",
-        "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-react": "^7.37.5",
-        "eslint-plugin-react-hooks": "^7.0.1",
-        "eslint-plugin-react-refresh": "^0.5.2",
-        "globals": "^17.4.0",
-        "prettier": "^3.8.1",
         "typescript": "~5.9.3",
-        "typescript-eslint": "^8.57.0",
         "vite": "^7.3.1",
-        "vite-tsconfig-paths": "^6.1.1",
-        "@types/bun": "^1.3.10"
+        "vite-tsconfig-paths": "^6.1.1"
     }
 }

@@ -1,9 +1,7 @@
 {
     "name": "fers-monorepo",
     "private": true,
-    "workspaces": [
-        "packages/*"
-    ],
+    "workspaces": ["packages/*"],
     "scripts": {
         "prepare": "husky",
         "ui:dev": "bun run --filter fers-ui tauri dev --no-watch",
@@ -11,11 +9,11 @@
         "tauri": "bun run --filter fers-ui tauri",
         "format": "bun run format:cpp && bun run format:js && bun run format:rust",
         "format:cpp": "git ls-files 'packages/**/*.cpp' 'packages/**/*.h' | xargs clang-format -i",
-        "format:js": "prettier --write .",
+        "format:js": "biome format --write .",
         "format:rust": "cargo fmt --all",
         "lint": "bun run lint:cpp && bun run lint:js && bun run lint:rust",
         "lint:cpp": "bun run build:cpp-debug && bun run clangtidy:run",
-        "lint:js": "bun run --filter fers-ui lint",
+        "lint:js": "biome lint .",
         "lint:rust": "cargo clippy --workspace -- -D warnings",
         "build:cpp-debug": "cmake --preset=debug && cmake --build --preset=debug --parallel",
         "coverage:cpp": "bash scripts/run_tests_gen_coverage.sh",
@@ -23,20 +21,13 @@
         "clangtidy:run": "run-clang-tidy -p build/debug/ -export-fixes fixes.yaml"
     },
     "devDependencies": {
-        "eslint": "^9.39.2",
+        "@biomejs/biome": "2.4.10",
         "husky": "^9.1.7",
-        "lint-staged": "^16.3.3",
-        "prettier": "^3.8.1"
+        "lint-staged": "^16.3.3"
     },
     "lint-staged": {
-        "*.{md,json,yml,yaml}": "prettier --write",
         "packages/**/*.{cpp,h}": "clang-format -i",
-        "packages/fers-ui/src/**/*.{ts,tsx,js,jsx}": [
-            "prettier --write",
-            "eslint --fix --config packages/fers-ui/eslint.config.js"
-        ],
-        "packages/fers-ui/src-tauri/**/*.rs": [
-            "cargo fmt --"
-        ]
+        "packages/fers-ui/src/**/*.{ts,tsx,js,jsx}": "biome check --write --no-errors-on-unmatched",
+        "packages/fers-ui/src-tauri/**/*.rs": "cargo fmt --"
     }
 }
