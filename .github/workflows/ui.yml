@@ -17,9 +17,37 @@ env:
     MACOSX_DEPLOYMENT_TARGET: '14.0'
 
 jobs:
+    lint-ui:
+        name: Lint UI (biome)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Cache Bun dependencies
+              uses: actions/cache@v5
+              with:
+                  path: ~/.bun/install/cache
+                  key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-bun-
+
+            - name: Install JS Dependencies
+              run: bun install
+
+            - name: Run biome lint
+              run: bun run --filter fers-ui lint
+
     build-ui:
         name: Build UI (${{ matrix.os }})
         runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
@@ -38,11 +66,24 @@ jobs:
             - name: Get CMake
               uses: lukka/get-cmake@latest
 
+            - name: Setup sccache
+              uses: mozilla-actions/sccache-action@v0.0.9
+
+            - name: Configure sccache environment
+              shell: bash
+              run: |
+                  echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+                  echo "CMAKE_C_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+                  echo "CMAKE_CXX_COMPILER_LAUNCHER=sccache" >> "$GITHUB_ENV"
+                  # Let vcpkg's port builds inherit sccache + the GHA cache credentials.
+                  echo "VCPKG_KEEP_ENV_VARS=SCCACHE_GHA_ENABLED;ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
+
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
               with:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
+                  doNotCache: false
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -74,3 +115,8 @@ jobs:
                   # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
                   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
               run: bun run ui:build
+
+            - name: sccache stats
+              if: always()
+              shell: bash
+              run: sccache --show-stats

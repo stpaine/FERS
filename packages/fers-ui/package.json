@@ -6,7 +6,7 @@
     "license": "GPL-2.0-only",
     "scripts": {
         "dev": "vite",
-        "build": "bun run lint && tsc && vite build",
+        "build": "tsc && vite build",
         "preview": "vite preview",
         "tauri": "tauri",
         "lint": "biome lint .",
