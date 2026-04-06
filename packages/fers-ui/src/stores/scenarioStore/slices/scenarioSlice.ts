@@ -123,6 +123,9 @@ export const createScenarioSlice: StateCreator<
     [],
     ScenarioActions
 > = (set, get) => ({
+    setScenarioFilePath: (path) => set({ scenarioFilePath: path }),
+    setOutputDirectory: (dir) => set({ outputDirectory: dir }),
+
     selectItem: (itemId) =>
         set((state) => {
             if (!itemId) {

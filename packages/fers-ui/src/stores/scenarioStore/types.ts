@@ -108,6 +108,8 @@ export type ScenarioState = ScenarioData & {
     isGeneratingKml: boolean;
     isBackendSyncing: boolean;
     backendVersion: number;
+    scenarioFilePath: string | null;
+    outputDirectory: string | null;
     errorSnackbar: {
         open: boolean;
         message: string;
@@ -154,6 +156,8 @@ export type ScenarioActions = {
     removeItem: (itemId: string) => void;
     loadScenario: (backendData: unknown) => void;
     resetScenario: () => void;
+    setScenarioFilePath: (path: string | null) => void;
+    setOutputDirectory: (dir: string | null) => void;
 };
 
 export type BackendActions = {

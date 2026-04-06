@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: GPL-2-0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { IconButton, Tooltip } from '@mui/material';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
-import { useScenarioStore } from '@/stores/scenarioStore';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
+import { IconButton, Tooltip } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
-import { save, open } from '@tauri-apps/plugin-dialog';
+import { dirname, join } from '@tauri-apps/api/path';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { useState } from 'react';
+import { useScenarioStore } from '@/stores/scenarioStore';
 import ConfirmDialog from './ConfirmDialog';
 
 export default function ScenarioIO() {
@@ -16,27 +17,50 @@ export default function ScenarioIO() {
     const isDirty = useScenarioStore((state) => state.isDirty);
     const resetScenario = useScenarioStore((state) => state.resetScenario);
     const showError = useScenarioStore((state) => state.showError);
+    const setScenarioFilePath = useScenarioStore(
+        (state) => state.setScenarioFilePath
+    );
+    const scenarioFilePath = useScenarioStore(
+        (state) => state.scenarioFilePath
+    );
 
     const [isConfirmOpen, setConfirmOpen] = useState(false);
 
     const handleExport = async () => {
         try {
-            await useScenarioStore.getState().syncBackend();
+            const state = useScenarioStore.getState();
+            await state.syncBackend();
 
             const xmlContent = await invoke<string>('get_scenario_as_xml');
 
+            // 1. Determine default directory
+            let defaultDir = '.';
+            if (scenarioFilePath) {
+                defaultDir = await dirname(scenarioFilePath);
+            }
+
+            // 2. Determine suggested filename
+            const simName =
+                state.globalParameters.simulation_name || 'scenario';
+            const suggestedFileName = `${simName.replace(/[^a-z0-9]/gi, '_')}.fersxml`;
+
+            // 3. Combine for dialog
+            const defaultPath = await join(defaultDir, suggestedFileName);
+
             const filePath = await save({
                 title: 'Export Scenario',
+                defaultPath: defaultPath,
                 filters: [
                     {
                         name: 'FERS XML Scenario',
-                        extensions: ['xml', 'fersxml'],
+                        extensions: ['fersxml', 'xml'],
                     },
                 ],
             });
 
             if (filePath) {
                 await writeTextFile(filePath, xmlContent);
+                setScenarioFilePath(filePath);
                 console.log('Scenario exported successfully to:', filePath);
             }
         } catch (error) {
@@ -73,6 +97,7 @@ export default function ScenarioIO() {
                 // Update the UI's Zustand store with the new state after resetting the current state
                 resetScenario();
                 loadScenario(scenarioData);
+                setScenarioFilePath(selectedPath);
 
                 console.log(
                     'Scenario imported and synchronized successfully from:',

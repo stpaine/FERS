@@ -16,11 +16,13 @@ import {
     List,
     ListItem,
     ListItemText,
+    TextField,
     Typography,
 } from '@mui/material';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { save } from '@tauri-apps/plugin-dialog';
+import { dirname, join } from '@tauri-apps/api/path';
+import { open, save } from '@tauri-apps/plugin-dialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
 
@@ -38,6 +40,13 @@ export const SimulationView = React.memo(function SimulationView() {
         (state) => state.setIsGeneratingKml
     );
     const showError = useScenarioStore((state) => state.showError);
+    const scenarioFilePath = useScenarioStore(
+        (state) => state.scenarioFilePath
+    );
+    const outputDirectory = useScenarioStore((state) => state.outputDirectory);
+    const setOutputDirectory = useScenarioStore(
+        (state) => state.setOutputDirectory
+    );
 
     // Use a Ref to store incoming data to avoid triggering re-renders on every event
     const progressRef = useRef<Record<string, ProgressState>>({});
@@ -145,12 +154,42 @@ export const SimulationView = React.memo(function SimulationView() {
         };
     }, [isSimulating, setIsSimulating, showError]);
 
+    const getEffectiveOutputDir = async () => {
+        if (outputDirectory) return outputDirectory;
+        if (scenarioFilePath) {
+            try {
+                return await dirname(scenarioFilePath);
+            } catch (e) {
+                console.warn('Failed to get dirname of scenario file', e);
+            }
+        }
+        return '.';
+    };
+
+    const handleSelectOutputDir = async () => {
+        try {
+            const selected = await open({
+                directory: true,
+                multiple: false,
+                defaultPath: await getEffectiveOutputDir(),
+            });
+            if (typeof selected === 'string') {
+                setOutputDirectory(selected);
+            }
+        } catch (err) {
+            console.error('Failed to open directory dialog:', err);
+        }
+    };
+
     const handleRunSimulation = async () => {
         progressRef.current = {};
         setDisplayProgress({});
         setIsSimulating(true);
         try {
             // Ensure the C++ backend has the latest scenario from the UI
+            const effectiveDir = await getEffectiveOutputDir();
+            await invoke('set_output_directory', { dir: effectiveDir });
+
             await useScenarioStore.getState().syncBackend();
             await invoke('run_simulation');
         } catch (err) {
@@ -164,8 +203,24 @@ export const SimulationView = React.memo(function SimulationView() {
 
     const handleGenerateKml = async () => {
         try {
+            const effectiveDir = await getEffectiveOutputDir();
+
+            // 1. Get the simulation name from the store
+            const simName =
+                useScenarioStore.getState().globalParameters.simulation_name ||
+                'scenario';
+
+            // 2. Sanitize the name and append extension
+            const suggestedFileName = `${simName.replace(/[^a-z0-9]/gi, '_')}.kml`;
+
+            // 3. Join the directory and filename to create the pre-fill path
+            const defaultPath = await join(effectiveDir, suggestedFileName);
+
+            await invoke('set_output_directory', { dir: effectiveDir });
+
             const outputPath = await save({
                 title: 'Save KML File',
+                defaultPath: defaultPath,
                 filters: [{ name: 'KML File', extensions: ['kml'] }],
             });
 
@@ -199,8 +254,59 @@ export const SimulationView = React.memo(function SimulationView() {
                 visualization. Ensure your scenario is fully configured before
                 proceeding.
             </Typography>
+            <Card sx={{ mb: 4 }}>
+                <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                        Output Settings
+                    </Typography>
+                    <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        sx={{ mb: 2 }}
+                    >
+                        Simulation results (.h5 files) and default KML exports
+                        will be saved here.
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <TextField
+                            label="Output Directory"
+                            variant="outlined"
+                            size="small"
+                            fullWidth
+                            value={
+                                outputDirectory ||
+                                (scenarioFilePath
+                                    ? 'Default (Scenario Directory)'
+                                    : 'Default (Current Directory)')
+                            }
+                            slotProps={{
+                                input: {
+                                    readOnly: true,
+                                },
+                            }}
+                        />
+                        <Button
+                            variant="outlined"
+                            onClick={handleSelectOutputDir}
+                            sx={{ whiteSpace: 'nowrap' }}
+                        >
+                            Browse...
+                        </Button>
+                        {outputDirectory && (
+                            <Button
+                                variant="text"
+                                color="error"
+                                onClick={() => setOutputDirectory(null)}
+                            >
+                                Reset
+                            </Button>
+                        )}
+                    </Box>
+                </CardContent>
+            </Card>
 
             <Grid container spacing={4} sx={{ width: '100%' }}>
+                {/* ... existing Grid items for Run Simulation and Generate KML ... */}
                 <Grid size={{ xs: 12, md: 6 }}>
                     <Card sx={{ height: '100%' }}>
                         <CardContent>

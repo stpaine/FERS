@@ -31,6 +31,8 @@ export const useScenarioStore = create<ScenarioStore>()(
         isGeneratingKml: false,
         isBackendSyncing: false,
         backendVersion: 0,
+        scenarioFilePath: null,
+        outputDirectory: null,
         errorSnackbar: {
             open: false,
             message: '',

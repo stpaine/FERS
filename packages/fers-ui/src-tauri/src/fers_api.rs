@@ -348,6 +348,27 @@ impl FersContext {
         }
     }
 
+    /// Sets the output directory for simulation results.
+    ///
+    /// # Parameters
+    ///
+    /// * `dir` - A UTF-8 string containing the path to the output directory.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - If the directory was successfully set.
+    /// * `Err(String)` - If an error occurred.
+    pub fn set_output_directory(&self, dir: &str) -> Result<(), String> {
+        let c_dir = CString::new(dir).map_err(|e| e.to_string())?;
+        // SAFETY: We pass a valid context pointer and a null-terminated C string.
+        let result = unsafe { ffi::fers_set_output_directory(self.ptr, c_dir.as_ptr()) };
+        if result == 0 {
+            Ok(())
+        } else {
+            Err(get_last_error())
+        }
+    }
+
     /// Loads a FERS scenario from an XML file into the context.
     ///
     /// This method replaces any existing scenario in the context with the one parsed

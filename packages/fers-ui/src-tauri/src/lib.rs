@@ -106,6 +106,12 @@ type FersState = Mutex<fers_api::FersContext>;
 
 // --- Tauri Commands ---
 
+/// Sets the output directory for simulation results.
+#[tauri::command]
+fn set_output_directory(dir: String, state: State<'_, FersState>) -> Result<(), String> {
+    state.lock().map_err(|e| e.to_string())?.set_output_directory(&dir)
+}
+
 /// Loads a FERS scenario from an XML file into the simulation context.
 ///
 /// This command replaces any existing in-memory scenario with the one parsed from
@@ -484,6 +490,7 @@ pub fn run() {
             get_antenna_pattern,
             get_preview_links,
             update_item_from_json,
+            set_output_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
