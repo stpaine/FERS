@@ -31,8 +31,8 @@ interface InterpolatedPoint {
 }
 
 interface InterpolatedRotationPoint {
-    azimuth_deg: number;
-    elevation_deg: number;
+    azimuth: number;
+    elevation: number;
 }
 
 function syncPlatformGranular(
@@ -299,7 +299,7 @@ export const createPlatformSlice: StateCreator<
         }
     },
     fetchPlatformPath: async (platformId) => {
-        const { platforms, showError } = get();
+        const { platforms, showError, globalParameters } = get();
         const platform = platforms.find((p) => p.id === platformId);
 
         if (!platform) return;
@@ -379,12 +379,13 @@ export const createPlatformSlice: StateCreator<
                             waypoints: rotWaypoints,
                             interpType:
                                 rotation.interpolation as InterpolationType,
+                            angleUnit: globalParameters.rotationAngleUnit,
                             numPoints: NUM_PATH_POINTS,
                         }
                     );
                     newRotationPoints = points.map((p) => ({
-                        azimuth: p.azimuth_deg,
-                        elevation: p.elevation_deg,
+                        azimuth: p.azimuth,
+                        elevation: p.elevation,
                     }));
                 } catch (error) {
                     const msg =

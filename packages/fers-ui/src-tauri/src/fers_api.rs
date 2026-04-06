@@ -874,6 +874,7 @@ pub fn get_interpolated_motion_path(
 pub fn get_interpolated_rotation_path(
     waypoints: Vec<crate::RotationWaypoint>,
     interp_type: crate::InterpolationType,
+    angle_unit: crate::RotationAngleUnit,
     num_points: usize,
 ) -> Result<Vec<crate::InterpolatedRotationPoint>, String> {
     if waypoints.is_empty() || num_points == 0 {
@@ -884,8 +885,8 @@ pub fn get_interpolated_rotation_path(
         .into_iter()
         .map(|wp| ffi::fers_rotation_waypoint_t {
             time: wp.time,
-            azimuth_deg: wp.azimuth,
-            elevation_deg: wp.elevation,
+            azimuth: wp.azimuth,
+            elevation: wp.elevation,
         })
         .collect();
 
@@ -894,12 +895,17 @@ pub fn get_interpolated_rotation_path(
         crate::InterpolationType::Linear => ffi::fers_interp_type_t_FERS_INTERP_LINEAR,
         crate::InterpolationType::Cubic => ffi::fers_interp_type_t_FERS_INTERP_CUBIC,
     };
+    let c_angle_unit = match angle_unit {
+        crate::RotationAngleUnit::Deg => ffi::fers_angle_unit_t_FERS_ANGLE_UNIT_DEG,
+        crate::RotationAngleUnit::Rad => ffi::fers_angle_unit_t_FERS_ANGLE_UNIT_RAD,
+    };
 
     let result_ptr = unsafe {
         ffi::fers_get_interpolated_rotation_path(
             c_waypoints.as_ptr(),
             c_waypoints.len(),
             c_interp_type,
+            c_angle_unit,
             num_points,
         )
     };
@@ -925,10 +931,7 @@ pub fn get_interpolated_rotation_path(
 
     let points: Vec<crate::InterpolatedRotationPoint> = result_slice
         .iter()
-        .map(|p| crate::InterpolatedRotationPoint {
-            azimuth_deg: p.azimuth_deg,
-            elevation_deg: p.elevation_deg,
-        })
+        .map(|p| crate::InterpolatedRotationPoint { azimuth: p.azimuth, elevation: p.elevation })
         .collect();
 
     Ok(points)
@@ -1069,13 +1072,18 @@ mod tests {
             crate::RotationWaypoint { time: 10.0, azimuth: 90.0, elevation: 20.0 },
         ];
 
-        let points =
-            get_interpolated_rotation_path(waypoints, crate::InterpolationType::Linear, 3).unwrap();
+        let points = get_interpolated_rotation_path(
+            waypoints,
+            crate::InterpolationType::Linear,
+            crate::RotationAngleUnit::Deg,
+            3,
+        )
+        .unwrap();
 
         assert_eq!(points.len(), 3);
         // Linear interpolation midpoint logic check
-        assert_eq!(points[1].azimuth_deg, 45.0);
-        assert_eq!(points[1].elevation_deg, 10.0);
+        assert_eq!(points[1].azimuth, 45.0);
+        assert_eq!(points[1].elevation, 10.0);
     }
 
     #[test]
@@ -1127,8 +1135,13 @@ mod tests {
             get_interpolated_motion_path(vec![], crate::InterpolationType::Linear, 5).unwrap();
         assert!(motion.is_empty());
 
-        let rotation =
-            get_interpolated_rotation_path(vec![], crate::InterpolationType::Linear, 5).unwrap();
+        let rotation = get_interpolated_rotation_path(
+            vec![],
+            crate::InterpolationType::Linear,
+            crate::RotationAngleUnit::Deg,
+            5,
+        )
+        .unwrap();
         assert!(rotation.is_empty());
 
         // Test zero num_points
@@ -1138,8 +1151,13 @@ mod tests {
         assert!(motion2.is_empty());
 
         let wp_r = vec![crate::RotationWaypoint { time: 0.0, azimuth: 0.0, elevation: 0.0 }];
-        let rotation2 =
-            get_interpolated_rotation_path(wp_r, crate::InterpolationType::Linear, 0).unwrap();
+        let rotation2 = get_interpolated_rotation_path(
+            wp_r,
+            crate::InterpolationType::Linear,
+            crate::RotationAngleUnit::Deg,
+            0,
+        )
+        .unwrap();
         assert!(rotation2.is_empty());
     }
 

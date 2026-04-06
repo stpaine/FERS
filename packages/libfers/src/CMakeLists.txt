@@ -52,6 +52,7 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/timing.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/rotation_angle_utils.h
 )
 
 # --- Source Files ---

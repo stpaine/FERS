@@ -1,25 +1,25 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import React, { useEffect, useMemo, useRef, memo } from 'react';
-import { MapControls, Environment, Html } from '@react-three/drei';
-import { Vector3 } from 'three';
+import { Environment, Html, MapControls } from '@react-three/drei';
+import React, { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { Vector3 } from 'three';
+import { type MapControls as MapControlsImpl } from 'three-stdlib';
+import { useDynamicScale } from '@/hooks/useDynamicScale';
 import {
-    useScenarioStore,
-    Platform,
     calculateInterpolatedPosition,
     calculateInterpolatedRotation,
+    Platform,
+    useScenarioStore,
 } from '@/stores/scenarioStore';
-import { MotionPathLine } from './MotionPathLine';
-import CameraManager from './CameraManager';
-import { type MapControls as MapControlsImpl } from 'three-stdlib';
-import { BoresightArrow } from './BoresightArrow';
-import { VelocityArrow } from './VelocityArrow';
-import { AntennaPatternMesh } from './AntennaPatternMesh';
-import LinkVisualizer from './LinkVisualizer';
 import { fersColors } from '@/theme';
-import { useDynamicScale } from '@/hooks/useDynamicScale';
+import { AntennaPatternMesh } from './AntennaPatternMesh';
+import { BoresightArrow } from './BoresightArrow';
+import CameraManager from './CameraManager';
+import LinkVisualizer from './LinkVisualizer';
+import { MotionPathLine } from './MotionPathLine';
+import { VelocityArrow } from './VelocityArrow';
 
 /**
  * A wrapper for axesHelper that scales based on camera distance to maintain visibility.
@@ -64,9 +64,12 @@ function useInterpolatedPosition(
  * Custom hook to calculate a platform's rotation at a given simulation time.
  */
 function useInterpolatedRotation(platform: Platform, currentTime: number) {
+    const angleUnit = useScenarioStore(
+        (state) => state.globalParameters.rotationAngleUnit
+    );
     return useMemo(
-        () => calculateInterpolatedRotation(platform, currentTime),
-        [platform, currentTime]
+        () => calculateInterpolatedRotation(platform, currentTime, angleUnit),
+        [platform, currentTime, angleUnit]
     );
 }
 

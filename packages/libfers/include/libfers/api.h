@@ -406,6 +406,15 @@ typedef enum // NOLINT(*-use-using)
 } fers_interp_type_t;
 
 /**
+ * @brief Units used for external rotation angles and rates.
+ */
+typedef enum // NOLINT(*-use-using)
+{
+	FERS_ANGLE_UNIT_DEG,
+	FERS_ANGLE_UNIT_RAD
+} fers_angle_unit_t;
+
+/**
  * @brief Represents a single waypoint for a motion path.
  * Coordinates are in the scenario's defined coordinate system (e.g., ENU meters).
  */
@@ -419,13 +428,13 @@ typedef struct // NOLINT(*-use-using)
 
 /**
  * @brief Represents a single waypoint for a rotation path.
- * Angles are in compass degrees (CW from North).
+ * Angles are in compass units (CW from North) selected by the caller.
  */
 typedef struct // NOLINT(*-use-using)
 {
 	double time; /**< Time in seconds. */
-	double azimuth_deg; /**< Azimuth angle in compass degrees (0=North, 90=East). */
-	double elevation_deg; /**< Elevation angle in degrees (positive up). */
+	double azimuth; /**< Azimuth angle in compass units (0=North, pi/2 or 90=East). */
+	double elevation; /**< Elevation angle in compass units (positive up). */
 } fers_rotation_waypoint_t;
 
 /**
@@ -444,12 +453,12 @@ typedef struct // NOLINT(*-use-using)
 
 /**
  * @brief Represents a single interpolated point on a rotation path.
- * Angles are in compass degrees (CW from North).
+ * Angles are in compass units (CW from North) selected by the caller.
  */
 typedef struct // NOLINT(*-use-using)
 {
-	double azimuth_deg; /**< Azimuth angle in compass degrees. */
-	double elevation_deg; /**< Elevation angle in degrees. */
+	double azimuth; /**< Azimuth angle in compass units. */
+	double elevation; /**< Elevation angle in compass units. */
 } fers_interpolated_rotation_point_t;
 
 
@@ -504,6 +513,7 @@ void fers_free_interpolated_motion_path(fers_interpolated_path_t* path);
  * @param waypoints An array of `fers_rotation_waypoint_t` structs.
  * @param waypoint_count The number of waypoints in the array.
  * @param interp_type The interpolation algorithm to use (STATIC, LINEAR, CUBIC).
+ * @param angle_unit The unit used by the waypoint angles and desired output angles.
  * @param num_points The desired number of points in the output interpolated path.
  * @return A pointer to a `fers_interpolated_rotation_path_t` struct containing the results.
  *         Returns NULL on failure. The caller owns the returned struct and must
@@ -512,7 +522,7 @@ void fers_free_interpolated_motion_path(fers_interpolated_path_t* path);
 fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fers_rotation_waypoint_t* waypoints,
 																	   size_t waypoint_count,
 																	   fers_interp_type_t interp_type,
-																	   size_t num_points);
+																	   fers_angle_unit_t angle_unit, size_t num_points);
 
 /**
  * @brief Frees the memory allocated for an interpolated rotation path.

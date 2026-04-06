@@ -12,7 +12,7 @@
         <!ATTLIST simulation name CDATA #REQUIRED>
 
         <!-- Simulation Parameters -->
-        <!ELEMENT parameters (starttime,endtime,rate,c?,simSamplingRate?,randomseed?,adc_bits?,oversample?,origin?,coordinatesystem?)>
+        <!ELEMENT parameters (starttime,endtime,rate,c?,simSamplingRate?,randomseed?,adc_bits?,oversample?,rotationangleunit?,origin?,coordinatesystem?)>
         <!-- Start time of simulation -->
         <!ELEMENT starttime (#PCDATA)>
         <!-- End time of simulation -->
@@ -29,6 +29,8 @@
         <!ELEMENT adc_bits (#PCDATA)>
         <!-- Oversampling factor -->
         <!ELEMENT oversample (#PCDATA)>
+        <!-- Rotation angle unit for external interfaces -->
+        <!ELEMENT rotationangleunit (#PCDATA)>
         <!-- Geodetic Origin for the simulation coordinate system (used for ENU frame) -->
         <!ELEMENT origin EMPTY>
         <!ATTLIST origin

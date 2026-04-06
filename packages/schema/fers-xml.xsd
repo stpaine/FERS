@@ -43,6 +43,14 @@
                 <xs:element minOccurs="0" name="randomseed" type="xs:string"/>
                 <xs:element minOccurs="0" name="adc_bits" type="xs:string"/>
                 <xs:element minOccurs="0" name="oversample" type="xs:string"/>
+                <xs:element minOccurs="0" name="rotationangleunit">
+                    <xs:simpleType>
+                        <xs:restriction base="xs:token">
+                            <xs:enumeration value="deg"/>
+                            <xs:enumeration value="rad"/>
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
                 <xs:element minOccurs="0" ref="origin"/>
                 <xs:element minOccurs="0" ref="coordinatesystem"/>
             </xs:sequence>

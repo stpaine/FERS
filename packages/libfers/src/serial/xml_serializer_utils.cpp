@@ -17,6 +17,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
@@ -73,6 +74,11 @@ namespace serial::xml_serializer_utils
 		if (p.oversample_ratio != 1)
 		{
 			addChildWithNumber(parent, "oversample", p.oversample_ratio);
+		}
+		if (p.rotation_angle_unit != params::RotationAngleUnit::Degrees)
+		{
+			addChildWithText(parent, "rotationangleunit",
+							 std::string(params::rotationAngleUnitToken(p.rotation_angle_unit)));
 		}
 
 		const XmlElement origin = parent.addChild("origin");
@@ -229,16 +235,21 @@ namespace serial::xml_serializer_utils
 			const XmlElement fixed_elem = parent.addChild("fixedrotation");
 			const auto start = rotPath.getStart();
 			const auto rate = rotPath.getRate();
+			const auto unit = params::rotationAngleUnit();
 
-			const RealType start_az_deg = std::fmod(90.0 - start.azimuth * 180.0 / PI + 360.0, 360.0);
-			const RealType start_el_deg = start.elevation * 180.0 / PI;
-			const RealType rate_az_deg_s = -rate.azimuth * 180.0 / PI;
-			const RealType rate_el_deg_s = rate.elevation * 180.0 / PI;
+			RealType start_az = rotation_angle_utils::internal_azimuth_to_external(start.azimuth, unit);
+			if (unit == params::RotationAngleUnit::Degrees)
+			{
+				start_az = std::fmod(start_az + 360.0, 360.0);
+			}
+			const RealType start_el = rotation_angle_utils::internal_elevation_to_external(start.elevation, unit);
+			const RealType rate_az = rotation_angle_utils::internal_azimuth_rate_to_external(rate.azimuth, unit);
+			const RealType rate_el = rotation_angle_utils::internal_elevation_rate_to_external(rate.elevation, unit);
 
-			addChildWithNumber(fixed_elem, "startazimuth", start_az_deg);
-			addChildWithNumber(fixed_elem, "startelevation", start_el_deg);
-			addChildWithNumber(fixed_elem, "azimuthrate", rate_az_deg_s);
-			addChildWithNumber(fixed_elem, "elevationrate", rate_el_deg_s);
+			addChildWithNumber(fixed_elem, "startazimuth", start_az);
+			addChildWithNumber(fixed_elem, "startelevation", start_el);
+			addChildWithNumber(fixed_elem, "azimuthrate", rate_az);
+			addChildWithNumber(fixed_elem, "elevationrate", rate_el);
 		}
 		else
 		{
@@ -257,13 +268,18 @@ namespace serial::xml_serializer_utils
 			default:
 				break;
 			}
+			const auto unit = params::rotationAngleUnit();
 			for (const auto& wp : rotPath.getCoords())
 			{
 				XmlElement wp_elem = rot_elem.addChild("rotationwaypoint");
-				const RealType az_deg = std::fmod(90.0 - wp.azimuth * 180.0 / PI + 360.0, 360.0);
-				const RealType el_deg = wp.elevation * 180.0 / PI;
-				addChildWithNumber(wp_elem, "azimuth", az_deg);
-				addChildWithNumber(wp_elem, "elevation", el_deg);
+				RealType azimuth = rotation_angle_utils::internal_azimuth_to_external(wp.azimuth, unit);
+				if (unit == params::RotationAngleUnit::Degrees)
+				{
+					azimuth = std::fmod(azimuth + 360.0, 360.0);
+				}
+				const RealType elevation = rotation_angle_utils::internal_elevation_to_external(wp.elevation, unit);
+				addChildWithNumber(wp_elem, "azimuth", azimuth);
+				addChildWithNumber(wp_elem, "elevation", elevation);
 				addChildWithNumber(wp_elem, "time", wp.t);
 			}
 		}

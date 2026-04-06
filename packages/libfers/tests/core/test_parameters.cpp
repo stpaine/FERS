@@ -34,6 +34,7 @@ TEST_CASE("Parameters default values are consistent", "[core][parameters]")
 	REQUIRE(params::renderThreads() == 1u);
 	REQUIRE(params::oversampleRatio() == 1u);
 	REQUIRE(params::coordinateFrame() == params::CoordinateFrame::ENU);
+	REQUIRE(params::rotationAngleUnit() == params::RotationAngleUnit::Degrees);
 	REQUIRE(params::utmZone() == 0);
 	REQUIRE(params::utmNorthHemisphere());
 }
@@ -64,6 +65,9 @@ TEST_CASE("Parameters setters update getters", "[core][parameters]")
 
 	params::setOversampleRatio(4);
 	REQUIRE(params::oversampleRatio() == 4u);
+
+	params::setRotationAngleUnit(params::RotationAngleUnit::Radians);
+	REQUIRE(params::rotationAngleUnit() == params::RotationAngleUnit::Radians);
 }
 
 TEST_CASE("Parameters setters validate inputs", "[core][parameters]")
@@ -130,6 +134,7 @@ TEST_CASE("Parameters reset restores defaults", "[core][parameters]")
 	REQUIRE(params::adcBits() == 0u);
 	REQUIRE(params::oversampleRatio() == 1u);
 	REQUIRE(params::coordinateFrame() == params::CoordinateFrame::ENU);
+	REQUIRE(params::rotationAngleUnit() == params::RotationAngleUnit::Degrees);
 	REQUIRE(params::utmZone() == 0);
 	REQUIRE(params::utmNorthHemisphere());
 }

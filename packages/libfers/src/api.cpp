@@ -29,6 +29,7 @@
 #include "core/thread_pool.h"
 #include "serial/json_serializer.h"
 #include "serial/kml_generator.h"
+#include "serial/rotation_angle_utils.h"
 #include "serial/xml_parser.h"
 #include "serial/xml_serializer.h"
 #include "signal/radar_signal.h"
@@ -793,6 +794,7 @@ void fers_free_interpolated_motion_path(fers_interpolated_path_t* path)
 fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fers_rotation_waypoint_t* waypoints,
 																	   const size_t waypoint_count,
 																	   const fers_interp_type_t interp_type,
+																	   const fers_angle_unit_t angle_unit,
 																	   const size_t num_points)
 {
 	last_error_message.clear();
@@ -811,19 +813,15 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 
 	try
 	{
+		const auto unit =
+			angle_unit == FERS_ANGLE_UNIT_RAD ? params::RotationAngleUnit::Radians : params::RotationAngleUnit::Degrees;
 		math::RotationPath path;
 		path.setInterp(to_cpp_rot_interp_type(interp_type));
 
 		for (size_t i = 0; i < waypoint_count; ++i)
 		{
-			const RealType az_deg = waypoints[i].azimuth_deg;
-			const RealType el_deg = waypoints[i].elevation_deg;
-
-			// Convert from compass degrees (from C-API) to internal mathematical radians
-			const RealType az_rad = (90.0 - az_deg) * (PI / 180.0);
-			const RealType el_rad = el_deg * (PI / 180.0);
-
-			path.addCoord({az_rad, el_rad, waypoints[i].time});
+			path.addCoord(serial::rotation_angle_utils::external_rotation_to_internal(
+				waypoints[i].azimuth, waypoints[i].elevation, waypoints[i].time, unit));
 		}
 
 		path.finalize();
@@ -840,12 +838,11 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 		if (waypoint_count < 2 || duration <= 0)
 		{
 			const math::SVec3 rot = path.getPosition(start_time);
-			// Convert back to compass degrees for output without normalization
-			const RealType az_deg = 90.0 - rot.azimuth * 180.0 / PI;
-			const RealType el_deg = rot.elevation * 180.0 / PI;
 			for (size_t i = 0; i < num_points; ++i)
 			{
-				result_path->points[i] = {az_deg, el_deg};
+				result_path->points[i] = fers_interpolated_rotation_point_t{
+					serial::rotation_angle_utils::internal_azimuth_to_external(rot.azimuth, unit),
+					serial::rotation_angle_utils::internal_elevation_to_external(rot.elevation, unit)};
 			}
 			return result_path;
 		}
@@ -857,12 +854,9 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 			const double t = start_time + i * time_step;
 			const math::SVec3 rot = path.getPosition(t);
 
-			// Convert from internal mathematical radians back to compass degrees for C-API output
-			// We do NOT normalize to [0, 360) to preserve winding/negative angles for the UI.
-			const RealType az_deg = 90.0 - rot.azimuth * 180.0 / PI;
-			const RealType el_deg = rot.elevation * 180.0 / PI;
-
-			result_path->points[i] = {az_deg, el_deg};
+			result_path->points[i] = fers_interpolated_rotation_point_t{
+				serial::rotation_angle_utils::internal_azimuth_to_external(rot.azimuth, unit),
+				serial::rotation_angle_utils::internal_elevation_to_external(rot.elevation, unit)};
 		}
 
 		return result_path;

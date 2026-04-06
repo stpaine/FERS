@@ -15,6 +15,7 @@
 #include <expected>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "config.h"
 #include "logging.h"
@@ -30,6 +31,16 @@ namespace params
 		ENU, ///< East-North-Up local tangent plane (default)
 		UTM, ///< Universal Transverse Mercator
 		ECEF ///< Earth-Centered, Earth-Fixed
+	};
+
+	/**
+	 * @enum RotationAngleUnit
+	 * @brief Defines the units used at external rotation-path boundaries.
+	 */
+	enum class RotationAngleUnit
+	{
+		Degrees, ///< Compass azimuth and elevation expressed in degrees
+		Radians ///< Compass azimuth and elevation expressed in radians
 	};
 
 	/**
@@ -52,6 +63,7 @@ namespace params
 		double origin_longitude = 18.4611991; ///< Geodetic origin longitude
 		double origin_altitude = 111.01; ///< Geodetic origin altitude (in meters)
 		CoordinateFrame coordinate_frame = CoordinateFrame::ENU; ///< Scenario coordinate frame
+		RotationAngleUnit rotation_angle_unit = RotationAngleUnit::Degrees; ///< External rotation angle unit
 		int utm_zone = 0; ///< UTM zone (1-60), if applicable
 		bool utm_north_hemisphere = true; ///< UTM hemisphere, if applicable
 		RealType rate = 0; ///< Rendering sample rate.
@@ -271,7 +283,29 @@ namespace params
 
 	inline CoordinateFrame coordinateFrame() noexcept { return params.coordinate_frame; }
 
+	inline RotationAngleUnit rotationAngleUnit() noexcept { return params.rotation_angle_unit; }
+
 	inline int utmZone() noexcept { return params.utm_zone; }
 
 	inline bool utmNorthHemisphere() noexcept { return params.utm_north_hemisphere; }
+
+	inline void setRotationAngleUnit(const RotationAngleUnit unit) noexcept { params.rotation_angle_unit = unit; }
+
+	inline constexpr std::string_view rotationAngleUnitToken(const RotationAngleUnit unit) noexcept
+	{
+		return unit == RotationAngleUnit::Radians ? "rad" : "deg";
+	}
+
+	inline std::optional<RotationAngleUnit> rotationAngleUnitFromToken(const std::string_view token) noexcept
+	{
+		if (token == "deg")
+		{
+			return RotationAngleUnit::Degrees;
+		}
+		if (token == "rad")
+		{
+			return RotationAngleUnit::Radians;
+		}
+		return std::nullopt;
+	}
 }

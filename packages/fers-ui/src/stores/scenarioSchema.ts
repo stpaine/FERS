@@ -11,6 +11,7 @@ const nullableNumber = z.preprocess(
 export const GlobalParametersSchema = z.object({
     id: z.literal('global-parameters'),
     type: z.literal('GlobalParameters'),
+    rotationAngleUnit: z.enum(['deg', 'rad']),
     simulation_name: z.string().min(1, 'Simulation name cannot be empty.'),
     start: z.number(),
     end: z.number(),

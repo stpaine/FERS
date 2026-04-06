@@ -16,6 +16,7 @@ import {
 import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
 import {
     Antenna,
+    GlobalParameters,
     Platform,
     ScenarioActions,
     ScenarioStore,
@@ -24,6 +25,19 @@ import {
 } from '../types';
 import { setPropertyByPath } from '../utils';
 import { buildScenarioJson } from './backendSlice';
+
+function convertRotationValue(
+    value: number,
+    fromUnit: GlobalParameters['rotationAngleUnit'],
+    toUnit: GlobalParameters['rotationAngleUnit']
+): number {
+    if (fromUnit === toUnit) {
+        return value;
+    }
+    return fromUnit === 'deg'
+        ? (value * Math.PI) / 180
+        : (value * 180) / Math.PI;
+}
 
 export const createScenarioSlice: StateCreator<
     ScenarioStore,
@@ -190,6 +204,66 @@ export const createScenarioSlice: StateCreator<
 
         if (jsonPayload) {
             void enqueueGranularSync(targetItemType, targetItemId, jsonPayload);
+        }
+    },
+    setRotationAngleUnit: (unit, convertExisting) => {
+        const previousUnit = get().globalParameters.rotationAngleUnit;
+        if (previousUnit === unit) {
+            return;
+        }
+
+        set((state) => {
+            state.globalParameters.rotationAngleUnit = unit;
+
+            if (convertExisting) {
+                for (const platform of state.platforms) {
+                    if (platform.rotation.type === 'fixed') {
+                        platform.rotation.startAzimuth = convertRotationValue(
+                            platform.rotation.startAzimuth,
+                            previousUnit,
+                            unit
+                        );
+                        platform.rotation.startElevation = convertRotationValue(
+                            platform.rotation.startElevation,
+                            previousUnit,
+                            unit
+                        );
+                        platform.rotation.azimuthRate = convertRotationValue(
+                            platform.rotation.azimuthRate,
+                            previousUnit,
+                            unit
+                        );
+                        platform.rotation.elevationRate = convertRotationValue(
+                            platform.rotation.elevationRate,
+                            previousUnit,
+                            unit
+                        );
+                    } else {
+                        for (const waypoint of platform.rotation.waypoints) {
+                            waypoint.azimuth = convertRotationValue(
+                                waypoint.azimuth,
+                                previousUnit,
+                                unit
+                            );
+                            waypoint.elevation = convertRotationValue(
+                                waypoint.elevation,
+                                previousUnit,
+                                unit
+                            );
+                        }
+                    }
+                }
+            }
+
+            for (const platform of state.platforms) {
+                delete platform.rotationPathPoints;
+            }
+            state.isDirty = true;
+        });
+
+        void enqueueFullSync(() => buildScenarioJson(get()));
+        for (const platform of get().platforms) {
+            void get().fetchPlatformPath(platform.id);
         }
     },
     removeItem: (itemId) => {

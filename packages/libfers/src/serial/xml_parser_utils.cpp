@@ -26,6 +26,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
 #include "serial/waveform_factory.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
@@ -186,6 +187,25 @@ namespace serial::xml_parser_utils
 											  params_out.oversample_ratio = v;
 											  LOG(logging::Level::DEBUG, "Oversampling enabled with ratio: {}", v);
 										  });
+
+		try
+		{
+			const auto unit_token = parameters.childElement("rotationangleunit", 0).getText();
+			if (!unit_token.empty())
+			{
+				if (const auto unit = params::rotationAngleUnitFromToken(unit_token))
+				{
+					params_out.rotation_angle_unit = *unit;
+				}
+				else
+				{
+					throw XmlException("Unsupported rotation angle unit '" + unit_token + "'.");
+				}
+			}
+		}
+		catch (const XmlException&)
+		{
+		}
 
 		bool origin_set = false;
 		if (const XmlElement origin_element = parameters.childElement("origin", 0); origin_element.isValid())
@@ -490,7 +510,7 @@ namespace serial::xml_parser_utils
 		path->finalize();
 	}
 
-	void parseRotationPath(const XmlElement& rotation, radar::Platform* platform)
+	void parseRotationPath(const XmlElement& rotation, radar::Platform* platform, const params::RotationAngleUnit unit)
 	{
 		math::RotationPath* path = platform->getRotationPath();
 		try
@@ -538,10 +558,7 @@ namespace serial::xml_parser_utils
 				const RealType el_deg = get_child_real_type(waypoint, "elevation");
 				const RealType time = get_child_real_type(waypoint, "time");
 
-				const RealType az_rad = (90.0 - az_deg) * (PI / 180.0);
-				const RealType el_rad = el_deg * (PI / 180.0);
-
-				path->addCoord({az_rad, el_rad, time});
+				path->addCoord(rotation_angle_utils::external_rotation_to_internal(az_deg, el_deg, time, unit));
 			}
 			catch (const XmlException& e)
 			{
@@ -553,22 +570,19 @@ namespace serial::xml_parser_utils
 		path->finalize();
 	}
 
-	void parseFixedRotation(const XmlElement& rotation, radar::Platform* platform)
+	void parseFixedRotation(const XmlElement& rotation, radar::Platform* platform, const params::RotationAngleUnit unit)
 	{
 		math::RotationPath* path = platform->getRotationPath();
 		try
 		{
-			math::RotationCoord start, rate;
 			const RealType start_az_deg = get_child_real_type(rotation, "startazimuth");
 			const RealType start_el_deg = get_child_real_type(rotation, "startelevation");
 			const RealType rate_az_deg_s = get_child_real_type(rotation, "azimuthrate");
 			const RealType rate_el_deg_s = get_child_real_type(rotation, "elevationrate");
-
-			start.azimuth = (90.0 - start_az_deg) * (PI / 180.0);
-			start.elevation = start_el_deg * (PI / 180.0);
-
-			rate.azimuth = -rate_az_deg_s * (PI / 180.0);
-			rate.elevation = rate_el_deg_s * (PI / 180.0);
+			const math::RotationCoord start =
+				rotation_angle_utils::external_rotation_to_internal(start_az_deg, start_el_deg, 0.0, unit);
+			const math::RotationCoord rate =
+				rotation_angle_utils::external_rotation_rate_to_internal(rate_az_deg_s, rate_el_deg_s, 0.0, unit);
 
 			path->setConstantRate(start, rate);
 			LOG(logging::Level::DEBUG, "Added fixed rotation to platform {}", platform->getName());
@@ -856,15 +870,15 @@ namespace serial::xml_parser_utils
 				"Both <rotationpath> and <fixedrotation> are declared for platform {}. Only <rotationpath> will be "
 				"used.",
 				plat->getName());
-			parseRotationPath(rot_path, plat.get());
+			parseRotationPath(rot_path, plat.get(), ctx.parameters.rotation_angle_unit);
 		}
 		else if (rot_path.isValid())
 		{
-			parseRotationPath(rot_path, plat.get());
+			parseRotationPath(rot_path, plat.get(), ctx.parameters.rotation_angle_unit);
 		}
 		else if (fixed_rot.isValid())
 		{
-			parseFixedRotation(fixed_rot, plat.get());
+			parseFixedRotation(fixed_rot, plat.get(), ctx.parameters.rotation_angle_unit);
 		}
 
 		ctx.world->add(std::move(plat));

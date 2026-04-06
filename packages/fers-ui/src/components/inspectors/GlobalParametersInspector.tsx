@@ -3,13 +3,20 @@
 
 import {
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
     FormControl,
     InputLabel,
     MenuItem,
     Select,
     TextField,
 } from '@mui/material';
-import { useScenarioStore, GlobalParameters } from '@/stores/scenarioStore';
+import { useState } from 'react';
+import { GlobalParameters, useScenarioStore } from '@/stores/scenarioStore';
 import { NumberField, Section } from './InspectorControls';
 
 interface GlobalParametersInspectorProps {
@@ -19,12 +26,58 @@ interface GlobalParametersInspectorProps {
 export function GlobalParametersInspector({
     item,
 }: GlobalParametersInspectorProps) {
-    const { updateItem } = useScenarioStore.getState();
+    const { updateItem, setRotationAngleUnit, platforms } = useScenarioStore();
     const handleChange = (path: string, value: unknown) =>
         updateItem(item.id, path, value);
+    const [pendingRotationUnit, setPendingRotationUnit] = useState<
+        GlobalParameters['rotationAngleUnit'] | null
+    >(null);
+
+    const hasExistingRotationValues = platforms.some((platform) => {
+        if (platform.rotation.type === 'fixed') {
+            return [
+                platform.rotation.startAzimuth,
+                platform.rotation.startElevation,
+                platform.rotation.azimuthRate,
+                platform.rotation.elevationRate,
+            ].some((value) => value !== 0);
+        }
+        return platform.rotation.waypoints.some(
+            (waypoint) => waypoint.azimuth !== 0 || waypoint.elevation !== 0
+        );
+    });
+
+    const handleRotationUnitChange = (
+        nextUnit: GlobalParameters['rotationAngleUnit']
+    ) => {
+        if (nextUnit === item.rotationAngleUnit) {
+            return;
+        }
+        if (hasExistingRotationValues) {
+            setPendingRotationUnit(nextUnit);
+            return;
+        }
+        setRotationAngleUnit(nextUnit, false);
+    };
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <FormControl fullWidth size="small">
+                <InputLabel>Rotation Angle Unit</InputLabel>
+                <Select
+                    label="Rotation Angle Unit"
+                    value={item.rotationAngleUnit}
+                    onChange={(e) =>
+                        handleRotationUnitChange(
+                            e.target
+                                .value as GlobalParameters['rotationAngleUnit']
+                        )
+                    }
+                >
+                    <MenuItem value="deg">Degrees</MenuItem>
+                    <MenuItem value="rad">Radians</MenuItem>
+                </Select>
+            </FormControl>
             <TextField
                 label="Simulation Name"
                 variant="outlined"
@@ -137,6 +190,48 @@ export function GlobalParametersInspector({
                     </>
                 )}
             </Section>
+            <Dialog
+                open={pendingRotationUnit !== null}
+                onClose={() => setPendingRotationUnit(null)}
+            >
+                <DialogTitle>Change Rotation Angle Unit</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Existing rotation values are present. Convert them to
+                        keep the same physical orientation and rates, or keep
+                        the numeric values as they are.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={() => setPendingRotationUnit(null)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            if (pendingRotationUnit) {
+                                setRotationAngleUnit(
+                                    pendingRotationUnit,
+                                    false
+                                );
+                            }
+                            setPendingRotationUnit(null);
+                        }}
+                    >
+                        Keep Numeric Values
+                    </Button>
+                    <Button
+                        variant="contained"
+                        onClick={() => {
+                            if (pendingRotationUnit) {
+                                setRotationAngleUnit(pendingRotationUnit, true);
+                            }
+                            setPendingRotationUnit(null);
+                        }}
+                    >
+                        Convert Existing Values
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </Box>
     );
 }

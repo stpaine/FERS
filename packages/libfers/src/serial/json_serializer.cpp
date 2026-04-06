@@ -30,6 +30,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
@@ -111,26 +112,19 @@ namespace math
 
 	void to_json(nlohmann::json& j, const RotationCoord& rc) // NOLINT(*-use-internal-linkage)
 	{
-		// The internal engine uses mathematical angles (radians, CCW from East),
-		// but the UI and XML format use compass degrees (CW from North).
-		// We intentionally DO NOT normalize the output (no fmod) to preserve
-		// negative angles or multi-turn rotations (winding) defined by the user.
-		const RealType az_deg = 90.0 - rc.azimuth * 180.0 / PI;
-		const RealType el_deg = rc.elevation * 180.0 / PI;
-		j = {{"time", rc.t}, {"azimuth", az_deg}, {"elevation", el_deg}};
+		const auto unit = params::rotationAngleUnit();
+		j = {{"time", rc.t},
+			 {"azimuth", serial::rotation_angle_utils::internal_azimuth_to_external(rc.azimuth, unit)},
+			 {"elevation", serial::rotation_angle_utils::internal_elevation_to_external(rc.elevation, unit)}};
 	}
 
 	void from_json(const nlohmann::json& j, RotationCoord& rc) // NOLINT(*-use-internal-linkage)
 	{
 		j.at("time").get_to(rc.t);
-		const RealType az_deg = j.at("azimuth").get<RealType>();
-		const RealType el_deg = j.at("elevation").get<RealType>();
-
-		// Convert from compass degrees (from JSON/UI) back to the internal engine's
-		// mathematical angle representation (radians, CCW from East). This keeps
-		// all internal physics calculations consistent.
-		rc.azimuth = (90.0 - az_deg) * (PI / 180.0);
-		rc.elevation = el_deg * (PI / 180.0);
+		const auto external = serial::rotation_angle_utils::external_rotation_to_internal(
+			j.at("azimuth").get<RealType>(), j.at("elevation").get<RealType>(), rc.t, params::rotationAngleUnit());
+		rc.azimuth = external.azimuth;
+		rc.elevation = external.elevation;
 	}
 
 	NLOHMANN_JSON_SERIALIZE_ENUM(Path::InterpType,
@@ -171,14 +165,14 @@ namespace math
 			// A constant-rate rotation path corresponds to the <fixedrotation> XML element.
 			// The start and rate values are converted to compass degrees per second.
 			// No normalization is applied to preserve negative start angles.
-			const RealType start_az_deg = 90.0 - p.getStart().azimuth * 180.0 / PI;
-			const RealType start_el_deg = p.getStart().elevation * 180.0 / PI;
-			const RealType rate_az_deg_s = -p.getRate().azimuth * 180.0 / PI; // Invert for CW rate
-			const RealType rate_el_deg_s = p.getRate().elevation * 180.0 / PI;
-			j["startazimuth"] = start_az_deg;
-			j["startelevation"] = start_el_deg;
-			j["azimuthrate"] = rate_az_deg_s;
-			j["elevationrate"] = rate_el_deg_s;
+			const auto unit = params::rotationAngleUnit();
+			j["startazimuth"] = serial::rotation_angle_utils::internal_azimuth_to_external(p.getStart().azimuth, unit);
+			j["startelevation"] =
+				serial::rotation_angle_utils::internal_elevation_to_external(p.getStart().elevation, unit);
+			j["azimuthrate"] =
+				serial::rotation_angle_utils::internal_azimuth_rate_to_external(p.getRate().azimuth, unit);
+			j["elevationrate"] =
+				serial::rotation_angle_utils::internal_elevation_rate_to_external(p.getRate().elevation, unit);
 		}
 		else
 		{
@@ -562,6 +556,8 @@ namespace params
 								 {{CoordinateFrame::ENU, "ENU"},
 								  {CoordinateFrame::UTM, "UTM"},
 								  {CoordinateFrame::ECEF, "ECEF"}})
+	NLOHMANN_JSON_SERIALIZE_ENUM(RotationAngleUnit,
+								 {{RotationAngleUnit::Degrees, "deg"}, {RotationAngleUnit::Radians, "rad"}})
 
 	void to_json(nlohmann::json& j, const Parameters& p) // NOLINT(*-use-internal-linkage)
 	{
@@ -571,7 +567,8 @@ namespace params
 						   {"c", p.c},
 						   {"simSamplingRate", p.sim_sampling_rate},
 						   {"adc_bits", p.adc_bits},
-						   {"oversample", p.oversample_ratio}};
+						   {"oversample", p.oversample_ratio},
+						   {"rotationangleunit", p.rotation_angle_unit}};
 
 		if (p.random_seed.has_value())
 		{
@@ -598,6 +595,7 @@ namespace params
 		p.sim_sampling_rate = j.value("simSamplingRate", 1000.0);
 		p.adc_bits = j.value("adc_bits", 0u);
 		p.oversample_ratio = j.value("oversample", 1u);
+		p.rotation_angle_unit = j.value("rotationangleunit", RotationAngleUnit::Degrees);
 		p.random_seed = j.value<std::optional<unsigned>>("randomseed", std::nullopt);
 
 		const auto& origin = j.at("origin");
@@ -1225,11 +1223,10 @@ namespace serial
 			const RealType rate_az_deg_s = fixed_json.at("azimuthrate").get<RealType>();
 			const RealType rate_el_deg_s = fixed_json.at("elevationrate").get<RealType>();
 
-			math::RotationCoord start, rate;
-			start.azimuth = (90.0 - start_az_deg) * (PI / 180.0);
-			start.elevation = start_el_deg * (PI / 180.0);
-			rate.azimuth = -rate_az_deg_s * (PI / 180.0);
-			rate.elevation = rate_el_deg_s * (PI / 180.0);
+			const auto start = serial::rotation_angle_utils::external_rotation_to_internal(
+				start_az_deg, start_el_deg, 0.0, params::rotationAngleUnit());
+			const auto rate = serial::rotation_angle_utils::external_rotation_rate_to_internal(
+				rate_az_deg_s, rate_el_deg_s, 0.0, params::rotationAngleUnit());
 			rot_path->setConstantRate(start, rate);
 			rot_path->finalize();
 			plat->setRotationPath(std::move(rot_path));

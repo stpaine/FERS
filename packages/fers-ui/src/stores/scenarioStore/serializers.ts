@@ -3,12 +3,12 @@
 
 import { omit } from '@/utils/typeUtils';
 import {
-    Platform,
-    PlatformComponent,
-    Waveform,
-    Timing,
     Antenna,
     GlobalParameters,
+    Platform,
+    PlatformComponent,
+    Timing,
+    Waveform,
 } from './types';
 
 /**
@@ -206,6 +206,7 @@ export const serializeGlobalParameters = (gp: GlobalParameters) => {
         endtime: end,
         randomseed: random_seed,
         oversample: oversample_ratio,
+        rotationangleunit: gp.rotationAngleUnit,
         coordinatesystem: coordinateSystem,
     });
 };

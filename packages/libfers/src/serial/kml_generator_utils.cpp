@@ -24,6 +24,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
 #include "signal/radar_signal.h"
 
 namespace serial::kml_generator_utils
@@ -295,6 +296,10 @@ namespace serial::kml_generator_utils
 		const std::string start_coords_str = formatCoordinates(start_lon, start_lat, start_alt);
 
 		const math::SVec3 initial_rotation = platform->getRotationPath()->getPosition(ctx.parameters.start);
+		const double display_azimuth = rotation_angle_utils::internal_azimuth_to_external(
+			initial_rotation.azimuth, ctx.parameters.rotation_angle_unit);
+		const double display_elevation = rotation_angle_utils::internal_elevation_to_external(
+			initial_rotation.elevation, ctx.parameters.rotation_angle_unit);
 
 		const double fers_azimuth_deg = initial_rotation.azimuth * 180.0 / PI;
 		double start_azimuth_deg_kml = 90.0 - fers_azimuth_deg;
@@ -312,7 +317,21 @@ namespace serial::kml_generator_utils
 		calculateDestinationCoordinate(start_lat, start_lon, start_azimuth_deg_kml, horizontal_distance, dest_lat,
 									   dest_lon);
 		const std::string end_coords_str = formatCoordinates(dest_lon, dest_lat, end_alt);
-		writeAntennaBeamLine(out, indent, "Antenna Boresight", "#lineStyle", start_coords_str, end_coords_str);
+		out << indent << "<Placemark>\n";
+		out << indent << "  <name>Antenna Boresight</name>\n";
+		out << indent << "  <ExtendedData>\n";
+		out << indent << "    <Data name=\"rotationangleunit\"><value>"
+			<< params::rotationAngleUnitToken(ctx.parameters.rotation_angle_unit) << "</value></Data>\n";
+		out << indent << "    <Data name=\"azimuth\"><value>" << display_azimuth << "</value></Data>\n";
+		out << indent << "    <Data name=\"elevation\"><value>" << display_elevation << "</value></Data>\n";
+		out << indent << "  </ExtendedData>\n";
+		out << indent << "  <styleUrl>#lineStyle</styleUrl>\n";
+		out << indent << "  <LineString>\n";
+		out << indent << "    <altitudeMode>absolute</altitudeMode>\n";
+		out << indent << "    <tessellate>1</tessellate>\n";
+		out << indent << "    <coordinates>" << start_coords_str << " " << end_coords_str << "</coordinates>\n";
+		out << indent << "  </LineString>\n";
+		out << indent << "</Placemark>\n";
 
 		if (angle3DbDropDeg.has_value() && *angle3DbDropDeg > EPSILON)
 		{

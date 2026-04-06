@@ -152,6 +152,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
 						   "  <simSamplingRate>500.0</simSamplingRate>"
 						   "  <randomseed>42</randomseed>"
+						   "  <rotationangleunit>rad</rotationangleunit>"
 						   "  <coordinatesystem frame=\"ECEF\"/>"
 						   "</parameters>");
 
@@ -161,6 +162,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(500.0, 1e-5));
 		REQUIRE(p.random_seed.has_value());
 		REQUIRE(p.random_seed.value() == 42);
+		REQUIRE(p.rotation_angle_unit == params::RotationAngleUnit::Radians);
 		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
 	}
 
@@ -388,7 +390,8 @@ TEST_CASE("parseRotationPath handles all interpolation types", "[serial][xml_par
 			"  <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
 			"  <rotationwaypoint><azimuth>10</azimuth><elevation>10</elevation><time>1</time></rotationwaypoint>"
 			"</rotationpath>");
-		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform);
+		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform,
+													params::RotationAngleUnit::Degrees);
 		REQUIRE(platform.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_LINEAR);
 	}
 
@@ -400,7 +403,8 @@ TEST_CASE("parseRotationPath handles all interpolation types", "[serial][xml_par
 			"  <rotationwaypoint><azimuth>10</azimuth><elevation>10</elevation><time>1</time></rotationwaypoint>"
 			"  <rotationwaypoint><azimuth>20</azimuth><elevation>20</elevation><time>2</time></rotationwaypoint>"
 			"</rotationpath>");
-		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform);
+		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform,
+													params::RotationAngleUnit::Degrees);
 		REQUIRE(platform.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CUBIC);
 	}
 }
@@ -417,7 +421,8 @@ TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser
 						   "  <azimuthrate>10</azimuthrate>"
 						   "  <elevationrate>5</elevationrate>"
 						   "</fixedrotation>");
-		serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform);
+		serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform,
+													 params::RotationAngleUnit::Degrees);
 
 		// 90 deg azimuth -> 0 rad (since az_rad = (90 - az_deg) * PI/180)
 		// rate 10 deg/s -> -10 * PI/180 rad/s
@@ -428,7 +433,9 @@ TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser
 	SECTION("Invalid throws")
 	{
 		auto doc = loadXml("<fixedrotation><startazimuth>90</startazimuth></fixedrotation>");
-		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform), XmlException);
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform,
+																	   params::RotationAngleUnit::Degrees),
+						  XmlException);
 	}
 }
 

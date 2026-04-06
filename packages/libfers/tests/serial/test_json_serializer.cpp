@@ -115,6 +115,7 @@ TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 	SECTION("Math Paths Serialize Correctly")
 	{
 		auto& plat_json = j["simulation"]["platforms"][0];
+		REQUIRE(j["simulation"]["parameters"]["rotationangleunit"] == "deg");
 
 		REQUIRE(plat_json["motionpath"]["interpolation"] == "cubic");
 		REQUIRE_THAT(plat_json["motionpath"]["positionwaypoints"][0]["x"].get<double>(), WithinAbs(1.1, 1e-9));
@@ -250,6 +251,7 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 		   {{"starttime", 0.0},
 			{"endtime", 1.0},
 			{"rate", 1000.0},
+			{"rotationangleunit", "rad"},
 			{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
 			{"coordinatesystem", {{"frame", "ENU"}}},
 			{"randomseed", 777}}},
@@ -288,6 +290,7 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 	REQUIRE(world.getReceivers().size() == 1);
 	REQUIRE(world.getTargets().size() == 1);
 	REQUIRE(params::params.random_seed == 777);
+	REQUIRE(params::params.rotation_angle_unit == params::RotationAngleUnit::Radians);
 
 	auto tx = world.getTransmitters()[0].get();
 	auto rx = world.getReceivers()[0].get();

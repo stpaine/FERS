@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { GlobalParameters, Waveform, Timing, Antenna, Platform } from './types';
 import { generateSimId } from './idUtils';
+import { Antenna, GlobalParameters, Platform, Timing, Waveform } from './types';
 
 export const defaultGlobalParameters: GlobalParameters = {
     id: 'global-parameters',
     type: 'GlobalParameters',
+    rotationAngleUnit: 'deg',
     simulation_name: 'FERS Simulation',
     start: 0.0,
     end: 10.0,

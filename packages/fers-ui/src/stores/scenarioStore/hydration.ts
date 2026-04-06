@@ -239,6 +239,8 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
         const globalParameters: GlobalParameters = {
             id: 'global-parameters',
             type: 'GlobalParameters',
+            rotationAngleUnit:
+                (params.rotationangleunit as 'deg' | 'rad') ?? 'deg',
             simulation_name: (data.name as string) || 'FERS Simulation',
             start: (params.starttime as number) ?? 0.0,
             end: (params.endtime as number) ?? 10.0,

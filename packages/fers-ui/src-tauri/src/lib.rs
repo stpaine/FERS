@@ -58,6 +58,14 @@ pub enum InterpolationType {
     Cubic,
 }
 
+/// Enum for the rotation angle unit received from the UI.
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum RotationAngleUnit {
+    Deg,
+    Rad,
+}
+
 /// Data structure for a single interpolated point sent back to the UI.
 ///
 /// Represents the physical state of a platform at a specific time step.
@@ -82,19 +90,19 @@ pub struct InterpolatedMotionPoint {
 pub struct RotationWaypoint {
     /// Time in seconds.
     time: f64,
-    /// Azimuth in compass degrees (0=North, 90=East).
+    /// Azimuth in compass units (0=North, pi/2 or 90=East).
     azimuth: f64,
-    /// Elevation in degrees (positive up).
+    /// Elevation in the selected external units (positive up).
     elevation: f64,
 }
 
 /// Data structure for a single interpolated rotation point sent back to the UI.
 #[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct InterpolatedRotationPoint {
-    /// Azimuth in compass degrees.
-    azimuth_deg: f64,
-    /// Elevation in degrees.
-    elevation_deg: f64,
+    /// Azimuth in compass units.
+    azimuth: f64,
+    /// Elevation in the selected external units.
+    elevation: f64,
 }
 
 /// Type alias for the managed Tauri state that holds the simulation context.
@@ -347,8 +355,9 @@ fn get_interpolated_motion_path(
 /// orientation changes over time.
 ///
 /// # Parameters
-/// * `waypoints` - A vector of rotation waypoints (azimuth/elevation in compass degrees).
+/// * `waypoints` - A vector of rotation waypoints in the selected external angle unit.
 /// * `interp_type` - The interpolation algorithm to use ('static', 'linear', 'cubic').
+/// * `angle_unit` - The angle unit to use for both input and output.
 /// * `num_points` - The desired number of points for the final path.
 ///
 /// # Returns
@@ -358,9 +367,10 @@ fn get_interpolated_motion_path(
 fn get_interpolated_rotation_path(
     waypoints: Vec<RotationWaypoint>,
     interp_type: InterpolationType,
+    angle_unit: RotationAngleUnit,
     num_points: usize,
 ) -> Result<Vec<InterpolatedRotationPoint>, String> {
-    fers_api::get_interpolated_rotation_path(waypoints, interp_type, num_points)
+    fers_api::get_interpolated_rotation_path(waypoints, interp_type, angle_unit, num_points)
 }
 
 /// Retrieves a 2D antenna gain pattern for visualization.
