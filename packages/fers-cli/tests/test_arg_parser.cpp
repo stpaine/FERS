@@ -59,14 +59,19 @@ TEST_CASE("parseArguments accepts a script file and preserves defaults", "[fers-
 
 TEST_CASE("parseArguments applies recognized options", "[fers-cli][arg-parser]")
 {
-	const auto result = parseArgs({"scenario.fersxml", "--log-level=DEBUG", "--log-file=runner.log", "-n=4",
+	const unsigned hw_threads = std::thread::hardware_concurrency();
+	const unsigned requested_threads = hw_threads > 0 ? hw_threads : 1;
+
+	const auto n_arg = std::string{"-n="} + std::to_string(requested_threads);
+
+	const auto result = parseArgs({"scenario.fersxml", "--log-level=DEBUG", "--log-file=runner.log", n_arg,
 								   "--out-dir=results", "--no-validate", "--kml=preview.kml"});
 
 	REQUIRE(result);
 	CHECK(result->script_file == "scenario.fersxml");
 	CHECK(result->log_level == FERS_LOG_DEBUG);
 	CHECK(result->log_file == std::optional<std::string>{"runner.log"});
-	CHECK(result->num_threads == 4);
+	CHECK(result->num_threads == requested_threads);
 	CHECK_FALSE(result->validate);
 	CHECK(result->generate_kml);
 	CHECK(result->kml_file == std::optional<std::string>{"preview.kml"});
