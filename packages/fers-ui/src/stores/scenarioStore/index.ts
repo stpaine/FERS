@@ -8,7 +8,10 @@ import { createAssetSlice } from './slices/assetSlice';
 import { createBackendSlice } from './slices/backendSlice';
 import { createPlatformSlice } from './slices/platformSlice';
 import { createScenarioSlice } from './slices/scenarioSlice';
-import { registerGranularSyncFailureHandler } from './syncQueue';
+import {
+    registerGranularSyncFailureHandler,
+    registerSyncWarningsHandler,
+} from './syncQueue';
 import { ScenarioStore } from './types';
 
 export * from './types';
@@ -35,10 +38,12 @@ export const useScenarioStore = create<ScenarioStore>()(
         scenarioFilePath: null,
         outputDirectory: null,
         antennaPreviewErrors: {},
-        errorSnackbar: {
+        notificationSnackbar: {
             open: false,
             message: '',
+            severity: 'error',
         },
+        notificationQueue: [],
         viewControlAction: { type: null, timestamp: 0 },
         visibility: {
             showAxes: true,
@@ -130,11 +135,84 @@ export const useScenarioStore = create<ScenarioStore>()(
             }),
 
         // Error Actions
-        showError: (message) => set({ errorSnackbar: { open: true, message } }),
-        hideError: () =>
-            set((state) => ({
-                errorSnackbar: { ...state.errorSnackbar, open: false },
-            })),
+        showError: (message) =>
+            set((state) => {
+                const notification = {
+                    open: true,
+                    message,
+                    severity: 'error' as const,
+                };
+                if (
+                    (state.notificationSnackbar.open &&
+                        state.notificationSnackbar.message === message &&
+                        state.notificationSnackbar.severity ===
+                            notification.severity) ||
+                    state.notificationQueue.some(
+                        (queued) =>
+                            queued.message === message &&
+                            queued.severity === notification.severity
+                    )
+                ) {
+                    return;
+                }
+                if (!state.notificationSnackbar.open) {
+                    state.notificationSnackbar = notification;
+                } else {
+                    state.notificationQueue.push({
+                        ...notification,
+                        open: false,
+                    });
+                }
+            }),
+        showWarning: (message) =>
+            set((state) => {
+                const notification = {
+                    open: true,
+                    message,
+                    severity: 'warning' as const,
+                };
+                if (
+                    (state.notificationSnackbar.open &&
+                        state.notificationSnackbar.message === message &&
+                        state.notificationSnackbar.severity ===
+                            notification.severity) ||
+                    state.notificationQueue.some(
+                        (queued) =>
+                            queued.message === message &&
+                            queued.severity === notification.severity
+                    )
+                ) {
+                    return;
+                }
+                if (!state.notificationSnackbar.open) {
+                    state.notificationSnackbar = notification;
+                } else {
+                    state.notificationQueue.push({
+                        ...notification,
+                        open: false,
+                    });
+                }
+            }),
+        hideNotification: () =>
+            set((state) => {
+                state.notificationSnackbar.open = false;
+            }),
+        advanceNotification: () =>
+            set((state) => {
+                const next = state.notificationQueue.shift();
+                if (next) {
+                    state.notificationSnackbar = {
+                        ...next,
+                        open: true,
+                    };
+                } else {
+                    state.notificationSnackbar = {
+                        ...state.notificationSnackbar,
+                        open: false,
+                        message: '',
+                    };
+                }
+            }),
         setAntennaPreviewError: (antennaId, message) =>
             set((state) => {
                 state.antennaPreviewErrors[antennaId] = message;
@@ -163,4 +241,9 @@ registerGranularSyncFailureHandler(async ({ itemType, itemId, error }) => {
                 `${syncMessage} Failed to reload backend state: ${formatSyncError(reloadError)}`
             );
     }
+});
+
+registerSyncWarningsHandler((warnings) => {
+    const { showWarning } = useScenarioStore.getState();
+    warnings.forEach((warning) => showWarning(warning));
 });

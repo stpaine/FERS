@@ -16,6 +16,7 @@
 #include "serial/json_serializer.h"
 
 #include <cmath>
+#include <format>
 #include <nlohmann/json.hpp>
 #include <random>
 
@@ -31,6 +32,7 @@
 #include "radar/target.h"
 #include "radar/transmitter.h"
 #include "serial/rotation_angle_utils.h"
+#include "serial/rotation_warning_utils.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
@@ -1211,7 +1213,29 @@ namespace serial
 		if (j.contains("rotationpath"))
 		{
 			auto rot_path = std::make_unique<math::RotationPath>();
-			j.at("rotationpath").get_to(*rot_path);
+			const auto& rotation_json = j.at("rotationpath");
+			rot_path->setInterp(rotation_json.at("interpolation").get<math::RotationPath::InterpType>());
+			unsigned waypoint_index = 0;
+			for (const auto& waypoint_json : rotation_json.at("rotationwaypoints"))
+			{
+				const RealType azimuth = waypoint_json.at("azimuth").get<RealType>();
+				const RealType elevation = waypoint_json.at("elevation").get<RealType>();
+				const RealType time = waypoint_json.at("time").get<RealType>();
+				const std::string owner =
+					std::format("platform '{}' rotation waypoint {}", plat->getName(), waypoint_index);
+
+				rotation_warning_utils::maybe_warn_about_rotation_value(azimuth, params::rotationAngleUnit(),
+																		rotation_warning_utils::ValueKind::Angle,
+																		"JSON", owner, "azimuth");
+				rotation_warning_utils::maybe_warn_about_rotation_value(elevation, params::rotationAngleUnit(),
+																		rotation_warning_utils::ValueKind::Angle,
+																		"JSON", owner, "elevation");
+
+				rot_path->addCoord(rotation_angle_utils::external_rotation_to_internal(azimuth, elevation, time,
+																					   params::rotationAngleUnit()));
+				++waypoint_index;
+			}
+			rot_path->finalize();
 			plat->setRotationPath(std::move(rot_path));
 		}
 		else if (j.contains("fixedrotation"))
@@ -1222,6 +1246,20 @@ namespace serial
 			const RealType start_el_deg = fixed_json.at("startelevation").get<RealType>();
 			const RealType rate_az_deg_s = fixed_json.at("azimuthrate").get<RealType>();
 			const RealType rate_el_deg_s = fixed_json.at("elevationrate").get<RealType>();
+			const std::string owner = std::format("platform '{}' fixedrotation", plat->getName());
+
+			rotation_warning_utils::maybe_warn_about_rotation_value(start_az_deg, params::rotationAngleUnit(),
+																	rotation_warning_utils::ValueKind::Angle, "JSON",
+																	owner, "startazimuth");
+			rotation_warning_utils::maybe_warn_about_rotation_value(start_el_deg, params::rotationAngleUnit(),
+																	rotation_warning_utils::ValueKind::Angle, "JSON",
+																	owner, "startelevation");
+			rotation_warning_utils::maybe_warn_about_rotation_value(rate_az_deg_s, params::rotationAngleUnit(),
+																	rotation_warning_utils::ValueKind::Rate, "JSON",
+																	owner, "azimuthrate");
+			rotation_warning_utils::maybe_warn_about_rotation_value(rate_el_deg_s, params::rotationAngleUnit(),
+																	rotation_warning_utils::ValueKind::Rate, "JSON",
+																	owner, "elevationrate");
 
 			const auto start = serial::rotation_angle_utils::external_rotation_to_internal(
 				start_az_deg, start_el_deg, 0.0, params::rotationAngleUnit());

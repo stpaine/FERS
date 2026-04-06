@@ -9,6 +9,7 @@
 #include <GeographicLib/UTMUPS.hpp>
 #include <cmath>
 #include <filesystem>
+#include <format>
 #include <string_view>
 
 #include "antenna/antenna_factory.h"
@@ -27,6 +28,7 @@
 #include "radar/target.h"
 #include "radar/transmitter.h"
 #include "serial/rotation_angle_utils.h"
+#include "serial/rotation_warning_utils.h"
 #include "serial/waveform_factory.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
@@ -557,6 +559,13 @@ namespace serial::xml_parser_utils
 				const RealType az_deg = get_child_real_type(waypoint, "azimuth");
 				const RealType el_deg = get_child_real_type(waypoint, "elevation");
 				const RealType time = get_child_real_type(waypoint, "time");
+				const std::string owner =
+					std::format("platform '{}' rotation waypoint {}", platform->getName(), waypoint_index);
+
+				rotation_warning_utils::maybe_warn_about_rotation_value(
+					az_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "azimuth");
+				rotation_warning_utils::maybe_warn_about_rotation_value(
+					el_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "elevation");
 
 				path->addCoord(rotation_angle_utils::external_rotation_to_internal(az_deg, el_deg, time, unit));
 			}
@@ -579,6 +588,16 @@ namespace serial::xml_parser_utils
 			const RealType start_el_deg = get_child_real_type(rotation, "startelevation");
 			const RealType rate_az_deg_s = get_child_real_type(rotation, "azimuthrate");
 			const RealType rate_el_deg_s = get_child_real_type(rotation, "elevationrate");
+			const std::string owner = std::format("platform '{}' fixedrotation", platform->getName());
+
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				start_az_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "startazimuth");
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				start_el_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "startelevation");
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				rate_az_deg_s, unit, rotation_warning_utils::ValueKind::Rate, "XML", owner, "azimuthrate");
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				rate_el_deg_s, unit, rotation_warning_utils::ValueKind::Rate, "XML", owner, "elevationrate");
 			const math::RotationCoord start =
 				rotation_angle_utils::external_rotation_to_internal(start_az_deg, start_el_deg, 0.0, unit);
 			const math::RotationCoord rate =

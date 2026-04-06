@@ -16,12 +16,14 @@
 #include <core/sim_id.h>
 #include <cstring>
 #include <filesystem>
+#include <format>
 #include <functional>
 #include <libfers/api.h>
 #include <math/path.h>
 #include <math/rotation_path.h>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 #include "antenna/antenna_factory.h"
 #include "core/fers_context.h"
@@ -30,6 +32,7 @@
 #include "serial/json_serializer.h"
 #include "serial/kml_generator.h"
 #include "serial/rotation_angle_utils.h"
+#include "serial/rotation_warning_utils.h"
 #include "serial/xml_parser.h"
 #include "serial/xml_serializer.h"
 #include "signal/radar_signal.h"
@@ -45,6 +48,7 @@ struct fers_context : public FersContext
 // thread's API call do not interfere with another's. This is crucial for a
 // thread-safe FFI layer.
 thread_local std::string last_error_message;
+thread_local std::vector<std::string> last_warning_messages;
 
 /**
  * @brief Centralized exception handler for the C-API boundary.
@@ -61,11 +65,29 @@ static void handle_api_exception(const std::exception& e, const std::string& fun
 	LOG(logging::Level::ERROR, "API Error in {}: {}", function_name, last_error_message);
 }
 
+static void begin_warning_capture() noexcept
+{
+	last_warning_messages.clear();
+	serial::rotation_warning_utils::clear_captured_warnings();
+}
+
+static void complete_warning_capture()
+{
+	last_warning_messages = serial::rotation_warning_utils::take_captured_warnings();
+}
+
+static void discard_warning_capture() noexcept
+{
+	last_warning_messages.clear();
+	serial::rotation_warning_utils::clear_captured_warnings();
+}
+
 extern "C" {
 
 fers_context_t* fers_context_create()
 {
 	last_error_message.clear();
+	discard_warning_capture();
 	try
 	{
 		return new fers_context_t();
@@ -189,10 +211,12 @@ int fers_set_output_directory(fers_context_t* context, const char* out_dir)
 int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_filepath, const int validate)
 {
 	last_error_message.clear();
+	begin_warning_capture();
 	if ((context == nullptr) || (xml_filepath == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or xml_filepath is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
+		discard_warning_capture();
 		return -1;
 	}
 
@@ -224,10 +248,12 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 			params::params.random_seed = seed;
 			ctx->getMasterSeeder().seed(seed);
 		}
+		complete_warning_capture();
 		return 0; // Success
 	}
 	catch (const std::exception& e)
 	{
+		discard_warning_capture();
 		handle_api_exception(e, "fers_load_scenario_from_xml_file");
 		return 1; // Error
 	}
@@ -236,10 +262,12 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 int fers_load_scenario_from_xml_string(fers_context_t* context, const char* xml_content, const int validate)
 {
 	last_error_message.clear();
+	begin_warning_capture();
 	if ((context == nullptr) || (xml_content == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or xml_content is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
+		discard_warning_capture();
 		return -1;
 	}
 
@@ -265,10 +293,12 @@ int fers_load_scenario_from_xml_string(fers_context_t* context, const char* xml_
 			ctx->getMasterSeeder().seed(seed);
 		}
 
+		complete_warning_capture();
 		return 0; // Success
 	}
 	catch (const std::exception& e)
 	{
+		discard_warning_capture();
 		handle_api_exception(e, "fers_load_scenario_from_xml_string");
 		return 1; // Parsing or logic error
 	}
@@ -334,8 +364,12 @@ char* fers_get_scenario_as_xml(fers_context_t* context)
 int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
+	begin_warning_capture();
 	if ((context == nullptr) || (json == nullptr))
+	{
+		discard_warning_capture();
 		return -1;
+	}
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
@@ -343,6 +377,7 @@ int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const c
 		if (p == nullptr)
 		{
 			last_error_message = "Platform not found";
+			discard_warning_capture();
 			return 1;
 		}
 		auto j = nlohmann::json::parse(json);
@@ -351,10 +386,12 @@ int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const c
 		{
 			p->setName(j.at("name").get<std::string>());
 		}
+		complete_warning_capture();
 		return 0;
 	}
 	catch (const std::exception& e)
 	{
+		discard_warning_capture();
 		handle_api_exception(e, "fers_update_platform_from_json");
 		return 1;
 	}
@@ -363,17 +400,23 @@ int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const c
 int fers_update_parameters_from_json(fers_context_t* context, const char* json)
 {
 	last_error_message.clear();
+	begin_warning_capture();
 	if ((context == nullptr) || (json == nullptr))
+	{
+		discard_warning_capture();
 		return -1;
+	}
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
 		auto j = nlohmann::json::parse(json);
 		serial::update_parameters_from_json(j, ctx->getMasterSeeder());
+		complete_warning_capture();
 		return 0;
 	}
 	catch (const std::exception& e)
 	{
+		discard_warning_capture();
 		handle_api_exception(e, "fers_update_parameters_from_json");
 		return 1;
 	}
@@ -560,10 +603,12 @@ int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const cha
 int fers_update_scenario_from_json(fers_context_t* context, const char* scenario_json)
 {
 	last_error_message.clear();
+	begin_warning_capture();
 	if ((context == nullptr) || (scenario_json == nullptr))
 	{
 		last_error_message = "Invalid arguments: context or scenario_json is NULL.";
 		LOG(logging::Level::ERROR, last_error_message);
+		discard_warning_capture();
 		return -1;
 	}
 
@@ -572,6 +617,7 @@ int fers_update_scenario_from_json(fers_context_t* context, const char* scenario
 	{
 		const nlohmann::json j = nlohmann::json::parse(scenario_json);
 		serial::json_to_world(j, *ctx->getWorld(), ctx->getMasterSeeder());
+		complete_warning_capture();
 
 		return 0; // Success
 	}
@@ -582,10 +628,12 @@ int fers_update_scenario_from_json(fers_context_t* context, const char* scenario
 		// developers diagnose schema or data format issues more easily.
 		last_error_message = "JSON parsing/deserialization error: " + std::string(e.what());
 		LOG(logging::Level::ERROR, "API Error in {}: {}", "fers_update_scenario_from_json", last_error_message);
+		discard_warning_capture();
 		return 2; // JSON error
 	}
 	catch (const std::exception& e)
 	{
+		discard_warning_capture();
 		handle_api_exception(e, "fers_update_scenario_from_json");
 		return 1; // Generic error
 	}
@@ -601,6 +649,18 @@ char* fers_get_last_error_message()
 	// making it safe to transfer ownership across the FFI boundary. The caller
 	// must then free this memory using `fers_free_string`.
 	return strdup(last_error_message.c_str());
+}
+
+char* fers_get_last_warning_messages_json()
+{
+	if (last_warning_messages.empty())
+	{
+		return nullptr;
+	}
+
+	const std::string warning_json = nlohmann::json(last_warning_messages).dump();
+	last_warning_messages.clear();
+	return strdup(warning_json.c_str());
 }
 
 void fers_free_string(char* str)
@@ -798,6 +858,8 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 																	   const size_t num_points)
 {
 	last_error_message.clear();
+	last_warning_messages.clear();
+	serial::rotation_warning_utils::clear_captured_warnings();
 	if ((waypoints == nullptr) || waypoint_count == 0 || num_points == 0)
 	{
 		last_error_message = "Invalid arguments: waypoints cannot be null and counts must be > 0.";
@@ -820,6 +882,12 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 
 		for (size_t i = 0; i < waypoint_count; ++i)
 		{
+			serial::rotation_warning_utils::maybe_warn_about_rotation_value(
+				waypoints[i].azimuth, unit, serial::rotation_warning_utils::ValueKind::Angle, "C-API",
+				std::format("rotation waypoint {}", i), "azimuth");
+			serial::rotation_warning_utils::maybe_warn_about_rotation_value(
+				waypoints[i].elevation, unit, serial::rotation_warning_utils::ValueKind::Angle, "C-API",
+				std::format("rotation waypoint {}", i), "elevation");
 			path.addCoord(serial::rotation_angle_utils::external_rotation_to_internal(
 				waypoints[i].azimuth, waypoints[i].elevation, waypoints[i].time, unit));
 		}
@@ -863,6 +931,7 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 	}
 	catch (const std::exception& e)
 	{
+		serial::rotation_warning_utils::clear_captured_warnings();
 		handle_api_exception(e, "fers_get_interpolated_rotation_path");
 		return nullptr;
 	}

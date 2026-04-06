@@ -17,6 +17,7 @@ export default function ScenarioIO() {
     const isDirty = useScenarioStore((state) => state.isDirty);
     const resetScenario = useScenarioStore((state) => state.resetScenario);
     const showError = useScenarioStore((state) => state.showError);
+    const showWarning = useScenarioStore((state) => state.showWarning);
     const setScenarioFilePath = useScenarioStore(
         (state) => state.setScenarioFilePath
     );
@@ -86,9 +87,12 @@ export default function ScenarioIO() {
 
             if (typeof selectedPath === 'string') {
                 // Load the XML file into the C++ core
-                await invoke('load_scenario_from_xml_file', {
-                    filepath: selectedPath,
-                });
+                const warnings = await invoke<string[]>(
+                    'load_scenario_from_xml_file',
+                    {
+                        filepath: selectedPath,
+                    }
+                );
 
                 // Fetch the new state as JSON from the C++ core
                 const jsonState = await invoke<string>('get_scenario_as_json');
@@ -98,6 +102,7 @@ export default function ScenarioIO() {
                 resetScenario();
                 loadScenario(scenarioData);
                 setScenarioFilePath(selectedPath);
+                warnings.forEach((warning) => showWarning(warning));
 
                 console.log(
                     'Scenario imported and synchronized successfully from:',

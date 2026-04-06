@@ -296,6 +296,17 @@ int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const cha
 char* fers_get_last_error_message();
 
 /**
+ * @brief Returns the last deduplicated rotation-unit warning list for the calling thread as JSON.
+ *
+ * The returned value is a JSON array of strings. It is populated by successful XML/JSON
+ * load and update calls that detect suspicious rotation values. The caller owns the string
+ * and must free it with `fers_free_string()`.
+ *
+ * @return A dynamically allocated JSON array string, or NULL if no warnings are available.
+ */
+char* fers_get_last_warning_messages_json();
+
+/**
  * @brief Frees a string that was allocated and returned by the libfers API.
  *
  * This function must be used to release memory for any string returned by

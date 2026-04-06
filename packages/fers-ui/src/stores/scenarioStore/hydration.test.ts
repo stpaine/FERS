@@ -78,10 +78,12 @@ function createState(overrides: Partial<ScenarioState> = {}): ScenarioState {
         scenarioFilePath: null,
         outputDirectory: null,
         antennaPreviewErrors: {},
-        errorSnackbar: {
+        notificationSnackbar: {
             open: false,
             message: '',
+            severity: 'error',
         },
+        notificationQueue: [],
         viewControlAction: { type: null, timestamp: 0 },
         visibility: {
             showAxes: true,

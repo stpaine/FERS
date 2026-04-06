@@ -211,6 +211,17 @@ fn get_last_error() -> String {
     }
 }
 
+fn take_last_warnings() -> Result<Vec<String>, String> {
+    let warnings_ptr = unsafe { ffi::fers_get_last_warning_messages_json() };
+    if warnings_ptr.is_null() {
+        return Ok(vec![]);
+    }
+
+    let warnings_json = FersOwnedString(warnings_ptr).into_string().map_err(|e| e.to_string())?;
+    serde_json::from_str(&warnings_json)
+        .map_err(|e| format!("Failed to decode warning payload from libfers: {}", e))
+}
+
 /// Data structure for simulation progress events emitted to the frontend.
 #[derive(serde::Serialize, Clone)]
 struct ProgressPayload {
@@ -391,14 +402,14 @@ impl FersContext {
     /// ```ignore
     /// context.load_scenario_from_xml_file("/path/to/scenario.xml")?;
     /// ```
-    pub fn load_scenario_from_xml_file(&self, filepath: &str) -> Result<(), String> {
+    pub fn load_scenario_from_xml_file(&self, filepath: &str) -> Result<Vec<String>, String> {
         let c_filepath = CString::new(filepath).map_err(|e| e.to_string())?;
         // SAFETY: We pass a valid context pointer and a null-terminated C string.
         // The function returns 0 on success.
         let result =
             unsafe { ffi::fers_load_scenario_from_xml_file(self.ptr, c_filepath.as_ptr(), 1) };
         if result == 0 {
-            Ok(())
+            take_last_warnings()
         } else {
             Err(get_last_error())
         }
@@ -494,36 +505,40 @@ impl FersContext {
     /// let modified_json = /* JSON from UI */;
     /// context.update_scenario_from_json(&modified_json)?;
     /// ```
-    pub fn update_scenario_from_json(&self, json: &str) -> Result<(), String> {
+    pub fn update_scenario_from_json(&self, json: &str) -> Result<Vec<String>, String> {
         let c_json = CString::new(json).map_err(|e| e.to_string())?;
         // SAFETY: We pass a valid context pointer and a null-terminated C string.
         // The function returns 0 on success.
         let result = unsafe { ffi::fers_update_scenario_from_json(self.ptr, c_json.as_ptr()) };
         if result == 0 {
-            Ok(())
+            take_last_warnings()
         } else {
             Err(get_last_error())
         }
     }
 
     /// Updates a single platform's paths and name from JSON.
-    pub fn update_platform_from_json(&self, id_str: &str, json: &str) -> Result<(), String> {
+    pub fn update_platform_from_json(
+        &self,
+        id_str: &str,
+        json: &str,
+    ) -> Result<Vec<String>, String> {
         let id = id_str.parse::<u64>().map_err(|e| format!("Invalid ID: {}", e))?;
         let c_json = CString::new(json).map_err(|e| e.to_string())?;
         let result = unsafe { ffi::fers_update_platform_from_json(self.ptr, id, c_json.as_ptr()) };
         if result == 0 {
-            Ok(())
+            take_last_warnings()
         } else {
             Err(get_last_error())
         }
     }
 
     /// Updates the global simulation parameters from JSON.
-    pub fn update_parameters_from_json(&self, json: &str) -> Result<(), String> {
+    pub fn update_parameters_from_json(&self, json: &str) -> Result<Vec<String>, String> {
         let c_json = CString::new(json).map_err(|e| e.to_string())?;
         let result = unsafe { ffi::fers_update_parameters_from_json(self.ptr, c_json.as_ptr()) };
         if result == 0 {
-            Ok(())
+            take_last_warnings()
         } else {
             Err(get_last_error())
         }
@@ -1021,6 +1036,25 @@ mod tests {
     }
 
     #[test]
+    fn test_update_scenario_returns_rotation_unit_warnings() {
+        let context = FersContext::new().unwrap();
+        let mut scenario: serde_json::Value =
+            serde_json::from_str(scenario_with_assets_json()).unwrap();
+        scenario["simulation"]["parameters"]["rotationangleunit"] =
+            serde_json::Value::String("rad".into());
+        scenario["simulation"]["platforms"][0]["rotationpath"]["rotationwaypoints"][0]["azimuth"] =
+            serde_json::Value::from(90.0);
+
+        let warnings = context
+            .update_scenario_from_json(&scenario.to_string())
+            .expect("Scenario update with warnings should still succeed");
+
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("rotation waypoint 0"));
+        assert!(warnings[0].contains("'azimuth'"));
+    }
+
+    #[test]
     fn test_load_scenario_from_xml_file() {
         let context = FersContext::new().unwrap();
         let mut temp_file = NamedTempFile::new().unwrap();
@@ -1205,7 +1239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_preview_links_success() {
+    fn test_get_antenna_pattern_success() {
         let context = FersContext::new().unwrap();
         let scenario = r#"{
             "simulation": {

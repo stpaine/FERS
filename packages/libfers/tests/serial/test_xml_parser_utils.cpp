@@ -2,10 +2,13 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <filesystem>
+#include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 #include "antenna/antenna_factory.h"
+#include "core/logging.h"
 #include "core/parameters.h"
 #include "core/world.h"
 #include "radar/platform.h"
@@ -27,6 +30,21 @@ namespace
 		params::Parameters saved;
 		ParamGuard() : saved(params::params) {}
 		~ParamGuard() { params::params = saved; }
+	};
+
+	struct CerrCapture
+	{
+		std::ostringstream buffer;
+		std::streambuf* old{nullptr};
+		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		~CerrCapture() { std::cerr.rdbuf(old); }
+		[[nodiscard]] std::string str() const { return buffer.str(); }
+	};
+
+	struct LogLevelGuard
+	{
+		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
+		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
 
 	XmlDocument loadXml(const std::string& xmlString)
@@ -437,6 +455,23 @@ TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser
 																	   params::RotationAngleUnit::Degrees),
 						  XmlException);
 	}
+}
+
+TEST_CASE("parseRotationPath warns when values look like the opposite unit", "[serial][xml_parser_utils]")
+{
+	LogLevelGuard log_guard(logging::Level::WARNING);
+	CerrCapture capture;
+	radar::Platform platform("warning-platform", 77);
+	auto doc =
+		loadXml("<rotationpath interpolation=\"static\">"
+				"  <rotationwaypoint><azimuth>90</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
+				"</rotationpath>");
+
+	serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform, params::RotationAngleUnit::Radians);
+
+	REQUIRE_THAT(capture.str(), ContainsSubstring("platform 'warning-platform' rotation waypoint 0"));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("'azimuth'"));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("declared"));
 }
 
 TEST_CASE("parseTransmitter resolves references and builds object with schedule", "[serial][xml_parser_utils]")

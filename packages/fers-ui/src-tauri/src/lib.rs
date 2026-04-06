@@ -132,7 +132,7 @@ fn set_output_directory(dir: String, state: State<'_, FersState>) -> Result<(), 
 ///
 /// # Returns
 ///
-/// * `Ok(())` if the scenario was successfully loaded.
+/// * `Ok(Vec<String>)` containing any deduplicated non-fatal warnings detected while loading.
 /// * `Err(String)` containing an error message if loading failed (e.g., file not found,
 ///   invalid XML, or a Mutex lock error).
 ///
@@ -146,7 +146,7 @@ fn set_output_directory(dir: String, state: State<'_, FersState>) -> Result<(), 
 fn load_scenario_from_xml_file(
     filepath: String,
     state: State<'_, FersState>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     state.lock().map_err(|e| e.to_string())?.load_scenario_from_xml_file(&filepath)
 }
 
@@ -219,7 +219,7 @@ fn get_scenario_as_xml(state: State<'_, FersState>) -> Result<String, String> {
 ///
 /// # Returns
 ///
-/// * `Ok(())` if the scenario was successfully updated.
+/// * `Ok(Vec<String>)` containing any deduplicated non-fatal warnings detected while updating.
 /// * `Err(String)` containing an error message if deserialization failed, the JSON
 ///   structure was invalid, or the Mutex could not be locked.
 ///
@@ -231,7 +231,10 @@ fn get_scenario_as_xml(state: State<'_, FersState>) -> Result<String, String> {
 /// await invoke('update_scenario_from_json', { json: JSON.stringify(updatedScenario) });
 /// ```
 #[tauri::command]
-fn update_scenario_from_json(json: String, state: State<'_, FersState>) -> Result<(), String> {
+fn update_scenario_from_json(
+    json: String,
+    state: State<'_, FersState>,
+) -> Result<Vec<String>, String> {
     state.lock().map_err(|e| e.to_string())?.update_scenario_from_json(&json)
 }
 
@@ -433,19 +436,19 @@ fn update_item_from_json(
     item_id: String,
     json: String,
     state: State<'_, FersState>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     let context = state.lock().map_err(|e| e.to_string())?;
     match item_type.as_str() {
         "Platform" => context.update_platform_from_json(&item_id, &json),
-        "Transmitter" => context.update_transmitter_from_json(&item_id, &json),
-        "Receiver" => context.update_receiver_from_json(&item_id, &json),
-        "Target" => context.update_target_from_json(&item_id, &json),
-        "Monostatic" => context.update_monostatic_from_json(&json),
-        "Antenna" => context.update_antenna_from_json(&json),
-        "Waveform" => context.update_waveform_from_json(&json),
-        "Timing" => context.update_timing_from_json(&item_id, &json),
+        "Transmitter" => context.update_transmitter_from_json(&item_id, &json).map(|()| vec![]),
+        "Receiver" => context.update_receiver_from_json(&item_id, &json).map(|()| vec![]),
+        "Target" => context.update_target_from_json(&item_id, &json).map(|()| vec![]),
+        "Monostatic" => context.update_monostatic_from_json(&json).map(|()| vec![]),
+        "Antenna" => context.update_antenna_from_json(&json).map(|()| vec![]),
+        "Waveform" => context.update_waveform_from_json(&json).map(|()| vec![]),
+        "Timing" => context.update_timing_from_json(&item_id, &json).map(|()| vec![]),
         "GlobalParameters" => context.update_parameters_from_json(&json),
-        _ => Ok(()),
+        _ => Ok(vec![]),
     }
 }
 

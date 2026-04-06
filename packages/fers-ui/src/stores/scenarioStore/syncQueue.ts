@@ -33,6 +33,7 @@ interface Deferred {
 type GranularSyncFailureHandler = (
     failure: GranularSyncFailure
 ) => Promise<void> | void;
+type SyncWarningsHandler = (warnings: string[]) => Promise<void> | void;
 
 // Latest pending granular payload per backend object. Older snapshots for the
 // same item are obsolete because granular syncs send full item state, not diffs.
@@ -48,6 +49,7 @@ let scheduledGranularFlush: Deferred | null = null;
 let pendingFullSync: Promise<void> | null = null;
 let granularSyncEpoch = 0;
 let granularSyncFailureHandler: GranularSyncFailureHandler | null = null;
+let syncWarningsHandler: SyncWarningsHandler | null = null;
 
 function createDeferred(): Deferred {
     let resolve!: () => void;
@@ -112,6 +114,21 @@ async function handleGranularSyncFailure(
     }
 }
 
+async function handleSyncWarnings(warnings: unknown): Promise<void> {
+    if (
+        !Array.isArray(warnings) ||
+        warnings.length === 0 ||
+        !syncWarningsHandler
+    ) {
+        return;
+    }
+    await syncWarningsHandler(
+        warnings.filter(
+            (warning): warning is string => typeof warning === 'string'
+        )
+    );
+}
+
 function scheduleGranularFlush(): Promise<void> {
     if (!scheduledGranularFlush) {
         scheduledGranularFlush = createDeferred();
@@ -143,11 +160,15 @@ function scheduleGranularFlush(): Promise<void> {
 
             for (const update of updates) {
                 try {
-                    await invokeBackend('update_item_from_json', {
-                        itemType: update.itemType,
-                        itemId: update.itemId,
-                        json: update.json,
-                    });
+                    const warnings = await invokeBackend<string[]>(
+                        'update_item_from_json',
+                        {
+                            itemType: update.itemType,
+                            itemId: update.itemId,
+                            json: update.json,
+                        }
+                    );
+                    await handleSyncWarnings(warnings);
                 } catch (e) {
                     await handleGranularSyncFailure(update, e);
                     throw e;
@@ -189,6 +210,12 @@ export function registerGranularSyncFailureHandler(
     granularSyncFailureHandler = handler;
 }
 
+export function registerSyncWarningsHandler(
+    handler: SyncWarningsHandler | null
+): void {
+    syncWarningsHandler = handler;
+}
+
 /**
  * Enqueue a full scenario snapshot. Coalesces with any pending full sync.
  * `buildJson` MUST read live state at call time.
@@ -206,7 +233,11 @@ export function enqueueFullSync(buildSnapshot: () => string): Promise<void> {
         pendingFullSync = null;
         const json = buildSnapshot();
         try {
-            await invokeBackend('update_scenario_from_json', { json });
+            const warnings = await invokeBackend<string[]>(
+                'update_scenario_from_json',
+                { json }
+            );
+            await handleSyncWarnings(warnings);
         } catch (e) {
             console.error('Full sync failed:', e);
         }
@@ -238,4 +269,5 @@ export function resetSyncQueueForTests(): void {
     invokeBackend = invoke;
     granularSyncEpoch = 0;
     granularSyncFailureHandler = null;
+    syncWarningsHandler = null;
 }

@@ -4,10 +4,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <random>
+#include <sstream>
 
 #include "antenna/antenna_factory.h"
+#include "core/logging.h"
 #include "core/parameters.h"
 #include "core/world.h"
 #include "math/coord.h"
@@ -42,6 +45,21 @@ namespace
 		params::Parameters saved;
 		ParamGuard() : saved(params::params) {}
 		~ParamGuard() { params::params = saved; }
+	};
+
+	struct CerrCapture
+	{
+		std::ostringstream buffer;
+		std::streambuf* old{nullptr};
+		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		~CerrCapture() { std::cerr.rdbuf(old); }
+		[[nodiscard]] std::string str() const { return buffer.str(); }
+	};
+
+	struct LogLevelGuard
+	{
+		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
+		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
 }
 
@@ -299,6 +317,38 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 	REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 	REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 	REQUIRE(tx->getSchedule().size() == 1);
+}
+
+TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit", "[serial][json]")
+{
+	ParamGuard guard;
+	LogLevelGuard log_guard(logging::Level::WARNING);
+	CerrCapture capture;
+	core::World world;
+	std::mt19937 seeder(42);
+
+	json scenario = {
+		{"simulation",
+		 {{"name", "Warning Scenario"},
+		  {"parameters",
+		   {{"starttime", 0.0},
+			{"endtime", 1.0},
+			{"rate", 1000.0},
+			{"rotationangleunit", "rad"},
+			{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+			{"coordinatesystem", {{"frame", "ENU"}}}}},
+		  {"platforms",
+		   json::array({{{"id", 100},
+						 {"name", "warn-platform"},
+						 {"rotationpath",
+						  {{"interpolation", "static"},
+						   {"rotationwaypoints",
+							json::array({{{"time", 0.0}, {"azimuth", 90.0}, {"elevation", 0.0}}})}}}}})}}}};
+
+	REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("platform 'warn-platform' rotation waypoint 0"));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("'azimuth'"));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("declared"));
 }
 
 TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")

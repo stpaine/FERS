@@ -97,6 +97,14 @@ export type ViewControlAction = {
     timestamp: number;
 };
 
+export type NotificationSeverity = 'warning' | 'error';
+
+export type NotificationState = {
+    open: boolean;
+    message: string;
+    severity: NotificationSeverity;
+};
+
 export type ScenarioState = ScenarioData & {
     selectedItemId: string | null;
     selectedComponentId: string | null;
@@ -111,10 +119,8 @@ export type ScenarioState = ScenarioData & {
     scenarioFilePath: string | null;
     outputDirectory: string | null;
     antennaPreviewErrors: Record<string, string>;
-    errorSnackbar: {
-        open: boolean;
-        message: string;
-    };
+    notificationSnackbar: NotificationState;
+    notificationQueue: NotificationState[];
     viewControlAction: ViewControlAction;
     visibility: VisualizationLayers;
 };
@@ -180,7 +186,9 @@ export type PlaybackActions = {
 
 export type ErrorActions = {
     showError: (message: string) => void;
-    hideError: () => void;
+    showWarning: (message: string) => void;
+    hideNotification: () => void;
+    advanceNotification: () => void;
     setAntennaPreviewError: (antennaId: string, message: string) => void;
     clearAntennaPreviewError: (antennaId: string) => void;
 };
