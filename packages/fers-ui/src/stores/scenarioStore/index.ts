@@ -8,6 +8,7 @@ import { createAssetSlice } from './slices/assetSlice';
 import { createBackendSlice } from './slices/backendSlice';
 import { createPlatformSlice } from './slices/platformSlice';
 import { createScenarioSlice } from './slices/scenarioSlice';
+import { registerGranularSyncFailureHandler } from './syncQueue';
 import { ScenarioStore } from './types';
 
 export * from './types';
@@ -135,3 +136,22 @@ export const useScenarioStore = create<ScenarioStore>()(
             })),
     }))
 );
+
+function formatSyncError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
+
+registerGranularSyncFailureHandler(async ({ itemType, itemId, error }) => {
+    const syncMessage = `Sync error for ${itemType} ${itemId}: ${formatSyncError(error)}. Reverting to backend state.`;
+    useScenarioStore.getState().showError(syncMessage);
+
+    try {
+        await useScenarioStore.getState().fetchFromBackend();
+    } catch (reloadError) {
+        useScenarioStore
+            .getState()
+            .showError(
+                `${syncMessage} Failed to reload backend state: ${formatSyncError(reloadError)}`
+            );
+    }
+});

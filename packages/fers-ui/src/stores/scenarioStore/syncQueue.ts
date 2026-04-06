@@ -8,6 +8,7 @@ import { invoke } from '@tauri-apps/api/core';
 // a granular edit on a freshly-added item would reach the backend before
 // the full sync that created it.
 let queue: Promise<void> = Promise.resolve();
+let invokeBackend: typeof invoke = invoke;
 
 const GRANULAR_FLUSH_INTERVAL_MS = 16;
 
@@ -17,11 +18,21 @@ interface GranularUpdate {
     json: string;
 }
 
+export interface GranularSyncFailure {
+    itemType: string;
+    itemId: string;
+    error: unknown;
+}
+
 interface Deferred {
     promise: Promise<void>;
     resolve: () => void;
     reject: (reason?: unknown) => void;
 }
+
+type GranularSyncFailureHandler = (
+    failure: GranularSyncFailure
+) => Promise<void> | void;
 
 // Latest pending granular payload per backend object. Older snapshots for the
 // same item are obsolete because granular syncs send full item state, not diffs.
@@ -35,6 +46,8 @@ let scheduledGranularFlush: Deferred | null = null;
 // later changes are automatically included. It is cleared at the start of
 // the task body so subsequent enqueues create a fresh task.
 let pendingFullSync: Promise<void> | null = null;
+let granularSyncEpoch = 0;
+let granularSyncFailureHandler: GranularSyncFailureHandler | null = null;
 
 function createDeferred(): Deferred {
     let resolve!: () => void;
@@ -74,6 +87,31 @@ function discardBufferedGranularSync(replacement?: Promise<void>): void {
     }
 }
 
+function invalidatePendingGranularSyncs(): void {
+    granularSyncEpoch += 1;
+    discardBufferedGranularSync();
+}
+
+async function handleGranularSyncFailure(
+    update: GranularUpdate,
+    error: unknown
+): Promise<void> {
+    console.error(
+        `Granular sync failed (${update.itemType} ${update.itemId}):`,
+        error
+    );
+
+    invalidatePendingGranularSyncs();
+
+    if (granularSyncFailureHandler) {
+        await granularSyncFailureHandler({
+            itemType: update.itemType,
+            itemId: update.itemId,
+            error,
+        });
+    }
+}
+
 function scheduleGranularFlush(): Promise<void> {
     if (!scheduledGranularFlush) {
         scheduledGranularFlush = createDeferred();
@@ -97,27 +135,23 @@ function scheduleGranularFlush(): Promise<void> {
             return;
         }
 
+        const taskEpoch = granularSyncEpoch;
         const task = queue.then(async () => {
-            let firstError: unknown = null;
+            if (taskEpoch !== granularSyncEpoch) {
+                return;
+            }
 
             for (const update of updates) {
                 try {
-                    await invoke('update_item_from_json', {
+                    await invokeBackend('update_item_from_json', {
                         itemType: update.itemType,
                         itemId: update.itemId,
                         json: update.json,
                     });
                 } catch (e) {
-                    console.error(
-                        `Granular sync failed (${update.itemType} ${update.itemId}):`,
-                        e
-                    );
-                    firstError ??= e;
+                    await handleGranularSyncFailure(update, e);
+                    throw e;
                 }
-            }
-
-            if (firstError) {
-                throw firstError;
             }
         });
 
@@ -129,6 +163,10 @@ function scheduleGranularFlush(): Promise<void> {
     }, GRANULAR_FLUSH_INTERVAL_MS);
 
     return scheduledGranularFlush.promise;
+}
+
+export function setSyncQueueInvokerForTests(testInvoke?: typeof invoke): void {
+    invokeBackend = testInvoke ?? invoke;
 }
 
 /** Enqueue a granular item update behind any in-flight work. */
@@ -143,6 +181,12 @@ export function enqueueGranularSync(
         json,
     });
     return scheduleGranularFlush();
+}
+
+export function registerGranularSyncFailureHandler(
+    handler: GranularSyncFailureHandler | null
+): void {
+    granularSyncFailureHandler = handler;
 }
 
 /**
@@ -162,7 +206,7 @@ export function enqueueFullSync(buildSnapshot: () => string): Promise<void> {
         pendingFullSync = null;
         const json = buildSnapshot();
         try {
-            await invoke('update_scenario_from_json', { json });
+            await invokeBackend('update_scenario_from_json', { json });
         } catch (e) {
             console.error('Full sync failed:', e);
         }
@@ -179,4 +223,19 @@ export function waitForSyncIdle(): Promise<void> {
         queue,
         scheduledGranularFlush?.promise ?? Promise.resolve(),
     ]).then(() => undefined);
+}
+
+export function resetSyncQueueForTests(): void {
+    if (granularFlushTimer) {
+        clearTimeout(granularFlushTimer);
+        granularFlushTimer = null;
+    }
+
+    pendingGranularUpdates.clear();
+    scheduledGranularFlush = null;
+    pendingFullSync = null;
+    queue = Promise.resolve();
+    invokeBackend = invoke;
+    granularSyncEpoch = 0;
+    granularSyncFailureHandler = null;
 }

@@ -3,6 +3,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { StateCreator } from 'zustand';
+import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
 import {
     serializeAntenna,
     serializeGlobalParameters,
@@ -55,8 +56,19 @@ export const createBackendSlice: StateCreator<
     fetchFromBackend: async () => {
         try {
             const jsonState = await invoke<string>('get_scenario_as_json');
-            const scenarioData = JSON.parse(jsonState);
-            get().loadScenario(scenarioData);
+            const parsedJson = JSON.parse(jsonState);
+            const scenarioData = parseScenarioData(parsedJson);
+            if (!scenarioData) {
+                throw new Error('Failed to hydrate scenario from backend JSON');
+            }
+
+            set(
+                buildHydratedScenarioState(get(), scenarioData, {
+                    isDirty: false,
+                    preserveSelection: true,
+                    preserveCurrentTime: true,
+                })
+            );
         } catch (error) {
             console.error('Failed to fetch state from backend:', error);
             throw error;
