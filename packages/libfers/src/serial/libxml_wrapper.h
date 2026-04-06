@@ -18,6 +18,7 @@
 #include <iostream>
 #include <libxml/parser.h>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -127,6 +128,28 @@ public:
 			throw XmlException("Attribute not found: " + std::string(name));
 		}
 		return value;
+	}
+
+	/**
+	 * @brief Get the value of an optional attribute.
+	 *
+	 * @param element The XmlElement to retrieve the attribute from.
+	 * @param name The name of the attribute.
+	 * @return The attribute value if present.
+	 */
+	static std::optional<std::string> getOptionalAttribute(const XmlElement& element, const std::string_view name)
+	{
+		if (!element.isValid())
+		{
+			return std::nullopt;
+		}
+		if (xmlChar* attr = xmlGetProp(element.getNode(), reinterpret_cast<const xmlChar*>(name.data())))
+		{
+			std::string value = reinterpret_cast<const char*>(attr);
+			xmlFree(attr);
+			return value;
+		}
+		return std::nullopt;
 	}
 
 	/**

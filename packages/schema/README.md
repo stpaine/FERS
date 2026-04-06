@@ -1,27 +1,33 @@
 # FERS XML Schema
 
-This directory contains the schema definitions that govern the structure of FERS scenario files. These schemas are the
-single source of truth for defining simulation scenarios.
+This directory contains the schema definitions for FERS XML inputs. These schemas cover both top-level simulation
+scenario files and standalone XML asset formats that are validated by `libfers`.
 
 ## Files
 
 - `fers-xml.xsd`: The **XML Schema Definition (XSD)** used for modern, robust validation of scenario files. This is the
   primary schema used by both the core simulator and the UI.
 - `fers-xml.dtd`: The **Document Type Definition (DTD)**, an older schema format retained for legacy purposes.
+- `antenna-pattern.xsd`: The XSD for standalone XML antenna-pattern assets loaded by `XmlAntenna`.
+- `antenna-pattern.dtd`: The legacy DTD counterpart for standalone XML antenna-pattern assets.
 
 ## Role in the Monorepo
 
-The schema serves as the formal contract between the `libfers` core library and its clients (`fers-cli`, `fers-ui`).
+The scenario schema serves as the formal contract between the `libfers` core library and its clients (`fers-cli`,
+`fers-ui`). The standalone antenna-pattern schema defines the contract for XML antenna asset files referenced by
+scenario documents.
 
 - **`fers-ui`** generates `.fersxml` files that conform to this schema.
 - **`libfers`** validates incoming `.fersxml` files against this schema before running a simulation.
+- **`libfers`** also validates standalone XML antenna-pattern assets against the embedded antenna-pattern schemas when
+  those files are loaded.
 
-During the build process of the `libfers` package, the XSD and DTD files are converted into C header files and embedded
-directly into the library binary. This ensures that the simulator always has access to the correct schema version for
+During the build process of the `libfers` package, the schema files are converted into C header files and embedded
+directly into the library binary. This ensures that the simulator always has access to the correct schema versions for
 validation without relying on external files.
 
 ## Modifying the Schema
 
-When making changes to the scenario definition, both `fers-xml.xsd` and `fers-xml.dtd` should be updated to maintain
-consistency. Any changes must be propagated throughout the codebase, particularly in the XML parsing logic within the
-`libfers` package and the XML generation logic in the `fers-ui` package.
+When making changes to a schema definition, update both the XSD and DTD for that format to maintain consistency. Any
+changes must also be propagated throughout the codebase, particularly in the XML parsing logic within `libfers` and,
+for scenario-schema changes, the XML generation logic in `fers-ui`.

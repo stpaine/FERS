@@ -1,0 +1,14 @@
+<!ELEMENT antenna (azimuth, elevation)>
+<!ELEMENT azimuth (gainsample+)>
+<!ATTLIST azimuth
+	unit (rad|deg) #IMPLIED
+	format (linear|dBi) #IMPLIED
+	symmetry (mirrored|full) #IMPLIED>
+<!ELEMENT elevation (gainsample+)>
+<!ATTLIST elevation
+	unit (rad|deg) #IMPLIED
+	format (linear|dBi) #IMPLIED
+	symmetry (mirrored|full) #IMPLIED>
+<!ELEMENT gainsample (angle, gain)>
+<!ELEMENT angle (#PCDATA)>
+<!ELEMENT gain (#PCDATA)>

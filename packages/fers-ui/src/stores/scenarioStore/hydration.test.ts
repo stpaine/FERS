@@ -77,6 +77,7 @@ function createState(overrides: Partial<ScenarioState> = {}): ScenarioState {
         backendVersion: 0,
         scenarioFilePath: null,
         outputDirectory: null,
+        antennaPreviewErrors: {},
         errorSnackbar: {
             open: false,
             message: '',

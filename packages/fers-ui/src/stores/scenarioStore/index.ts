@@ -34,6 +34,7 @@ export const useScenarioStore = create<ScenarioStore>()(
         backendVersion: 0,
         scenarioFilePath: null,
         outputDirectory: null,
+        antennaPreviewErrors: {},
         errorSnackbar: {
             open: false,
             message: '',
@@ -134,6 +135,14 @@ export const useScenarioStore = create<ScenarioStore>()(
             set((state) => ({
                 errorSnackbar: { ...state.errorSnackbar, open: false },
             })),
+        setAntennaPreviewError: (antennaId, message) =>
+            set((state) => {
+                state.antennaPreviewErrors[antennaId] = message;
+            }),
+        clearAntennaPreviewError: (antennaId) =>
+            set((state) => {
+                delete state.antennaPreviewErrors[antennaId];
+            }),
     }))
 );
 

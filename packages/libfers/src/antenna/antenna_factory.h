@@ -13,6 +13,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -435,6 +436,12 @@ namespace antenna
 	class XmlAntenna final : public Antenna
 	{
 	public:
+		enum class AxisSymmetry
+		{
+			Mirrored,
+			Full,
+		};
+
 		/**
 		 * @brief Constructs an XmlAntenna with the specified name and XML configuration file.
 		 *
@@ -485,6 +492,9 @@ namespace antenna
 		[[nodiscard]] const interp::InterpSet* getElevationSamples() const noexcept { return _elev_samples.get(); }
 
 	private:
+		[[nodiscard]] std::optional<RealType> lookupAxisGain(const interp::InterpSet* set, RealType angle,
+															 AxisSymmetry symmetry) const noexcept;
+
 		/**
 		 * @brief Loads the antenna gain pattern from the specified XML file.
 		 *
@@ -497,6 +507,8 @@ namespace antenna
 		RealType _max_gain{}; ///< The maximum gain of the antenna.
 		std::unique_ptr<interp::InterpSet> _azi_samples; ///< Interpolation set for azimuth gain samples.
 		std::unique_ptr<interp::InterpSet> _elev_samples; ///< Interpolation set for elevation gain samples.
+		AxisSymmetry _azi_symmetry{AxisSymmetry::Mirrored}; ///< Lookup mode for azimuth gain samples.
+		AxisSymmetry _elev_symmetry{AxisSymmetry::Mirrored}; ///< Lookup mode for elevation gain samples.
 	};
 
 	/**

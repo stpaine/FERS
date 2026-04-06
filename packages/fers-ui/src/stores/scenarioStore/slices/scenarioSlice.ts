@@ -131,6 +131,9 @@ export const createScenarioSlice: StateCreator<
 
                 setPropertyByPath(item, propertyPath, value);
                 state.isDirty = true;
+                if (item.type === 'Antenna') {
+                    delete state.antennaPreviewErrors[item.id];
+                }
 
                 if (
                     item.type !== 'Platform' &&
@@ -204,6 +207,9 @@ export const createScenarioSlice: StateCreator<
                     (item: { id: string }) => item.id === itemId
                 );
                 if (index > -1) {
+                    if (key === 'antennas') {
+                        delete state.antennaPreviewErrors[itemId];
+                    }
                     state[key].splice(index, 1);
                     if (state.selectedItemId === itemId) {
                         state.selectedItemId = null;
@@ -232,6 +238,7 @@ export const createScenarioSlice: StateCreator<
             selectedItemId: null,
             selectedComponentId: null,
             isDirty: false,
+            antennaPreviewErrors: {},
             currentTime: defaultGlobalParameters.start,
         });
         void enqueueFullSync(() => buildScenarioJson(get()));

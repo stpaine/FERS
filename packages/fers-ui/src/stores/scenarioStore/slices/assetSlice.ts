@@ -110,6 +110,7 @@ export const createAssetSlice: StateCreator<
         set((state) => {
             const index = state.antennas.findIndex((a) => a.id === antennaId);
             if (index === -1) return;
+            delete state.antennaPreviewErrors[antennaId];
 
             const oldAntenna = state.antennas[index];
             const baseAntenna = {

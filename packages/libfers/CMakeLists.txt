@@ -159,19 +159,33 @@ set(SCHEMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../schema)
 set(GENERATED_HEADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated_headers)
 
 add_custom_command(
-		OUTPUT ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+		OUTPUT
+		${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
+		${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+		${GENERATED_HEADERS_DIR}/antenna_pattern_dtd.h
+		${GENERATED_HEADERS_DIR}/antenna_pattern_xsd.h
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_HEADERS_DIR}
 		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.dtd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.dtd
 		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.xsd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.xsd
+		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/antenna-pattern.dtd ${CMAKE_CURRENT_BINARY_DIR}/antenna-pattern.dtd
+		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/antenna-pattern.xsd ${CMAKE_CURRENT_BINARY_DIR}/antenna-pattern.xsd
 		COMMAND xxd -i fers-xml.dtd > ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
 		COMMAND xxd -i fers-xml.xsd > ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+		COMMAND xxd -i antenna-pattern.dtd > ${GENERATED_HEADERS_DIR}/antenna_pattern_dtd.h
+		COMMAND xxd -i antenna-pattern.xsd > ${GENERATED_HEADERS_DIR}/antenna_pattern_xsd.h
 		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-		DEPENDS ${SCHEMA_DIR}/fers-xml.dtd ${SCHEMA_DIR}/fers-xml.xsd
+		DEPENDS
+		${SCHEMA_DIR}/fers-xml.dtd
+		${SCHEMA_DIR}/fers-xml.xsd
+		${SCHEMA_DIR}/antenna-pattern.dtd
+		${SCHEMA_DIR}/antenna-pattern.xsd
 		COMMENT "Converting XML schema files to C headers"
 )
 add_custom_target(generate_schemas ALL DEPENDS
 				  ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
 				  ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
+				  ${GENERATED_HEADERS_DIR}/antenna_pattern_dtd.h
+				  ${GENERATED_HEADERS_DIR}/antenna_pattern_xsd.h
 )
 
 # --- Third-Party Dependencies (vcpkg) ---

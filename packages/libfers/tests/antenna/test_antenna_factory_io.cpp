@@ -1,9 +1,13 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <highfive/highfive.hpp>
+#include <iomanip>
+#include <sstream>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -13,10 +17,13 @@
 #include "core/sim_id.h"
 #include "math/geometry_ops.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace
 {
+	using Sample = std::pair<RealType, RealType>;
+
 	std::string uniqueFileName(const std::string& prefix, const std::string& extension)
 	{
 		return prefix + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + extension;
@@ -48,6 +55,36 @@ namespace
 
 	math::SVec3 unitDirection(const RealType azimuth, const RealType elevation) { return {1.0, azimuth, elevation}; }
 
+	std::string formatReal(const RealType value)
+	{
+		std::ostringstream out;
+		out << std::setprecision(17) << value;
+		return out.str();
+	}
+
+	RealType radToDeg(const RealType value) { return value * 180.0 / PI; }
+
+	RealType linearToDbi(const RealType value) { return 10.0 * std::log10(value); }
+
+	std::string makeAxisXml(const std::string_view axis_name, const std::vector<Sample>& samples,
+							const std::string_view attributes = {})
+	{
+		std::ostringstream out;
+		out << "<" << axis_name;
+		if (!attributes.empty())
+		{
+			out << " " << attributes;
+		}
+		out << ">";
+		for (const auto& [angle, gain] : samples)
+		{
+			out << "<gainsample><angle>" << formatReal(angle) << "</angle><gain>" << formatReal(gain)
+				<< "</gain></gainsample>";
+		}
+		out << "</" << axis_name << ">";
+		return out.str();
+	}
+
 	std::string xmlPatternFixture()
 	{
 		return R"(<antenna>
@@ -62,6 +99,38 @@ namespace
 			<gainsample><angle>2.0</angle><gain>0.0</gain></gainsample>
 		</elevation>
 	</antenna>)";
+	}
+
+	std::string xmlPositiveLinearPatternFixture()
+	{
+		const std::vector<Sample> azimuth = {{0.0, 8.0}, {1.0, 4.0}, {2.0, 2.0}};
+		const std::vector<Sample> elevation = {{0.0, 8.0}, {1.0, 2.0}, {2.0, 1.0}};
+		return "<antenna>" + makeAxisXml("azimuth", azimuth) + makeAxisXml("elevation", elevation) + "</antenna>";
+	}
+
+	std::string xmlPatternFixtureDegreesDbi()
+	{
+		const std::vector<Sample> azimuth = {
+			{radToDeg(0.0), linearToDbi(8.0)},
+			{radToDeg(1.0), linearToDbi(4.0)},
+			{radToDeg(2.0), linearToDbi(2.0)},
+		};
+		const std::vector<Sample> elevation = {
+			{radToDeg(0.0), linearToDbi(8.0)},
+			{radToDeg(1.0), linearToDbi(2.0)},
+			{radToDeg(2.0), linearToDbi(1.0)},
+		};
+		return "<antenna>" + makeAxisXml("azimuth", azimuth, "unit=\"deg\" format=\"dBi\" symmetry=\"mirrored\"") +
+			makeAxisXml("elevation", elevation, "unit=\"deg\" format=\"dBi\" symmetry=\"mirrored\"") + "</antenna>";
+	}
+
+	std::string xmlAsymmetricPatternFixture(const bool explicit_symmetry)
+	{
+		const std::string symmetry = explicit_symmetry ? " symmetry=\"full\"" : "";
+		const std::vector<Sample> azimuth = {{-90.0, 10.0}, {0.0, 0.0}, {90.0, -10.0}};
+		const std::vector<Sample> elevation = {{0.0, 0.0}, {90.0, 0.0}};
+		return "<antenna>" + makeAxisXml("azimuth", azimuth, std::string("unit=\"deg\" format=\"dBi\"") + symmetry) +
+			makeAxisXml("elevation", elevation, "unit=\"deg\" format=\"dBi\" symmetry=\"mirrored\"") + "</antenna>";
 	}
 }
 
@@ -104,6 +173,66 @@ TEST_CASE("XmlAntenna interpolates normalized axis gains", "[antenna][io]")
 
 	const RealType expected = 0.75 * 0.75 * 8.0 * 0.5;
 	REQUIRE_THAT(antenna.getGain(unitDirection(-0.5, 0.25), unitDirection(0.0, 0.0), 1.0), WithinAbs(expected, 1e-12));
+	REQUIRE_THAT(antenna.getGain(unitDirection(-1.0, 0.0), unitDirection(0.0, 0.0), 1.0),
+				 WithinAbs(antenna.getGain(unitDirection(1.0, 0.0), unitDirection(0.0, 0.0), 1.0), 1e-12));
+
+	removeIfExists(path);
+}
+
+TEST_CASE("XmlAntenna converts degree and dBi axes to internal units", "[antenna][io]")
+{
+	const std::filesystem::path linear_path = tempFilePath(uniqueFileName("xml_antenna_linear_ref", ".xml"));
+	const std::filesystem::path converted_path = tempFilePath(uniqueFileName("xml_antenna_dbi_deg", ".xml"));
+	removeIfExists(linear_path);
+	removeIfExists(converted_path);
+	writeXmlAntennaFile(linear_path, xmlPositiveLinearPatternFixture());
+	writeXmlAntennaFile(converted_path, xmlPatternFixtureDegreesDbi());
+
+	antenna::XmlAntenna linear("linear", linear_path.string(), 101);
+	antenna::XmlAntenna converted("converted", converted_path.string(), 102);
+	linear.setEfficiencyFactor(0.5);
+	converted.setEfficiencyFactor(0.5);
+
+	REQUIRE_THAT(converted.getMaxGain(), WithinAbs(linear.getMaxGain(), 1e-10));
+	REQUIRE_THAT(converted.getGain(unitDirection(0.0, 0.0), unitDirection(0.0, 0.0), 1.0),
+				 WithinAbs(linear.getGain(unitDirection(0.0, 0.0), unitDirection(0.0, 0.0), 1.0), 1e-10));
+	REQUIRE_THAT(converted.getGain(unitDirection(-0.5, 0.25), unitDirection(0.0, 0.0), 1.0),
+				 WithinAbs(linear.getGain(unitDirection(-0.5, 0.25), unitDirection(0.0, 0.0), 1.0), 1e-10));
+	REQUIRE_THAT(converted.getGain(unitDirection(1.0, 1.0), unitDirection(0.0, 0.0), 1.0),
+				 WithinAbs(linear.getGain(unitDirection(1.0, 1.0), unitDirection(0.0, 0.0), 1.0), 1e-10));
+
+	removeIfExists(linear_path);
+	removeIfExists(converted_path);
+}
+
+TEST_CASE("XmlAntenna supports explicit full-range asymmetric lookup", "[antenna][io]")
+{
+	const std::filesystem::path path = tempFilePath(uniqueFileName("xml_antenna_asym_explicit", ".xml"));
+	removeIfExists(path);
+	writeXmlAntennaFile(path, xmlAsymmetricPatternFixture(true));
+
+	antenna::XmlAntenna antenna("xml", path.string(), 15);
+
+	const RealType negative_gain = antenna.getGain(unitDirection(-PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
+	const RealType positive_gain = antenna.getGain(unitDirection(PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
+
+	REQUIRE(negative_gain > positive_gain);
+
+	removeIfExists(path);
+}
+
+TEST_CASE("XmlAntenna auto-detects full-range lookup from negative sample angles", "[antenna][io]")
+{
+	const std::filesystem::path path = tempFilePath(uniqueFileName("xml_antenna_asym_auto", ".xml"));
+	removeIfExists(path);
+	writeXmlAntennaFile(path, xmlAsymmetricPatternFixture(false));
+
+	antenna::XmlAntenna antenna("xml", path.string(), 16);
+
+	const RealType negative_gain = antenna.getGain(unitDirection(-PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
+	const RealType positive_gain = antenna.getGain(unitDirection(PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
+
+	REQUIRE(negative_gain > positive_gain);
 
 	removeIfExists(path);
 }
@@ -145,8 +274,28 @@ TEST_CASE("XmlAntenna throws when gain samples are unavailable", "[antenna][io]"
 		<elevation></elevation>
 	</antenna>)");
 
-	antenna::XmlAntenna antenna("xml", path.string(), 7);
-	REQUIRE_THROWS_AS(antenna.getGain(unitDirection(0.0, 0.0), unitDirection(0.0, 0.0), 1.0), std::runtime_error);
+	REQUIRE_THROWS_AS(antenna::XmlAntenna("xml", path.string(), 7), std::runtime_error);
+
+	removeIfExists(path);
+}
+
+TEST_CASE("XmlAntenna rejects non-positive peak gain during load", "[antenna][io]")
+{
+	const std::filesystem::path path = tempFilePath(uniqueFileName("xml_antenna_zero_peak", ".xml"));
+	removeIfExists(path);
+	writeXmlAntennaFile(path,
+						R"(<antenna>
+		<azimuth>
+			<gainsample><angle>0.0</angle><gain>0.0</gain></gainsample>
+			<gainsample><angle>1.0</angle><gain>0.0</gain></gainsample>
+		</azimuth>
+		<elevation>
+			<gainsample><angle>0.0</angle><gain>0.0</gain></gainsample>
+			<gainsample><angle>1.0</angle><gain>0.0</gain></gainsample>
+		</elevation>
+	</antenna>)");
+
+	REQUIRE_THROWS_WITH(antenna::XmlAntenna("xml", path.string(), 8), ContainsSubstring("peak linear gain"));
 
 	removeIfExists(path);
 }

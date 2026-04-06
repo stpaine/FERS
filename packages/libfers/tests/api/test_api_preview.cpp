@@ -78,6 +78,55 @@ TEST_CASE("API antenna pattern accepts zero frequency for isotropic previews", "
 	REQUIRE(pattern.get()->max_gain > 0.0);
 }
 
+TEST_CASE("API antenna pattern previews XML antennas loaded from standalone files", "[api][preview]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const api_test::ScopedPath antenna_path(api_test::uniqueTempPath("api_preview_xml_antenna", ".xml"));
+	api_test::writeTextFile(antenna_path.path,
+							R"(<?xml version="1.0" encoding="UTF-8"?>
+<antenna>
+  <azimuth unit="deg" format="dBi" symmetry="full">
+    <gainsample><angle>-90</angle><gain>10</gain></gainsample>
+    <gainsample><angle>0</angle><gain>0</gain></gainsample>
+    <gainsample><angle>90</angle><gain>-10</gain></gainsample>
+  </azimuth>
+  <elevation unit="deg" format="dBi" symmetry="mirrored">
+    <gainsample><angle>0</angle><gain>0</gain></gainsample>
+    <gainsample><angle>90</angle><gain>0</gain></gainsample>
+  </elevation>
+</antenna>)");
+
+	auto xml = api_test::previewScenarioXml("API XML Antenna Preview");
+	const auto replace_all = [](std::string& text, const std::string_view from, const std::string& to)
+	{
+		size_t position = 0;
+		while ((position = text.find(from, position)) != std::string::npos)
+		{
+			text.replace(position, from.size(), to);
+			position += to.size();
+		}
+	};
+
+	replace_all(xml, "<antenna name=\"api_preview_iso\" pattern=\"isotropic\"/>",
+				"<antenna name=\"api_preview_xml\" pattern=\"xml\" filename=\"" + antenna_path.path.string() + "\"/>");
+	replace_all(xml, "antenna=\"api_preview_iso\"", "antenna=\"api_preview_xml\"");
+
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	const auto scenario = api_test::parseScenarioJson(context.get());
+	const auto antenna_id = api_test::parseId(scenario.at("simulation").at("antennas").at(0).at("id"));
+
+	api_test::AntennaPattern pattern(fers_get_antenna_pattern(context.get(), antenna_id, 5, 3, 1.0e9));
+	REQUIRE(pattern.get() != nullptr);
+	REQUIRE(pattern.get()->max_gain > 0.0);
+	REQUIRE_THAT(pattern.get()->gains[1 + 5], WithinAbs(1.0, 1e-12));
+	REQUIRE(pattern.get()->gains[1 + 5] > pattern.get()->gains[3 + 5]);
+}
+
 TEST_CASE("API preview links return empty list for empty world", "[api][preview]")
 {
 	api_test::clearLastError();

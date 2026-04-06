@@ -110,6 +110,7 @@ export type ScenarioState = ScenarioData & {
     backendVersion: number;
     scenarioFilePath: string | null;
     outputDirectory: string | null;
+    antennaPreviewErrors: Record<string, string>;
     errorSnackbar: {
         open: boolean;
         message: string;
@@ -176,6 +177,8 @@ export type PlaybackActions = {
 export type ErrorActions = {
     showError: (message: string) => void;
     hideError: () => void;
+    setAntennaPreviewError: (antennaId: string, message: string) => void;
+    clearAntennaPreviewError: (antennaId: string) => void;
 };
 
 export type ViewControlActions = {

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+    <xs:simpleType name="axisUnitType">
+        <xs:restriction base="xs:token">
+            <xs:enumeration value="rad"/>
+            <xs:enumeration value="deg"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="axisFormatType">
+        <xs:restriction base="xs:token">
+            <xs:enumeration value="linear"/>
+            <xs:enumeration value="dBi"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:simpleType name="axisSymmetryType">
+        <xs:restriction base="xs:token">
+            <xs:enumeration value="mirrored"/>
+            <xs:enumeration value="full"/>
+        </xs:restriction>
+    </xs:simpleType>
+
+    <xs:complexType name="gainSampleType">
+        <xs:sequence>
+            <xs:element name="angle" type="xs:string"/>
+            <xs:element name="gain" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="axisType">
+        <xs:sequence>
+            <xs:element name="gainsample" type="gainSampleType" maxOccurs="unbounded"/>
+        </xs:sequence>
+        <xs:attribute name="unit" type="axisUnitType" use="optional"/>
+        <xs:attribute name="format" type="axisFormatType" use="optional"/>
+        <xs:attribute name="symmetry" type="axisSymmetryType" use="optional"/>
+    </xs:complexType>
+
+    <xs:element name="antenna">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="azimuth" type="axisType"/>
+                <xs:element name="elevation" type="axisType"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

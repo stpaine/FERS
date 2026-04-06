@@ -111,6 +111,7 @@ type HydratedScenarioState = Pick<
     | 'selectedItemId'
     | 'selectedComponentId'
     | 'isDirty'
+    | 'antennaPreviewErrors'
     | 'currentTime'
 >;
 
@@ -198,6 +199,7 @@ export function buildHydratedScenarioState(
         ...scenarioData,
         ...selection,
         isDirty: options.isDirty,
+        antennaPreviewErrors: {},
         currentTime: options.preserveCurrentTime
             ? clampCurrentTime(
                   currentState.currentTime,
