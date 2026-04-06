@@ -15,6 +15,7 @@
 #include <core/parameters.h>
 #include <core/sim_id.h>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <libfers/api.h>
 #include <math/path.h>
@@ -162,6 +163,28 @@ int fers_set_thread_count(unsigned num_threads)
 	}
 }
 
+int fers_set_output_directory(fers_context_t* context, const char* out_dir)
+{
+	last_error_message.clear();
+	if ((context == nullptr) || (out_dir == nullptr))
+	{
+		last_error_message = "Invalid arguments: context or out_dir is NULL.";
+		LOG(logging::Level::ERROR, last_error_message);
+		return -1;
+	}
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		ctx->setOutputDir(out_dir);
+		return 0;
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_set_output_directory");
+		return 1;
+	}
+}
+
 int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_filepath, const int validate)
 {
 	last_error_message.clear();
@@ -175,6 +198,13 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
+		// Set default output directory to the scenario file's directory
+		std::filesystem::path p(xml_filepath);
+		auto parent = p.parent_path();
+		if (parent.empty())
+			parent = ".";
+		ctx->setOutputDir(parent.string());
+
 		serial::parseSimulation(xml_filepath, ctx->getWorld(), static_cast<bool>(validate), ctx->getMasterSeeder());
 
 		// After parsing, seed the master random number generator. This is done
@@ -606,7 +636,8 @@ int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callba
 	{
 		pool::ThreadPool pool(params::renderThreads());
 
-		core::runEventDrivenSim(ctx->getWorld(), pool, progress_fn);
+		// Pass the output directory to the engine
+		core::runEventDrivenSim(ctx->getWorld(), pool, progress_fn, ctx->getOutputDir());
 
 		return 0;
 	}

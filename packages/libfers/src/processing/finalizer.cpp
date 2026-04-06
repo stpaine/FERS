@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <format>
 #include <highfive/highfive.hpp>
 #include <vector>
@@ -26,7 +27,7 @@
 namespace processing
 {
 	void runPulsedFinalizer(radar::Receiver* receiver, const std::vector<std::unique_ptr<radar::Target>>* targets,
-							std::shared_ptr<core::ProgressReporter> reporter)
+							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir)
 	{
 		const auto timing_model = receiver->getTiming()->clone();
 		if (!timing_model)
@@ -35,7 +36,12 @@ namespace processing
 			return;
 		}
 
-		const auto hdf5_filename = std::format("{}_results.h5", receiver->getName());
+		std::filesystem::path out_path(output_dir);
+		if (!std::filesystem::exists(out_path))
+		{
+			std::filesystem::create_directories(out_path);
+		}
+		const auto hdf5_filename = (out_path / std::format("{}_results.h5", receiver->getName())).string();
 
 		std::unique_ptr<HighFive::File> h5_file;
 		{
@@ -119,7 +125,7 @@ namespace processing
 	}
 
 	void finalizeCwReceiver(radar::Receiver* receiver, pool::ThreadPool* /*pool*/,
-							std::shared_ptr<core::ProgressReporter> reporter)
+							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir)
 	{
 		LOG(logging::Level::INFO, "Finalization task started for CW receiver '{}'.", receiver->getName());
 		if (reporter)
@@ -167,7 +173,12 @@ namespace processing
 			reporter->report(std::format("Writing HDF5 for {}", receiver->getName()), 75, 100);
 		}
 
-		const auto hdf5_filename = std::format("{}_results.h5", receiver->getName());
+		std::filesystem::path out_path(output_dir);
+		if (!std::filesystem::exists(out_path))
+		{
+			std::filesystem::create_directories(out_path);
+		}
+		const auto hdf5_filename = (out_path / std::format("{}_results.h5", receiver->getName())).string();
 		pipeline::exportCwToHdf5(hdf5_filename, iq_buffer, fullscale, timing_model->getFrequency());
 
 		if (reporter)

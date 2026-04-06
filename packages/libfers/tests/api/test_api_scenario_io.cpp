@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
+// Copyright (c) 2026-present FERS Contributors (see AUTHORS.md).
+
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -30,6 +33,38 @@ TEST_CASE("API loading scenario from XML string rejects null arguments", "[api][
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or xml_content is NULL"));
 	}
+}
+
+TEST_CASE("API set output directory rejects null arguments", "[api][scenario]")
+{
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	SECTION("null context")
+	{
+		REQUIRE(fers_set_output_directory(nullptr, "/tmp") == -1);
+		api_test::ApiString error = api_test::lastError();
+		REQUIRE_THAT(error.str(), ContainsSubstring("context or out_dir is NULL"));
+	}
+
+	SECTION("null out_dir")
+	{
+		REQUIRE(fers_set_output_directory(context.get(), nullptr) == -1);
+		api_test::ApiString error = api_test::lastError();
+		REQUIRE_THAT(error.str(), ContainsSubstring("context or out_dir is NULL"));
+	}
+}
+
+TEST_CASE("API set output directory succeeds with valid arguments", "[api][scenario]")
+{
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	REQUIRE(fers_set_output_directory(context.get(), "/tmp/custom_dir") == 0);
+	api_test::ApiString error = api_test::lastError();
+	REQUIRE(error.get() == nullptr);
 }
 
 TEST_CASE("API loading scenario from XML file rejects null arguments", "[api][scenario]")

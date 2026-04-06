@@ -148,10 +148,15 @@ TEST_CASE("API run simulation accepts a minimal valid scenario", "[api][runtime]
 	api_test::Context context;
 	REQUIRE(context.get() != nullptr);
 
+	const auto out_dir = api_test::uniqueTempPath("api_out_dir");
+	std::filesystem::create_directories(out_dir);
+	api_test::ScopedPath dir_guard(out_dir);
+
 	const std::string unique_rx_name =
 		"api_preview_rx_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-	const auto output_path = std::filesystem::path(unique_rx_name + "_results.h5");
-	api_test::ScopedPath output_guard(output_path);
+	const auto output_path = out_dir / (unique_rx_name + "_results.h5");
+
+	REQUIRE(fers_set_output_directory(context.get(), out_dir.string().c_str()) == 0);
 
 	std::string xml = api_test::previewScenarioXml("Runtime Scenario");
 	size_t pos = xml.find("api_preview_rx");
@@ -175,10 +180,15 @@ TEST_CASE("API run simulation invokes progress callbacks with caller user data",
 	api_test::Context context;
 	REQUIRE(context.get() != nullptr);
 
+	const auto out_dir = api_test::uniqueTempPath("api_out_dir_cb");
+	std::filesystem::create_directories(out_dir);
+	api_test::ScopedPath dir_guard(out_dir);
+
 	const std::string unique_rx_name =
 		"api_preview_rx_cb_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-	const auto output_path = std::filesystem::path(unique_rx_name + "_results.h5");
-	api_test::ScopedPath output_guard(output_path);
+	const auto output_path = out_dir / (unique_rx_name + "_results.h5");
+
+	REQUIRE(fers_set_output_directory(context.get(), out_dir.string().c_str()) == 0);
 
 	std::string xml = api_test::previewScenarioXml("Runtime Callback Scenario");
 	size_t pos = xml.find("api_preview_rx");
@@ -205,4 +215,5 @@ TEST_CASE("API run simulation invokes progress callbacks with caller user data",
 		}
 	}
 	REQUIRE(saw_expected_message);
+	REQUIRE(std::filesystem::exists(output_path));
 }

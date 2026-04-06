@@ -34,6 +34,8 @@ namespace core
 		bool validate = true; ///< Validate the input .fersxml file by default.
 		std::optional<std::string> log_file; ///< Optional log file path for logging output.
 		bool generate_kml = false; ///< Optional flag to generate KML visualization output.
+		std::optional<std::string> kml_file; ///< Optional specific file path for KML output.
+		std::optional<std::string> output_dir; ///< Optional output directory for simulation results.
 	};
 
 	/**

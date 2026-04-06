@@ -41,9 +41,10 @@ using radar::Transmitter;
 
 namespace core
 {
-	SimulationEngine::SimulationEngine(World* world, pool::ThreadPool& pool,
-									   std::shared_ptr<ProgressReporter> reporter) :
-		_world(world), _pool(pool), _reporter(std::move(reporter)), _last_report_time(std::chrono::steady_clock::now())
+	SimulationEngine::SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter,
+									   std::string output_dir) :
+		_world(world), _pool(pool), _reporter(std::move(reporter)), _output_dir(std::move(output_dir)),
+		_last_report_time(std::chrono::steady_clock::now())
 	{
 	}
 
@@ -85,7 +86,7 @@ namespace core
 			if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
 				_finalizer_threads.emplace_back(processing::runPulsedFinalizer, receiver_ptr.get(),
-												&_world->getTargets(), _reporter);
+												&_world->getTargets(), _reporter, _output_dir);
 			}
 		}
 	}
@@ -279,7 +280,7 @@ namespace core
 		{
 			if (receiver_ptr->getMode() == OperationMode::CW_MODE)
 			{
-				_pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &_pool, _reporter);
+				_pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &_pool, _reporter, _output_dir);
 			}
 			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
@@ -299,10 +300,11 @@ namespace core
 	}
 
 	void runEventDrivenSim(World* world, pool::ThreadPool& pool,
-						   const std::function<void(const std::string&, int, int)>& progress_callback)
+						   const std::function<void(const std::string&, int, int)>& progress_callback,
+						   const std::string& output_dir)
 	{
 		auto reporter = std::make_shared<ProgressReporter>(progress_callback);
-		SimulationEngine engine(world, pool, reporter);
+		SimulationEngine engine(world, pool, reporter, output_dir);
 		engine.run();
 	}
 }

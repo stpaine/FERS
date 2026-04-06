@@ -72,6 +72,14 @@ fers_context_t* fers_context_create();
 void fers_context_destroy(fers_context_t* context);
 
 /**
+ * @brief Sets the output directory for simulation results.
+ * @param context A valid `fers_context_t` handle.
+ * @param out_dir A null-terminated UTF-8 string for the output directory path.
+ * @return 0 on success, non-zero on error.
+ */
+int fers_set_output_directory(fers_context_t* context, const char* out_dir);
+
+/**
  * @brief Log levels for the FERS library.
  */
 typedef enum // NOLINT(*-use-using)

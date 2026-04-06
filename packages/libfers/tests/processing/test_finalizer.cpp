@@ -49,6 +49,11 @@ namespace
 		}
 	};
 
+	std::filesystem::path resultPath(const std::filesystem::path& dir, const std::string& receiver_name)
+	{
+		return dir / (receiver_name + "_results.h5");
+	}
+
 	void setupPlatform(radar::Platform& platform, const math::Vec3& position)
 	{
 		platform.getMotionPath()->addCoord(math::Coord{position, 0.0});
@@ -147,7 +152,9 @@ TEST_CASE("finalizeCwReceiver exits cleanly when no CW samples were collected", 
 	params::setOversampleRatio(1);
 
 	const std::string receiver_name = uniqueName("cw_empty");
-	const auto output_path = resultPath(receiver_name);
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("cw_empty_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
 	removeIfExists(output_path);
 
 	radar::Platform platform("RxPlatform");
@@ -160,13 +167,15 @@ TEST_CASE("finalizeCwReceiver exits cleanly when no CW samples were collected", 
 		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
 												 { progress_calls.push_back({msg, current, total}); });
 
-	processing::finalizeCwReceiver(&receiver, nullptr, reporter);
+	processing::finalizeCwReceiver(&receiver, nullptr, reporter, out_dir.string());
 
 	REQUIRE_FALSE(std::filesystem::exists(output_path));
 	REQUIRE(progress_calls.size() == 1u);
 	REQUIRE(progress_calls.front().current == 0);
 	REQUIRE(progress_calls.front().total == 100);
 	REQUIRE(progress_calls.front().message.find(receiver_name) != std::string::npos);
+
+	std::filesystem::remove_all(out_dir);
 }
 
 TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies deterministic phase noise, and exports HDF5",
@@ -179,7 +188,9 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies determini
 	params::setAdcBits(0);
 
 	const std::string receiver_name = uniqueName("cw_finalize");
-	const auto output_path = resultPath(receiver_name);
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("cw_finalize_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
 	removeIfExists(output_path);
 
 	radar::Platform rx_platform("RxPlatform");
@@ -201,7 +212,7 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies determini
 		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
 												 { progress_calls.push_back({msg, current, total}); });
 
-	processing::finalizeCwReceiver(&receiver, nullptr, reporter);
+	processing::finalizeCwReceiver(&receiver, nullptr, reporter, out_dir.string());
 
 	HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
 	const auto i_data = readDataset(file, "I_data");
@@ -232,7 +243,7 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies determini
 		REQUIRE(progress_calls[i].current == expected_progress[i]);
 	}
 
-	removeIfExists(output_path);
+	std::filesystem::remove_all(out_dir);
 }
 
 TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates", "[processing][finalizer]")
@@ -243,7 +254,9 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 	params::setAdcBits(0);
 
 	const std::string receiver_name = uniqueName("pulsed_finalize");
-	const auto output_path = resultPath(receiver_name);
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("pulsed_finalize_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
 	removeIfExists(output_path);
 
 	radar::Platform rx_platform("RxPlatform");
@@ -278,7 +291,7 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
 												 { progress_calls.push_back({msg, current, total}); });
 
-	std::jthread worker(processing::runPulsedFinalizer, &receiver, &targets, reporter);
+	std::jthread worker(processing::runPulsedFinalizer, &receiver, &targets, reporter, out_dir.string());
 	receiver.enqueueFinalizerJob(std::move(first_job));
 	std::this_thread::sleep_for(std::chrono::milliseconds(150));
 	receiver.enqueueFinalizerJob(std::move(second_job));
@@ -328,7 +341,7 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 		progress_calls, [&receiver_name](const ProgressCall& call)
 		{ return call.message == "Finished Exporting " + receiver_name && call.current == 100 && call.total == 100; }));
 
-	removeIfExists(output_path);
+	std::filesystem::remove_all(out_dir);
 }
 
 // TODO: The null-check branches after Timing::clone in finalizer.cpp are not reachable

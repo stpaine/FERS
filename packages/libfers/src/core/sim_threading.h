@@ -102,8 +102,10 @@ namespace core
 		 * @param world Pointer to the simulation world containing all entities.
 		 * @param pool Reference to the thread pool for asynchronous tasks.
 		 * @param reporter Shared pointer to the thread-safe progress reporter.
+		 * @param output_dir Output directory for the simulation files.
 		 */
-		SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter);
+		SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter,
+						 std::string output_dir);
 
 		/**
 		 * @brief Starts and runs the main simulation loop until completion.
@@ -207,6 +209,8 @@ namespace core
 
 		std::chrono::steady_clock::time_point _last_report_time; ///< Timestamp of the last progress report.
 		int _last_reported_percent = -1; ///< The last reported percentage to prevent redundant updates.
+
+		std::string _output_dir; ///< Output directory for the simulation files.
 	};
 
 	/**
@@ -220,7 +224,9 @@ namespace core
 	 * @param world A pointer to the simulation world containing all entities and state.
 	 * @param pool A reference to the thread pool for executing tasks.
 	 * @param progress_callback An optional callback function for reporting progress.
+	 * @param output_dir Output directory for the simulation files.
 	 */
 	void runEventDrivenSim(World* world, pool::ThreadPool& pool,
-						   const std::function<void(const std::string&, int, int)>& progress_callback);
+						   const std::function<void(const std::string&, int, int)>& progress_callback,
+						   const std::string& output_dir);
 }

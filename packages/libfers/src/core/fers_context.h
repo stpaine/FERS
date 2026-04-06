@@ -63,6 +63,16 @@ public:
 	 */
 	[[nodiscard]] std::mt19937& getMasterSeeder() noexcept { return _master_seeder; }
 
+	/**
+	 * @brief Sets the output directory for simulation results.
+	 */
+	void setOutputDir(std::string dir) { _output_dir = std::move(dir); }
+
+	/**
+	 * @brief Gets the output directory for simulation results.
+	 */
+	[[nodiscard]] const std::string& getOutputDir() const noexcept { return _output_dir; }
+
 private:
 	/// Owns the `core::World` object, which contains all simulation entities.
 	/// Using `std::unique_ptr` ensures that the world's complex state is
@@ -71,4 +81,7 @@ private:
 
 	/// Master random engine used to seed all other random generators in the simulation.
 	std::mt19937 _master_seeder;
+
+	/// Output directory for the simulation files
+	std::string _output_dir = ".";
 };

@@ -154,7 +154,7 @@ TEST_CASE("SimulationEngine handles CW state events", "[core][threading]")
 	ParamGuard guard;
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
@@ -197,7 +197,7 @@ TEST_CASE("SimulationEngine handles Pulsed Window events", "[core][threading]")
 
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	// Reconfigure as pulsed
 	auto pulsed_rx_plat = std::make_unique<radar::Platform>("PulsedRxPlat", 20);
@@ -262,7 +262,7 @@ TEST_CASE("SimulationEngine handles Tx Pulsed Start and routes responses", "[cor
 
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* cw_rx = world->getReceivers().front().get();
@@ -311,7 +311,7 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
@@ -363,7 +363,7 @@ TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buff
 
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
@@ -412,7 +412,7 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 
 	SECTION("Simulation runs to completion and shuts down cleanly")
 	{
-		REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, progress_cb));
+		REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, progress_cb, "."));
 
 		// Should have received at least initialization and completion updates
 		REQUIRE(progress_updates >= 2);
@@ -456,7 +456,7 @@ TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle",
 
 	// Running the engine will initialize the finalizer thread and then shut it down.
 	// If the shutdown logic fails, the std::jthread will hang indefinitely waiting for a job.
-	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr));
+	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));
 }
 
 TEST_CASE("SimulationEngine processCwPhysics exits early if t_event <= t_current", "[core][threading]")
@@ -466,7 +466,7 @@ TEST_CASE("SimulationEngine processCwPhysics exits early if t_event <= t_current
 	ParamGuard guard;
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* rx = world->getReceivers().front().get();
 	rx->prepareCwData(10);
@@ -491,16 +491,14 @@ TEST_CASE("SimulationEngine processCwPhysics exits early if t_event <= t_current
 
 TEST_CASE("SimulationEngine processEvent dispatches all event types correctly", "[core][threading]")
 {
-	// This test covers:
-	// 3. processEvent(event) -> switch (event.type) (all cases)
 	ParamGuard guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
-	params::setTime(0.0, 10.0); // FIX: Ensure simulation end time allows future events to be scheduled
+	params::setTime(0.0, 10.0);
 
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
@@ -586,7 +584,7 @@ TEST_CASE("SimulationEngine routeResponse handles null responses safely", "[core
 	world->add(std::move(rx));
 
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	// This will call calculateResponse, which returns nullptr because they share a platform,
 	// and then pass it to routeResponse. It should return early without crashing.
@@ -610,7 +608,7 @@ TEST_CASE("SimulationEngine updateProgress safely handles null reporter", "[core
 	world->getEventQueue().push({0.5, core::EventType::TX_CW_START, tx});
 
 	// Passing nullptr for the progress callback ensures the internal _reporter is null
-	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr));
+	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));
 }
 
 // TODO: A deeply synchronized test for the `shutdown()` thread joining logic is currently omitted.

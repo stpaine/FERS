@@ -70,7 +70,8 @@ int main(const int argc, char* argv[])
 		return 0;
 	}
 
-	const auto& [script_file, log_level, num_threads, validate, log_file, generate_kml] = config_result.value();
+	const auto& [script_file, log_level, num_threads, validate, log_file, generate_kml, kml_file, output_dir] =
+		config_result.value();
 
 	// Configure logging via the C API
 	const char* log_file_ptr = log_file ? log_file->c_str() : nullptr;
@@ -89,11 +90,30 @@ int main(const int argc, char* argv[])
 		"Running FERS with arguments: script_file={}, log_level={}, num_threads={}, validate={}, log_file={}",
 		script_file, logging::getLevelString(log_level), num_threads, validate, log_file.value_or("None"));
 
+	// Determine the output directory
+	std::filesystem::path script_path(script_file);
+	std::filesystem::path default_out_dir = script_path.parent_path();
+	if (default_out_dir.empty())
+	{
+		default_out_dir = ".";
+	}
+	std::filesystem::path final_out_dir = output_dir ? std::filesystem::path(*output_dir) : default_out_dir;
+
 	// Create a simulation context using the C-API
 	fers_context_t* context = fers_context_create();
 	if (context == nullptr)
 	{
 		LOG(FERS_LOG_FATAL, "Failed to create FERS simulation context.");
+		return 1;
+	}
+
+	// Set the output directory via the C-API
+	if (fers_set_output_directory(context, final_out_dir.string().c_str()) != 0)
+	{
+		char* err = fers_get_last_error_message();
+		LOG(FERS_LOG_FATAL, "Failed to set output directory: {}", err ? err : "Unknown error");
+		fers_free_string(err);
+		fers_context_destroy(context);
 		return 1;
 	}
 
@@ -110,8 +130,28 @@ int main(const int argc, char* argv[])
 
 	if (generate_kml)
 	{
-		std::filesystem::path kml_output_path = script_file;
-		kml_output_path.replace_extension(".kml");
+		std::filesystem::path kml_output_path;
+		if (kml_file && !kml_file->empty())
+		{
+			std::filesystem::path provided_kml_path(*kml_file);
+			// If it's a full path or relative path with directories, use it directly.
+			// Otherwise, place it in the final output directory.
+			if (provided_kml_path.has_parent_path() || provided_kml_path.is_absolute())
+			{
+				kml_output_path = provided_kml_path;
+			}
+			else
+			{
+				kml_output_path = final_out_dir / provided_kml_path;
+			}
+		}
+		else
+		{
+			// Default to scenario name in the output directory
+			kml_output_path = final_out_dir / script_path.filename();
+			kml_output_path.replace_extension(".kml");
+		}
+
 		const std::string kml_output_file = kml_output_path.string();
 
 		LOG(FERS_LOG_INFO, "Generating KML file for scenario: {}", kml_output_file);
