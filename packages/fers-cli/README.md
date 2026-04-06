@@ -14,6 +14,7 @@ terminal and to maintain backward compatibility with the original FERS workflow.
 - Parses command-line arguments for simulation control.
 - Loads scenarios from FERS XML files.
 - Displays real-time simulation progress in the console.
+- Automatically outputs results to the scenario's directory by default.
 - Generates KML files for scenario visualization.
 
 ## Building
@@ -39,7 +40,8 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 | `--help`, `-h`        | Show the help message and exit.                                                                                                      |
 | `--version`, `-v`     | Show version information and exit.                                                                                                   |
 | `--no-validate`       | Disable the validation of the scenario file before running.                                                                          |
-| `--kml`               | Generate a KML visualization of the scenario and exit. The output will have the same name as the input file with a `.kml` extension. |
+| `--kml[=<file>]`      | Generate a KML visualization of the scenario and exit. If a filename is provided, it will be used. Otherwise, it defaults to the scenario name with a `.kml` extension in the output directory. |
+| `--out-dir=<dir>`     | Set the output directory for simulation results and default KML output. Defaults to the directory containing the input scenario file. |
 | `--log-level=<level>` | Set the logging level (`TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, `FATAL`).                                                       |
 | `--log-file=<file>`   | Log output to the specified `.log` or `.txt` file in addition to the console.                                                        |
 | `-n=<threads>`        | Set the number of threads to use for the simulation.                                                                                 |
@@ -48,5 +50,5 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 
 ```bash
 # From the project root
-./build/release/packages/fers-cli/fers-cli examples/mixed_scenario/example.fersxml --log-level=INFO -n=8
+./build/release/packages/fers-cli/fers-cli examples/mixed_scenario/example.fersxml --out-dir=./results --log-level=INFO -n=8
 ```

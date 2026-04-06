@@ -24,7 +24,7 @@ semi-independent packages.
 - **Visual Scenario Builder:** An intuitive 3D interface to construct, configure, and visualize radar scenarios.
 - **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed, and
   continuous wave (CW).
-- **Advanced Data Export:** Output simulation data in HDF5, CSV, and XML formats for analysis.
+- **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and
   deployed [documentation site](https://davidbits.github.io/FERS/)
