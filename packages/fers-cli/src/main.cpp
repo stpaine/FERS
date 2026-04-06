@@ -18,6 +18,7 @@
 #include <string>
 
 #include "arg_parser.h"
+#include "cli_paths.h"
 
 // --- Shim to restore LOG() functionality via C-API ---
 namespace logging
@@ -90,14 +91,7 @@ int main(const int argc, char* argv[])
 		"Running FERS with arguments: script_file={}, log_level={}, num_threads={}, validate={}, log_file={}",
 		script_file, logging::getLevelString(log_level), num_threads, validate, log_file.value_or("None"));
 
-	// Determine the output directory
-	std::filesystem::path script_path(script_file);
-	std::filesystem::path default_out_dir = script_path.parent_path();
-	if (default_out_dir.empty())
-	{
-		default_out_dir = ".";
-	}
-	std::filesystem::path final_out_dir = output_dir ? std::filesystem::path(*output_dir) : default_out_dir;
+	const std::filesystem::path final_out_dir = core::resolveOutputDir(script_file, output_dir);
 
 	// Create a simulation context using the C-API
 	fers_context_t* context = fers_context_create();
@@ -130,28 +124,7 @@ int main(const int argc, char* argv[])
 
 	if (generate_kml)
 	{
-		std::filesystem::path kml_output_path;
-		if (kml_file && !kml_file->empty())
-		{
-			std::filesystem::path provided_kml_path(*kml_file);
-			// If it's a full path or relative path with directories, use it directly.
-			// Otherwise, place it in the final output directory.
-			if (provided_kml_path.has_parent_path() || provided_kml_path.is_absolute())
-			{
-				kml_output_path = provided_kml_path;
-			}
-			else
-			{
-				kml_output_path = final_out_dir / provided_kml_path;
-			}
-		}
-		else
-		{
-			// Default to scenario name in the output directory
-			kml_output_path = final_out_dir / script_path.filename();
-			kml_output_path.replace_extension(".kml");
-		}
-
+		const std::filesystem::path kml_output_path = core::resolveKmlOutputPath(script_file, final_out_dir, kml_file);
 		const std::string kml_output_file = kml_output_path.string();
 
 		LOG(FERS_LOG_INFO, "Generating KML file for scenario: {}", kml_output_file);

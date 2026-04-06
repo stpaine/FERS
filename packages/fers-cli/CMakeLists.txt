@@ -1,24 +1,32 @@
 project(fers-cli)
 
+# Create the internal library target that holds the unit-testable CLI logic.
+add_library(fers-cli-core STATIC)
+
+apply_fers_warnings(fers-cli-core)
+
+target_sources(fers-cli-core PRIVATE
+			   src/arg_parser.cpp
+			   src/cli_paths.cpp
+)
+
+target_include_directories(fers-cli-core PUBLIC
+						   ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(fers-cli-core PUBLIC fers::fers)
+
 # Create the executable target
 add_executable(fers-cli)
 
 # Apply project-wide compiler warnings and flags
 apply_fers_warnings(fers-cli)
 
-# Add its own source files
 target_sources(fers-cli PRIVATE
 			   src/main.cpp
-			   src/arg_parser.cpp
 )
 
-# Add include directory for its own headers (arg_parser.h)
-target_include_directories(fers-cli PRIVATE
-						   ${CMAKE_CURRENT_SOURCE_DIR}/src
-)
-
-# Link against libfers.
-target_link_libraries(fers-cli PRIVATE fers::fers)
+target_link_libraries(fers-cli PRIVATE fers-cli-core)
 
 # --- Cross-Platform Relocatable RPATH ---
 set_target_properties(fers-cli PROPERTIES
@@ -34,3 +42,7 @@ endif ()
 
 # Install the executable
 install(TARGETS fers-cli DESTINATION bin)
+
+if (FERS_BUILD_TESTS)
+	add_subdirectory(tests)
+endif ()
