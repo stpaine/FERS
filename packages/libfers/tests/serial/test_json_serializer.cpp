@@ -488,6 +488,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	// Give tx and rx an initial timing object to verify seed preservation
 	auto initial_timing = std::make_shared<timing::Timing>("tim1", 12345, 30);
+	initial_timing->initializeModel(w.findTiming(30));
 	tx->setTiming(initial_timing);
 	rx->setTiming(initial_timing);
 
@@ -606,20 +607,36 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 				  {"phase_offset", 0.5},
 				  {"random_phase_offset_stdev", 0.1},
 				  {"noise_entries", json::array({{{"alpha", 1.0}, {"weight", 0.5}}})}};
-		serial::update_timing_from_json(j, pt_ptr);
+		serial::update_timing_from_json(j, w, 30);
 
-		REQUIRE(pt_ptr->getName() == "tim_updated");
-		REQUIRE_THAT(pt_ptr->getFrequency(), WithinAbs(2e6, 1e-9));
-		REQUIRE(pt_ptr->getSyncOnPulse() == true);
-		REQUIRE_THAT(pt_ptr->getFreqOffset().value(), WithinAbs(10.0, 1e-9));
-		REQUIRE_THAT(pt_ptr->getRandomFreqOffsetStdev().value(), WithinAbs(2.0, 1e-9));
-		REQUIRE_THAT(pt_ptr->getPhaseOffset().value(), WithinAbs(0.5, 1e-9));
-		REQUIRE_THAT(pt_ptr->getRandomPhaseOffsetStdev().value(), WithinAbs(0.1, 1e-9));
+		auto* updated_timing = w.findTiming(30);
+		REQUIRE(updated_timing != nullptr);
+		REQUIRE(updated_timing != pt_ptr);
+
+		REQUIRE(updated_timing->getName() == "tim_updated");
+		REQUIRE_THAT(updated_timing->getFrequency(), WithinAbs(2e6, 1e-9));
+		REQUIRE(updated_timing->getSyncOnPulse() == true);
+		REQUIRE_THAT(updated_timing->getFreqOffset().value(), WithinAbs(10.0, 1e-9));
+		REQUIRE_THAT(updated_timing->getRandomFreqOffsetStdev().value(), WithinAbs(2.0, 1e-9));
+		REQUIRE_THAT(updated_timing->getPhaseOffset().value(), WithinAbs(0.5, 1e-9));
+		REQUIRE_THAT(updated_timing->getRandomPhaseOffsetStdev().value(), WithinAbs(0.1, 1e-9));
 
 		std::vector<RealType> alphas, weights;
-		pt_ptr->copyAlphas(alphas, weights);
+		updated_timing->copyAlphas(alphas, weights);
 		REQUIRE(alphas.size() == 1);
 		REQUIRE_THAT(alphas[0], WithinAbs(1.0, 1e-9));
+		REQUIRE(tx_ptr->getTiming().get() != initial_timing.get());
+		REQUIRE(rx_ptr->getTiming().get() != initial_timing.get());
+		REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
+		REQUIRE(rx_ptr->getTiming()->getSeed() == 12345);
+		REQUIRE(tx_ptr->getTiming()->getName() == "tim_updated");
+		REQUIRE(rx_ptr->getTiming()->getName() == "tim_updated");
+		REQUIRE_THAT(tx_ptr->getTiming()->getFrequency(), WithinAbs(2e6, 1e-9));
+		REQUIRE_THAT(rx_ptr->getTiming()->getFrequency(), WithinAbs(2e6, 1e-9));
+		REQUIRE(tx_ptr->getTiming()->getSyncOnPulse() == true);
+		REQUIRE(rx_ptr->getTiming()->getSyncOnPulse() == true);
+		REQUIRE_THAT(tx_ptr->getTiming()->getFreqOffset(), WithinAbs(rx_ptr->getTiming()->getFreqOffset(), 1e-9));
+		REQUIRE_THAT(tx_ptr->getTiming()->getPhaseOffset(), WithinAbs(rx_ptr->getTiming()->getPhaseOffset(), 1e-9));
 	}
 }
 

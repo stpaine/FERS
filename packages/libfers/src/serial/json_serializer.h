@@ -18,6 +18,8 @@
 #include <nlohmann/json.hpp>
 #include <random>
 
+#include "core/sim_id.h"
+
 namespace timing
 {
 	class PrototypeTiming;
@@ -75,6 +77,11 @@ namespace serial
 	std::unique_ptr<fers_signal::RadarSignal> parse_waveform_from_json(const nlohmann::json& j);
 
 	/**
+	 * @brief Parses a timing prototype from JSON.
+	 */
+	std::unique_ptr<timing::PrototypeTiming> parse_timing_from_json(const nlohmann::json& j, SimId id);
+
+	/**
 	 * @brief Updates global simulation parameters from JSON.
 	 */
 	void update_parameters_from_json(const nlohmann::json& j, std::mt19937& masterSeeder);
@@ -111,7 +118,7 @@ namespace serial
 	/**
 	 * @brief Updates a timing source from JSON without full context recreation.
 	 */
-	void update_timing_from_json(const nlohmann::json& j, timing::PrototypeTiming* timing);
+	void update_timing_from_json(const nlohmann::json& j, core::World& world, SimId id);
 
 	/**
 	 * @brief Deserializes a nlohmann::json object and reconstructs the simulation world.

@@ -254,6 +254,64 @@ TEST_CASE("World replaces waveform and updates dependent components", "[core][wo
 	REQUIRE(tx_ptr->getSignal() == new_wf_ptr);
 }
 
+TEST_CASE("World replaces timing and refreshes dependent radar timing models", "[core][world]")
+{
+	core::World world;
+
+	auto old_timing = std::make_unique<timing::PrototypeTiming>("OldTiming", 300);
+	old_timing->setFrequency(1.0e6);
+	old_timing->setFreqOffset(2.0);
+	old_timing->setPhaseOffset(0.1);
+	world.add(std::move(old_timing));
+
+	auto plat = std::make_unique<radar::Platform>("Plat", 1);
+	auto tx = std::make_unique<radar::Transmitter>(plat.get(), "Tx", radar::OperationMode::CW_MODE, 2);
+	auto rx = std::make_unique<radar::Receiver>(plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 3);
+
+	auto tx_timing = std::make_shared<timing::Timing>("OldTiming", 12345, 300);
+	tx_timing->initializeModel(world.findTiming(300));
+	auto rx_timing = std::make_shared<timing::Timing>("OldTiming", 54321, 300);
+	rx_timing->initializeModel(world.findTiming(300));
+
+	tx->setTiming(tx_timing);
+	rx->setTiming(rx_timing);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	world.add(std::move(plat));
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+
+	auto new_timing = std::make_unique<timing::PrototypeTiming>("NewTiming", 300);
+	new_timing->setFrequency(2.5e6);
+	new_timing->setSyncOnPulse();
+	new_timing->setFreqOffset(7.5);
+	new_timing->setPhaseOffset(0.75);
+	new_timing->setAlpha(1.0, 0.5);
+	world.replace(std::move(new_timing));
+
+	auto* replaced = world.findTiming(300);
+	REQUIRE(replaced != nullptr);
+	REQUIRE(replaced->getName() == "NewTiming");
+	REQUIRE_THAT(replaced->getFrequency(), WithinAbs(2.5e6, 1e-9));
+
+	REQUIRE(tx_ptr->getTiming().get() != tx_timing.get());
+	REQUIRE(rx_ptr->getTiming().get() != rx_timing.get());
+	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
+	REQUIRE(rx_ptr->getTiming()->getSeed() == 54321);
+	REQUIRE(tx_ptr->getTiming()->getName() == "NewTiming");
+	REQUIRE(rx_ptr->getTiming()->getName() == "NewTiming");
+	REQUIRE_THAT(tx_ptr->getTiming()->getFrequency(), WithinAbs(2.5e6, 1e-9));
+	REQUIRE_THAT(rx_ptr->getTiming()->getFrequency(), WithinAbs(2.5e6, 1e-9));
+	REQUIRE(tx_ptr->getTiming()->getSyncOnPulse());
+	REQUIRE(rx_ptr->getTiming()->getSyncOnPulse());
+	REQUIRE_THAT(tx_ptr->getTiming()->getFreqOffset(), WithinAbs(7.5, 1e-9));
+	REQUIRE_THAT(rx_ptr->getTiming()->getFreqOffset(), WithinAbs(7.5, 1e-9));
+	REQUIRE_THAT(tx_ptr->getTiming()->getPhaseOffset(), WithinAbs(0.75, 1e-9));
+	REQUIRE_THAT(rx_ptr->getTiming()->getPhaseOffset(), WithinAbs(0.75, 1e-9));
+}
+
 TEST_CASE("World enforces unique ids for assets", "[core][world]")
 {
 	core::World world;

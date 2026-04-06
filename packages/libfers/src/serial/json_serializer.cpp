@@ -1124,6 +1124,13 @@ namespace serial
 		return wf;
 	}
 
+	std::unique_ptr<timing::PrototypeTiming> parse_timing_from_json(const nlohmann::json& j, const SimId id)
+	{
+		auto timing = std::make_unique<timing::PrototypeTiming>(j.at("name").get<std::string>(), id);
+		j.get_to(*timing);
+		return timing;
+	}
+
 	void update_parameters_from_json(const nlohmann::json& j, std::mt19937& masterSeeder)
 	{
 		nlohmann::json sim;
@@ -1465,11 +1472,21 @@ namespace serial
 		world.replace(std::move(target_obj));
 	}
 
-	void update_timing_from_json(const nlohmann::json& j, timing::PrototypeTiming* timing)
+	void update_timing_from_json(const nlohmann::json& j, core::World& world, const SimId id)
 	{
-		if (j.contains("name"))
-			timing->setName(j.at("name").get<std::string>());
-		timing::from_json(j, *timing);
+		auto* existing = world.findTiming(id);
+		if (existing == nullptr)
+		{
+			throw std::runtime_error("Timing ID " + std::to_string(id) + " not found.");
+		}
+
+		auto patched = j;
+		if (!patched.contains("name"))
+		{
+			patched["name"] = existing->getName();
+		}
+
+		world.replace(parse_timing_from_json(patched, id));
 	}
 
 	nlohmann::json world_to_json(const core::World& world)

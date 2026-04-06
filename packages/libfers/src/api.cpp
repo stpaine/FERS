@@ -540,14 +540,13 @@ int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const cha
 	auto* ctx = reinterpret_cast<FersContext*>(context);
 	try
 	{
-		auto* timing = ctx->getWorld()->findTiming(id);
-		if (timing == nullptr)
+		if (ctx->getWorld()->findTiming(id) == nullptr)
 		{
 			last_error_message = "Timing not found";
 			return 1;
 		}
 		auto j = nlohmann::json::parse(json);
-		serial::update_timing_from_json(j, timing);
+		serial::update_timing_from_json(j, *ctx->getWorld(), id);
 		return 0;
 	}
 	catch (const std::exception& e)

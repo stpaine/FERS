@@ -177,6 +177,12 @@ namespace core
 		void replace(std::unique_ptr<fers_signal::RadarSignal> waveform);
 
 		/**
+		 * @brief Replaces an existing timing prototype and refreshes dependent radar timing models.
+		 * @param timing Unique pointer to the new timing prototype.
+		 */
+		void replace(std::unique_ptr<timing::PrototypeTiming> timing);
+
+		/**
 		 * @brief Retrieves the list of platforms.
 		 *
 		 * @return A const reference to a vector of unique pointers to Platform objects.
