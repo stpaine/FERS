@@ -895,6 +895,17 @@ def summary_to_json(summary: BuildSummary, dedupe_mode: str, max_examples: int) 
     warn_stats = summarize_warning_hotspots(summary, dedupe_mode)
     warnings = [d for d in summary.diagnostics if d.kind == "warning"]
     errors = [d for d in summary.diagnostics if d.kind == "error"]
+    notes = [d for d in summary.diagnostics if d.kind == "note"]
+    warning_details_by_file: dict[str, list[dict]] = defaultdict(list)
+    error_details_by_file: dict[str, list[dict]] = defaultdict(list)
+    note_details_by_file: dict[str, list[dict]] = defaultdict(list)
+
+    for d in warnings:
+        warning_details_by_file[d.file].append(asdict(d))
+    for d in errors:
+        error_details_by_file[d.file].append(asdict(d))
+    for d in notes:
+        note_details_by_file[d.file].append(asdict(d))
 
     return {
         "status": format_status(summary),
@@ -919,7 +930,20 @@ def summary_to_json(summary: BuildSummary, dedupe_mode: str, max_examples: int) 
         "warning_categories_unique": dict(warn_stats["unique_by_flag"].most_common()),
         "warnings_by_file_raw": dict(warn_stats["raw_by_file"].most_common()),
         "warnings_by_file_unique": dict(warn_stats["unique_by_file"].most_common()),
+        "warning_details_by_file": {
+            file: warning_details_by_file[file]
+            for file, _ in warn_stats["raw_by_file"].most_common()
+        },
         "errors_by_file": dict(summary.errors_by_file.most_common()),
+        "error_details_by_file": {
+            file: error_details_by_file[file]
+            for file, _ in summary.errors_by_file.most_common()
+        },
+        "notes_by_file": dict(Counter(d.file for d in notes).most_common()),
+        "note_details_by_file": {
+            file: note_details_by_file[file]
+            for file, _ in Counter(d.file for d in notes).most_common()
+        },
         "compiler_config": {
             "standards_seen": dict(summary.standards_seen.most_common()),
             "optimization_levels_seen": dict(summary.optimization_levels_seen.most_common()),
