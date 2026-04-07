@@ -29,7 +29,16 @@ namespace interp
 			return std::nullopt;
 		}
 
-		const auto iter = _data.lower_bound(static_cast<double>(x));
+		// TODO: RealConcept is broader than the implementation really supports?
+		// std::is_arithmetic_v<T> admits integral types
+		// That may be intended, but for value(T x) it means interpolation with
+		// integer queries returns std::optional<int>, and the final interpolated
+		// double gets truncated by:
+		// return static_cast<T>(...)
+		// If the class is conceptually for real-valued interpolation,
+		// std::floating_point<T> would be a better constraint
+		const RealType x_value = static_cast<RealType>(x);
+		const auto iter = _data.lower_bound(x_value);
 
 		if (iter == _data.begin())
 		{
@@ -40,7 +49,7 @@ namespace interp
 			const auto prev = std::prev(iter);
 			return static_cast<T>(prev->second);
 		}
-		if (iter->first == static_cast<double>(x))
+		if (iter->first == x_value)
 		{
 			return static_cast<T>(iter->second);
 		}
@@ -49,7 +58,7 @@ namespace interp
 		const auto [x1, y1] = *prev;
 		const auto [x2, y2] = *iter;
 
-		return static_cast<T>(y2 * (x - x1) / (x2 - x1) + y1 * (x2 - x) / (x2 - x1));
+		return static_cast<T>(y2 * (x_value - x1) / (x2 - x1) + y1 * (x2 - x_value) / (x2 - x1));
 	}
 
 	double InterpSetData::max() const noexcept

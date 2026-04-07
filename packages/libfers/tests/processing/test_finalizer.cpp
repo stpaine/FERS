@@ -67,11 +67,6 @@ namespace
 		return prefix + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
 	}
 
-	std::filesystem::path resultPath(const std::string& receiver_name)
-	{
-		return std::filesystem::current_path() / (receiver_name + "_results.h5");
-	}
-
 	void removeIfExists(const std::filesystem::path& path)
 	{
 		std::error_code ec;

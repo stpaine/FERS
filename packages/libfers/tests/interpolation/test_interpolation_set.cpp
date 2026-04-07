@@ -67,6 +67,17 @@ TEST_CASE("InterpSetData linearly interpolates", "[interpolation][set]")
 	REQUIRE_THAT(*mid, WithinAbs(5.0, 1e-12));
 }
 
+TEST_CASE("InterpSetData linearly interpolates float queries", "[interpolation][set]")
+{
+	interp::InterpSetData data;
+	data.insertSample(0.0, 0.0);
+	data.insertSample(10.0, 20.0);
+
+	auto mid = data.value(2.5f);
+	REQUIRE(mid.has_value());
+	REQUIRE_THAT(*mid, WithinAbs(5.0f, 1e-6f));
+}
+
 TEST_CASE("InterpSetData max uses absolute magnitude", "[interpolation][set]")
 {
 	interp::InterpSetData data;

@@ -394,8 +394,8 @@ namespace antenna
 			LOG(Level::FATAL, "Could not load antenna description {}", filename.data());
 			throw std::runtime_error("Could not load antenna description");
 		}
-		doc.validateWithDtd(antenna_pattern_dtd);
-		doc.validateWithXsd(antenna_pattern_xsd);
+		(void)doc.validateWithDtd(antenna_pattern_dtd);
+		(void)doc.validateWithXsd(antenna_pattern_xsd);
 
 		const XmlElement root(doc.getRootElement());
 		const AxisLoadResult elev_result = loadAntennaGainAxis(_elev_samples.get(), root.childElement("elevation", 0));
@@ -422,15 +422,16 @@ namespace antenna
 		const double ex1 = (pattern_angle.azimuth + PI) / two_pi;
 		const double ey1 = (pattern_angle.elevation + PI) / two_pi;
 
-		const auto calc_grid_point = [](const double value, const unsigned size)
+		const auto calc_grid_point = [](const double value, const std::size_t size)
 		{
-			const double x1 = std::floor(value * (size - 1)) / (size - 1);
-			const double x2 = std::min(x1 + 1.0 / size, 1.0);
+			const double grid_size = static_cast<double>(size - 1);
+			const double x1 = std::floor(value * grid_size) / grid_size;
+			const double x2 = std::min(x1 + 1.0 / static_cast<double>(size), 1.0);
 			return std::pair{x1, x2};
 		};
 
-		unsigned size_azi = _pattern.size();
-		unsigned size_elev = _pattern[0].size();
+		const std::size_t size_azi = _pattern.size();
+		const std::size_t size_elev = _pattern[0].size();
 
 		LOG(logging::Level::TRACE, "Size of pattern: {} x {}", size_azi, size_elev);
 
@@ -440,11 +441,11 @@ namespace antenna
 		const double t = (ex1 - x1) / (x2 - x1);
 		const double u = (ey1 - y1) / (y2 - y1);
 
-		const auto calc_array_index = [](const double value, const unsigned size)
-		{ return std::min(static_cast<unsigned>(std::floor(value * size)), size - 1); };
+		const auto calc_array_index = [](const double value, const std::size_t size)
+		{ return std::min(static_cast<std::size_t>(std::floor(value * static_cast<double>(size))), size - 1); };
 
-		const unsigned arr_x = calc_array_index(x1, size_azi);
-		const unsigned arr_y = calc_array_index(y1, size_elev);
+		const std::size_t arr_x = calc_array_index(x1, size_azi);
+		const std::size_t arr_y = calc_array_index(y1, size_elev);
 
 		const RealType interp = (1.0 - t) * (1.0 - u) * _pattern[arr_x][arr_y] +
 			t * (1.0 - u) * _pattern[(arr_x + 1) % size_azi][arr_y] +

@@ -11,6 +11,9 @@
 
 #include "thread_pool.h"
 
+#include <limits>
+#include <stdexcept>
+
 #include "logging.h"
 
 namespace pool
@@ -75,7 +78,11 @@ namespace pool
 	{
 		std::unique_lock lock(_queue_mutex);
 		const unsigned active_threads = _pending_tasks;
-		const unsigned total_threads = _workers.size();
+		if (_workers.size() > static_cast<std::size_t>(std::numeric_limits<unsigned>::max()))
+		{
+			throw std::runtime_error("Thread pool size exceeds unsigned range.");
+		}
+		const unsigned total_threads = static_cast<unsigned>(_workers.size());
 		return total_threads > active_threads ? total_threads - active_threads : 0;
 	}
 }

@@ -9,6 +9,7 @@
 #include <GeographicLib/Geodesic.hpp>
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <iomanip>
 #include <map>
 #include <ranges>
@@ -46,23 +47,24 @@ namespace serial::kml_generator_utils
 
 	double find3DbDropAngle(const double alpha, const double beta, const double gamma)
 	{
-		constexpr int num_points = 1000;
+		constexpr std::size_t num_points = 1000;
+		const auto midpoint = static_cast<std::ptrdiff_t>(num_points / 2);
 		std::vector<double> theta(num_points);
 		std::vector<double> gain(num_points);
-		for (int i = 0; i < num_points; ++i)
+		for (std::size_t i = 0; i < num_points; ++i)
 		{
-			theta[i] = -PI + 2.0 * PI * i / (num_points - 1);
+			theta[i] = -PI + 2.0 * PI * static_cast<double>(i) / static_cast<double>(num_points - 1);
 			gain[i] = sincAntennaGain(theta[i], alpha, beta, gamma);
 		}
-		const double max_gain = *std::max_element(gain.begin() + num_points / 2, gain.end());
+		const auto search_begin = gain.begin() + midpoint;
+		const double max_gain = *std::max_element(search_begin, gain.end());
 		const double max_gain_db = 10.0 * std::log10(max_gain);
 		const double target_gain_db = max_gain_db - 3.0;
-		double target_gain = std::pow(10.0, target_gain_db / 10.0);
-		const int idx = std::distance(
-			gain.begin() + num_points / 2,
-			std::min_element(gain.begin() + num_points / 2, gain.end(), [target_gain](const double a, const double b)
-							 { return std::abs(a - target_gain) < std::abs(b - target_gain); }));
-		const double angle_3db_drop = theta[idx + num_points / 2];
+		const double target_gain = std::pow(10.0, target_gain_db / 10.0);
+		const auto min_gain = std::min_element(search_begin, gain.end(), [target_gain](const double a, const double b)
+											   { return std::abs(a - target_gain) < std::abs(b - target_gain); });
+		const auto idx = static_cast<std::size_t>(std::distance(search_begin, min_gain));
+		const double angle_3db_drop = theta[static_cast<std::size_t>(midpoint) + idx];
 		return angle_3db_drop * 180.0 / PI;
 	}
 

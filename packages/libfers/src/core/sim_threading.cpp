@@ -43,8 +43,8 @@ namespace core
 {
 	SimulationEngine::SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter,
 									   std::string output_dir) :
-		_world(world), _pool(pool), _reporter(std::move(reporter)), _output_dir(std::move(output_dir)),
-		_last_report_time(std::chrono::steady_clock::now())
+		_world(world), _pool(pool), _reporter(std::move(reporter)), _last_report_time(std::chrono::steady_clock::now()),
+		_output_dir(std::move(output_dir))
 	{
 	}
 
@@ -284,7 +284,8 @@ namespace core
 			}
 			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
-				RenderingJob shutdown_job{.duration = -1.0};
+				RenderingJob shutdown_job{};
+				shutdown_job.duration = -1.0;
 				receiver_ptr->enqueueFinalizerJob(std::move(shutdown_job));
 			}
 		}

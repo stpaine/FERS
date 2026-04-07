@@ -818,16 +818,17 @@ fers_interpolated_path_t* fers_get_interpolated_motion_path(const fers_motion_wa
 			const math::Vec3 pos = path.getPosition(start_time);
 			for (size_t i = 0; i < num_points; ++i)
 			{
-				result_path->points[i] = {pos.x, pos.y, pos.z};
+				result_path->points[i] = {pos.x, pos.y, pos.z, 0.0, 0.0, 0.0};
 			}
 			return result_path;
 		}
 
-		const double time_step = duration / (num_points > 1 ? num_points - 1 : 1);
+		const double time_step =
+			duration / static_cast<double>(num_points > 1 ? num_points - 1 : static_cast<size_t>(1));
 
 		for (size_t i = 0; i < num_points; ++i)
 		{
-			const double t = start_time + i * time_step;
+			const double t = start_time + static_cast<double>(i) * time_step;
 			const math::Vec3 pos = path.getPosition(t);
 			const math::Vec3 vel = path.getVelocity(t);
 			result_path->points[i] = {pos.x, pos.y, pos.z, vel.x, vel.y, vel.z};
@@ -915,11 +916,12 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 			return result_path;
 		}
 
-		const double time_step = duration / (num_points > 1 ? num_points - 1 : 1);
+		const double time_step =
+			duration / static_cast<double>(num_points > 1 ? num_points - 1 : static_cast<size_t>(1));
 
 		for (size_t i = 0; i < num_points; ++i)
 		{
-			const double t = start_time + i * time_step;
+			const double t = start_time + static_cast<double>(i) * time_step;
 			const math::SVec3 rot = path.getPosition(t);
 
 			result_path->points[i] = fers_interpolated_rotation_point_t{
@@ -996,14 +998,17 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 		const math::SVec3 ref_angle(1.0, 0.0, 0.0);
 		double max_gain = 0.0;
 
+		const RealType az_denominator = static_cast<RealType>(az_samples - 1);
+		const RealType el_denominator = static_cast<RealType>(el_samples - 1);
+
 		for (size_t i = 0; i < el_samples; ++i)
 		{
 			// Elevation from -PI/2 to PI/2
-			const RealType elevation = (static_cast<RealType>(i) / (el_samples - 1)) * PI - (PI / 2.0);
+			const RealType elevation = (static_cast<RealType>(i) / el_denominator) * PI - (PI / 2.0);
 			for (size_t j = 0; j < az_samples; ++j)
 			{
 				// Azimuth from -PI to PI
-				const RealType azimuth = (static_cast<RealType>(j) / (az_samples - 1)) * 2.0 * PI - PI;
+				const RealType azimuth = (static_cast<RealType>(j) / az_denominator) * 2.0 * PI - PI;
 				const math::SVec3 sample_angle(1.0, azimuth, elevation);
 				const RealType gain = ant->getGain(sample_angle, ref_angle, wavelength);
 				data->gains[i * az_samples + j] = gain;

@@ -28,7 +28,7 @@ namespace timing
 	}
 
 	// NOLINTNEXTLINE(readability-make-member-function-const)
-	void Timing::skipSamples(const long long samples) noexcept
+	void Timing::skipSamples(const std::size_t samples) noexcept
 	{
 		if (_enabled && _model)
 		{
@@ -70,7 +70,7 @@ namespace timing
 		_model = std::make_unique<noise::ClockModelGenerator>(_rng, _alphas, _weights, _frequency, _phase_offset,
 															  _freq_offset, 15);
 
-		if (timing->getFrequency() == 0.0f)
+		if (timing->getFrequency() == 0.0)
 		{
 			LOG(Level::INFO, "Timing source frequency not set, results could be incorrect.");
 		}

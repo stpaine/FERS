@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <random>
@@ -138,7 +139,7 @@ namespace noise
 		 *
 		 * @param samples The number of samples to skip.
 		 */
-		void skipSamples(long long samples) noexcept;
+		void skipSamples(std::size_t samples) noexcept;
 
 		/**
 		 * @brief Resets the noise generator state.
@@ -196,7 +197,7 @@ namespace noise
 		 *
 		 * @param samples The number of samples to skip.
 		 */
-		void skipSamples(long long samples);
+		void skipSamples(std::size_t samples);
 
 		/**
 		 * @brief Resets the noise generator state.
@@ -217,6 +218,6 @@ namespace noise
 		RealType _phase_offset; ///< Phase offset for the noise.
 		RealType _freq_offset; ///< Frequency offset for the noise.
 		RealType _frequency; ///< Base frequency of the clock model.
-		unsigned long _count = 0; ///< Sample counter.
+		std::size_t _count = 0; ///< Sample counter.
 	};
 }

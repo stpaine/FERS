@@ -3,6 +3,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -182,6 +183,59 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 		REQUIRE(p.random_seed.value() == 42);
 		REQUIRE(p.rotation_angle_unit == params::RotationAngleUnit::Radians);
 		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
+	}
+
+	SECTION("Unsigned optional parameters floor positive fractional values")
+	{
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "  <randomseed>42.9</randomseed>"
+						   "  <adc_bits>12.8</adc_bits>"
+						   "  <oversample>4.2</oversample>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE(p.random_seed.has_value());
+		REQUIRE(p.random_seed.value() == 42);
+		REQUIRE(p.adc_bits == 12);
+		REQUIRE(p.oversample_ratio == 4);
+	}
+
+	SECTION("Unsigned optional parameters reject invalid values")
+	{
+		const auto parse_invalid = [](const std::string& xml)
+		{
+			params::Parameters p;
+			auto doc = loadXml(xml);
+			serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+		};
+		const auto too_large_unsigned =
+			std::to_string(static_cast<unsigned long long>(std::numeric_limits<unsigned>::max()) + 1ULL);
+
+		REQUIRE_THROWS_AS(parse_invalid("<parameters>"
+										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+										"  <randomseed>-1</randomseed>"
+										"</parameters>"),
+						  XmlException);
+
+		REQUIRE_THROWS_AS(parse_invalid("<parameters>"
+										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+										"  <adc_bits>nan</adc_bits>"
+										"</parameters>"),
+						  XmlException);
+
+		REQUIRE_THROWS_AS(parse_invalid("<parameters>"
+										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+										"  <oversample>0</oversample>"
+										"</parameters>"),
+						  std::runtime_error);
+
+		REQUIRE_THROWS_AS(parse_invalid(std::string("<parameters>") +
+										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>" +
+										"  <adc_bits>" + too_large_unsigned + "</adc_bits>" + "</parameters>"),
+						  XmlException);
 	}
 
 	SECTION("UTM North Hemisphere")
@@ -596,6 +650,8 @@ TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 {
 	core::World world;
 	std::mt19937 seeder(42);
+	const unsigned expected_seed = static_cast<unsigned>(seeder());
+	seeder.seed(42);
 	serial::xml_parser_utils::ParserContext ctx;
 	ctx.world = &world;
 	ctx.master_seeder = &seeder;
@@ -612,6 +668,7 @@ TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 	auto* tgt = world.getTargets().front().get();
 	auto* model = dynamic_cast<const radar::RcsChiSquare*>(tgt->getFluctuationModel());
 	REQUIRE(model != nullptr);
+	REQUIRE(tgt->getSeed() == expected_seed);
 	REQUIRE_THAT(model->getK(), WithinAbs(2.0, 1e-5));
 }
 

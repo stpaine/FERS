@@ -8,9 +8,9 @@
     "configurePresets": [
         {
             "name": "debug",
-            "displayName": "Debug (Make)",
-            "description": "Standard Debug build using Unix Makefiles",
-            "generator": "Unix Makefiles",
+            "displayName": "Debug",
+            "description": "Standard Debug build using Ninja",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
@@ -19,9 +19,9 @@
         },
         {
             "name": "release",
-            "displayName": "Release (Make)",
-            "description": "Standard Release build (-O2 -s) using Unix Makefiles",
-            "generator": "Unix Makefiles",
+            "displayName": "Release",
+            "description": "Standard Release build (-O2 -s) using Ninja",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
@@ -30,9 +30,9 @@
         },
         {
             "name": "relwithdebinfo",
-            "displayName": "RelWithDebInfo (Make)",
-            "description": "Release build with debug symbols using Unix Makefiles",
-            "generator": "Unix Makefiles",
+            "displayName": "RelWithDebInfo",
+            "description": "Release build with debug symbols using Ninja",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/relwithdebinfo",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "RelWithDebInfo",
@@ -41,8 +41,8 @@
         },
         {
             "name": "asan",
-            "displayName": "AddressSanitizer (Make)",
-            "description": "Debug build with AddressSanitizer enabled using Unix Makefiles",
+            "displayName": "AddressSanitizer",
+            "description": "Debug build with AddressSanitizer enabled",
             "inherits": "debug",
             "binaryDir": "${sourceDir}/build/asan",
             "cacheVariables": {
@@ -52,8 +52,8 @@
         },
         {
             "name": "tsan",
-            "displayName": "ThreadSanitizer (Make)",
-            "description": "Debug build with ThreadSanitizer enabled using Unix Makefiles",
+            "displayName": "ThreadSanitizer",
+            "description": "Debug build with ThreadSanitizer enabled",
             "inherits": "debug",
             "binaryDir": "${sourceDir}/build/tsan",
             "cacheVariables": {
@@ -63,8 +63,8 @@
         },
         {
             "name": "coverage",
-            "displayName": "Code Coverage (Make)",
-            "description": "Debug build with coverage generation enabled using Unix Makefiles",
+            "displayName": "Code Coverage",
+            "description": "Debug build with coverage generation enabled",
             "inherits": "debug",
             "binaryDir": "${sourceDir}/build/coverage",
             "cacheVariables": {
@@ -74,10 +74,9 @@
         },
         {
             "name": "coverage-ci",
-            "displayName": "Code Coverage (Ninja)",
-            "description": "Debug build with coverage generation enabled using Ninja for CI",
+            "displayName": "Code Coverage (CI)",
+            "description": "Debug build with coverage generation enabled for CI",
             "inherits": "coverage",
-            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/coverage-ci"
         }
     ],

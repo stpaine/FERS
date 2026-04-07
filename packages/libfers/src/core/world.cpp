@@ -13,6 +13,7 @@
 #include "world.h"
 
 #include <iomanip>
+#include <limits>
 #include <sstream>
 
 #include "antenna/antenna_factory.h"
@@ -346,9 +347,14 @@ namespace core
 
 		const std::string separator = "--------------------------------------------------------------------";
 		const std::string title = "| Event Queue Contents (" + std::to_string(_event_queue.size()) + " events)";
+		if (separator.size() > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+		{
+			throw std::runtime_error("Separator width exceeds stream formatting limits.");
+		}
+		const int title_width = static_cast<int>(separator.size()) - 1;
 
 		ss << separator << "\n"
-		   << std::left << std::setw(separator.length() - 1) << title << "|\n"
+		   << std::left << std::setw(title_width) << title << "|\n"
 		   << separator << "\n"
 		   << "| " << std::left << std::setw(12) << "Timestamp" << " | " << std::setw(21) << "Event Type" << " | "
 		   << std::setw(25) << "Source Object" << " |\n"

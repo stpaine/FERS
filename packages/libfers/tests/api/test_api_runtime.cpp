@@ -44,8 +44,13 @@ TEST_CASE("API log level mapping covers all exported enum values", "[api][runtim
 		fers_log_level_t level;
 		const char* label;
 	} cases[] = {
-		{FERS_LOG_TRACE, "trace"}, {FERS_LOG_DEBUG, "debug"}, {FERS_LOG_WARNING, "warning"},
-		{FERS_LOG_ERROR, "error"}, {FERS_LOG_FATAL, "fatal"}, {static_cast<fers_log_level_t>(999), "default"},
+		{FERS_LOG_TRACE, "trace"},
+		{FERS_LOG_DEBUG, "debug"},
+		{FERS_LOG_WARNING, "warning"},
+		{FERS_LOG_ERROR, "error"},
+		{FERS_LOG_FATAL, "fatal"},
+		// Exercise the fallback branch with a value outside the exported enum set but still representable.
+		{static_cast<fers_log_level_t>(FERS_LOG_FATAL + 1), "default"},
 	};
 
 	for (const auto& entry : cases)

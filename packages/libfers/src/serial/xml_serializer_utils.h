@@ -83,7 +83,8 @@ namespace serial::xml_serializer_utils
 			std::array<char, 64> buffer{};
 			if (auto [ptr, ec] = std::to_chars(buffer.data(), buffer.data() + buffer.size(), value); ec == std::errc())
 			{
-				addChildWithText(parent, name, std::string(buffer.data(), ptr - buffer.data()));
+				const auto length = static_cast<std::string::size_type>(ptr - buffer.data());
+				addChildWithText(parent, name, std::string(buffer.data(), length));
 			}
 			else
 			{

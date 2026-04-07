@@ -10,6 +10,7 @@
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <string_view>
 
 #include "antenna/antenna_factory.h"
@@ -38,6 +39,16 @@ namespace fs = std::filesystem;
 
 namespace serial::xml_parser_utils
 {
+	namespace
+	{
+		[[nodiscard]] unsigned next_seed(std::mt19937& master_seeder)
+		{
+			static_assert(std::mt19937::max() <= std::numeric_limits<unsigned>::max(),
+						  "std::mt19937 output must fit into unsigned seeds.");
+			return static_cast<unsigned>(master_seeder());
+		}
+	}
+
 	RealType get_child_real_type(const XmlElement& element, const std::string& elementName)
 	{
 		const std::string text = element.childElement(elementName, 0).getText();
@@ -128,67 +139,89 @@ namespace serial::xml_parser_utils
 		}
 		LOG(logging::Level::DEBUG, "Sample rate set to: {:.5f}", params_out.rate);
 
-		auto set_param_with_exception_handling =
-			[&](const XmlElement& element, const std::string& paramName, const RealType defaultValue, auto setter)
+		const auto parse_unsigned_parameter = [&](const std::string_view param_name, const RealType raw_value)
 		{
-			try
+			if (!std::isfinite(raw_value))
 			{
-				if (paramName == "adc_bits" || paramName == "oversample")
-				{
-					setter(static_cast<unsigned>(std::floor(get_child_real_type(element, paramName))));
-				}
-				else
-				{
-					setter(get_child_real_type(element, paramName));
-				}
+				throw XmlException(std::format("Parameter '{}' must be finite.", param_name));
 			}
-			catch (const XmlException&)
+			if (raw_value < 0.0)
 			{
-				LOG(logging::Level::WARNING, "Failed to set parameter {}. Using default value. {}", paramName,
-					defaultValue);
+				throw XmlException(std::format("Parameter '{}' must be non-negative.", param_name));
 			}
+
+			const RealType floored_value = std::floor(raw_value);
+			if (floored_value > static_cast<RealType>(std::numeric_limits<unsigned>::max()))
+			{
+				throw XmlException(std::format("Parameter '{}' exceeds the supported unsigned range.", param_name));
+			}
+
+			return static_cast<unsigned>(floored_value);
 		};
 
-		set_param_with_exception_handling(parameters, "c", params::Parameters::DEFAULT_C,
-										  [&](RealType v)
-										  {
-											  params_out.c = v;
-											  LOG(logging::Level::INFO, "Propagation speed (c) set to: {:.5f}", v);
-										  });
-
-		set_param_with_exception_handling(parameters, "simSamplingRate", 1000.0,
-										  [&](RealType v)
-										  {
-											  params_out.sim_sampling_rate = v;
-											  LOG(logging::Level::DEBUG, "Simulation sampling rate set to: {:.5f} Hz",
-												  v);
-										  });
-
-		try
+		auto set_optional_real_parameter = [&](const std::string& param_name, const RealType default_value, auto setter)
 		{
-			const auto seed = static_cast<unsigned>(std::floor(get_child_real_type(parameters, "randomseed")));
+			if (!parameters.childElement(param_name, 0).isValid())
+			{
+				LOG(logging::Level::WARNING, "Failed to set parameter {}. Using default value. {}", param_name,
+					default_value);
+				return;
+			}
+
+			setter(get_child_real_type(parameters, param_name));
+		};
+
+		auto set_optional_unsigned_parameter =
+			[&](const std::string& param_name, const unsigned default_value, auto setter)
+		{
+			if (!parameters.childElement(param_name, 0).isValid())
+			{
+				LOG(logging::Level::WARNING, "Failed to set parameter {}. Using default value. {}", param_name,
+					default_value);
+				return;
+			}
+
+			setter(parse_unsigned_parameter(param_name, get_child_real_type(parameters, param_name)));
+		};
+
+		set_optional_real_parameter("c", params::Parameters::DEFAULT_C,
+									[&](const RealType value)
+									{
+										params_out.c = value;
+										LOG(logging::Level::INFO, "Propagation speed (c) set to: {:.5f}", value);
+									});
+
+		set_optional_real_parameter("simSamplingRate", 1000.0,
+									[&](const RealType value)
+									{
+										params_out.sim_sampling_rate = value;
+										LOG(logging::Level::DEBUG, "Simulation sampling rate set to: {:.5f} Hz", value);
+									});
+
+		if (parameters.childElement("randomseed", 0).isValid())
+		{
+			const auto seed = parse_unsigned_parameter("randomseed", get_child_real_type(parameters, "randomseed"));
 			params_out.random_seed = seed;
 			LOG(logging::Level::DEBUG, "Random seed set to: {}", seed);
 		}
-		catch (const XmlException&)
-		{
-		}
 
-		set_param_with_exception_handling(parameters, "adc_bits", 0,
-										  [&](unsigned v)
-										  {
-											  params_out.adc_bits = v;
-											  LOG(logging::Level::DEBUG, "ADC quantization bits set to: {}", v);
-										  });
+		set_optional_unsigned_parameter("adc_bits", 0,
+										[&](const unsigned value)
+										{
+											params_out.adc_bits = value;
+											LOG(logging::Level::DEBUG, "ADC quantization bits set to: {}", value);
+										});
 
-		set_param_with_exception_handling(parameters, "oversample", 1,
-										  [&](unsigned v)
-										  {
-											  if (v == 0)
-												  throw std::runtime_error("Oversample ratio must be >= 1");
-											  params_out.oversample_ratio = v;
-											  LOG(logging::Level::DEBUG, "Oversampling enabled with ratio: {}", v);
-										  });
+		set_optional_unsigned_parameter("oversample", 1,
+										[&](const unsigned value)
+										{
+											if (value == 0)
+											{
+												throw std::runtime_error("Oversample ratio must be >= 1");
+											}
+											params_out.oversample_ratio = value;
+											LOG(logging::Level::DEBUG, "Oversampling enabled with ratio: {}", value);
+										});
 
 		try
 		{
@@ -664,7 +697,7 @@ namespace serial::xml_parser_utils
 							   "'");
 		}
 		const auto timing_obj =
-			std::make_shared<timing::Timing>(proto->getName(), (*ctx.master_seeder)(), proto->getId());
+			std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
 		timing_obj->initializeModel(proto);
 		transmitter_obj->setTiming(timing_obj);
 
@@ -688,7 +721,7 @@ namespace serial::xml_parser_utils
 		const bool is_pulsed = pulsed_mode_element.isValid();
 		const radar::OperationMode mode = is_pulsed ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
 
-		auto receiver_obj = std::make_unique<radar::Receiver>(platform, name, (*ctx.master_seeder)(), mode, id);
+		auto receiver_obj = std::make_unique<radar::Receiver>(platform, name, next_seed(*ctx.master_seeder), mode, id);
 
 		const SimId ant_id = resolve_reference_id(receiver, "antenna", "receiver '" + name + "'", *refs.antennas);
 		const antenna::Antenna* antenna = ctx.world->findAntenna(ant_id);
@@ -741,7 +774,7 @@ namespace serial::xml_parser_utils
 			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for receiver '" + name + "'");
 		}
 		const auto timing_obj =
-			std::make_shared<timing::Timing>(proto->getName(), (*ctx.master_seeder)(), proto->getId());
+			std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
 		timing_obj->initializeModel(proto);
 		receiver_obj->setTiming(timing_obj);
 
@@ -791,7 +824,7 @@ namespace serial::xml_parser_utils
 
 		const std::string rcs_type = XmlElement::getSafeAttribute(rcs_element, "type");
 		std::unique_ptr<radar::Target> target_obj;
-		const unsigned seed = (*ctx.master_seeder)();
+		const unsigned seed = next_seed(*ctx.master_seeder);
 
 		if (rcs_type == "isotropic")
 		{
@@ -1012,15 +1045,15 @@ namespace serial::xml_parser_utils
 		params::params = ctx.parameters;
 
 		auto parseElements =
-			[](const XmlElement& root, const std::string& elementName, ParserContext& ctx, auto parseFunction)
+			[](const XmlElement& parent, const std::string& elementName, ParserContext& parser_ctx, auto parseFunction)
 		{
 			unsigned index = 0;
 			while (true)
 			{
-				XmlElement element = root.childElement(elementName, index++);
+				XmlElement element = parent.childElement(elementName, index++);
 				if (!element.isValid())
 					break;
-				parseFunction(element, ctx);
+				parseFunction(element, parser_ctx);
 			}
 		};
 

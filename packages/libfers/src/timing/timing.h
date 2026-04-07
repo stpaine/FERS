@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <random>
 #include <string>
@@ -55,9 +56,9 @@ namespace timing
 		/**
 		 * @brief Gets the next sample from the timing source.
 		 *
-		 * @return The next sample value or 0.0f if not enabled.
+		 * @return The next sample value or 0.0 if not enabled.
 		 */
-		[[nodiscard]] RealType getNextSample() const noexcept { return _enabled ? _model->getSample() : 0.0f; }
+		[[nodiscard]] RealType getNextSample() const noexcept { return _enabled ? _model->getSample() : 0.0; }
 
 		/**
 		 * @brief Gets the name of the timing source.
@@ -119,7 +120,7 @@ namespace timing
 		 *
 		 * @param samples The number of samples to skip.
 		 */
-		void skipSamples(long long samples) noexcept;
+		void skipSamples(std::size_t samples) noexcept;
 
 		/**
 		 * @brief Initializes the timing model.

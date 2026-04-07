@@ -91,3 +91,15 @@ TEST_CASE("InterpFilter getFilter rejects out of range", "[interpolation][filter
 	REQUIRE_THROWS_AS(filter.getFilter(1.1), std::runtime_error);
 	REQUIRE_THROWS_AS(filter.getFilter(-1.1), std::runtime_error);
 }
+
+TEST_CASE("InterpFilter getFilter keeps the upper boundary in range", "[interpolation][filter]")
+{
+	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+
+	const auto last_filter = filter.getFilter(1.0);
+	const auto near_last_filter = filter.getFilter(0.999);
+
+	REQUIRE(last_filter.size() == params::renderFilterLength());
+	REQUIRE(near_last_filter.size() == last_filter.size());
+	REQUIRE(last_filter.data() >= near_last_filter.data());
+}

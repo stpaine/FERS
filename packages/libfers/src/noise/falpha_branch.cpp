@@ -59,7 +59,7 @@ namespace noise
 			_highpass = std::make_unique<IirFilter>(hp_den.data(), hp_num.data(), hp_num.size());
 		}
 
-		if (_ffrac == 0.5f)
+		if (_ffrac == 0.5)
 		{
 			constexpr std::array sf_num = {
 				5.210373977738306e-03,	-7.694671394585578e-03, 1.635979377907092e-03,	9.852449140857658e-05,
@@ -74,7 +74,7 @@ namespace noise
 			_shape_gain = 5.210373977738306e-03;
 			_shape_filter = std::make_unique<IirFilter>(sf_den.data(), sf_num.data(), sf_num.size());
 		}
-		else if (_ffrac != 0.0f)
+		else if (_ffrac != 0.0)
 		{
 			LOG(Level::FATAL, "Fractional noise generation values other than 0.5 or 0 are not supported. ffrac={}",
 				_ffrac);

@@ -106,14 +106,15 @@ void getPositionLinear(RealType t, T& coord, const std::vector<T>& coords)
 	}
 	else
 	{
-		auto xri = std::distance(coords.begin(), xrp);
-		auto xli = xri - 1;
+		using index_type = typename std::vector<T>::size_type;
+		const auto right_index = static_cast<index_type>(xrp - coords.begin());
+		const auto left_index = right_index - 1;
 
-		const RealType iw = coords[xri].t - coords[xli].t;
-		const RealType rw = (coords[xri].t - t) / iw;
+		const RealType iw = coords[right_index].t - coords[left_index].t;
+		const RealType rw = (coords[right_index].t - t) / iw;
 		const RealType lw = 1 - rw;
 
-		coord = coords[xri] * lw + coords[xli] * rw;
+		coord = coords[right_index] * lw + coords[left_index] * rw;
 	}
 	coord.t = t;
 }
@@ -149,19 +150,20 @@ void getPositionCubic(RealType t, T& coord, const std::vector<T>& coords, const 
 	}
 	else
 	{
-		auto xri = std::distance(coords.begin(), xrp);
-		auto xli = xri - 1;
+		using index_type = typename std::vector<T>::size_type;
+		const auto right_index = static_cast<index_type>(xrp - coords.begin());
+		const auto left_index = right_index - 1;
 
-		const RealType xrd = coords[xri].t - t;
-		const RealType xld = t - coords[xli].t;
-		const RealType iw = coords[xri].t - coords[xli].t;
+		const RealType xrd = coords[right_index].t - t;
+		const RealType xld = t - coords[left_index].t;
+		const RealType iw = coords[right_index].t - coords[left_index].t;
 		const RealType iws = iw * iw / 6.0;
 		const RealType a = xrd / iw;
 		const RealType b = xld / iw;
 		const RealType c = (a * a * a - a) * iws;
 		const RealType d = (b * b * b - b) * iws;
 
-		coord = coords[xli] * a + coords[xri] * b + dd[xli] * c + dd[xri] * d;
+		coord = coords[left_index] * a + coords[right_index] * b + dd[left_index] * c + dd[right_index] * d;
 	}
 	coord.t = t;
 }
@@ -177,7 +179,8 @@ void getPositionCubic(RealType t, T& coord, const std::vector<T>& coords, const 
 template <Interpolatable T>
 void finalizeCubic(const std::vector<T>& coords, std::vector<T>& dd)
 {
-	const int size = static_cast<int>(coords.size());
+	using index_type = typename std::vector<T>::size_type;
+	const index_type size = coords.size();
 	if (size < 2)
 	{
 		throw math::PathException("Not enough points for cubic interpolation");
@@ -189,13 +192,16 @@ void finalizeCubic(const std::vector<T>& coords, std::vector<T>& dd)
 	dd.front() = 0;
 	dd.back() = 0;
 
-	for (int i = 1; i < size - 1; ++i)
+	for (index_type i = 1; i + 1 < size; ++i)
 	{
-		const T yrd = coords[i + 1] - coords[i];
-		const T yld = coords[i] - coords[i - 1];
-		const RealType xrd = coords[i + 1].t - coords[i].t;
-		const RealType xld = coords[i].t - coords[i - 1].t;
-		const RealType iw = coords[i + 1].t - coords[i - 1].t;
+		const index_type next_index = i + 1;
+		const index_type prev_index = i - 1;
+
+		const T yrd = coords[next_index] - coords[i];
+		const T yld = coords[i] - coords[prev_index];
+		const RealType xrd = coords[next_index].t - coords[i].t;
+		const RealType xld = coords[i].t - coords[prev_index].t;
+		const RealType iw = coords[next_index].t - coords[prev_index].t;
 
 		if (iw <= EPSILON)
 		{
@@ -208,12 +214,12 @@ void finalizeCubic(const std::vector<T>& coords, std::vector<T>& dd)
 		const T yld_xld = (xld <= EPSILON) ? (yld * 0.0) : (yld / xld);
 
 		const RealType si = xld / iw;
-		const T p = dd[i - 1] * si + 2.0;
+		const T p = dd[prev_index] * si + 2.0;
 		dd[i] = (si - 1.0) / p;
-		tmp[i] = ((yrd_xrd - yld_xld) * 6.0 / iw - tmp[i - 1] * si) / p;
+		tmp[i] = ((yrd_xrd - yld_xld) * 6.0 / iw - tmp[prev_index] * si) / p;
 	}
 
-	for (int i = size - 2; i >= 0; --i)
+	for (index_type i = size - 1; i-- > 0;)
 	{
 		dd[i] = dd[i] * dd[i + 1] + tmp[i];
 	}

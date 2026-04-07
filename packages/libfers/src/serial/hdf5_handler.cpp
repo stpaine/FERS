@@ -82,7 +82,7 @@ namespace serial
 	{
 		std::scoped_lock lock(hdf5_global_mutex);
 
-		const unsigned size = data.size();
+		const std::size_t size = data.size();
 
 		const std::string base_chunk_name = "chunk_" + std::format("{:06}", count);
 		const std::string i_chunk_name = base_chunk_name + "_I";

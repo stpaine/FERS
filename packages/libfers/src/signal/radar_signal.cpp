@@ -26,7 +26,7 @@
 
 namespace fers_signal
 {
-	std::vector<ComplexType> CwSignal::render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+	std::vector<ComplexType> CwSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
 											  const RealType /*fracWinDelay*/) const
 	{
 		size = 0;
@@ -109,7 +109,7 @@ namespace fers_signal
 				calculateWeightsAndDelays(iter, next, sample_time, idelay, fracWinDelay);
 			const auto& filt = interp.getFilter(fdelay);
 			ComplexType accum = performConvolution(i, filt.data(), filt_length, amplitude, i_sample_unwrap);
-			out[i] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
+			out[static_cast<std::size_t>(i)] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
 
 			sample_time += timestep;
 		}
@@ -145,10 +145,11 @@ namespace fers_signal
 
 		for (int j = start; j < end; ++j)
 		{
-			if (const unsigned sample_idx = i + j + iSampleUnwrap;
-				sample_idx < _size && j + filtLength / 2 < filtLength)
+			const int sample_idx = i + j + iSampleUnwrap;
+			const int filt_idx = j + filtLength / 2;
+			if (sample_idx >= 0 && sample_idx < static_cast<int>(_size) && filt_idx >= 0 && filt_idx < filtLength)
 			{
-				accum += amplitude * _data[sample_idx] * filt[j + filtLength / 2];
+				accum += amplitude * _data[static_cast<std::size_t>(sample_idx)] * filt[filt_idx];
 			}
 		}
 

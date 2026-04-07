@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <span>
 #include <vector>
@@ -146,7 +147,7 @@ namespace fers_signal
 	private:
 		std::vector<RealType> _filter; ///< Filter coefficients
 		std::vector<RealType> _w; ///< Internal state
-		unsigned _order{}; ///< Filter order
+		std::size_t _order{}; ///< Filter order
 	};
 
 	/**

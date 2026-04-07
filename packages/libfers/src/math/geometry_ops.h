@@ -65,12 +65,13 @@ namespace math
 		/**
 		 * @brief Parameterized constructor for SVec3.
 		 *
-		 * @param length The length or magnitude of the vector.
-		 * @param azimuth The azimuthal angle of the vector.
-		 * @param elevation The elevation angle of the vector.
+		 * @param vector_length The length or magnitude of the vector.
+		 * @param vector_azimuth The azimuthal angle of the vector.
+		 * @param vector_elevation The elevation angle of the vector.
 		 */
-		constexpr SVec3(const RealType length, const RealType azimuth, const RealType elevation) noexcept :
-			length(length), azimuth(azimuth), elevation(elevation)
+		constexpr SVec3(const RealType vector_length, const RealType vector_azimuth,
+						const RealType vector_elevation) noexcept :
+			length(vector_length), azimuth(vector_azimuth), elevation(vector_elevation)
 		{
 		}
 
@@ -118,11 +119,14 @@ namespace math
 		/**
 		 * @brief Parameterized constructor for Vec3.
 		 *
-		 * @param x The x component.
-		 * @param y The y component.
-		 * @param z The z component.
+		 * @param x_value The x component.
+		 * @param y_value The y component.
+		 * @param z_value The z component.
 		 */
-		constexpr Vec3(const RealType x, const RealType y, const RealType z) noexcept : x(x), y(y), z(z) {}
+		constexpr Vec3(const RealType x_value, const RealType y_value, const RealType z_value) noexcept :
+			x(x_value), y(y_value), z(z_value)
+		{
+		}
 
 		/**
 		 * @brief Constructs a rectangular vector from a spherical SVec3.

@@ -53,13 +53,17 @@ Follow these steps to set up a development environment for building the C++ core
 
 Ensure you have the following tools installed on your system:
 
-- A C++23 compatible compiler (e.g., GCC 11+, Clang 14+) and **CMake** (3.22+).
+- A C++23 compatible compiler (e.g., GCC 11+, Clang 14+), **CMake** (3.22+), and [**Ninja**](https://ninja-build.org/).
 - [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment.
 - [**Bun**](https://bun.sh/).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
 - [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
 - **Other notable dependencies (for linux):** `build-essential`, `pkg-config`, and `xxd`.
+
+> [!TIP]
+> Ninja is available in all major package managers: `sudo apt install ninja-build` (Debian/Ubuntu),
+> `brew install ninja` (macOS), or `choco install ninja` (Windows).
 
 ### 2. Clone the Repository
 

@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <expected>
 #include <span>
 #include <vector>
@@ -82,8 +83,8 @@ namespace interp
 		RealType _alpha; ///< The alpha value for the Kaiser window.
 		RealType _beta = 5; ///< The beta value for the Kaiser window.
 		RealType _bessel_beta; ///< The Bessel function value for the Kaiser window.
-		int _length; ///< The length of the filter.
-		int _table_filters; ///< The number of filters in the table.
+		std::size_t _length; ///< The length of the filter.
+		std::size_t _table_filters; ///< The number of filters in the table.
 		std::vector<RealType> _filter_table; ///< The table of precomputed filters.
 	};
 }

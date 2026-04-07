@@ -57,18 +57,18 @@ namespace
 	 * @param localWindowSize The size of the local window in samples.
 	 */
 	void processResponse(const serial::Response* resp, std::vector<ComplexType>& localWindow, const RealType rate,
-						 const RealType start, const RealType fracDelay, const unsigned localWindowSize)
+						 const RealType start, const RealType fracDelay, const std::size_t localWindowSize)
 	{
 		unsigned psize;
 		RealType prate;
 		const auto array = resp->renderBinary(prate, psize, fracDelay);
 		int start_sample = static_cast<int>(std::round(rate * (resp->startTime() - start)));
-		const unsigned roffset = start_sample < 0 ? -start_sample : 0;
-		start_sample = std::max(start_sample, 0);
+		const auto roffset = start_sample < 0 ? static_cast<std::size_t>(-start_sample) : std::size_t{0};
+		const auto start_offset = static_cast<std::size_t>(std::max(start_sample, 0));
 
-		for (unsigned i = roffset; i < psize && i + start_sample < localWindowSize; ++i)
+		for (std::size_t i = roffset; i < psize && i + start_offset < localWindowSize; ++i)
 		{
-			localWindow[i + start_sample] += array[i];
+			localWindow[i + start_offset] += array[i];
 		}
 	}
 }
@@ -90,7 +90,7 @@ namespace processing
 		}
 
 		const RealType rate = params::rate() * params::oversampleRatio();
-		const auto local_window_size = static_cast<unsigned>(std::ceil(length * rate));
+		const auto local_window_size = static_cast<std::size_t>(std::ceil(length * rate));
 
 		std::vector local_window(local_window_size, ComplexType{});
 
@@ -101,7 +101,7 @@ namespace processing
 			processResponse(resp, local_window, rate, start, fracDelay, local_window_size);
 		}
 
-		for (unsigned i = 0; i < local_window_size; ++i)
+		for (std::size_t i = 0; i < local_window_size; ++i)
 		{
 			window[i] += local_window[i];
 		}

@@ -107,12 +107,13 @@ namespace
 	{
 		try
 		{
-			config.num_threads = std::stoi(arg.substr(3));
-			if (config.num_threads == 0)
+			const int requested_threads = std::stoi(arg.substr(3));
+			if (requested_threads <= 0)
 			{
 				return std::unexpected("Number of threads must be greater than 0");
 			}
 
+			config.num_threads = static_cast<unsigned>(requested_threads);
 			if (const unsigned max_threads = std::thread::hardware_concurrency();
 				max_threads > 0 && config.num_threads > max_threads)
 			{

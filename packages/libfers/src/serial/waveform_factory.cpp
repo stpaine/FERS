@@ -12,10 +12,12 @@
 
 #include "waveform_factory.h"
 
+#include <cmath>
 #include <complex>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <string_view>
@@ -33,6 +35,31 @@ using fers_signal::Signal;
 
 namespace
 {
+	[[nodiscard]] unsigned checked_sample_count(const std::size_t sample_count, const std::string_view source)
+	{
+		if (sample_count > static_cast<std::size_t>(std::numeric_limits<unsigned>::max()))
+		{
+			throw std::runtime_error(std::format("Waveform '{}' has too many samples to load into Signal.", source));
+		}
+		return static_cast<unsigned>(sample_count);
+	}
+
+	[[nodiscard]] unsigned parse_csv_sample_count(const RealType sample_count, const std::filesystem::path& filepath)
+	{
+		if (!std::isfinite(sample_count) || sample_count < 0.0 || std::trunc(sample_count) != sample_count)
+		{
+			throw std::runtime_error("Waveform file '" + filepath.string() + "' has an invalid sample count header.");
+		}
+
+		if (sample_count > static_cast<RealType>(std::numeric_limits<unsigned>::max()))
+		{
+			throw std::runtime_error("Waveform file '" + filepath.string() +
+									 "' declares more samples than Signal can represent.");
+		}
+
+		return static_cast<unsigned>(sample_count);
+	}
+
 	/**
 	 * @brief Loads a radar waveform from an HDF5 file and returns a RadarSignal object.
 	 *
@@ -49,11 +76,12 @@ namespace
 	{
 		std::vector<ComplexType> data;
 		serial::readPulseData(filepath.string(), data);
+		const unsigned sample_count = checked_sample_count(data.size(), filepath.string());
 
 		auto signal = std::make_unique<Signal>();
-		signal->load(data, data.size(), params::rate());
+		signal->load(data, sample_count, params::rate());
 		return std::make_unique<RadarSignal>(
-			name, power, carrierFreq, static_cast<RealType>(data.size()) / params::rate(), std::move(signal), id);
+			name, power, carrierFreq, static_cast<RealType>(sample_count) / params::rate(), std::move(signal), id);
 	}
 
 	/**
@@ -77,10 +105,20 @@ namespace
 			throw std::runtime_error("Could not open file '" + filepath.string() + "' to read waveform");
 		}
 
-		RealType rlength, rate;
-		ifile >> rlength >> rate;
+		RealType rlength = 0.0;
+		RealType rate = 0.0;
+		if (!(ifile >> rlength >> rate))
+		{
+			LOG(logging::Level::FATAL, "Could not read waveform header from file '{}'", filepath.string());
+			throw std::runtime_error("Could not read waveform header from file '" + filepath.string() + "'");
+		}
+		if (!std::isfinite(rate) || rate <= 0.0)
+		{
+			LOG(logging::Level::FATAL, "Waveform file '{}' has invalid sample rate {}", filepath.string(), rate);
+			throw std::runtime_error("Waveform file '" + filepath.string() + "' has an invalid sample rate");
+		}
 
-		const auto length = static_cast<std::size_t>(rlength);
+		const unsigned length = parse_csv_sample_count(rlength, filepath);
 		std::vector<ComplexType> data(length);
 
 		// Read the file data

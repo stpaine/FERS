@@ -22,7 +22,7 @@ including the official `fers-cli` and `fers-ui` applications.
 ## Dependencies
 
 - A C++23 compatible compiler (e.g., GCC 11+, Clang 14+)
-- **CMake** (3.22+)
+- **CMake** (3.22+) and [**Ninja**](https://ninja-build.org/)
 - **vcpkg** for C++ package management. All third-party libraries (like HDF5, libxml2, etc.) are managed through the `vcpkg.json` manifest at the repository root.
 - **Doxygen** & **Graphviz** (for documentation generation, optional)
 
