@@ -56,9 +56,9 @@ namespace timing
 		/**
 		 * @brief Gets the next sample from the timing source.
 		 *
-		 * @return The next sample value or 0.0f if not enabled.
+		 * @return The next sample value or 0.0 if not enabled.
 		 */
-		[[nodiscard]] RealType getNextSample() const noexcept { return _enabled ? _model->getSample() : 0.0f; }
+		[[nodiscard]] RealType getNextSample() const noexcept { return _enabled ? _model->getSample() : 0.0; }
 
 		/**
 		 * @brief Gets the name of the timing source.
