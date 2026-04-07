@@ -301,9 +301,6 @@ TEST_CASE("calculateResponse direct path interp points have consistent Friis pow
 	const RealType dist = 2000.0;
 	const RealType carrier = 1.0e9;
 	const RealType c = params::c();
-	const RealType lambda = c / carrier;
-
-	const RealType expected_power = (lambda * lambda) / (16.0 * PI * PI * dist * dist);
 
 	radar::Platform tx_plat("tx_plat");
 	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});

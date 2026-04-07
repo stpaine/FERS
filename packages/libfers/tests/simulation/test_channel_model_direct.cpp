@@ -104,9 +104,7 @@ TEST_CASE("solveReDirect Friis equation with different distances", "[simulation]
 	params::params.reset();
 
 	// Verify inverse-square law: doubling distance should quarter the power
-	const RealType c = params::c();
 	const RealType carrier = 3.0e9; // 3 GHz
-	const RealType lambda = c / carrier;
 
 	antenna::Isotropic iso_ant("iso");
 	auto timing = std::make_shared<timing::Timing>("clk", 42);

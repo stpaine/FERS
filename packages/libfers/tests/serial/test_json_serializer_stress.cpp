@@ -146,6 +146,7 @@ namespace
 	{
 		std::uniform_real_distribution<RealType> dist_real(0.1, 1000.0);
 		std::uniform_int_distribution<int> dist_mode(0, 1);
+		std::uniform_int_distribution<unsigned> seed_dist;
 
 		std::vector<SimId> wave_ids, ant_ids, time_ids;
 
@@ -243,7 +244,7 @@ namespace
 			auto tx = std::make_unique<radar::Transmitter>(plat.get(), "tx_" + std::to_string(i), tx_mode);
 			tx->setWave(world.findWaveform(wave_ids[i % wave_ids.size()]));
 			tx->setAntenna(world.findAntenna(ant_ids[i % ant_ids.size()]));
-			auto tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), rng(), proto_tim->getId());
+			auto tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
 			tx_tim->initializeModel(proto_tim);
 			tx->setTiming(tx_tim);
 			if (tx_mode == radar::OperationMode::PULSED_MODE)
@@ -253,9 +254,9 @@ namespace
 
 			// Standalone Receiver
 			auto rx_mode = dist_mode(rng) == 0 ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
-			auto rx = std::make_unique<radar::Receiver>(plat.get(), "rx_" + std::to_string(i), rng(), rx_mode);
+			auto rx = std::make_unique<radar::Receiver>(plat.get(), "rx_" + std::to_string(i), seed_dist(rng), rx_mode);
 			rx->setAntenna(world.findAntenna(ant_ids[(i + 1) % ant_ids.size()]));
-			auto rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), rng(), proto_tim->getId());
+			auto rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
 			rx_tim->initializeModel(proto_tim);
 			rx->setTiming(rx_tim);
 			rx->setNoiseTemperature(290.0);
@@ -273,18 +274,20 @@ namespace
 			auto mono_tx = std::make_unique<radar::Transmitter>(plat.get(), "mono_tx_" + std::to_string(i), mono_mode);
 			mono_tx->setWave(world.findWaveform(wave_ids[(i + 2) % wave_ids.size()]));
 			mono_tx->setAntenna(world.findAntenna(ant_ids[(i + 2) % ant_ids.size()]));
-			auto mono_tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), rng(), proto_tim->getId());
+			auto mono_tx_tim =
+				std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
 			mono_tx_tim->initializeModel(proto_tim);
 			mono_tx->setTiming(mono_tx_tim);
 			if (mono_mode == radar::OperationMode::PULSED_MODE)
 				mono_tx->setPrf(2000.0 + dist_real(rng));
 			mono_tx->setSchedule({{0.01, 0.09}});
 
-			auto mono_rx =
-				std::make_unique<radar::Receiver>(plat.get(), "mono_rx_" + std::to_string(i), rng(), mono_mode);
+			auto mono_rx = std::make_unique<radar::Receiver>(plat.get(), "mono_rx_" + std::to_string(i), seed_dist(rng),
+															 mono_mode);
 			mono_rx->setAntenna(
 				world.findAntenna(ant_ids[(i + 2) % ant_ids.size()])); // Monostatic usually shares antenna
-			auto mono_rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), rng(), proto_tim->getId());
+			auto mono_rx_tim =
+				std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
 			mono_rx_tim->initializeModel(proto_tim);
 			mono_rx->setTiming(mono_rx_tim);
 			mono_rx->setNoiseTemperature(300.0);
@@ -299,7 +302,7 @@ namespace
 			world.add(std::move(mono_rx));
 
 			// Target
-			auto tgt = radar::createIsoTarget(plat.get(), "tgt_" + std::to_string(i), dist_real(rng), rng());
+			auto tgt = radar::createIsoTarget(plat.get(), "tgt_" + std::to_string(i), dist_real(rng), seed_dist(rng));
 			if (i % 2 == 0)
 			{
 				tgt->setFluctuationModel(std::make_unique<radar::RcsChiSquare>(tgt->getRngEngine(), 2.0));
