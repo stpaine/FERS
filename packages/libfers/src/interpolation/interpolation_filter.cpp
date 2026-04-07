@@ -117,10 +117,10 @@ namespace interp
 
 		for (std::ptrdiff_t i = -hfilt; i < hfilt; ++i)
 		{
-			const RealType delay = i / static_cast<RealType>(hfilt);
+			const RealType delay = static_cast<RealType>(i) / static_cast<RealType>(hfilt);
 			for (std::ptrdiff_t j = -alpha_offset; j < alpha_offset; ++j)
 			{
-				if (auto interp = interpFilter(j - delay); interp)
+				if (auto interp = interpFilter(static_cast<RealType>(j) - delay); interp)
 				{
 					const auto filter_index =
 						static_cast<std::size_t>(i + hfilt) * _length + static_cast<std::size_t>(j + alpha_offset);

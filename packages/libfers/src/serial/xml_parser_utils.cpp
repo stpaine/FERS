@@ -10,6 +10,7 @@
 #include <cmath>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <string_view>
 
 #include "antenna/antenna_factory.h"
@@ -38,6 +39,16 @@ namespace fs = std::filesystem;
 
 namespace serial::xml_parser_utils
 {
+	namespace
+	{
+		[[nodiscard]] unsigned next_seed(std::mt19937& master_seeder)
+		{
+			static_assert(std::mt19937::max() <= std::numeric_limits<unsigned>::max(),
+						  "std::mt19937 output must fit into unsigned seeds.");
+			return static_cast<unsigned>(master_seeder());
+		}
+	}
+
 	RealType get_child_real_type(const XmlElement& element, const std::string& elementName)
 	{
 		const std::string text = element.childElement(elementName, 0).getText();
@@ -664,7 +675,7 @@ namespace serial::xml_parser_utils
 							   "'");
 		}
 		const auto timing_obj =
-			std::make_shared<timing::Timing>(proto->getName(), (*ctx.master_seeder)(), proto->getId());
+			std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
 		timing_obj->initializeModel(proto);
 		transmitter_obj->setTiming(timing_obj);
 
@@ -688,7 +699,7 @@ namespace serial::xml_parser_utils
 		const bool is_pulsed = pulsed_mode_element.isValid();
 		const radar::OperationMode mode = is_pulsed ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
 
-		auto receiver_obj = std::make_unique<radar::Receiver>(platform, name, (*ctx.master_seeder)(), mode, id);
+		auto receiver_obj = std::make_unique<radar::Receiver>(platform, name, next_seed(*ctx.master_seeder), mode, id);
 
 		const SimId ant_id = resolve_reference_id(receiver, "antenna", "receiver '" + name + "'", *refs.antennas);
 		const antenna::Antenna* antenna = ctx.world->findAntenna(ant_id);
@@ -741,7 +752,7 @@ namespace serial::xml_parser_utils
 			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for receiver '" + name + "'");
 		}
 		const auto timing_obj =
-			std::make_shared<timing::Timing>(proto->getName(), (*ctx.master_seeder)(), proto->getId());
+			std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
 		timing_obj->initializeModel(proto);
 		receiver_obj->setTiming(timing_obj);
 
@@ -791,7 +802,7 @@ namespace serial::xml_parser_utils
 
 		const std::string rcs_type = XmlElement::getSafeAttribute(rcs_element, "type");
 		std::unique_ptr<radar::Target> target_obj;
-		const unsigned seed = (*ctx.master_seeder)();
+		const unsigned seed = next_seed(*ctx.master_seeder);
 
 		if (rcs_type == "isotropic")
 		{

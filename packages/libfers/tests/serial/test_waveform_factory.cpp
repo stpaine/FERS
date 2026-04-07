@@ -214,7 +214,56 @@ TEST_CASE("Waveform factory throws for incomplete CSV waveform data", "[serial][
 	removeIfExists(path);
 }
 
-// TODO: Add a malformed CSV header test once loadWaveformFromCsvFile validates
-// header extraction before using the parsed values. The current implementation
-// reads header values into uninitialized locals on extraction failure, which is
-// not reliable to exercise deterministically in a unit test.
+TEST_CASE("Waveform factory throws for malformed CSV header", "[serial][waveform_factory]")
+{
+	const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_bad_header", ".csv"));
+	removeIfExists(path);
+
+	{
+		std::ofstream out(path);
+		REQUIRE(out.is_open());
+		out << "not-a-count\n";
+		out << "still-not-a-rate\n";
+	}
+
+	REQUIRE_THROWS_AS(serial::loadWaveformFromFile("wave", path.string(), 1.0, 2.0), std::runtime_error);
+
+	removeIfExists(path);
+}
+
+TEST_CASE("Waveform factory rejects invalid CSV sample counts", "[serial][waveform_factory]")
+{
+	SECTION("fractional sample count")
+	{
+		const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_fractional_count", ".csv"));
+		removeIfExists(path);
+
+		{
+			std::ofstream out(path);
+			REQUIRE(out.is_open());
+			out << 2.5 << "\n";
+			out << 16.0 << "\n";
+			out << ComplexType(1.0, 0.0) << "\n";
+			out << ComplexType(0.0, 1.0) << "\n";
+		}
+
+		REQUIRE_THROWS_AS(serial::loadWaveformFromFile("wave", path.string(), 1.0, 2.0), std::runtime_error);
+		removeIfExists(path);
+	}
+
+	SECTION("negative sample count")
+	{
+		const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_negative_count", ".csv"));
+		removeIfExists(path);
+
+		{
+			std::ofstream out(path);
+			REQUIRE(out.is_open());
+			out << -1 << "\n";
+			out << 16.0 << "\n";
+		}
+
+		REQUIRE_THROWS_AS(serial::loadWaveformFromFile("wave", path.string(), 1.0, 2.0), std::runtime_error);
+		removeIfExists(path);
+	}
+}
