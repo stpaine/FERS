@@ -220,13 +220,36 @@ set(FERS_NATIVE_LINK_MANIFEST_TARGETS
 )
 
 # --- Create Library Targets ---
+
+# Compile sources exactly once into an OBJECT library.
+# Both static and shared targets consume these objects.
+add_library(fers_objects OBJECT)
+set_target_properties(fers_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+fers_configure_library_target(fers_objects)
+target_precompile_headers(fers_objects PRIVATE
+	<nlohmann/json.hpp>
+)
+
 if (FERS_BUILD_STATIC_LIBS)
-	add_library(fers_static STATIC)
+	add_library(fers_static STATIC $<TARGET_OBJECTS:fers_objects>)
 	set_target_properties(fers_static PROPERTIES OUTPUT_NAME "fers")
 	# Ensure the static library is built with Position-Independent Code,
 	# which is required when linking it into a shared library (like the Rust cdylib).
 	set_target_properties(fers_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
-	fers_configure_library_target(fers_static)
+
+	# Include directories and link dependencies must be set on the
+	# final library targets so that consumers inherit them correctly.
+	target_include_directories(fers_static PUBLIC
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+		$<INSTALL_INTERFACE:include>
+	)
+	target_link_libraries(fers_static PRIVATE ${FERS_NATIVE_LINK_DEPENDENCIES})
+	target_compile_definitions(fers_static PRIVATE HAVE_LIBHDF5)
+
+	set_target_properties(fers_static PROPERTIES
+		SOVERSION ${CMAKE_PROJECT_VERSION_MAJOR}
+		VERSION ${CMAKE_PROJECT_VERSION}
+	)
 	add_library(fers::fers_static ALIAS fers_static)
 
 	set(_fers_native_static_links)
@@ -249,9 +272,20 @@ if (FERS_BUILD_STATIC_LIBS)
 endif ()
 
 if (FERS_BUILD_SHARED_LIBS)
-	add_library(fers_shared SHARED)
+	add_library(fers_shared SHARED $<TARGET_OBJECTS:fers_objects>)
 	set_target_properties(fers_shared PROPERTIES OUTPUT_NAME "fers")
-	fers_configure_library_target(fers_shared)
+
+	target_include_directories(fers_shared PUBLIC
+		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+		$<INSTALL_INTERFACE:include>
+	)
+	target_link_libraries(fers_shared PRIVATE ${FERS_NATIVE_LINK_DEPENDENCIES})
+	target_compile_definitions(fers_shared PRIVATE HAVE_LIBHDF5)
+
+	set_target_properties(fers_shared PROPERTIES
+		SOVERSION ${CMAKE_PROJECT_VERSION_MAJOR}
+		VERSION ${CMAKE_PROJECT_VERSION}
+	)
 	add_library(fers::fers_shared ALIAS fers_shared)
 endif ()
 
