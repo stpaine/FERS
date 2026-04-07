@@ -153,6 +153,14 @@ TEST_CASE("parseArguments rejects a zero thread count", "[fers-cli][arg-parser]"
 	CHECK(result.error() == "Number of threads must be greater than 0");
 }
 
+TEST_CASE("parseArguments rejects a negative thread count", "[fers-cli][arg-parser]")
+{
+	const auto result = parseArgs({"scenario.fersxml", "-n=-4"});
+
+	REQUIRE_FALSE(result);
+	CHECK(result.error() == "Number of threads must be greater than 0");
+}
+
 TEST_CASE("parseArguments requires a script file", "[fers-cli][arg-parser]")
 {
 	const auto result = parseArgs({"--out-dir=results"});

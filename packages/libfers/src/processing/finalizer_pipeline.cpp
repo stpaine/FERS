@@ -27,21 +27,39 @@ namespace processing::pipeline
 {
 	void advanceTimingModel(timing::Timing* timing_model, const radar::Receiver* receiver, const RealType rate)
 	{
+
 		if ((timing_model == nullptr) || !timing_model->isEnabled())
 		{
 			return;
 		}
 
+		// Convert the duration-derived sample advance to a signed temporary first.
+		// The physical calculation can legitimately produce a negative or zero result
+		// (for example due to floor() or an inter-pulse gap that is not positive),
+		// but skipSamples() models advancing by a non-negative sample count only.
+		// After validating that the computed value is > 0, cast to std::size_t for
+		// the skipSamples() call chain:
+		//   Timing::skipSamples -> ClockModelGenerator::skipSamples ->
+		//   MultirateGenerator::skipSamples.
+		// This preserves the sign until validation and avoids passing invalid negative
+		// counts into the timing/noise generators.
 		if (timing_model->getSyncOnPulse())
 		{
 			timing_model->reset();
-			timing_model->skipSamples(static_cast<long>(std::floor(rate * receiver->getWindowSkip())));
+			const auto skip_samples = static_cast<long long>(std::floor(rate * receiver->getWindowSkip()));
+			if (skip_samples > 0)
+			{
+				timing_model->skipSamples(static_cast<std::size_t>(skip_samples));
+			}
 		}
 		else
 		{
 			const RealType inter_pulse_skip_duration = 1.0 / receiver->getWindowPrf() - receiver->getWindowLength();
-			const auto samples_to_skip = static_cast<long>(std::floor(rate * inter_pulse_skip_duration));
-			timing_model->skipSamples(samples_to_skip);
+			const auto samples_to_skip = static_cast<long long>(std::floor(rate * inter_pulse_skip_duration));
+			if (samples_to_skip > 0)
+			{
+				timing_model->skipSamples(static_cast<std::size_t>(samples_to_skip));
+			}
 		}
 	}
 

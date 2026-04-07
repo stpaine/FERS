@@ -12,6 +12,8 @@
 
 #include "interpolation_filter.h"
 
+#include <algorithm>
+#include <cstddef>
 #include <stdexcept>
 
 #include "core/logging.h"
@@ -93,11 +95,11 @@ namespace interp
 
 	InterpFilter::InterpFilter()
 	{
-		_length = static_cast<int>(params::renderFilterLength());
+		_length = params::renderFilterLength();
 		_table_filters = 1000;
 		_filter_table = std::vector<RealType>(_table_filters * _length);
 
-		_alpha = std::floor(params::renderFilterLength() / 2.0);
+		_alpha = std::floor(static_cast<RealType>(_length) / 2.0);
 		if (auto bessel = besselI0(_beta); bessel)
 		{
 			_bessel_beta = *bessel;
@@ -108,18 +110,21 @@ namespace interp
 			throw std::runtime_error("Bessel function calculation failed");
 		}
 
-		const int hfilt = _table_filters / 2;
+		const auto hfilt = static_cast<std::ptrdiff_t>(_table_filters / 2);
+		const auto alpha_offset = static_cast<std::ptrdiff_t>(_alpha);
 
 		LOG(Level::DEBUG, "Building table of {} filters", _table_filters);
 
-		for (int i = -hfilt; i < hfilt; ++i)
+		for (std::ptrdiff_t i = -hfilt; i < hfilt; ++i)
 		{
 			const RealType delay = i / static_cast<RealType>(hfilt);
-			for (int j = static_cast<int>(-_alpha); j < _alpha; ++j)
+			for (std::ptrdiff_t j = -alpha_offset; j < alpha_offset; ++j)
 			{
 				if (auto interp = interpFilter(j - delay); interp)
 				{
-					_filter_table[(i + hfilt) * _length + j + static_cast<int>(_alpha)] = *interp;
+					const auto filter_index =
+						static_cast<std::size_t>(i + hfilt) * _length + static_cast<std::size_t>(j + alpha_offset);
+					_filter_table[filter_index] = *interp;
 				}
 				else
 				{
@@ -140,8 +145,9 @@ namespace interp
 			throw std::runtime_error("Requested delay filter value out of range");
 		}
 
-		// TODO: Investigate if OOB access can occur here
-		const auto filt = static_cast<unsigned>((delay + 1) * (_table_filters / 2.0));
-		return std::span{&_filter_table[filt * _length], static_cast<size_t>(_length)};
+		const auto filt =
+			std::min(static_cast<std::size_t>((delay + 1.0) * (static_cast<RealType>(_table_filters) / 2.0)),
+					 _table_filters - 1);
+		return std::span{_filter_table.data() + filt * _length, _length};
 	}
 }

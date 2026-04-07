@@ -34,9 +34,14 @@ namespace noise
 	}
 
 	// NOLINTNEXTLINE(readability-make-member-function-const)
-	void MultirateGenerator::skipSamples(const long long samples) noexcept
+	void MultirateGenerator::skipSamples(const std::size_t samples) noexcept
 	{
-		if (const int skip_branches = static_cast<int>(std::log10(samples)) - 1; skip_branches > 0)
+		if (samples == 0)
+		{
+			return;
+		}
+
+		if (const int skip_branches = static_cast<int>(std::log10(static_cast<double>(samples))) - 1; skip_branches > 0)
 		{
 			std::vector<FAlphaBranch*> flushbranches;
 			FAlphaBranch* branch = _topbranch.get();
@@ -49,8 +54,9 @@ namespace noise
 
 			if (branch != nullptr)
 			{
-				const auto reduced_samples = samples / static_cast<long long>(std::pow(10.0, skip_branches));
-				for (long long i = 0; i < reduced_samples; ++i)
+				const auto reduced_samples =
+					samples / static_cast<std::size_t>(std::pow(10.0, static_cast<double>(skip_branches)));
+				for (std::size_t i = 0; i < reduced_samples; ++i)
 				{
 					branch->getSample();
 				}
@@ -63,7 +69,7 @@ namespace noise
 		}
 		else
 		{
-			for (long long i = 0; i < samples; ++i)
+			for (std::size_t i = 0; i < samples; ++i)
 			{
 				_topbranch->getSample();
 			}
@@ -149,7 +155,7 @@ namespace noise
 		return sample;
 	}
 
-	void ClockModelGenerator::skipSamples(const long long samples)
+	void ClockModelGenerator::skipSamples(const std::size_t samples)
 	{
 		for (const auto& generator : _generators)
 		{

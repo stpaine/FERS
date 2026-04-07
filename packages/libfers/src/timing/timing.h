@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <random>
 #include <string>
@@ -119,7 +120,7 @@ namespace timing
 		 *
 		 * @param samples The number of samples to skip.
 		 */
-		void skipSamples(long long samples) noexcept;
+		void skipSamples(std::size_t samples) noexcept;
 
 		/**
 		 * @brief Initializes the timing model.

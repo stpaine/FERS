@@ -13,6 +13,7 @@
 #include "path.h"
 
 #include <algorithm>
+#include <cstddef>
 
 #include "coord.h"
 #include "core/logging.h"
@@ -77,19 +78,22 @@ namespace math
 		case InterpType::INTERP_LINEAR:
 			{
 				auto xrp = std::ranges::upper_bound(_coords, t, {}, &Coord::t);
-				size_t idx = std::distance(_coords.begin(), xrp);
+				auto idx = std::distance(_coords.begin(), xrp);
 
 				// Clamp to valid segments
-				if (idx == 0)
+				if (idx <= 0)
 					idx = 1;
-				if (idx >= _coords.size())
-					idx = _coords.size() - 1;
+				if (static_cast<std::size_t>(idx) >= _coords.size())
+					idx = static_cast<decltype(idx)>(_coords.size() - 1);
 
-				if (idx < 1)
+				if (idx < 1 || static_cast<std::size_t>(idx) >= _coords.size())
 					return {0, 0, 0}; // Should not happen if size >= 1 and clamp works
 
-				const auto& p1 = _coords[idx - 1];
-				const auto& p2 = _coords[idx];
+				const auto right_idx = static_cast<std::size_t>(idx);
+				const auto left_idx = right_idx - 1;
+
+				const auto& p1 = _coords[left_idx];
+				const auto& p2 = _coords[right_idx];
 				const RealType dt = p2.t - p1.t;
 
 				if (dt <= EPSILON)
@@ -101,25 +105,26 @@ namespace math
 		case InterpType::INTERP_CUBIC:
 			{
 				auto xrp = std::ranges::upper_bound(_coords, t, {}, &Coord::t);
-				size_t xri;
+				std::ptrdiff_t xri;
 				if (xrp == _coords.begin())
 					xri = 1;
 				else if (xrp == _coords.end())
-					xri = _coords.size() - 1;
+					xri = static_cast<std::ptrdiff_t>(_coords.size() - 1);
 				else
 					xri = std::distance(_coords.begin(), xrp);
 
-				if (xri < 1 || xri >= _coords.size())
+				if (xri < 1 || static_cast<std::size_t>(xri) >= _coords.size())
 					return {0, 0, 0};
 
-				size_t xli = xri - 1;
+				const auto right_idx = static_cast<std::size_t>(xri);
+				const auto left_idx = right_idx - 1;
 
-				const RealType h = _coords[xri].t - _coords[xli].t;
+				const RealType h = _coords[right_idx].t - _coords[left_idx].t;
 				if (h <= EPSILON)
 					return {0, 0, 0};
 
-				const RealType a = (_coords[xri].t - t) / h;
-				const RealType b = (t - _coords[xli].t) / h;
+				const RealType a = (_coords[right_idx].t - t) / h;
+				const RealType b = (t - _coords[left_idx].t) / h;
 
 				// Derivative coefficients
 				// da/dt = -1/h
@@ -132,7 +137,8 @@ namespace math
 				const RealType dc = -h / 6.0 * (3.0 * a * a - 1.0);
 				const RealType dd_coeff = h / 6.0 * (3.0 * b * b - 1.0);
 
-				return _coords[xli].pos * da + _coords[xri].pos * db + _dd[xli].pos * dc + _dd[xri].pos * dd_coeff;
+				return _coords[left_idx].pos * da + _coords[right_idx].pos * db + _dd[left_idx].pos * dc +
+					_dd[right_idx].pos * dd_coeff;
 			}
 		}
 		return {0, 0, 0};

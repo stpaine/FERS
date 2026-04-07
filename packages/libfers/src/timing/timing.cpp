@@ -28,7 +28,7 @@ namespace timing
 	}
 
 	// NOLINTNEXTLINE(readability-make-member-function-const)
-	void Timing::skipSamples(const long long samples) noexcept
+	void Timing::skipSamples(const std::size_t samples) noexcept
 	{
 		if (_enabled && _model)
 		{
