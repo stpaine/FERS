@@ -394,8 +394,8 @@ namespace antenna
 			LOG(Level::FATAL, "Could not load antenna description {}", filename.data());
 			throw std::runtime_error("Could not load antenna description");
 		}
-		doc.validateWithDtd(antenna_pattern_dtd);
-		doc.validateWithXsd(antenna_pattern_xsd);
+		(void)doc.validateWithDtd(antenna_pattern_dtd);
+		(void)doc.validateWithXsd(antenna_pattern_xsd);
 
 		const XmlElement root(doc.getRootElement());
 		const AxisLoadResult elev_result = loadAntennaGainAxis(_elev_samples.get(), root.childElement("elevation", 0));

@@ -26,7 +26,7 @@
 
 namespace fers_signal
 {
-	std::vector<ComplexType> CwSignal::render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+	std::vector<ComplexType> CwSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
 											  const RealType /*fracWinDelay*/) const
 	{
 		size = 0;
