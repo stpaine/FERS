@@ -205,14 +205,14 @@ namespace serial::xml_parser_utils
 	 * @param rotation The `<rotationpath>` XML element.
 	 * @param platform The platform to modify.
 	 */
-	void parseRotationPath(const XmlElement& rotation, radar::Platform* platform);
+	void parseRotationPath(const XmlElement& rotation, radar::Platform* platform, params::RotationAngleUnit unit);
 
 	/**
 	 * @brief Parses a `<fixedrotation>` block and attaches it to a Platform.
 	 * @param rotation The `<fixedrotation>` XML element.
 	 * @param platform The platform to modify.
 	 */
-	void parseFixedRotation(const XmlElement& rotation, radar::Platform* platform);
+	void parseFixedRotation(const XmlElement& rotation, radar::Platform* platform, params::RotationAngleUnit unit);
 
 	/**
 	 * @brief Parses a `<transmitter>` block, resolves its dependencies, and adds it to the World.

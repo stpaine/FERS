@@ -18,6 +18,7 @@
 #include <iostream>
 #include <libxml/parser.h>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -86,7 +87,7 @@ public:
 	 */
 	[[nodiscard]] std::string getText() const
 	{
-		if (!_node)
+		if (_node == nullptr)
 		{
 			return "";
 		}
@@ -130,6 +131,28 @@ public:
 	}
 
 	/**
+	 * @brief Get the value of an optional attribute.
+	 *
+	 * @param element The XmlElement to retrieve the attribute from.
+	 * @param name The name of the attribute.
+	 * @return The attribute value if present.
+	 */
+	static std::optional<std::string> getOptionalAttribute(const XmlElement& element, const std::string_view name)
+	{
+		if (!element.isValid())
+		{
+			return std::nullopt;
+		}
+		if (xmlChar* attr = xmlGetProp(element.getNode(), reinterpret_cast<const xmlChar*>(name.data())))
+		{
+			std::string value = reinterpret_cast<const char*>(attr);
+			xmlFree(attr);
+			return value;
+		}
+		return std::nullopt;
+	}
+
+	/**
 	 * @brief Set an attribute on the XML element.
 	 *
 	 * @param name The name of the attribute.
@@ -163,12 +186,12 @@ public:
 	 */
 	[[nodiscard]] XmlElement childElement(const std::string_view name = "", const unsigned index = 0) const noexcept
 	{
-		if (!_node)
+		if (_node == nullptr)
 		{
 			return XmlElement(nullptr);
 		}
 		unsigned count = 0;
-		for (auto* child = _node->children; child; child = child->next)
+		for (auto* child = _node->children; child != nullptr; child = child->next)
 		{
 			if (child->type == XML_ELEMENT_NODE && (name.empty() || name == reinterpret_cast<const char*>(child->name)))
 			{
@@ -296,7 +319,7 @@ public:
 			throw std::runtime_error("Document not loaded");
 		}
 		const xmlNode* root = xmlDocGetRootElement(_doc.get());
-		if (!root)
+		if (root == nullptr)
 		{
 			throw std::runtime_error("Root element not found");
 		}

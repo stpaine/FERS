@@ -355,6 +355,13 @@ TEST_CASE("FileTarget currently throws at lookup time when an RCS axis has no sa
 	removeIfExists(path);
 }
 
+TEST_CASE("Target exposes initial seed", "[radar][target]")
+{
+	radar::Platform platform("TargetPlatform");
+	radar::IsoTarget target(&platform, "Iso", 1.0, 12345);
+	REQUIRE(target.getSeed() == 12345);
+}
+
 // TODO: FileTarget accepts XML files with missing/empty azimuth or elevation axes
 // during construction and only fails later in getRcs(). Once the source validates
 // required sample sets in the constructor, replace the lookup-time failure test

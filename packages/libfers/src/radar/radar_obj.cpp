@@ -45,7 +45,7 @@ namespace radar
 
 	void Radar::setAntenna(const antenna::Antenna* ant)
 	{
-		if (!ant)
+		if (ant == nullptr)
 		{
 			LOG(Level::FATAL, "Transmitter's antenna set to null");
 			throw std::logic_error("Transmitter's antenna set to null");
@@ -55,7 +55,7 @@ namespace radar
 
 	void Radar::setAttached(const Radar* obj)
 	{
-		if (_attached)
+		if (_attached != nullptr)
 		{
 			LOG(Level::FATAL, "Attempted to attach second object to transmitter");
 			throw std::runtime_error("Attempted to attach second object to transmitter");

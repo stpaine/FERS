@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { useMemo, useState, useEffect, useRef } from 'react';
-import * as THREE from 'three';
 import { invoke } from '@tauri-apps/api/core';
-import { useScenarioStore, PlatformComponent } from '@/stores/scenarioStore';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as THREE from 'three';
 import { useShallow } from 'zustand/react/shallow';
 import { useDynamicScale } from '@/hooks/useDynamicScale';
+import { PlatformComponent, useScenarioStore } from '@/stores/scenarioStore';
 
 const AZIMUTH_SEGMENTS = 64; // Resolution for azimuth sampling
 const ELEVATION_SEGMENTS = 32; // Resolution for elevation sampling
@@ -53,10 +53,15 @@ export function AntennaPatternMesh({
             };
         })
     );
+    const { setAntennaPreviewError, clearAntennaPreviewError } =
+        useScenarioStore.getState();
 
     const antennaIdStr = antenna?.id;
     const userScale = antenna?.meshScale ?? 1.0;
     const groupRef = useRef<THREE.Group>(null!);
+
+    // Create a stable hash of the antenna's properties to trigger real-time updates
+    const antennaHash = JSON.stringify(antenna);
 
     // Apply dynamic scaling hook
     useDynamicScale(groupRef, { baseScale: userScale });
@@ -102,6 +107,9 @@ export function AntennaPatternMesh({
             // The cleanup function from the previous run will have already cleared the data,
             // so the component will render nothing (which is correct).
             if (!antennaIdStr || frequency === null) {
+                if (antennaIdStr) {
+                    clearAntennaPreviewError(antennaIdStr);
+                }
                 return;
             }
 
@@ -117,14 +125,18 @@ export function AntennaPatternMesh({
                 );
 
                 if (!isCancelled) {
+                    clearAntennaPreviewError(antennaIdStr);
                     setPatternData(data);
                 }
             } catch (error) {
+                const message =
+                    error instanceof Error ? error.message : String(error);
                 console.error(
                     `Failed to fetch pattern for antenna ${antennaIdStr}:`,
                     error
                 );
                 if (!isCancelled) {
+                    setAntennaPreviewError(antennaIdStr, message);
                     setPatternData(null);
                 }
             }
@@ -137,7 +149,7 @@ export function AntennaPatternMesh({
             // Clear data on cleanup to prevent "stale" patterns flashing when switching configurations
             setPatternData(null);
         };
-    }, [antennaIdStr, frequency, backendVersion]);
+    }, [antennaIdStr, frequency, antennaHash, backendVersion]);
 
     const geometry = useMemo(() => {
         if (!patternData) return new THREE.BufferGeometry();

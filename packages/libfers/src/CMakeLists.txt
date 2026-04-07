@@ -52,6 +52,8 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/timing.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/rotation_angle_utils.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/rotation_warning_utils.h
 )
 
 # --- Source Files ---
@@ -85,6 +87,7 @@ set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/serial/libxml_wrapper.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/waveform_factory.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/response.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/rotation_warning_utils.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_parser_utils.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer_utils.cpp

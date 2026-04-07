@@ -24,7 +24,7 @@ semi-independent packages.
 - **Visual Scenario Builder:** An intuitive 3D interface to construct, configure, and visualize radar scenarios.
 - **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed, and
   continuous wave (CW).
-- **Advanced Data Export:** Output simulation data in HDF5, CSV, and XML formats for analysis.
+- **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and
   deployed [documentation site](https://davidbits.github.io/FERS/)
@@ -111,7 +111,7 @@ Navigate to the root of the repository and start the development server:
 
 > [!WARNING]
 > The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
-> In particular, there is a known issue causing WebGL context loss on macOS on launch. See https://github.com/davidbits/FERS/issues/181 for details.
+> On some Intel macOS systems, especially older WKWebView/WebKit runtimes, WebGL may be unavailable at startup and the 3D Scenario view cannot be created. This is a system WebKit limitation rather than a FERS scene-content bug. FERS now detects that condition and disables the viewport gracefully instead of crashing, but the underlying fix still requires a working Safari/WKWebView WebGL stack on the host machine. See https://github.com/davidbits/FERS/issues/181 for details.
 
 ```bash
 bun ui:dev
@@ -203,7 +203,7 @@ The following notice was part of the original FERS distribution:
 1. `The system library glib-2.0 was not found` or similar errors related to system packages.
     - Ensure you have installed the necessary Tauri prerequisites for your operating system. On Debian-based Linux distributions, you can install the required packages by following https://tauri.app/start/prerequisites/
 
-## ⚠️ Disclaimer & Development Status
+## Disclaimer & Development Status
 
 > [!WARNING]
 > Please be aware that FERS is currently undergoing a significant modernization and re-architecture. The `master` branch is under **heavy active development** and should be considered an **alpha-stage** project.

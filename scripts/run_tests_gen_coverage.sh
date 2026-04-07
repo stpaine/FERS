@@ -5,7 +5,7 @@ IFS=$'\n\t'
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
-readonly REPO_ROOT="${SCRIPT_DIR}"
+readonly REPO_ROOT="${SCRIPT_DIR}/.."
 readonly COVERAGE_DIR="${REPO_ROOT}/build/coverage"
 
 die() {
@@ -33,8 +33,8 @@ done
 cd "$REPO_ROOT"
 
 cmake --preset=coverage
-cmake --build --preset=coverage --parallel "12"
-ctest --preset=coverage --parallel "12"
+cmake --build --preset=coverage --parallel
+ctest --preset=coverage --parallel
 
 cd "$COVERAGE_DIR"
 

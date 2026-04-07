@@ -20,6 +20,7 @@ jobs:
     build-and-test:
         name: Build & Test (${{ matrix.os }})
         runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
@@ -38,13 +39,36 @@ jobs:
             - name: Get CMake
               uses: lukka/get-cmake@latest
 
-            - name: Cache vcpkg
+            - name: Verify build tools
+              shell: bash
+              run: |
+                  cmake --version
+                  ninja --version
+
+            - name: Setup ccache
+              uses: hendrikmuhs/ccache-action@v1.2
+              with:
+                  key: ${{ matrix.os }}-coverage
+                  variant: ccache
+                  max-size: 500M
+
+            - name: Configure ccache environment
+              shell: bash
+              run: |
+                  echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
+                  # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
+                  echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
+                  mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+
+            - name: Cache vcpkg downloads
               uses: actions/cache@v5
               with:
-                  path: ${{ github.workspace }}/vcpkg
-                  key: vcpkg-${{ runner.os }}-${{ hashFiles('**/vcpkg.json') }}
+                  path: ${{ github.workspace }}/.cache/vcpkg/downloads
+                  key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
                   restore-keys: |
-                      vcpkg-${{ runner.os }}-
+                      ${{ runner.os }}-vcpkg-downloads-
 
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
@@ -52,12 +76,31 @@ jobs:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
                   runVcpkgInstall: true
+                  doNotCache: false
 
             - name: Configure CMake (coverage)
-              run: cmake --preset=coverage
+              shell: bash
+              run: |
+                  for attempt in 1 2 3; do
+                      if cmake --fresh --preset=coverage-ci; then
+                          exit 0
+                      fi
+
+                      if [ "$attempt" -eq 3 ]; then
+                          exit 1
+                      fi
+
+                      echo "CMake configure failed on attempt $attempt. Retrying in 15 seconds..."
+                      sleep 15
+                  done
 
             - name: Build (coverage)
-              run: cmake --build --preset=coverage
+              run: cmake --build --preset=coverage-ci --parallel
 
             - name: Run Tests
-              run: ctest --preset=coverage --output-on-failure
+              run: ctest --preset=coverage-ci --output-on-failure
+
+            - name: ccache stats
+              if: always()
+              shell: bash
+              run: ccache --show-stats

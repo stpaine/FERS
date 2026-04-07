@@ -85,6 +85,13 @@ namespace radar
 		[[nodiscard]] OperationMode getMode() const noexcept { return _mode; }
 
 		/**
+		 * @brief Sets the operational mode of the transmitter.
+		 *
+		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
+		 */
+		void setMode(OperationMode mode) noexcept { _mode = mode; }
+
+		/**
 		 * @brief Sets the radar signal wave to be transmitted.
 		 *
 		 * @param pulse Pointer to the RadarSignal object representing the wave.

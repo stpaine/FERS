@@ -3,12 +3,17 @@
 
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
-import { ScenarioStore } from './types';
 import { defaultGlobalParameters } from './defaults';
 import { createAssetSlice } from './slices/assetSlice';
 import { createBackendSlice } from './slices/backendSlice';
 import { createPlatformSlice } from './slices/platformSlice';
 import { createScenarioSlice } from './slices/scenarioSlice';
+import {
+    registerGranularSyncFailureHandler,
+    registerSyncWarningsHandler,
+} from './syncQueue';
+import { ScenarioStore } from './types';
+
 export * from './types';
 export * from './utils';
 
@@ -27,12 +32,18 @@ export const useScenarioStore = create<ScenarioStore>()(
         currentTime: 0,
         targetPlaybackDuration: null,
         isSimulating: false,
+        isGeneratingKml: false,
         isBackendSyncing: false,
         backendVersion: 0,
-        errorSnackbar: {
+        scenarioFilePath: null,
+        outputDirectory: null,
+        antennaPreviewErrors: {},
+        notificationSnackbar: {
             open: false,
             message: '',
+            severity: 'error',
         },
+        notificationQueue: [],
         viewControlAction: { type: null, timestamp: 0 },
         visibility: {
             showAxes: true,
@@ -73,6 +84,7 @@ export const useScenarioStore = create<ScenarioStore>()(
                     duration !== null && duration > 0 ? duration : null,
             }),
         setIsSimulating: (isSimulating) => set({ isSimulating }),
+        setIsGeneratingKml: (isGeneratingKml) => set({ isGeneratingKml }),
 
         frameScene: () =>
             set({
@@ -123,34 +135,115 @@ export const useScenarioStore = create<ScenarioStore>()(
             }),
 
         // Error Actions
-        showError: (message) => set({ errorSnackbar: { open: true, message } }),
-        hideError: () =>
-            set((state) => ({
-                errorSnackbar: { ...state.errorSnackbar, open: false },
-            })),
+        showError: (message) =>
+            set((state) => {
+                const notification = {
+                    open: true,
+                    message,
+                    severity: 'error' as const,
+                };
+                if (
+                    (state.notificationSnackbar.open &&
+                        state.notificationSnackbar.message === message &&
+                        state.notificationSnackbar.severity ===
+                            notification.severity) ||
+                    state.notificationQueue.some(
+                        (queued) =>
+                            queued.message === message &&
+                            queued.severity === notification.severity
+                    )
+                ) {
+                    return;
+                }
+                if (!state.notificationSnackbar.open) {
+                    state.notificationSnackbar = notification;
+                } else {
+                    state.notificationQueue.push({
+                        ...notification,
+                        open: false,
+                    });
+                }
+            }),
+        showWarning: (message) =>
+            set((state) => {
+                const notification = {
+                    open: true,
+                    message,
+                    severity: 'warning' as const,
+                };
+                if (
+                    (state.notificationSnackbar.open &&
+                        state.notificationSnackbar.message === message &&
+                        state.notificationSnackbar.severity ===
+                            notification.severity) ||
+                    state.notificationQueue.some(
+                        (queued) =>
+                            queued.message === message &&
+                            queued.severity === notification.severity
+                    )
+                ) {
+                    return;
+                }
+                if (!state.notificationSnackbar.open) {
+                    state.notificationSnackbar = notification;
+                } else {
+                    state.notificationQueue.push({
+                        ...notification,
+                        open: false,
+                    });
+                }
+            }),
+        hideNotification: () =>
+            set((state) => {
+                state.notificationSnackbar.open = false;
+            }),
+        advanceNotification: () =>
+            set((state) => {
+                const next = state.notificationQueue.shift();
+                if (next) {
+                    state.notificationSnackbar = {
+                        ...next,
+                        open: true,
+                    };
+                } else {
+                    state.notificationSnackbar = {
+                        ...state.notificationSnackbar,
+                        open: false,
+                        message: '',
+                    };
+                }
+            }),
+        setAntennaPreviewError: (antennaId, message) =>
+            set((state) => {
+                state.antennaPreviewErrors[antennaId] = message;
+            }),
+        clearAntennaPreviewError: (antennaId) =>
+            set((state) => {
+                delete state.antennaPreviewErrors[antennaId];
+            }),
     }))
 );
 
-let debounceTimer: ReturnType<typeof setTimeout>;
+function formatSyncError(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
+}
 
-useScenarioStore.subscribe((state, prevState) => {
-    // Check for structural changes in the scenario data using reference equality.
-    // Immer ensures that if data changes, the array/object reference changes.
-    const hasStructuralChanges =
-        state.platforms !== prevState.platforms ||
-        state.antennas !== prevState.antennas ||
-        state.waveforms !== prevState.waveforms ||
-        state.timings !== prevState.timings ||
-        state.globalParameters !== prevState.globalParameters;
+registerGranularSyncFailureHandler(async ({ itemType, itemId, error }) => {
+    const syncMessage = `Sync error for ${itemType} ${itemId}: ${formatSyncError(error)}. Reverting to backend state.`;
+    useScenarioStore.getState().showError(syncMessage);
 
-    // We only trigger sync if data changed AND we aren't currently simulating/playing
-    // (though simulation usually locks UI, checking prevents edge cases).
-    if (hasStructuralChanges && !state.isSimulating) {
-        if (debounceTimer) clearTimeout(debounceTimer);
-
-        debounceTimer = setTimeout(() => {
-            // Trigger the sync action defined in backendSlice
-            void state.syncBackend();
-        }, 500);
+    try {
+        await useScenarioStore.getState().fetchFromBackend();
+    } catch (reloadError) {
+        useScenarioStore
+            .getState()
+            .showError(
+                `${syncMessage} Failed to reload backend state: ${formatSyncError(reloadError)}`
+            );
     }
+});
+
+registerSyncWarningsHandler((warnings) => {
+    const { showWarning } = useScenarioStore.getState();
+    warnings.forEach((warning) => showWarning(warning));
 });

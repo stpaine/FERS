@@ -202,3 +202,47 @@ TEST_CASE("Efficiency factor accepts values greater than unity", "[antenna]")
 	antenna.setEfficiencyFactor(1.25);
 	REQUIRE_THAT(antenna.getEfficiencyFactor(), WithinAbs(1.25, 0.0));
 }
+
+TEST_CASE("Antenna setters modify properties in-place", "[antenna]")
+{
+	SECTION("Base Antenna")
+	{
+		antenna::Isotropic ant("iso", 1);
+		ant.setName("new_iso");
+		REQUIRE(ant.getName() == "new_iso");
+	}
+
+	SECTION("Sinc")
+	{
+		antenna::Sinc ant("sinc", 1.0, 1.0, 1.0);
+		ant.setAlpha(2.0);
+		ant.setBeta(3.0);
+		ant.setGamma(4.0);
+		REQUIRE_THAT(ant.getAlpha(), WithinAbs(2.0, 1e-9));
+		REQUIRE_THAT(ant.getBeta(), WithinAbs(3.0, 1e-9));
+		REQUIRE_THAT(ant.getGamma(), WithinAbs(4.0, 1e-9));
+	}
+
+	SECTION("Gaussian")
+	{
+		antenna::Gaussian ant("gauss", 1.0, 1.0);
+		ant.setAzimuthScale(2.5);
+		ant.setElevationScale(3.5);
+		REQUIRE_THAT(ant.getAzimuthScale(), WithinAbs(2.5, 1e-9));
+		REQUIRE_THAT(ant.getElevationScale(), WithinAbs(3.5, 1e-9));
+	}
+
+	SECTION("SquareHorn")
+	{
+		antenna::SquareHorn ant("horn", 1.0);
+		ant.setDimension(5.0);
+		REQUIRE_THAT(ant.getDimension(), WithinAbs(5.0, 1e-9));
+	}
+
+	SECTION("Parabolic")
+	{
+		antenna::Parabolic ant("dish", 1.0);
+		ant.setDiameter(10.0);
+		REQUIRE_THAT(ant.getDiameter(), WithinAbs(10.0, 1e-9));
+	}
+}

@@ -94,9 +94,11 @@ TEST_CASE("serializeParameters creates correct tags across frames", "[serial][xm
 	SECTION("ECEF")
 	{
 		p.coordinate_frame = params::CoordinateFrame::ECEF;
+		p.rotation_angle_unit = params::RotationAngleUnit::Radians;
 		serial::xml_serializer_utils::serializeParameters(root, p);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("<coordinatesystem frame=\"ECEF\"/>"));
+		REQUIRE_THAT(s, ContainsSubstring("<rotationangleunit>rad</rotationangleunit>"));
 	}
 
 	SECTION("ENU")
@@ -117,6 +119,7 @@ TEST_CASE("serializeParameters creates correct tags across frames", "[serial][xm
 		REQUIRE_THAT(s, !ContainsSubstring("<randomseed>"));
 		REQUIRE_THAT(s, !ContainsSubstring("<adc_bits>"));
 		REQUIRE_THAT(s, !ContainsSubstring("<oversample>"));
+		REQUIRE_THAT(s, !ContainsSubstring("<rotationangleunit>"));
 	}
 }
 

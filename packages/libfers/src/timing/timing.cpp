@@ -81,7 +81,7 @@ namespace timing
 
 	std::unique_ptr<Timing> Timing::clone() const
 	{
-		if (!_prototype)
+		if (_prototype == nullptr)
 		{
 			LOG(Level::FATAL, "Cannot clone a Timing object that has not been initialized from a prototype.");
 			throw std::logic_error("Cannot clone a Timing object that has not been initialized from a prototype.");

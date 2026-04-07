@@ -22,6 +22,7 @@
 #include "radar/radar_obj.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
+#include "timing/timing.h"
 
 using antenna::Antenna;
 using fers_signal::RadarSignal;
@@ -87,6 +88,155 @@ namespace core
 	{
 		const auto it = _timings.find(id);
 		return it != _timings.end() ? it->second.get() : nullptr;
+	}
+
+	Platform* World::findPlatform(const SimId id)
+	{
+		for (auto& p : _platforms)
+		{
+			if (p->getId() == id)
+				return p.get();
+		}
+		return nullptr;
+	}
+
+	Transmitter* World::findTransmitter(const SimId id)
+	{
+		for (auto& tx : _transmitters)
+			if (tx->getId() == id)
+				return tx.get();
+		return nullptr;
+	}
+
+	Receiver* World::findReceiver(const SimId id)
+	{
+		for (auto& rx : _receivers)
+			if (rx->getId() == id)
+				return rx.get();
+		return nullptr;
+	}
+
+	Target* World::findTarget(const SimId id)
+	{
+		for (auto& tgt : _targets)
+			if (tgt->getId() == id)
+				return tgt.get();
+		return nullptr;
+	}
+
+	void World::replace(std::unique_ptr<Target> target)
+	{
+		const SimId id = target->getId();
+		for (auto& t : _targets)
+		{
+			if (t->getId() == id)
+			{
+				t = std::move(target);
+				return;
+			}
+		}
+		_targets.push_back(std::move(target));
+	}
+
+	void World::replace(std::unique_ptr<Antenna> antenna)
+	{
+		const SimId id = antenna->getId();
+		const Antenna* new_ptr = antenna.get();
+
+		std::unique_ptr<Antenna> old_owned;
+		const Antenna* old_ptr = nullptr;
+
+		if (auto it = _antennas.find(id); it != _antennas.end())
+		{
+			old_owned = std::move(it->second);
+			old_ptr = old_owned.get();
+			it->second = std::move(antenna);
+		}
+		else
+		{
+			_antennas[id] = std::move(antenna);
+		}
+
+		if ((old_ptr != nullptr) && old_ptr != new_ptr)
+		{
+			for (auto& tx : _transmitters)
+				if (tx->getAntenna() == old_ptr)
+					tx->setAntenna(new_ptr);
+
+			for (auto& rx : _receivers)
+				if (rx->getAntenna() == old_ptr)
+					rx->setAntenna(new_ptr);
+		}
+	}
+
+	void World::replace(std::unique_ptr<RadarSignal> waveform)
+	{
+		const SimId id = waveform->getId();
+		RadarSignal* new_ptr = waveform.get();
+
+		std::unique_ptr<RadarSignal> old_owned;
+		const RadarSignal* old_ptr = nullptr;
+
+		if (auto it = _waveforms.find(id); it != _waveforms.end())
+		{
+			old_owned = std::move(it->second);
+			old_ptr = old_owned.get();
+			it->second = std::move(waveform);
+		}
+		else
+		{
+			_waveforms[id] = std::move(waveform);
+		}
+
+		if ((old_ptr != nullptr) && old_ptr != new_ptr)
+		{
+			for (auto& tx : _transmitters)
+				if (tx->getSignal() == old_ptr)
+					tx->setSignal(new_ptr);
+		}
+	}
+
+	void World::replace(std::unique_ptr<PrototypeTiming> timing)
+	{
+		const SimId id = timing->getId();
+		const PrototypeTiming* new_ptr = timing.get();
+
+		std::unique_ptr<PrototypeTiming> old_owned;
+		const PrototypeTiming* old_ptr = nullptr;
+
+		if (auto it = _timings.find(id); it != _timings.end())
+		{
+			old_owned = std::move(it->second);
+			old_ptr = old_owned.get();
+			it->second = std::move(timing);
+		}
+		else
+		{
+			_timings[id] = std::move(timing);
+		}
+
+		auto refresh_timing = [id, new_ptr](auto& radar_obj)
+		{
+			const auto current_timing = radar_obj->getTiming();
+			if (!current_timing || (current_timing->getId() != id))
+			{
+				return;
+			}
+
+			auto refreshed =
+				std::make_shared<timing::Timing>(new_ptr->getName(), current_timing->getSeed(), new_ptr->getId());
+			refreshed->initializeModel(new_ptr);
+			radar_obj->setTiming(refreshed);
+		};
+
+		if ((old_ptr != nullptr) && old_ptr != new_ptr)
+		{
+			for (auto& tx : _transmitters)
+				refresh_timing(tx);
+
+			for (auto& rx : _receivers)
+				refresh_timing(rx);
+		}
 	}
 
 	void World::clear() noexcept

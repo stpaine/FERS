@@ -18,11 +18,12 @@
 #include <string>
 
 #include "arg_parser.h"
+#include "cli_paths.h"
 
 // --- Shim to restore LOG() functionality via C-API ---
 namespace logging
 {
-	inline std::string getLevelString(fers_log_level_t l)
+	static inline std::string getLevelString(fers_log_level_t l)
 	{
 		switch (l)
 		{
@@ -64,13 +65,14 @@ int main(const int argc, char* argv[])
 			config_result.error() != "No arguments provided.")
 		{
 			// Use basic stderr here because logging isn't configured yet
-			std::cerr << "[ERROR] Argument parsing error: " << config_result.error() << std::endl;
+			std::cerr << "[ERROR] Argument parsing error: " << config_result.error() << '\n';
 			return 1;
 		}
 		return 0;
 	}
 
-	const auto& [script_file, log_level, num_threads, validate, log_file, generate_kml] = config_result.value();
+	const auto& [script_file, log_level, num_threads, validate, log_file, generate_kml, kml_file, output_dir] =
+		config_result.value();
 
 	// Configure logging via the C API
 	const char* log_file_ptr = log_file ? log_file->c_str() : nullptr;
@@ -78,7 +80,7 @@ int main(const int argc, char* argv[])
 	{
 		// If we can't configure logging, we must print to stderr manually
 		char* err = fers_get_last_error_message();
-		std::cerr << "[ERROR] Failed to configure logging: " << (err ? err : "Unknown error") << std::endl;
+		std::cerr << "[ERROR] Failed to configure logging: " << ((err != nullptr) ? err : "Unknown error") << '\n';
 		fers_free_string(err);
 		return 1;
 	}
@@ -89,11 +91,23 @@ int main(const int argc, char* argv[])
 		"Running FERS with arguments: script_file={}, log_level={}, num_threads={}, validate={}, log_file={}",
 		script_file, logging::getLevelString(log_level), num_threads, validate, log_file.value_or("None"));
 
+	const std::filesystem::path final_out_dir = core::resolveOutputDir(script_file, output_dir);
+
 	// Create a simulation context using the C-API
 	fers_context_t* context = fers_context_create();
-	if (!context)
+	if (context == nullptr)
 	{
 		LOG(FERS_LOG_FATAL, "Failed to create FERS simulation context.");
+		return 1;
+	}
+
+	// Set the output directory via the C-API
+	if (fers_set_output_directory(context, final_out_dir.string().c_str()) != 0)
+	{
+		char* err = fers_get_last_error_message();
+		LOG(FERS_LOG_FATAL, "Failed to set output directory: {}", err ? err : "Unknown error");
+		fers_free_string(err);
+		fers_context_destroy(context);
 		return 1;
 	}
 
@@ -110,8 +124,7 @@ int main(const int argc, char* argv[])
 
 	if (generate_kml)
 	{
-		std::filesystem::path kml_output_path = script_file;
-		kml_output_path.replace_extension(".kml");
+		const std::filesystem::path kml_output_path = core::resolveKmlOutputPath(script_file, final_out_dir, kml_file);
 		const std::string kml_output_file = kml_output_path.string();
 
 		LOG(FERS_LOG_INFO, "Generating KML file for scenario: {}", kml_output_file);

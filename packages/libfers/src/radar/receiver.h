@@ -85,7 +85,7 @@ namespace radar
 		 * @param flag The flag to check.
 		 * @return True if the flag is set, false otherwise.
 		 */
-		[[nodiscard]] bool checkFlag(RecvFlag flag) const noexcept { return _flags & static_cast<int>(flag); }
+		[[nodiscard]] bool checkFlag(RecvFlag flag) const noexcept { return (_flags & static_cast<int>(flag)) != 0; }
 
 		/**
 		 * @brief Retrieves the unique ID of the receiver.
@@ -172,6 +172,12 @@ namespace radar
 		void setActive(const bool active) noexcept { _is_active = active; }
 
 		/**
+		 * @brief Sets the operational mode of the receiver.
+		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
+		 */
+		void setMode(OperationMode mode) noexcept { _mode = mode; }
+
+		/**
 		 * @brief Moves all responses from the inbox into a RenderingJob.
 		 * @return A vector of unique pointers to the responses.
 		 */
@@ -208,6 +214,13 @@ namespace radar
 		 * @param flag The flag to set.
 		 */
 		void setFlag(RecvFlag flag) noexcept { _flags |= static_cast<int>(flag); }
+
+		/**
+		 * @brief Clears a receiver flag.
+		 *
+		 * @param flag The flag to clear.
+		 */
+		void clearFlag(RecvFlag flag) noexcept { _flags &= ~static_cast<int>(flag); }
 
 		/**
 		 * @brief Sets the noise temperature of the receiver.

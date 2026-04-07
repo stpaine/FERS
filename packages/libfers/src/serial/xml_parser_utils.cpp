@@ -9,6 +9,7 @@
 #include <GeographicLib/UTMUPS.hpp>
 #include <cmath>
 #include <filesystem>
+#include <format>
 #include <string_view>
 
 #include "antenna/antenna_factory.h"
@@ -26,6 +27,8 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
+#include "serial/rotation_warning_utils.h"
 #include "serial/waveform_factory.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
@@ -186,6 +189,25 @@ namespace serial::xml_parser_utils
 											  params_out.oversample_ratio = v;
 											  LOG(logging::Level::DEBUG, "Oversampling enabled with ratio: {}", v);
 										  });
+
+		try
+		{
+			const auto unit_token = parameters.childElement("rotationangleunit", 0).getText();
+			if (!unit_token.empty())
+			{
+				if (const auto unit = params::rotationAngleUnitFromToken(unit_token))
+				{
+					params_out.rotation_angle_unit = *unit;
+				}
+				else
+				{
+					throw XmlException("Unsupported rotation angle unit '" + unit_token + "'.");
+				}
+			}
+		}
+		catch (const XmlException&)
+		{
+		}
 
 		bool origin_set = false;
 		if (const XmlElement origin_element = parameters.childElement("origin", 0); origin_element.isValid())
@@ -490,7 +512,7 @@ namespace serial::xml_parser_utils
 		path->finalize();
 	}
 
-	void parseRotationPath(const XmlElement& rotation, radar::Platform* platform)
+	void parseRotationPath(const XmlElement& rotation, radar::Platform* platform, const params::RotationAngleUnit unit)
 	{
 		math::RotationPath* path = platform->getRotationPath();
 		try
@@ -537,11 +559,15 @@ namespace serial::xml_parser_utils
 				const RealType az_deg = get_child_real_type(waypoint, "azimuth");
 				const RealType el_deg = get_child_real_type(waypoint, "elevation");
 				const RealType time = get_child_real_type(waypoint, "time");
+				const std::string owner =
+					std::format("platform '{}' rotation waypoint {}", platform->getName(), waypoint_index);
 
-				const RealType az_rad = (90.0 - az_deg) * (PI / 180.0);
-				const RealType el_rad = el_deg * (PI / 180.0);
+				rotation_warning_utils::maybe_warn_about_rotation_value(
+					az_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "azimuth");
+				rotation_warning_utils::maybe_warn_about_rotation_value(
+					el_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "elevation");
 
-				path->addCoord({az_rad, el_rad, time});
+				path->addCoord(rotation_angle_utils::external_rotation_to_internal(az_deg, el_deg, time, unit));
 			}
 			catch (const XmlException& e)
 			{
@@ -553,22 +579,29 @@ namespace serial::xml_parser_utils
 		path->finalize();
 	}
 
-	void parseFixedRotation(const XmlElement& rotation, radar::Platform* platform)
+	void parseFixedRotation(const XmlElement& rotation, radar::Platform* platform, const params::RotationAngleUnit unit)
 	{
 		math::RotationPath* path = platform->getRotationPath();
 		try
 		{
-			math::RotationCoord start, rate;
 			const RealType start_az_deg = get_child_real_type(rotation, "startazimuth");
 			const RealType start_el_deg = get_child_real_type(rotation, "startelevation");
 			const RealType rate_az_deg_s = get_child_real_type(rotation, "azimuthrate");
 			const RealType rate_el_deg_s = get_child_real_type(rotation, "elevationrate");
+			const std::string owner = std::format("platform '{}' fixedrotation", platform->getName());
 
-			start.azimuth = (90.0 - start_az_deg) * (PI / 180.0);
-			start.elevation = start_el_deg * (PI / 180.0);
-
-			rate.azimuth = -rate_az_deg_s * (PI / 180.0);
-			rate.elevation = rate_el_deg_s * (PI / 180.0);
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				start_az_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "startazimuth");
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				start_el_deg, unit, rotation_warning_utils::ValueKind::Angle, "XML", owner, "startelevation");
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				rate_az_deg_s, unit, rotation_warning_utils::ValueKind::Rate, "XML", owner, "azimuthrate");
+			rotation_warning_utils::maybe_warn_about_rotation_value(
+				rate_el_deg_s, unit, rotation_warning_utils::ValueKind::Rate, "XML", owner, "elevationrate");
+			const math::RotationCoord start =
+				rotation_angle_utils::external_rotation_to_internal(start_az_deg, start_el_deg, 0.0, unit);
+			const math::RotationCoord rate =
+				rotation_angle_utils::external_rotation_rate_to_internal(rate_az_deg_s, rate_el_deg_s, 0.0, unit);
 
 			path->setConstantRate(start, rate);
 			LOG(logging::Level::DEBUG, "Added fixed rotation to platform {}", platform->getName());
@@ -600,7 +633,7 @@ namespace serial::xml_parser_utils
 		const SimId waveform_id =
 			resolve_reference_id(transmitter, "waveform", "transmitter '" + name + "'", *refs.waveforms);
 		fers_signal::RadarSignal* wave = ctx.world->findWaveform(waveform_id);
-		if (!wave)
+		if (wave == nullptr)
 		{
 			throw XmlException("Waveform ID '" + std::to_string(waveform_id) + "' not found for transmitter '" + name +
 							   "'");
@@ -615,7 +648,7 @@ namespace serial::xml_parser_utils
 		const SimId antenna_id =
 			resolve_reference_id(transmitter, "antenna", "transmitter '" + name + "'", *refs.antennas);
 		const antenna::Antenna* ant = ctx.world->findAntenna(antenna_id);
-		if (!ant)
+		if (ant == nullptr)
 		{
 			throw XmlException("Antenna ID '" + std::to_string(antenna_id) + "' not found for transmitter '" + name +
 							   "'");
@@ -625,7 +658,7 @@ namespace serial::xml_parser_utils
 		const SimId timing_id =
 			resolve_reference_id(transmitter, "timing", "transmitter '" + name + "'", *refs.timings);
 		const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
-		if (!proto)
+		if (proto == nullptr)
 		{
 			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for transmitter '" + name +
 							   "'");
@@ -659,7 +692,7 @@ namespace serial::xml_parser_utils
 
 		const SimId ant_id = resolve_reference_id(receiver, "antenna", "receiver '" + name + "'", *refs.antennas);
 		const antenna::Antenna* antenna = ctx.world->findAntenna(ant_id);
-		if (!antenna)
+		if (antenna == nullptr)
 		{
 			throw XmlException("Antenna ID '" + std::to_string(ant_id) + "' not found for receiver '" + name + "'");
 		}
@@ -703,7 +736,7 @@ namespace serial::xml_parser_utils
 
 		const SimId timing_id = resolve_reference_id(receiver, "timing", "receiver '" + name + "'", *refs.timings);
 		const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
-		if (!proto)
+		if (proto == nullptr)
 		{
 			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for receiver '" + name + "'");
 		}
@@ -856,15 +889,15 @@ namespace serial::xml_parser_utils
 				"Both <rotationpath> and <fixedrotation> are declared for platform {}. Only <rotationpath> will be "
 				"used.",
 				plat->getName());
-			parseRotationPath(rot_path, plat.get());
+			parseRotationPath(rot_path, plat.get(), ctx.parameters.rotation_angle_unit);
 		}
 		else if (rot_path.isValid())
 		{
-			parseRotationPath(rot_path, plat.get());
+			parseRotationPath(rot_path, plat.get(), ctx.parameters.rotation_angle_unit);
 		}
 		else if (fixed_rot.isValid())
 		{
-			parseFixedRotation(fixed_rot, plat.get());
+			parseFixedRotation(fixed_rot, plat.get(), ctx.parameters.rotation_angle_unit);
 		}
 
 		ctx.world->add(std::move(plat));

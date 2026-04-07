@@ -17,9 +17,37 @@ env:
     MACOSX_DEPLOYMENT_TARGET: '14.0'
 
 jobs:
+    lint-ui:
+        name: Lint UI (biome)
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Cache Bun dependencies
+              uses: actions/cache@v5
+              with:
+                  path: ~/.bun/install/cache
+                  key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lock') }}
+                  restore-keys: |
+                      ${{ runner.os }}-bun-
+
+            - name: Install JS Dependencies
+              run: bun install
+
+            - name: Run biome lint
+              run: bun run --filter fers-ui lint
+
     build-ui:
         name: Build UI (${{ matrix.os }})
         runs-on: ${{ matrix.os }}
+        timeout-minutes: 30
         strategy:
             fail-fast: false
             matrix:
@@ -38,11 +66,43 @@ jobs:
             - name: Get CMake
               uses: lukka/get-cmake@latest
 
+            - name: Verify build tools
+              shell: bash
+              run: |
+                  cmake --version
+                  ninja --version
+
+            - name: Setup ccache
+              uses: hendrikmuhs/ccache-action@v1.2
+              with:
+                  key: ui-${{ matrix.os }}
+                  variant: ccache
+                  max-size: 500M
+
+            - name: Configure ccache environment
+              shell: bash
+              run: |
+                echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
+                # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
+                echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
+                mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+
+            - name: Cache vcpkg downloads
+              uses: actions/cache@v5
+              with:
+                  path: ${{ github.workspace }}/.cache/vcpkg/downloads
+                  key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-vcpkg-downloads-
+
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
               with:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
+                  doNotCache: false
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -71,6 +131,25 @@ jobs:
 
             - name: Build UI
               env:
+                  CMAKE_GENERATOR: Ninja
                   # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
                   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
-              run: bun run ui:build
+              shell: bash
+              run: |
+                  for attempt in 1 2 3; do
+                      if bun run ui:build; then
+                          exit 0
+                      fi
+
+                      if [ "$attempt" -eq 3 ]; then
+                          exit 1
+                      fi
+
+                      echo "UI build failed on attempt $attempt. Retrying in 15 seconds..."
+                      sleep 15
+                  done
+
+            - name: ccache stats
+              if: always()
+              shell: bash
+              run: ccache --show-stats

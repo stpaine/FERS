@@ -2,10 +2,13 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <filesystem>
+#include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 
 #include "antenna/antenna_factory.h"
+#include "core/logging.h"
 #include "core/parameters.h"
 #include "core/world.h"
 #include "radar/platform.h"
@@ -27,6 +30,21 @@ namespace
 		params::Parameters saved;
 		ParamGuard() : saved(params::params) {}
 		~ParamGuard() { params::params = saved; }
+	};
+
+	struct CerrCapture
+	{
+		std::ostringstream buffer;
+		std::streambuf* old{nullptr};
+		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		~CerrCapture() { std::cerr.rdbuf(old); }
+		[[nodiscard]] std::string str() const { return buffer.str(); }
+	};
+
+	struct LogLevelGuard
+	{
+		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
+		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
 
 	XmlDocument loadXml(const std::string& xmlString)
@@ -152,6 +170,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
 						   "  <simSamplingRate>500.0</simSamplingRate>"
 						   "  <randomseed>42</randomseed>"
+						   "  <rotationangleunit>rad</rotationangleunit>"
 						   "  <coordinatesystem frame=\"ECEF\"/>"
 						   "</parameters>");
 
@@ -161,6 +180,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(500.0, 1e-5));
 		REQUIRE(p.random_seed.has_value());
 		REQUIRE(p.random_seed.value() == 42);
+		REQUIRE(p.rotation_angle_unit == params::RotationAngleUnit::Radians);
 		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
 	}
 
@@ -388,7 +408,8 @@ TEST_CASE("parseRotationPath handles all interpolation types", "[serial][xml_par
 			"  <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
 			"  <rotationwaypoint><azimuth>10</azimuth><elevation>10</elevation><time>1</time></rotationwaypoint>"
 			"</rotationpath>");
-		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform);
+		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform,
+													params::RotationAngleUnit::Degrees);
 		REQUIRE(platform.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_LINEAR);
 	}
 
@@ -400,7 +421,8 @@ TEST_CASE("parseRotationPath handles all interpolation types", "[serial][xml_par
 			"  <rotationwaypoint><azimuth>10</azimuth><elevation>10</elevation><time>1</time></rotationwaypoint>"
 			"  <rotationwaypoint><azimuth>20</azimuth><elevation>20</elevation><time>2</time></rotationwaypoint>"
 			"</rotationpath>");
-		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform);
+		serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform,
+													params::RotationAngleUnit::Degrees);
 		REQUIRE(platform.getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CUBIC);
 	}
 }
@@ -417,7 +439,8 @@ TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser
 						   "  <azimuthrate>10</azimuthrate>"
 						   "  <elevationrate>5</elevationrate>"
 						   "</fixedrotation>");
-		serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform);
+		serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform,
+													 params::RotationAngleUnit::Degrees);
 
 		// 90 deg azimuth -> 0 rad (since az_rad = (90 - az_deg) * PI/180)
 		// rate 10 deg/s -> -10 * PI/180 rad/s
@@ -428,8 +451,27 @@ TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser
 	SECTION("Invalid throws")
 	{
 		auto doc = loadXml("<fixedrotation><startazimuth>90</startazimuth></fixedrotation>");
-		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform), XmlException);
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseFixedRotation(doc.getRootElement(), &platform,
+																	   params::RotationAngleUnit::Degrees),
+						  XmlException);
 	}
+}
+
+TEST_CASE("parseRotationPath warns when values look like the opposite unit", "[serial][xml_parser_utils]")
+{
+	LogLevelGuard log_guard(logging::Level::WARNING);
+	CerrCapture capture;
+	radar::Platform platform("warning-platform", 77);
+	auto doc =
+		loadXml("<rotationpath interpolation=\"static\">"
+				"  <rotationwaypoint><azimuth>90</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
+				"</rotationpath>");
+
+	serial::xml_parser_utils::parseRotationPath(doc.getRootElement(), &platform, params::RotationAngleUnit::Radians);
+
+	REQUIRE_THAT(capture.str(), ContainsSubstring("platform 'warning-platform' rotation waypoint 0"));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("'azimuth'"));
+	REQUIRE_THAT(capture.str(), ContainsSubstring("declared"));
 }
 
 TEST_CASE("parseTransmitter resolves references and builds object with schedule", "[serial][xml_parser_utils]")
@@ -571,4 +613,86 @@ TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 	auto* model = dynamic_cast<const radar::RcsChiSquare*>(tgt->getFluctuationModel());
 	REQUIRE(model != nullptr);
 	REQUIRE_THAT(model->getK(), WithinAbs(2.0, 1e-5));
+}
+
+TEST_CASE("parsePlatform prefers rotationpath over fixedrotation and supports fixed-only", "[serial][xml_parser_utils]")
+{
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+
+	std::unordered_map<std::string, SimId> w_refs;
+	std::unordered_map<std::string, SimId> a_refs;
+	std::unordered_map<std::string, SimId> t_refs;
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	auto register_name = [](const XmlElement&, std::string_view) {};
+
+	SECTION("Both rotationpath and fixedrotation: rotationpath is used")
+	{
+		auto doc = loadXml(
+			"<platform name=\"plat_both\">"
+			"  <rotationpath interpolation=\"linear\">"
+			"    <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
+			"    <rotationwaypoint><azimuth>90</azimuth><elevation>0</elevation><time>1</time></rotationwaypoint>"
+			"  </rotationpath>"
+			"  <fixedrotation>"
+			"    <startazimuth>90</startazimuth><startelevation>0</startelevation>"
+			"    <azimuthrate>10</azimuthrate><elevationrate>0</elevationrate>"
+			"  </fixedrotation>"
+			"</platform>");
+
+		serial::xml_parser_utils::parsePlatform(doc.getRootElement(), ctx, register_name, refs);
+
+		REQUIRE(world.getPlatforms().size() == 1);
+		auto* plat = world.getPlatforms().front().get();
+		REQUIRE(plat->getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_LINEAR);
+		REQUIRE_THAT(plat->getRotation(1.0).azimuth, WithinAbs(0.0, 1e-5));
+	}
+
+	SECTION("Only fixedrotation: constant-rate rotation is used")
+	{
+		world.clear();
+
+		auto doc = loadXml("<platform name=\"plat_fixed\">"
+						   "  <fixedrotation>"
+						   "    <startazimuth>90</startazimuth><startelevation>0</startelevation>"
+						   "    <azimuthrate>10</azimuthrate><elevationrate>5</elevationrate>"
+						   "  </fixedrotation>"
+						   "</platform>");
+
+		serial::xml_parser_utils::parsePlatform(doc.getRootElement(), ctx, register_name, refs);
+
+		REQUIRE(world.getPlatforms().size() == 1);
+		auto* plat = world.getPlatforms().front().get();
+		REQUIRE(plat->getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CONSTANT);
+		REQUIRE_THAT(plat->getRotation(1.0).azimuth, WithinAbs(-10.0 * PI / 180.0, 1e-5));
+		REQUIRE_THAT(plat->getRotation(1.0).elevation, WithinAbs(5.0 * PI / 180.0, 1e-5));
+	}
+}
+
+TEST_CASE("collectIncludeElements skips empty and unreadable includes", "[serial][xml_parser_utils]")
+{
+	SECTION("Empty include text is ignored")
+	{
+		auto doc = loadXml("<simulation><include></include></simulation>");
+		std::vector<std::filesystem::path> include_paths;
+
+		serial::xml_parser_utils::collectIncludeElements(doc, std::filesystem::temp_directory_path(), include_paths);
+
+		REQUIRE(include_paths.empty());
+	}
+
+	SECTION("Unreadable include file is collected once and skipped")
+	{
+		const std::string missing_name = "collect_include_missing_file_7f9a8115.xml";
+		auto doc = loadXml("<simulation><include>" + missing_name + "</include></simulation>");
+		const auto base_dir = std::filesystem::temp_directory_path();
+		std::vector<std::filesystem::path> include_paths;
+
+		serial::xml_parser_utils::collectIncludeElements(doc, base_dir, include_paths);
+
+		REQUIRE(include_paths.size() == 1);
+		REQUIRE(include_paths[0] == (base_dir / missing_name));
+	}
 }

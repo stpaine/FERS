@@ -78,6 +78,13 @@ namespace radar
 		 */
 		[[nodiscard]] const std::string& getName() const noexcept { return _name; }
 
+		/**
+		 * @brief Sets the name of the object.
+		 *
+		 * @param name The new name for the object.
+		 */
+		void setName(std::string name) noexcept { _name = std::move(name); }
+
 	private:
 		Platform* _platform; ///< Pointer to the Platform object associated with this Object.
 		SimId _id; ///< Unique ID for this object.

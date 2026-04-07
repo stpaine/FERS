@@ -2,6 +2,7 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import {
+    Alert,
     Box,
     FormControl,
     InputLabel,
@@ -9,7 +10,7 @@ import {
     Select,
     TextField,
 } from '@mui/material';
-import { useScenarioStore, Antenna } from '@/stores/scenarioStore';
+import { Antenna, useScenarioStore } from '@/stores/scenarioStore';
 import { FileInput, NumberField } from './InspectorControls';
 
 interface AntennaInspectorProps {
@@ -17,6 +18,9 @@ interface AntennaInspectorProps {
 }
 
 export function AntennaInspector({ item }: AntennaInspectorProps) {
+    const previewError = useScenarioStore(
+        (state) => state.antennaPreviewErrors[item.id]
+    );
     const { updateItem, setAntennaPattern } = useScenarioStore.getState();
     const handleChange = (path: string, value: unknown) =>
         updateItem(item.id, path, value);
@@ -62,6 +66,7 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
                 value={item.meshScale ?? null}
                 onChange={(v) => handleChange('meshScale', v)}
             />
+            {previewError && <Alert severity="error">{previewError}</Alert>}
 
             {item.pattern === 'sinc' && (
                 <>
@@ -113,19 +118,23 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
             )}
 
             {(item.pattern === 'xml' || item.pattern === 'file') && (
-                <FileInput
-                    label="Pattern File"
-                    value={item.filename}
-                    onChange={(v) => handleChange('filename', v)}
-                    filters={[
-                        {
-                            name: 'Antenna Pattern',
-                            extensions:
-                                item.pattern === 'xml' ? ['xml'] : ['h5'],
-                        },
-                        { name: 'All Files', extensions: ['*'] },
-                    ]}
-                />
+                <>
+                    {/* TODO: Support authoring antenna XML in-app. That requires a real editor flow plus UI/store/schema
+                    changes for antenna asset contents, rather than treating XML antennas as opaque filename-only assets. */}
+                    <FileInput
+                        label="Pattern File"
+                        value={item.filename}
+                        onChange={(v) => handleChange('filename', v)}
+                        filters={[
+                            {
+                                name: 'Antenna Pattern',
+                                extensions:
+                                    item.pattern === 'xml' ? ['xml'] : ['h5'],
+                            },
+                            { name: 'All Files', extensions: ['*'] },
+                        ]}
+                    />
+                </>
             )}
         </Box>
     );

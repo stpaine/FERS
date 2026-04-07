@@ -84,16 +84,15 @@ namespace
 	 */
 	std::expected<void, std::string> handleLogFile(const std::string& arg, core::Config& config) noexcept
 	{
-		if (std::string log_file_path = arg.substr(11); isValidLogFileExtension(log_file_path))
+		std::string log_file_path = arg.substr(11);
+		if (isValidLogFileExtension(log_file_path))
 		{
 			config.log_file = log_file_path;
 			return {};
 		}
-		else
-		{
-			std::cerr << "[ERROR] Invalid log file extension. Must be .log or .txt\n";
-			return std::unexpected("Invalid log file extension: " + log_file_path);
-		}
+
+		std::cerr << "[ERROR] Invalid log file extension. Must be .log or .txt\n";
+		return std::unexpected("Invalid log file extension: " + log_file_path);
 	}
 
 	/**
@@ -162,6 +161,11 @@ namespace
 		{
 			return handleNumThreads(arg, config);
 		}
+		if (arg.rfind("--out-dir=", 0) == 0)
+		{
+			config.output_dir = arg.substr(10);
+			return {};
+		}
 		if (arg == "--no-validate")
 		{
 			config.validate = false;
@@ -170,6 +174,12 @@ namespace
 		if (arg == "--kml")
 		{
 			config.generate_kml = true;
+			return {};
+		}
+		if (arg.rfind("--kml=", 0) == 0)
+		{
+			config.generate_kml = true;
+			config.kml_file = arg.substr(6);
 			return {};
 		}
 		if (arg[0] != '-' && !scriptFileSet)
@@ -199,8 +209,11 @@ Options:
   --help, -h              Show this help message and exit
   --version, -v           Show version information and exit
   --no-validate           Disable XML schema validation before running.
-  --kml                   Generate a KML visualization of the scenario and exit. The output file
-                          will have the same name as the input file with a .kml extension.
+  --kml[=<file>]          Generate a KML visualization of the scenario and exit. If a filename
+                          is provided, it will be used. Otherwise, it defaults to the scenario
+                          name with a .kml extension in the output directory.
+  --out-dir=<dir>         Set the output directory for simulation results and default KML output.
+                          Defaults to the directory containing the script file.
   --log-level=<level>     Set the logging level (TRACE, DEBUG, INFO, WARNING, ERROR, FATAL)
   --log-file=<file>       Log output to the specified .log or .txt file as well as the console.
   -n=<threads>            Number of threads to use
@@ -210,7 +223,7 @@ Arguments:
 
 Example:
   )" << programName
-				  << R"( simulation.fersxml --log-level=DEBUG --log-file=output.log -n=4
+				  << R"( simulation.fersxml --out-dir=./results --log-level=DEBUG -n=4
 
 This program runs radar simulations based on an XML script file.
 Make sure the script file follows the correct format to avoid errors.
@@ -225,7 +238,7 @@ Make sure the script file follows the correct format to avoid errors.
 | Version 1.0.0                                  |
 | Author: Marc Brooker                           |
 \------------------------------------------------/
-)" << std::endl;
+)" << '\n';
 	}
 
 	std::expected<Config, std::string> parseArguments(const int argc, char* argv[]) noexcept

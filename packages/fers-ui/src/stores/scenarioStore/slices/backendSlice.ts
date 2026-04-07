@@ -1,47 +1,38 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { StateCreator } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { StateCreator } from 'zustand';
+import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
 import {
-    ScenarioStore,
-    BackendActions,
-    TargetComponent,
-    Timing,
-} from '../types';
-import { omit } from '@/utils/typeUtils.ts';
+    serializeAntenna,
+    serializeGlobalParameters,
+    serializePlatform,
+    serializeTiming,
+    serializeWaveform,
+} from '../serializers';
+import { enqueueFullSync } from '../syncQueue';
+import { BackendActions, ScenarioState, ScenarioStore } from '../types';
 
-// Helper to strip null/undefined values from an object before sending to backend
-const cleanObject = <T>(obj: T): T => {
-    if (Array.isArray(obj)) {
-        return obj.map(cleanObject) as unknown as T;
-    }
-    if (obj !== null && typeof obj === 'object') {
-        const newObj = {} as Record<string, unknown>;
-        for (const [key, value] of Object.entries(obj)) {
-            if (value !== null && value !== undefined) {
-                newObj[key] = cleanObject(value);
-            }
-        }
-        return newObj as T;
-    }
-    return obj;
-};
-
-// --- Backend-specific type definitions ---
-type BackendTarget = {
-    id: string;
-    name: string;
-    rcs: {
-        type: TargetComponent['rcs_type'];
-        value?: number;
-        filename?: string;
+/**
+ * Build the full scenario JSON payload expected by the `update_scenario_from_json`
+ * Tauri command. Extracted from `syncBackend` so the sync queue can capture a
+ * snapshot at task-execution time rather than enqueue time.
+ */
+export function buildScenarioJson(state: ScenarioState): string {
+    const { globalParameters, waveforms, timings, antennas, platforms } = state;
+    const scenarioJson = {
+        simulation: {
+            name: globalParameters.simulation_name,
+            parameters: serializeGlobalParameters(globalParameters),
+            waveforms: waveforms.map(serializeWaveform),
+            timings: timings.map(serializeTiming),
+            antennas: antennas.map(serializeAntenna),
+            platforms: platforms.map(serializePlatform),
+        },
     };
-    model?: {
-        type: Exclude<TargetComponent['rcs_model'], 'constant'>;
-        k?: number;
-    };
-};
+    return JSON.stringify(scenarioJson, null, 2);
+}
 
 export const createBackendSlice: StateCreator<
     ScenarioStore,
@@ -51,212 +42,13 @@ export const createBackendSlice: StateCreator<
 > = (set, get) => ({
     syncBackend: async () => {
         set({ isBackendSyncing: true });
-        const { globalParameters, waveforms, timings, antennas, platforms } =
-            get();
-
-        const backendPlatforms = platforms.map((p) => {
-            const { components, motionPath, rotation, ...rest } = p;
-
-            // Map the list of components to backend objects
-            const backendComponents = components.map((component) => {
-                let compObj = {};
-                const mode =
-                    'radarType' in component && component.radarType === 'pulsed'
-                        ? {
-                              pulsed_mode: {
-                                  prf: component.prf,
-                                  ...(component.type !== 'transmitter' && {
-                                      window_skip: component.window_skip,
-                                      window_length: component.window_length,
-                                  }),
-                              },
-                          }
-                        : 'radarType' in component &&
-                            component.radarType === 'cw'
-                          ? { cw_mode: {} }
-                          : {};
-
-                switch (component.type) {
-                    case 'monostatic':
-                        compObj = {
-                            monostatic: {
-                                tx_id: component.txId,
-                                rx_id: component.rxId,
-                                name: component.name,
-                                ...mode,
-                                antenna: component.antennaId ?? 0,
-                                waveform: component.waveformId ?? 0,
-                                timing: component.timingId ?? 0,
-                                noise_temp: component.noiseTemperature,
-                                nodirect: component.noDirectPaths,
-                                nopropagationloss: component.noPropagationLoss,
-                                schedule: component.schedule,
-                            },
-                        };
-                        break;
-                    case 'transmitter':
-                        compObj = {
-                            transmitter: {
-                                id: component.id,
-                                name: component.name,
-                                ...mode,
-                                antenna: component.antennaId ?? 0,
-                                waveform: component.waveformId ?? 0,
-                                timing: component.timingId ?? 0,
-                                schedule: component.schedule,
-                            },
-                        };
-                        break;
-                    case 'receiver':
-                        compObj = {
-                            receiver: {
-                                id: component.id,
-                                name: component.name,
-                                ...mode,
-                                antenna: component.antennaId ?? 0,
-                                timing: component.timingId ?? 0,
-                                noise_temp: component.noiseTemperature,
-                                nodirect: component.noDirectPaths,
-                                nopropagationloss: component.noPropagationLoss,
-                                schedule: component.schedule,
-                            },
-                        };
-                        break;
-                    case 'target':
-                        {
-                            const targetObj: BackendTarget = {
-                                id: component.id,
-                                name: component.name,
-                                rcs: {
-                                    type: component.rcs_type,
-                                    value: component.rcs_value,
-                                    filename: component.rcs_filename,
-                                },
-                            };
-                            if (component.rcs_model !== 'constant') {
-                                targetObj.model = {
-                                    type: component.rcs_model,
-                                    k: component.rcs_k,
-                                };
-                            }
-                            compObj = { target: targetObj };
-                        }
-                        break;
-                }
-                return cleanObject(compObj);
-            });
-
-            const backendRotation: Record<string, unknown> = {};
-            if (rotation.type === 'fixed') {
-                const r = omit(rotation, 'type');
-                backendRotation.fixedrotation = {
-                    interpolation: 'constant',
-                    startazimuth: r.startAzimuth,
-                    startelevation: r.startElevation,
-                    azimuthrate: r.azimuthRate,
-                    elevationrate: r.elevationRate,
-                };
-            } else {
-                const r = omit(rotation, 'type');
-                backendRotation.rotationpath = {
-                    interpolation: r.interpolation,
-                    rotationwaypoints: r.waypoints.map((wp) => omit(wp, 'id')),
-                };
-            }
-
-            return cleanObject({
-                ...rest,
-                id: p.id,
-                motionpath: {
-                    interpolation: motionPath.interpolation,
-                    positionwaypoints: motionPath.waypoints.map((wp) =>
-                        omit(wp, 'id')
-                    ),
-                },
-                ...backendRotation,
-                components: backendComponents,
-            });
-        });
-
-        const backendWaveforms = waveforms.map((w) => {
-            const waveformContent =
-                w.waveformType === 'cw'
-                    ? { cw: {} }
-                    : { pulsed_from_file: { filename: w.filename } };
-
-            return {
-                id: w.id,
-                name: w.name,
-                power: w.power,
-                carrier_frequency: w.carrier_frequency,
-                ...waveformContent,
-            };
-        });
-
-        const backendTimings = timings.map((t: Timing) => {
-            const rest = omit(t, 'type');
-            const timingObj = {
-                ...rest,
-                synconpulse: false,
-                freq_offset: t.freqOffset,
-                random_freq_offset_stdev: t.randomFreqOffsetStdev,
-                phase_offset: t.phaseOffset,
-                random_phase_offset_stdev: t.randomPhaseOffsetStdev,
-                noise_entries: t.noiseEntries.map((entry) => omit(entry, 'id')),
-            };
-            // Remove noise_entries array if it's empty
-            if (timingObj.noise_entries?.length === 0) {
-                delete (timingObj as Partial<typeof timingObj>).noise_entries;
-            }
-            return timingObj;
-        });
-
-        const backendAntennas = antennas.map((a) =>
-            omit(a, 'type', 'meshScale')
-        );
-
-        const {
-            start,
-            end,
-            random_seed,
-            oversample_ratio,
-            coordinateSystem,
-            ...gpRest
-        } = globalParameters;
-
-        const gp_params = {
-            ...gpRest,
-            starttime: start,
-            endtime: end,
-            randomseed: random_seed,
-            oversample: oversample_ratio,
-            coordinatesystem: coordinateSystem,
-        };
-
-        const scenarioJson = {
-            simulation: {
-                name: globalParameters.simulation_name,
-                parameters: cleanObject(gp_params),
-                waveforms: cleanObject(backendWaveforms),
-                timings: cleanObject(backendTimings),
-                antennas: cleanObject(backendAntennas),
-                platforms: backendPlatforms,
-            },
-        };
-
         try {
-            const jsonPayload = JSON.stringify(scenarioJson, null, 2);
-            await invoke('update_scenario_from_json', {
-                json: jsonPayload,
-            });
-            console.log('Successfully synced state to backend.');
-
+            await enqueueFullSync(() => buildScenarioJson(get()));
             set((state) => {
                 state.isBackendSyncing = false;
                 state.backendVersion += 1;
             });
         } catch (error) {
-            console.error('Failed to sync state to backend:', error);
             set({ isBackendSyncing: false });
             throw error;
         }
@@ -264,8 +56,19 @@ export const createBackendSlice: StateCreator<
     fetchFromBackend: async () => {
         try {
             const jsonState = await invoke<string>('get_scenario_as_json');
-            const scenarioData = JSON.parse(jsonState);
-            get().loadScenario(scenarioData);
+            const parsedJson = JSON.parse(jsonState);
+            const scenarioData = parseScenarioData(parsedJson);
+            if (!scenarioData) {
+                throw new Error('Failed to hydrate scenario from backend JSON');
+            }
+
+            set(
+                buildHydratedScenarioState(get(), scenarioData, {
+                    isDirty: false,
+                    preserveSelection: true,
+                    preserveCurrentTime: true,
+                })
+            );
         } catch (error) {
             console.error('Failed to fetch state from backend:', error);
             throw error;

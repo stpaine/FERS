@@ -29,4 +29,10 @@ namespace timing
 		alphas = _alphas;
 		weights = _weights;
 	}
+
+	void PrototypeTiming::clearNoiseEntries() noexcept
+	{
+		_alphas.clear();
+		_weights.clear();
+	}
 }

@@ -75,6 +75,13 @@ namespace timing
 		[[nodiscard]] SimId getId() const noexcept { return _id; }
 
 		/**
+		 * @brief Gets the initial seed used for the timing source's RNG.
+		 *
+		 * @return The initial seed value.
+		 */
+		[[nodiscard]] unsigned getSeed() const noexcept { return _seed; }
+
+		/**
 		 * @brief Checks if the timing source synchronizes on pulse.
 		 *
 		 * @return True if synchronized on pulse, otherwise false.

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+use std::collections::HashSet;
 use std::env;
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 fn env_var(key: &str) -> Option<String> {
     env::var(key).ok().filter(|value| !value.is_empty())
@@ -31,6 +33,47 @@ fn linux_triplet(target: &str) -> Option<&'static str> {
         Some("x64-linux")
     } else {
         None
+    }
+}
+
+fn static_library_name(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?.to_str()?;
+    let name = file_name.strip_suffix(".a").or_else(|| file_name.strip_suffix(".lib"))?;
+
+    let name = name.strip_prefix("lib").unwrap_or(name);
+    if name.is_empty() {
+        None
+    } else {
+        Some(name.to_owned())
+    }
+}
+
+fn emit_static_links_from_file(links_file: &Path) {
+    let contents = fs::read_to_string(links_file).unwrap_or_else(|err| {
+        panic!("failed to read generated native link manifest {}: {err}", links_file.display())
+    });
+
+    let mut seen_dirs = HashSet::new();
+    let mut seen_libs = HashSet::new();
+
+    for line in contents.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let lib_path = Path::new(line);
+
+        if let Some(lib_dir) = lib_path.parent() {
+            if !seen_dirs.contains(lib_dir) {
+                println!("cargo:rustc-link-search=native={}", lib_dir.display());
+                seen_dirs.insert(lib_dir.to_path_buf());
+            }
+        }
+
+        let lib_name = static_library_name(lib_path).unwrap_or_else(|| {
+            panic!("unsupported static library entry in {}: {}", links_file.display(), line)
+        });
+
+        if !seen_libs.contains(&lib_name) {
+            println!("cargo:rustc-link-lib=static={}", lib_name);
+            seen_libs.insert(lib_name);
+        }
     }
 }
 
@@ -80,6 +123,9 @@ fn main() {
         vcpkg_triplet = Some(explicit_triplet);
     }
 
+    let vcpkg_triplet =
+        vcpkg_triplet.unwrap_or_else(|| panic!("unsupported target for Tauri C++ build: {target}"));
+
     config
         .define("CMAKE_TOOLCHAIN_FILE", &vcpkg_toolchain)
         .define("FERS_BUILD_TESTS", "OFF")
@@ -88,9 +134,7 @@ fn main() {
         .build_target("fers_static")
         .profile("Release");
 
-    if let Some(ref triplet) = vcpkg_triplet {
-        config.define("VCPKG_TARGET_TRIPLET", triplet);
-    }
+    config.define("VCPKG_TARGET_TRIPLET", &vcpkg_triplet);
 
     if target.contains("apple") {
         if let Some(arch) = apple_architecture(&target) {
@@ -113,53 +157,13 @@ fn main() {
     let dst = config.build();
     let build_dir = dst.join("build");
 
-    // --- 3. Locate vcpkg installed directory ---
-    let vcpkg_installed_dir = build_dir.join("vcpkg_installed");
-
-    let triplet = vcpkg_triplet.as_deref().expect("unsupported target for Tauri C++ build");
-    let triplet_dir = vcpkg_installed_dir.join(triplet);
-    let vcpkg_lib_dir = triplet_dir.join("lib");
-
-    // --- 4. Link the libraries ---
+    // --- 3. Link the libraries ---
     let libfers_lib_dir = build_dir.join("packages/libfers");
     println!("cargo:rustc-link-search=native={}", libfers_lib_dir.display());
     println!("cargo:rustc-link-lib=static=fers");
 
-    println!("cargo:rustc-link-search=native={}", vcpkg_lib_dir.display());
-
-    // We bypass pkg-config entirely for vcpkg dependencies because vcpkg's .pc files
-    // for static libraries often omit transitive dependencies like szip and libaec.
-    // Order is critical here: dependents must appear BEFORE their dependencies.
-    //
-    // Note on iconv: on Linux, iconv is part of glibc and vcpkg will not install a
-    // standalone libiconv.a. The existence check below handles this gracefully — the
-    // entry is simply skipped if the file is absent.
-    let vcpkg_libs = [
-        "Geographic",
-        "GeographicLib",
-        "hdf5_hl",
-        "hdf5",
-        "sz",
-        "aec",
-        "xml2",
-        "lzma",
-        "iconv",
-        "z",
-    ];
-
-    for lib in vcpkg_libs {
-        let lib_a = format!("lib{}.a", lib);
-        let lib_lib = format!("{}.lib", lib);
-        let lib_lib2 = format!("lib{}.lib", lib);
-
-        // Only link if vcpkg actually built it
-        if vcpkg_lib_dir.join(&lib_a).exists()
-            || vcpkg_lib_dir.join(&lib_lib).exists()
-            || vcpkg_lib_dir.join(&lib_lib2).exists()
-        {
-            println!("cargo:rustc-link-lib=static={}", lib);
-        }
-    }
+    let vcpkg_links_file = libfers_lib_dir.join("vcpkg_links.txt");
+    emit_static_links_from_file(&vcpkg_links_file);
 
     // Use the TARGET env var (not cfg!) so this is correct during cross-compilation.
     if target.contains("apple") {
@@ -168,7 +172,7 @@ fn main() {
         println!("cargo:rustc-link-lib=stdc++");
     }
 
-    // --- 5. Generate Rust bindings for the C++ API ---
+    // --- 4. Generate Rust bindings for the C++ API ---
     let header_path = repo_root.join("packages/libfers/include/libfers/api.h");
 
     println!("cargo:rerun-if-changed={}", header_path.display());
@@ -178,12 +182,15 @@ fn main() {
     println!("cargo:rerun-if-env-changed=CMAKE_OSX_DEPLOYMENT_TARGET");
     println!("cargo:rerun-if-env-changed=SDKROOT");
     println!("cargo:rerun-if-changed={}", repo_root.join("vcpkg.json").display());
+    println!("cargo:rerun-if-changed={}", repo_root.join("CMakeLists.txt").display());
+    println!("cargo:rerun-if-changed={}", repo_root.join("packages/CMakeLists.txt").display());
     println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/src").display());
     println!("cargo:rerun-if-changed={}", repo_root.join("packages/libfers/include").display());
     println!(
         "cargo:rerun-if-changed={}",
         repo_root.join("packages/libfers/CMakeLists.txt").display()
     );
+    println!("cargo:rerun-if-changed={}", vcpkg_links_file.display());
 
     let bindings = bindgen::Builder::default()
         .header(header_path.to_str().unwrap())

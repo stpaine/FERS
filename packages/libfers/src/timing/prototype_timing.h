@@ -116,12 +116,22 @@ namespace timing
 		void setSyncOnPulse() noexcept { _sync_on_pulse = true; }
 
 		/**
+		 * @brief Disables synchronization on pulse.
+		 */
+		void clearSyncOnPulse() noexcept { _sync_on_pulse = false; }
+
+		/**
 		 * @brief Sets an alpha and weight value.
 		 *
 		 * @param alpha The alpha value to be added.
 		 * @param weight The weight value to be added.
 		 */
 		void setAlpha(RealType alpha, RealType weight) noexcept;
+
+		/**
+		 * @brief Clears all noise entries.
+		 */
+		void clearNoiseEntries() noexcept;
 
 		/**
 		 * @brief Sets the frequency offset.
@@ -131,11 +141,21 @@ namespace timing
 		void setFreqOffset(RealType offset) noexcept { _freq_offset = offset; }
 
 		/**
+		 * @brief Clears the frequency offset.
+		 */
+		void clearFreqOffset() noexcept { _freq_offset = std::nullopt; }
+
+		/**
 		 * @brief Sets the phase offset.
 		 *
 		 * @param offset The phase offset to be set.
 		 */
 		void setPhaseOffset(RealType offset) noexcept { _phase_offset = offset; }
+
+		/**
+		 * @brief Clears the phase offset.
+		 */
+		void clearPhaseOffset() noexcept { _phase_offset = std::nullopt; }
 
 		/**
 		 * @brief Sets a random frequency offset standard deviation.
@@ -150,6 +170,23 @@ namespace timing
 		 * @param stdev The standard deviation for generating the random phase offset.
 		 */
 		void setRandomPhaseOffsetStdev(RealType stdev) noexcept { _random_phase_stdev = stdev; }
+
+		/**
+		 * @brief Clears the random frequency offset standard deviation.
+		 */
+		void clearRandomFreqOffsetStdev() noexcept { _random_freq_stdev = std::nullopt; }
+
+		/**
+		 * @brief Clears the random phase offset standard deviation.
+		 */
+		void clearRandomPhaseOffsetStdev() noexcept { _random_phase_stdev = std::nullopt; }
+
+		/**
+		 * @brief Sets the name of the timing source.
+		 *
+		 * @param name The new name.
+		 */
+		void setName(std::string name) noexcept { _name = std::move(name); }
 
 	private:
 		SimId _id; ///< Unique ID for this timing source.

@@ -146,7 +146,8 @@ TEST_CASE("API rotation path interpolation validates arguments", "[api][paths]")
 
 	SECTION("null waypoints")
 	{
-		api_test::RotationPath path(fers_get_interpolated_rotation_path(nullptr, 1, FERS_INTERP_LINEAR, 2));
+		api_test::RotationPath path(
+			fers_get_interpolated_rotation_path(nullptr, 1, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 2));
 		REQUIRE(path.get() == nullptr);
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("waypoints cannot be null"));
@@ -154,7 +155,8 @@ TEST_CASE("API rotation path interpolation validates arguments", "[api][paths]")
 
 	SECTION("zero waypoint count")
 	{
-		api_test::RotationPath path(fers_get_interpolated_rotation_path(&point, 0, FERS_INTERP_LINEAR, 2));
+		api_test::RotationPath path(
+			fers_get_interpolated_rotation_path(&point, 0, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 2));
 		REQUIRE(path.get() == nullptr);
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("counts must be > 0"));
@@ -162,7 +164,8 @@ TEST_CASE("API rotation path interpolation validates arguments", "[api][paths]")
 
 	SECTION("zero output count")
 	{
-		api_test::RotationPath path(fers_get_interpolated_rotation_path(&point, 1, FERS_INTERP_LINEAR, 0));
+		api_test::RotationPath path(
+			fers_get_interpolated_rotation_path(&point, 1, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 0));
 		REQUIRE(path.get() == nullptr);
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("counts must be > 0"));
@@ -170,7 +173,8 @@ TEST_CASE("API rotation path interpolation validates arguments", "[api][paths]")
 
 	SECTION("cubic needs more waypoints")
 	{
-		api_test::RotationPath path(fers_get_interpolated_rotation_path(&point, 1, FERS_INTERP_CUBIC, 2));
+		api_test::RotationPath path(
+			fers_get_interpolated_rotation_path(&point, 1, FERS_INTERP_CUBIC, FERS_ANGLE_UNIT_DEG, 2));
 		REQUIRE(path.get() == nullptr);
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Cubic interpolation requires at least 2 waypoints"));
@@ -181,15 +185,16 @@ TEST_CASE("API rotation path interpolation returns constant compass angles for s
 {
 	api_test::clearLastError();
 	const fers_rotation_waypoint_t waypoint{0.0, 15.0, -10.0};
-	api_test::RotationPath path(fers_get_interpolated_rotation_path(&waypoint, 1, FERS_INTERP_STATIC, 4));
+	api_test::RotationPath path(
+		fers_get_interpolated_rotation_path(&waypoint, 1, FERS_INTERP_STATIC, FERS_ANGLE_UNIT_DEG, 4));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 4u);
 
 	for (size_t i = 0; i < path.get()->count; ++i)
 	{
-		REQUIRE_THAT(path.get()->points[i].azimuth_deg, WithinAbs(15.0, 1e-12));
-		REQUIRE_THAT(path.get()->points[i].elevation_deg, WithinAbs(-10.0, 1e-12));
+		REQUIRE_THAT(path.get()->points[i].azimuth, WithinAbs(15.0, 1e-12));
+		REQUIRE_THAT(path.get()->points[i].elevation, WithinAbs(-10.0, 1e-12));
 	}
 }
 
@@ -200,17 +205,18 @@ TEST_CASE("API rotation path interpolation preserves compass-angle semantics", "
 		{0.0, 0.0, -10.0},
 		{10.0, 180.0, 20.0},
 	};
-	api_test::RotationPath path(fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
+	api_test::RotationPath path(
+		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
 
-	REQUIRE_THAT(path.get()->points[0].azimuth_deg, WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[1].azimuth_deg, WithinAbs(90.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[2].azimuth_deg, WithinAbs(180.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[0].elevation_deg, WithinAbs(-10.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[1].elevation_deg, WithinAbs(5.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[2].elevation_deg, WithinAbs(20.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[0].azimuth, WithinAbs(0.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[1].azimuth, WithinAbs(90.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[2].azimuth, WithinAbs(180.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[0].elevation, WithinAbs(-10.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[1].elevation, WithinAbs(5.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[2].elevation, WithinAbs(20.0, 1e-12));
 }
 
 TEST_CASE("API rotation path interpolation maps cubic enum to cubic behavior", "[api][paths]")
@@ -221,12 +227,13 @@ TEST_CASE("API rotation path interpolation maps cubic enum to cubic behavior", "
 		{1.0, 32.7042204869, 57.2957795131},
 		{2.0, -24.5915590262, 114.5915590262},
 	};
-	api_test::RotationPath path(fers_get_interpolated_rotation_path(waypoints, 3, FERS_INTERP_CUBIC, 3));
+	api_test::RotationPath path(
+		fers_get_interpolated_rotation_path(waypoints, 3, FERS_INTERP_CUBIC, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
-	REQUIRE_THAT(path.get()->points[1].azimuth_deg, WithinAbs(32.7042204869, 1e-6));
-	REQUIRE_THAT(path.get()->points[1].elevation_deg, WithinAbs(57.2957795131, 1e-6));
+	REQUIRE_THAT(path.get()->points[1].azimuth, WithinAbs(32.7042204869, 1e-6));
+	REQUIRE_THAT(path.get()->points[1].elevation, WithinAbs(57.2957795131, 1e-6));
 }
 
 TEST_CASE("API rotation path interpolation preserves unnormalized winding angles", "[api][paths]")
@@ -236,12 +243,29 @@ TEST_CASE("API rotation path interpolation preserves unnormalized winding angles
 		{0.0, -30.0, 0.0},
 		{10.0, 390.0, 0.0},
 	};
-	api_test::RotationPath path(fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
+	api_test::RotationPath path(
+		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
 
-	REQUIRE_THAT(path.get()->points[0].azimuth_deg, WithinAbs(-30.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[1].azimuth_deg, WithinAbs(180.0, 1e-12));
-	REQUIRE_THAT(path.get()->points[2].azimuth_deg, WithinAbs(390.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[0].azimuth, WithinAbs(-30.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[1].azimuth, WithinAbs(180.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[2].azimuth, WithinAbs(390.0, 1e-12));
+}
+
+TEST_CASE("API rotation path interpolation supports radians", "[api][paths]")
+{
+	api_test::clearLastError();
+	const fers_rotation_waypoint_t waypoints[] = {
+		{0.0, 0.0, 0.0},
+		{1.0, PI / 2.0, PI / 4.0},
+	};
+	api_test::RotationPath path(
+		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_RAD, 3));
+
+	REQUIRE(path.get() != nullptr);
+	REQUIRE(path.get()->count == 3u);
+	REQUIRE_THAT(path.get()->points[1].azimuth, WithinAbs(PI / 4.0, 1e-12));
+	REQUIRE_THAT(path.get()->points[1].elevation, WithinAbs(PI / 8.0, 1e-12));
 }

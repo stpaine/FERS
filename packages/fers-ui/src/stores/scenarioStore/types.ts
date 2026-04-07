@@ -3,20 +3,20 @@
 
 import { z } from 'zod';
 import {
-    GlobalParametersSchema,
-    WaveformSchema,
-    TimingSchema,
     AntennaSchema,
-    PlatformSchema,
-    ScenarioDataSchema,
-    NoiseEntrySchema,
-    PositionWaypointSchema,
-    RotationWaypointSchema,
-    PlatformComponentSchema,
     FixedRotationSchema,
-    RotationPathSchema,
+    GlobalParametersSchema,
     MotionPathSchema,
+    NoiseEntrySchema,
+    PlatformComponentSchema,
+    PlatformSchema,
+    PositionWaypointSchema,
+    RotationPathSchema,
+    RotationWaypointSchema,
+    ScenarioDataSchema,
     SchedulePeriodSchema,
+    TimingSchema,
+    WaveformSchema,
 } from '../scenarioSchema';
 
 // --- Zod Inferred Types ---
@@ -97,6 +97,14 @@ export type ViewControlAction = {
     timestamp: number;
 };
 
+export type NotificationSeverity = 'warning' | 'error';
+
+export type NotificationState = {
+    open: boolean;
+    message: string;
+    severity: NotificationSeverity;
+};
+
 export type ScenarioState = ScenarioData & {
     selectedItemId: string | null;
     selectedComponentId: string | null;
@@ -105,12 +113,14 @@ export type ScenarioState = ScenarioData & {
     currentTime: number;
     targetPlaybackDuration: number | null;
     isSimulating: boolean;
+    isGeneratingKml: boolean;
     isBackendSyncing: boolean;
     backendVersion: number;
-    errorSnackbar: {
-        open: boolean;
-        message: string;
-    };
+    scenarioFilePath: string | null;
+    outputDirectory: string | null;
+    antennaPreviewErrors: Record<string, string>;
+    notificationSnackbar: NotificationState;
+    notificationQueue: NotificationState[];
     viewControlAction: ViewControlAction;
     visibility: VisualizationLayers;
 };
@@ -150,9 +160,15 @@ export type PlatformActions = {
 export type ScenarioActions = {
     selectItem: (itemId: string | null) => void;
     updateItem: (itemId: string, propertyPath: string, value: unknown) => void;
+    setRotationAngleUnit: (
+        unit: GlobalParameters['rotationAngleUnit'],
+        convertExisting: boolean
+    ) => void;
     removeItem: (itemId: string) => void;
     loadScenario: (backendData: unknown) => void;
     resetScenario: () => void;
+    setScenarioFilePath: (path: string | null) => void;
+    setOutputDirectory: (dir: string | null) => void;
 };
 
 export type BackendActions = {
@@ -165,11 +181,16 @@ export type PlaybackActions = {
     setCurrentTime: (time: number | ((prevTime: number) => number)) => void;
     setTargetPlaybackDuration: (duration: number | null) => void;
     setIsSimulating: (isSimulating: boolean) => void;
+    setIsGeneratingKml: (isGeneratingKml: boolean) => void;
 };
 
 export type ErrorActions = {
     showError: (message: string) => void;
-    hideError: () => void;
+    showWarning: (message: string) => void;
+    hideNotification: () => void;
+    advanceNotification: () => void;
+    setAntennaPreviewError: (antennaId: string, message: string) => void;
+    clearAntennaPreviewError: (antennaId: string) => void;
 };
 
 export type ViewControlActions = {

@@ -17,6 +17,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
@@ -74,6 +75,11 @@ namespace serial::xml_serializer_utils
 		{
 			addChildWithNumber(parent, "oversample", p.oversample_ratio);
 		}
+		if (p.rotation_angle_unit != params::RotationAngleUnit::Degrees)
+		{
+			addChildWithText(parent, "rotationangleunit",
+							 std::string(params::rotationAngleUnitToken(p.rotation_angle_unit)));
+		}
 
 		const XmlElement origin = parent.addChild("origin");
 		origin.setAttribute("latitude", std::to_string(p.origin_latitude));
@@ -104,7 +110,7 @@ namespace serial::xml_serializer_utils
 		addChildWithNumber(parent, "power", waveform.getPower());
 		addChildWithNumber(parent, "carrier_frequency", waveform.getCarrier());
 
-		if (dynamic_cast<const fers_signal::CwSignal*>(waveform.getSignal()))
+		if (dynamic_cast<const fers_signal::CwSignal*>(waveform.getSignal()) != nullptr)
 		{
 			(void)parent.addChild("cw"); // Empty element
 		}
@@ -229,16 +235,21 @@ namespace serial::xml_serializer_utils
 			const XmlElement fixed_elem = parent.addChild("fixedrotation");
 			const auto start = rotPath.getStart();
 			const auto rate = rotPath.getRate();
+			const auto unit = params::rotationAngleUnit();
 
-			const RealType start_az_deg = std::fmod(90.0 - start.azimuth * 180.0 / PI + 360.0, 360.0);
-			const RealType start_el_deg = start.elevation * 180.0 / PI;
-			const RealType rate_az_deg_s = -rate.azimuth * 180.0 / PI;
-			const RealType rate_el_deg_s = rate.elevation * 180.0 / PI;
+			RealType start_az = rotation_angle_utils::internal_azimuth_to_external(start.azimuth, unit);
+			if (unit == params::RotationAngleUnit::Degrees)
+			{
+				start_az = std::fmod(start_az + 360.0, 360.0);
+			}
+			const RealType start_el = rotation_angle_utils::internal_elevation_to_external(start.elevation, unit);
+			const RealType rate_az = rotation_angle_utils::internal_azimuth_rate_to_external(rate.azimuth, unit);
+			const RealType rate_el = rotation_angle_utils::internal_elevation_rate_to_external(rate.elevation, unit);
 
-			addChildWithNumber(fixed_elem, "startazimuth", start_az_deg);
-			addChildWithNumber(fixed_elem, "startelevation", start_el_deg);
-			addChildWithNumber(fixed_elem, "azimuthrate", rate_az_deg_s);
-			addChildWithNumber(fixed_elem, "elevationrate", rate_el_deg_s);
+			addChildWithNumber(fixed_elem, "startazimuth", start_az);
+			addChildWithNumber(fixed_elem, "startelevation", start_el);
+			addChildWithNumber(fixed_elem, "azimuthrate", rate_az);
+			addChildWithNumber(fixed_elem, "elevationrate", rate_el);
 		}
 		else
 		{
@@ -257,13 +268,18 @@ namespace serial::xml_serializer_utils
 			default:
 				break;
 			}
+			const auto unit = params::rotationAngleUnit();
 			for (const auto& wp : rotPath.getCoords())
 			{
 				XmlElement wp_elem = rot_elem.addChild("rotationwaypoint");
-				const RealType az_deg = std::fmod(90.0 - wp.azimuth * 180.0 / PI + 360.0, 360.0);
-				const RealType el_deg = wp.elevation * 180.0 / PI;
-				addChildWithNumber(wp_elem, "azimuth", az_deg);
-				addChildWithNumber(wp_elem, "elevation", el_deg);
+				RealType azimuth = rotation_angle_utils::internal_azimuth_to_external(wp.azimuth, unit);
+				if (unit == params::RotationAngleUnit::Degrees)
+				{
+					azimuth = std::fmod(azimuth + 360.0, 360.0);
+				}
+				const RealType elevation = rotation_angle_utils::internal_elevation_to_external(wp.elevation, unit);
+				addChildWithNumber(wp_elem, "azimuth", azimuth);
+				addChildWithNumber(wp_elem, "elevation", elevation);
 				addChildWithNumber(wp_elem, "time", wp.t);
 			}
 		}
@@ -273,8 +289,8 @@ namespace serial::xml_serializer_utils
 	{
 		const XmlElement tx_elem = parent.addChild("transmitter");
 		tx_elem.setAttribute("name", tx.getName());
-		tx_elem.setAttribute("waveform", tx.getSignal() ? tx.getSignal()->getName() : "");
-		tx_elem.setAttribute("antenna", tx.getAntenna() ? tx.getAntenna()->getName() : "");
+		tx_elem.setAttribute("waveform", (tx.getSignal() != nullptr) ? tx.getSignal()->getName() : "");
+		tx_elem.setAttribute("antenna", (tx.getAntenna() != nullptr) ? tx.getAntenna()->getName() : "");
 		tx_elem.setAttribute("timing", tx.getTiming() ? tx.getTiming()->getName() : "");
 
 		if (tx.getMode() == radar::OperationMode::PULSED_MODE)
@@ -294,7 +310,7 @@ namespace serial::xml_serializer_utils
 	{
 		const XmlElement rx_elem = parent.addChild("receiver");
 		rx_elem.setAttribute("name", rx.getName());
-		rx_elem.setAttribute("antenna", rx.getAntenna() ? rx.getAntenna()->getName() : "");
+		rx_elem.setAttribute("antenna", (rx.getAntenna() != nullptr) ? rx.getAntenna()->getName() : "");
 		rx_elem.setAttribute("timing", rx.getTiming() ? rx.getTiming()->getName() : "");
 		setAttributeFromBool(rx_elem, "nodirect", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		setAttributeFromBool(rx_elem, "nopropagationloss", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
@@ -323,8 +339,8 @@ namespace serial::xml_serializer_utils
 	{
 		const XmlElement mono_elem = parent.addChild("monostatic");
 		mono_elem.setAttribute("name", tx.getName());
-		mono_elem.setAttribute("antenna", tx.getAntenna() ? tx.getAntenna()->getName() : "");
-		mono_elem.setAttribute("waveform", tx.getSignal() ? tx.getSignal()->getName() : "");
+		mono_elem.setAttribute("antenna", (tx.getAntenna() != nullptr) ? tx.getAntenna()->getName() : "");
+		mono_elem.setAttribute("waveform", (tx.getSignal() != nullptr) ? tx.getSignal()->getName() : "");
 		mono_elem.setAttribute("timing", tx.getTiming() ? tx.getTiming()->getName() : "");
 		setAttributeFromBool(mono_elem, "nodirect", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		setAttributeFromBool(mono_elem, "nopropagationloss", rx.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
@@ -391,7 +407,7 @@ namespace serial::xml_serializer_utils
 		{
 			if (tx->getPlatform() == &platform)
 			{
-				if (tx->getAttached())
+				if (tx->getAttached() != nullptr)
 				{
 					serializeMonostatic(*tx, *dynamic_cast<const radar::Receiver*>(tx->getAttached()), parent);
 				}
@@ -404,7 +420,7 @@ namespace serial::xml_serializer_utils
 
 		for (const auto& rx : world.getReceivers())
 		{
-			if (rx->getPlatform() == &platform && !rx->getAttached())
+			if (rx->getPlatform() == &platform && (rx->getAttached() == nullptr))
 			{
 				serializeReceiver(*rx, parent);
 			}

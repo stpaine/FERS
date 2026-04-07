@@ -23,7 +23,7 @@ extern "C" {
  */
 struct fers_context;
 
-typedef struct fers_context fers_context_t;
+typedef struct fers_context fers_context_t; // NOLINT(*-use-using)
 
 /**
  * @brief A function pointer type for progress reporting callbacks.
@@ -37,7 +37,8 @@ typedef struct fers_context fers_context_t;
  * @param user_data An opaque pointer passed back to the caller, useful for
  *                  maintaining state (e.g., a class instance or application handle).
  */
-typedef void (*fers_progress_callback_t)(const char* message, int current, int total, void* user_data);
+typedef void (*fers_progress_callback_t)(const char* message, int current, int total,
+										 void* user_data); // NOLINT(*-use-using)
 
 
 // --- Context Lifecycle ---
@@ -71,9 +72,17 @@ fers_context_t* fers_context_create();
 void fers_context_destroy(fers_context_t* context);
 
 /**
+ * @brief Sets the output directory for simulation results.
+ * @param context A valid `fers_context_t` handle.
+ * @param out_dir A null-terminated UTF-8 string for the output directory path.
+ * @return 0 on success, non-zero on error.
+ */
+int fers_set_output_directory(fers_context_t* context, const char* out_dir);
+
+/**
  * @brief Log levels for the FERS library.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_LOG_TRACE,
 	FERS_LOG_DEBUG,
@@ -190,6 +199,82 @@ char* fers_get_scenario_as_xml(fers_context_t* context);
  */
 int fers_update_scenario_from_json(fers_context_t* context, const char* scenario_json);
 
+/**
+ * @brief Updates a single platform's paths and name from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the platform.
+ * @param json The JSON string for the platform.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates the global simulation parameters from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the parameters.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_parameters_from_json(fers_context_t* context, const char* json);
+
+/**
+ * @brief Updates a single antenna from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the antenna.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_antenna_from_json(fers_context_t* context, const char* json);
+
+/**
+ * @brief Updates a single waveform from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the waveform.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_waveform_from_json(fers_context_t* context, const char* json);
+
+/**
+ * @brief Updates a single transmitter from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the transmitter.
+ * @param json The JSON string for the transmitter.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_transmitter_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a single receiver from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the receiver.
+ * @param json The JSON string for the receiver.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_receiver_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a single target from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the target.
+ * @param json The JSON string for the target.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_target_from_json(fers_context_t* context, uint64_t id, const char* json);
+
+/**
+ * @brief Updates a monostatic radar from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param json The JSON string for the monostatic component.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_monostatic_from_json(fers_context_t* context, const char* json);
+
+/**
+ * @brief Updates a single timing source from JSON without full context recreation.
+ * @param context A valid `fers_context_t` handle.
+ * @param id The unique ID of the timing source.
+ * @param json The JSON string for the timing source.
+ * @return 0 on success, non-zero on failure.
+ */
+int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const char* json);
 
 // --- Error Handling ---
 
@@ -209,6 +294,17 @@ int fers_update_scenario_from_json(fers_context_t* context, const char* scenario
  *         error message, or NULL if no error has occurred.
  */
 char* fers_get_last_error_message();
+
+/**
+ * @brief Returns the last deduplicated rotation-unit warning list for the calling thread as JSON.
+ *
+ * The returned value is a JSON array of strings. It is populated by successful XML/JSON
+ * load and update calls that detect suspicious rotation values. The caller owns the string
+ * and must free it with `fers_free_string()`.
+ *
+ * @return A dynamically allocated JSON array string, or NULL if no warnings are available.
+ */
+char* fers_get_last_warning_messages_json();
 
 /**
  * @brief Frees a string that was allocated and returned by the libfers API.
@@ -268,7 +364,7 @@ int fers_generate_kml(const fers_context_t* context, const char* output_kml_file
  * The data is structured as a flat array in row-major order (elevation rows, then azimuth columns).
  * @note The `gains` array must be freed using `fers_free_antenna_pattern_data`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double* gains; // Flat array of gain values [el_count * az_count]
 	size_t az_count; // Number of samples along azimuth (-180 to +180 deg)
@@ -313,7 +409,7 @@ void fers_free_antenna_pattern_data(fers_antenna_pattern_data_t* data);
  * This enum provides a language-agnostic way to specify the desired
  * interpolation algorithm when calling the path generation functions.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_INTERP_STATIC,
 	FERS_INTERP_LINEAR,
@@ -321,10 +417,19 @@ typedef enum
 } fers_interp_type_t;
 
 /**
+ * @brief Units used for external rotation angles and rates.
+ */
+typedef enum // NOLINT(*-use-using)
+{
+	FERS_ANGLE_UNIT_DEG,
+	FERS_ANGLE_UNIT_RAD
+} fers_angle_unit_t;
+
+/**
  * @brief Represents a single waypoint for a motion path.
  * Coordinates are in the scenario's defined coordinate system (e.g., ENU meters).
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double time; /**< Time in seconds. */
 	double x; /**< X coordinate in meters (East in ENU). */
@@ -334,20 +439,20 @@ typedef struct
 
 /**
  * @brief Represents a single waypoint for a rotation path.
- * Angles are in compass degrees (CW from North).
+ * Angles are in compass units (CW from North) selected by the caller.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double time; /**< Time in seconds. */
-	double azimuth_deg; /**< Azimuth angle in compass degrees (0=North, 90=East). */
-	double elevation_deg; /**< Elevation angle in degrees (positive up). */
+	double azimuth; /**< Azimuth angle in compass units (0=North, pi/2 or 90=East). */
+	double elevation; /**< Elevation angle in compass units (positive up). */
 } fers_rotation_waypoint_t;
 
 /**
  * @brief Represents a single interpolated point on a motion path.
  * Includes position and velocity in the scenario's coordinate frame.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	double x; /**< X position in meters. */
 	double y; /**< Y position in meters. */
@@ -359,12 +464,12 @@ typedef struct
 
 /**
  * @brief Represents a single interpolated point on a rotation path.
- * Angles are in compass degrees (CW from North).
+ * Angles are in compass units (CW from North) selected by the caller.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
-	double azimuth_deg; /**< Azimuth angle in compass degrees. */
-	double elevation_deg; /**< Elevation angle in degrees. */
+	double azimuth; /**< Azimuth angle in compass units. */
+	double elevation; /**< Elevation angle in compass units. */
 } fers_interpolated_rotation_point_t;
 
 
@@ -372,7 +477,7 @@ typedef struct
  * @brief A container for an array of interpolated motion path points.
  * @note The `points` array must be freed using `fers_free_interpolated_motion_path`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_interpolated_point_t* points;
 	size_t count;
@@ -382,7 +487,7 @@ typedef struct
  * @brief A container for an array of interpolated rotation path points.
  * @note The `points` array must be freed using `fers_free_interpolated_rotation_path`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_interpolated_rotation_point_t* points;
 	size_t count;
@@ -419,6 +524,7 @@ void fers_free_interpolated_motion_path(fers_interpolated_path_t* path);
  * @param waypoints An array of `fers_rotation_waypoint_t` structs.
  * @param waypoint_count The number of waypoints in the array.
  * @param interp_type The interpolation algorithm to use (STATIC, LINEAR, CUBIC).
+ * @param angle_unit The unit used by the waypoint angles and desired output angles.
  * @param num_points The desired number of points in the output interpolated path.
  * @return A pointer to a `fers_interpolated_rotation_path_t` struct containing the results.
  *         Returns NULL on failure. The caller owns the returned struct and must
@@ -427,7 +533,7 @@ void fers_free_interpolated_motion_path(fers_interpolated_path_t* path);
 fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fers_rotation_waypoint_t* waypoints,
 																	   size_t waypoint_count,
 																	   fers_interp_type_t interp_type,
-																	   size_t num_points);
+																	   fers_angle_unit_t angle_unit, size_t num_points);
 
 /**
  * @brief Frees the memory allocated for an interpolated rotation path.
@@ -440,7 +546,7 @@ void fers_free_interpolated_rotation_path(fers_interpolated_rotation_path_t* pat
 /**
  * @brief Quality of the radio link based on SNR.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_LINK_STRONG, // SNR > 0 dB
 	FERS_LINK_WEAK // SNR < 0 dB (Geometric possibility but sub-noise)
@@ -449,7 +555,7 @@ typedef enum
 /**
  * @brief Type of visual link to render.
  */
-typedef enum
+typedef enum // NOLINT(*-use-using)
 {
 	FERS_LINK_MONOSTATIC, // Combined Tx/Rx path
 	FERS_LINK_BISTATIC_TX_TGT, // Illuminator path
@@ -461,7 +567,7 @@ typedef enum
  * @brief Represents a single renderable line segment metadata.
  * Geometry is resolved client-side.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_link_type_t type; /**< Type of the link (Monostatic, Bistatic, etc.). */
 	fers_link_quality_t quality; /**< Signal quality (Strong/Weak). */
@@ -475,7 +581,7 @@ typedef struct
  * @brief A container for a list of visual links.
  * @note The `links` array is owned by this struct and must be freed using `fers_free_preview_links`.
  */
-typedef struct
+typedef struct // NOLINT(*-use-using)
 {
 	fers_visual_link_t* links;
 	size_t count;

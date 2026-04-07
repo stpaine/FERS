@@ -13,11 +13,15 @@
 #include "antenna/antenna_factory.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <complex>
+#include <limits>
 #include <optional>
 #include <stdexcept>
 
+#include "antenna_pattern_dtd.h"
+#include "antenna_pattern_xsd.h"
 #include "core/config.h"
 #include "core/logging.h"
 #include "core/portable_utils.h"
@@ -30,6 +34,149 @@ using math::Vec3;
 
 namespace
 {
+	enum class AxisUnit
+	{
+		Radians,
+		Degrees,
+	};
+
+	enum class AxisGainFormat
+	{
+		Linear,
+		DBi,
+	};
+
+	struct AxisMetadata
+	{
+		AxisUnit unit{AxisUnit::Radians};
+		AxisGainFormat format{AxisGainFormat::Linear};
+		antenna::XmlAntenna::AxisSymmetry symmetry{antenna::XmlAntenna::AxisSymmetry::Mirrored};
+		bool unit_explicit{};
+		bool format_explicit{};
+		bool symmetry_explicit{};
+	};
+
+	struct AxisLoadResult
+	{
+		RealType max_gain{};
+		antenna::XmlAntenna::AxisSymmetry symmetry{antenna::XmlAntenna::AxisSymmetry::Mirrored};
+		std::size_t sample_count{};
+	};
+
+	std::string toLowerCopy(std::string value)
+	{
+		std::transform(value.begin(), value.end(), value.begin(),
+					   [](const unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+		return value;
+	}
+
+	RealType parseRealValue(const std::string_view text, const std::string_view context)
+	{
+		const std::string value(text);
+		size_t index = 0;
+		double parsed = 0.0;
+
+		try
+		{
+			parsed = std::stod(value, &index);
+		}
+		catch (const std::exception&)
+		{
+			throw std::runtime_error("Invalid numeric value for " + std::string(context) + ": '" + value + "'.");
+		}
+
+		while (index < value.size() && (std::isspace(static_cast<unsigned char>(value[index])) != 0))
+		{
+			++index;
+		}
+
+		if (index != value.size())
+		{
+			throw std::runtime_error("Invalid numeric value for " + std::string(context) + ": '" + value + "'.");
+		}
+
+		if (!std::isfinite(parsed))
+		{
+			throw std::runtime_error("Non-finite numeric value for " + std::string(context) + ".");
+		}
+
+		return static_cast<RealType>(parsed);
+	}
+
+	const char* axisUnitName(const AxisUnit unit) noexcept { return unit == AxisUnit::Degrees ? "deg" : "rad"; }
+
+	const char* axisFormatName(const AxisGainFormat format) noexcept
+	{
+		return format == AxisGainFormat::DBi ? "dBi" : "linear";
+	}
+
+	const char* axisSymmetryName(const antenna::XmlAntenna::AxisSymmetry symmetry) noexcept
+	{
+		return symmetry == antenna::XmlAntenna::AxisSymmetry::Full ? "full" : "mirrored";
+	}
+
+	AxisMetadata parseAxisMetadata(const XmlElement& axisXml)
+	{
+		AxisMetadata metadata;
+		const std::string axis_name(axisXml.name());
+
+		if (const auto unit_attr = XmlElement::getOptionalAttribute(axisXml, "unit"); unit_attr.has_value())
+		{
+			metadata.unit_explicit = true;
+			const std::string value = toLowerCopy(*unit_attr);
+			if (value == "rad")
+			{
+				metadata.unit = AxisUnit::Radians;
+			}
+			else if (value == "deg")
+			{
+				metadata.unit = AxisUnit::Degrees;
+			}
+			else
+			{
+				throw std::runtime_error("Unsupported unit '" + *unit_attr + "' on <" + axis_name + "> axis.");
+			}
+		}
+
+		if (const auto format_attr = XmlElement::getOptionalAttribute(axisXml, "format"); format_attr.has_value())
+		{
+			metadata.format_explicit = true;
+			const std::string value = toLowerCopy(*format_attr);
+			if (value == "linear")
+			{
+				metadata.format = AxisGainFormat::Linear;
+			}
+			else if (value == "dbi")
+			{
+				metadata.format = AxisGainFormat::DBi;
+			}
+			else
+			{
+				throw std::runtime_error("Unsupported format '" + *format_attr + "' on <" + axis_name + "> axis.");
+			}
+		}
+
+		if (const auto symmetry_attr = XmlElement::getOptionalAttribute(axisXml, "symmetry"); symmetry_attr.has_value())
+		{
+			metadata.symmetry_explicit = true;
+			const std::string value = toLowerCopy(*symmetry_attr);
+			if (value == "mirrored")
+			{
+				metadata.symmetry = antenna::XmlAntenna::AxisSymmetry::Mirrored;
+			}
+			else if (value == "full")
+			{
+				metadata.symmetry = antenna::XmlAntenna::AxisSymmetry::Full;
+			}
+			else
+			{
+				throw std::runtime_error("Unsupported symmetry '" + *symmetry_attr + "' on <" + axis_name + "> axis.");
+			}
+		}
+
+		return metadata;
+	}
+
 	/**
 	 * @brief Compute the sinc function.
 	 *
@@ -59,23 +206,108 @@ namespace
 	 * @param set The interpolation set to store the gain axis data.
 	 * @param axisXml The XML element containing the gain axis data.
 	 */
-	void loadAntennaGainAxis(const interp::InterpSet* set, const XmlElement& axisXml) noexcept
+	AxisLoadResult loadAntennaGainAxis(const interp::InterpSet* set, const XmlElement& axisXml)
 	{
-		XmlElement tmp = axisXml.childElement("gainsample");
-		while (tmp.isValid())
+		if (!axisXml.isValid())
 		{
-			XmlElement angle_element = tmp.childElement("angle", 0);
+			throw std::runtime_error("XML antenna pattern is missing a required gain axis.");
+		}
 
-			if (XmlElement gain_element = tmp.childElement("gain", 0);
+		const AxisMetadata metadata = parseAxisMetadata(axisXml);
+		const std::string axis_name(axisXml.name());
+		XmlElement sample = axisXml.childElement("gainsample");
+		if (!sample.isValid())
+		{
+			throw std::runtime_error("XML antenna <" + axis_name + "> axis must contain at least one <gainsample>.");
+		}
+
+		RealType min_angle = std::numeric_limits<RealType>::max();
+		RealType max_angle = std::numeric_limits<RealType>::lowest();
+		RealType max_gain = 0.0;
+		std::size_t sample_count = 0;
+
+		while (sample.isValid())
+		{
+			XmlElement angle_element = sample.childElement("angle", 0);
+
+			if (XmlElement gain_element = sample.childElement("gain", 0);
 				angle_element.isValid() && gain_element.isValid())
 			{
-				const RealType angle = std::stof(angle_element.getText());
-				const RealType gain = std::stof(gain_element.getText());
+				const RealType raw_angle = parseRealValue(angle_element.getText(), "<" + axis_name + "> sample angle");
+				const RealType raw_gain = parseRealValue(gain_element.getText(), "<" + axis_name + "> sample gain");
+				const RealType angle = metadata.unit == AxisUnit::Degrees ? raw_angle * (PI / 180.0) : raw_angle;
+				const RealType gain =
+					metadata.format == AxisGainFormat::DBi ? std::pow(10.0, raw_gain / 10.0) : raw_gain;
+
+				if (!std::isfinite(angle))
+				{
+					throw std::runtime_error("Converted <" + axis_name + "> sample angle is non-finite.");
+				}
+				if (!std::isfinite(gain))
+				{
+					throw std::runtime_error("Converted <" + axis_name + "> sample gain is non-finite.");
+				}
+				if (gain < 0.0)
+				{
+					throw std::runtime_error("Converted <" + axis_name + "> sample gain must be non-negative.");
+				}
+
 				set->insertSample(angle, gain);
+				min_angle = std::min(min_angle, angle);
+				max_angle = std::max(max_angle, angle);
+				max_gain = std::max(max_gain, gain);
+				++sample_count;
+			}
+			else if (sample.name() == "gainsample")
+			{
+				throw std::runtime_error("Each <gainsample> in <" + axis_name + "> must contain <angle> and <gain>.");
 			}
 
-			tmp = XmlElement(tmp.getNode()->next);
+			sample = XmlElement(sample.getNode()->next);
 		}
+
+		AxisLoadResult result;
+		result.max_gain = max_gain;
+		result.symmetry = metadata.symmetry;
+		result.sample_count = sample_count;
+
+		if (metadata.symmetry_explicit)
+		{
+			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Mirrored && min_angle < 0.0)
+			{
+				throw std::runtime_error("XML antenna <" + axis_name +
+										 "> axis uses symmetry='mirrored' but defines negative sample angles.");
+			}
+			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Full && !(min_angle < 0.0 && max_angle > 0.0))
+			{
+				throw std::runtime_error(
+					"XML antenna <" + axis_name +
+					"> axis uses symmetry='full' but does not span both negative and positive angles.");
+			}
+		}
+		else if (min_angle < 0.0)
+		{
+			if (!(min_angle < 0.0 && max_angle > 0.0))
+			{
+				throw std::runtime_error("XML antenna <" + axis_name +
+										 "> axis contains negative sample angles but does not span both sides of zero "
+										 "for full-range lookup.");
+			}
+			result.symmetry = antenna::XmlAntenna::AxisSymmetry::Full;
+		}
+
+		const char* unit_source = metadata.unit_explicit ? "explicit" : "legacy default";
+		const char* format_source = metadata.format_explicit ? "explicit" : "legacy default";
+		const char* symmetry_source = metadata.symmetry_explicit
+			? "explicit"
+			: (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Full ? "auto-detected" : "legacy default");
+
+		LOG(Level::INFO,
+			"XML antenna axis '{}' using unit='{}' ({}) format='{}' ({}) symmetry='{}' ({}) with {} samples.",
+			axis_name, axisUnitName(metadata.unit), unit_source, axisFormatName(metadata.format), format_source,
+			axisSymmetryName(result.symmetry), symmetry_source, result.sample_count);
+
+		return result;
 	}
 }
 
@@ -125,13 +357,25 @@ namespace antenna
 		return ge * std::pow(2 * j1C(x), 2) * getEfficiencyFactor();
 	}
 
+	std::optional<RealType> XmlAntenna::lookupAxisGain(const interp::InterpSet* set, const RealType angle,
+													   const AxisSymmetry symmetry) const noexcept
+	{
+		if (symmetry == AxisSymmetry::Mirrored)
+		{
+			return set->getValueAt(std::abs(angle));
+		}
+		return set->getValueAt(angle);
+	}
+
 	RealType XmlAntenna::getGain(const SVec3& angle, const SVec3& refangle, RealType /*wavelength*/) const
 	{
 		const SVec3 delta_angle = angle - refangle;
 
-		const std::optional<RealType> azi_value = _azi_samples->getValueAt(std::abs(delta_angle.azimuth));
+		const std::optional<RealType> azi_value =
+			lookupAxisGain(_azi_samples.get(), delta_angle.azimuth, _azi_symmetry);
 
-		if (const std::optional<RealType> elev_value = _elev_samples->getValueAt(std::abs(delta_angle.elevation));
+		if (const std::optional<RealType> elev_value =
+				lookupAxisGain(_elev_samples.get(), delta_angle.elevation, _elev_symmetry);
 			azi_value && elev_value)
 		{
 			return *azi_value * *elev_value * _max_gain * getEfficiencyFactor();
@@ -150,12 +394,21 @@ namespace antenna
 			LOG(Level::FATAL, "Could not load antenna description {}", filename.data());
 			throw std::runtime_error("Could not load antenna description");
 		}
+		doc.validateWithDtd(antenna_pattern_dtd);
+		doc.validateWithXsd(antenna_pattern_xsd);
 
 		const XmlElement root(doc.getRootElement());
-		loadAntennaGainAxis(_elev_samples.get(), root.childElement("elevation", 0));
-		loadAntennaGainAxis(_azi_samples.get(), root.childElement("azimuth", 0));
+		const AxisLoadResult elev_result = loadAntennaGainAxis(_elev_samples.get(), root.childElement("elevation", 0));
+		const AxisLoadResult azi_result = loadAntennaGainAxis(_azi_samples.get(), root.childElement("azimuth", 0));
 
-		_max_gain = std::max(_azi_samples->getMax(), _elev_samples->getMax());
+		_elev_symmetry = elev_result.symmetry;
+		_azi_symmetry = azi_result.symmetry;
+
+		_max_gain = std::max(azi_result.max_gain, elev_result.max_gain);
+		if (!std::isfinite(_max_gain) || _max_gain <= 0.0)
+		{
+			throw std::runtime_error("XML antenna pattern peak linear gain must be greater than zero.");
+		}
 		_elev_samples->divide(_max_gain);
 		_azi_samples->divide(_max_gain);
 	}

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { useState } from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import {
     Box,
     Button,
@@ -17,19 +19,17 @@ import {
     TextField,
     Typography,
 } from '@mui/material';
+import { useState } from 'react';
 import {
-    useScenarioStore,
     Platform,
     PlatformComponent,
     PositionWaypoint,
     RotationWaypoint,
+    useScenarioStore,
 } from '@/stores/scenarioStore';
-import { Section, NumberField } from './InspectorControls';
-import DeleteIcon from '@mui/icons-material/Delete';
-import EditIcon from '@mui/icons-material/Edit';
-import AddIcon from '@mui/icons-material/Add';
-import { PlatformComponentInspector } from './PlatformComponentInspector';
 import { generateSimId } from '@/stores/scenarioStore/idUtils';
+import { NumberField, Section } from './InspectorControls';
+import { PlatformComponentInspector } from './PlatformComponentInspector';
 
 interface PlatformInspectorProps {
     item: Platform;
@@ -43,6 +43,7 @@ interface WaypointEditDialogProps {
     ) => void;
     waypoint: PositionWaypoint | RotationWaypoint | null;
     waypointType: 'position' | 'rotation';
+    angleUnitLabel: 'deg' | 'rad';
 }
 
 function WaypointEditDialog({
@@ -50,6 +51,7 @@ function WaypointEditDialog({
     onClose,
     waypoint,
     waypointType,
+    angleUnitLabel,
 }: WaypointEditDialogProps) {
     const [editedWaypoint, setEditedWaypoint] = useState(waypoint);
 
@@ -74,7 +76,7 @@ function WaypointEditDialog({
         // Sanitize the local state on close: convert any nulls back to 0.
         for (const key in sanitizedWaypoint) {
             if (
-                Object.prototype.hasOwnProperty.call(sanitizedWaypoint, key) &&
+                Object.hasOwn(sanitizedWaypoint, key) &&
                 sanitizedWaypoint[key] === null
             ) {
                 sanitizedWaypoint[key] = 0;
@@ -123,14 +125,14 @@ function WaypointEditDialog({
                         'azimuth' in editedWaypoint && (
                             <>
                                 <NumberField
-                                    label="Azimuth (deg)"
+                                    label={`Azimuth (${angleUnitLabel})`}
                                     value={editedWaypoint.azimuth}
                                     onChange={(v) =>
                                         handleFieldChange('azimuth', v)
                                     }
                                 />
                                 <NumberField
-                                    label="Elevation (deg)"
+                                    label={`Elevation (${angleUnitLabel})`}
                                     value={editedWaypoint.elevation}
                                     onChange={(v) =>
                                         handleFieldChange('elevation', v)
@@ -165,6 +167,9 @@ export function PlatformInspector({
         addPlatformComponent,
         removePlatformComponent,
     } = useScenarioStore.getState();
+    const angleUnitLabel = useScenarioStore(
+        (state) => state.globalParameters.rotationAngleUnit
+    );
 
     const handleChange = (path: string, value: unknown) =>
         updateItem(item.id, path, value);
@@ -346,28 +351,28 @@ export function PlatformInspector({
                 {item.rotation.type === 'fixed' && (
                     <>
                         <NumberField
-                            label="Start Azimuth (deg)"
+                            label={`Start Azimuth (${angleUnitLabel})`}
                             value={item.rotation.startAzimuth}
                             onChange={(v) =>
                                 handleChange('rotation.startAzimuth', v)
                             }
                         />
                         <NumberField
-                            label="Start Elevation (deg)"
+                            label={`Start Elevation (${angleUnitLabel})`}
                             value={item.rotation.startElevation}
                             onChange={(v) =>
                                 handleChange('rotation.startElevation', v)
                             }
                         />
                         <NumberField
-                            label="Azimuth Rate (deg/s)"
+                            label={`Azimuth Rate (${angleUnitLabel}/s)`}
                             value={item.rotation.azimuthRate}
                             onChange={(v) =>
                                 handleChange('rotation.azimuthRate', v)
                             }
                         />
                         <NumberField
-                            label="Elevation Rate (deg/s)"
+                            label={`Elevation Rate (${angleUnitLabel}/s)`}
                             value={item.rotation.elevationRate}
                             onChange={(v) =>
                                 handleChange('rotation.elevationRate', v)
@@ -433,7 +438,7 @@ export function PlatformInspector({
                                                     textOverflow: 'ellipsis',
                                                 }}
                                             >
-                                                {`T: ${wp.time}s, Az: ${wp.azimuth}°, El: ${wp.elevation}°`}
+                                                {`T: ${wp.time}s, Az: ${wp.azimuth} ${angleUnitLabel}, El: ${wp.elevation} ${angleUnitLabel}`}
                                             </Typography>
                                             <Box
                                                 sx={{
@@ -580,6 +585,7 @@ export function PlatformInspector({
                 onClose={handleDialogClose}
                 waypoint={currentEditingWaypoint}
                 waypointType={editingWaypointInfo?.type ?? 'position'}
+                angleUnitLabel={angleUnitLabel}
             />
         </Box>
     );

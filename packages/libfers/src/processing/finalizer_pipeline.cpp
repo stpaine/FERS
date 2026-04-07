@@ -27,7 +27,7 @@ namespace processing::pipeline
 {
 	void advanceTimingModel(timing::Timing* timing_model, const radar::Receiver* receiver, const RealType rate)
 	{
-		if (!timing_model || !timing_model->isEnabled())
+		if ((timing_model == nullptr) || !timing_model->isEnabled())
 		{
 			return;
 		}
@@ -122,7 +122,7 @@ namespace processing::pipeline
 	void exportCwToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
 						const RealType fullscale, const RealType ref_freq)
 	{
-		std::lock_guard<std::mutex> lock(serial::hdf5_global_mutex);
+		std::scoped_lock lock(serial::hdf5_global_mutex);
 		try
 		{
 			HighFive::File file(filename, HighFive::File::Truncate);

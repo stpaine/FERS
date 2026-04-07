@@ -18,6 +18,27 @@
 #include <nlohmann/json.hpp>
 #include <random>
 
+#include "core/sim_id.h"
+
+namespace timing
+{
+	class PrototypeTiming;
+}
+namespace antenna
+{
+	class Antenna;
+}
+namespace fers_signal
+{
+	class RadarSignal;
+}
+namespace radar
+{
+	class Target;
+	class Receiver;
+	class Transmitter;
+	class Platform;
+}
 namespace core
 {
 	class World;
@@ -39,6 +60,65 @@ namespace serial
 	 * @return A nlohmann::json object representing the world.
 	 */
 	nlohmann::json world_to_json(const core::World& world);
+
+	/**
+	 * @brief Updates a platform's motion and rotation paths from JSON.
+	 */
+	void update_platform_paths_from_json(const nlohmann::json& j, radar::Platform* plat);
+
+	/**
+	 * @brief Parses an Antenna from JSON.
+	 */
+	std::unique_ptr<antenna::Antenna> parse_antenna_from_json(const nlohmann::json& j);
+
+	/**
+	 * @brief Parses a Waveform from JSON.
+	 */
+	std::unique_ptr<fers_signal::RadarSignal> parse_waveform_from_json(const nlohmann::json& j);
+
+	/**
+	 * @brief Parses a timing prototype from JSON.
+	 */
+	std::unique_ptr<timing::PrototypeTiming> parse_timing_from_json(const nlohmann::json& j, SimId id);
+
+	/**
+	 * @brief Updates global simulation parameters from JSON.
+	 */
+	void update_parameters_from_json(const nlohmann::json& j, std::mt19937& masterSeeder);
+
+	/**
+	 * @brief Updates an antenna from JSON without full context recreation.
+	 */
+	void update_antenna_from_json(const nlohmann::json& j, antenna::Antenna* ant, core::World& world);
+
+	/**
+	 * @brief Updates a transmitter from JSON without full context recreation.
+	 */
+	void update_transmitter_from_json(const nlohmann::json& j, radar::Transmitter* tx, core::World& world,
+									  std::mt19937& masterSeeder);
+
+	/**
+	 * @brief Updates a receiver from JSON without full context recreation.
+	 */
+	void update_receiver_from_json(const nlohmann::json& j, radar::Receiver* rx, core::World& world,
+								   std::mt19937& masterSeeder);
+
+	/**
+	 * @brief Updates a target from JSON without full context recreation.
+	 */
+	void update_target_from_json(const nlohmann::json& j, radar::Target* tgt, core::World& world,
+								 std::mt19937& masterSeeder);
+
+	/**
+	 * @brief Updates a monostatic radar from JSON without full context recreation.
+	 */
+	void update_monostatic_from_json(const nlohmann::json& j, radar::Transmitter* tx, radar::Receiver* rx,
+									 core::World& world, std::mt19937& masterSeeder);
+
+	/**
+	 * @brief Updates a timing source from JSON without full context recreation.
+	 */
+	void update_timing_from_json(const nlohmann::json& j, core::World& world, SimId id);
 
 	/**
 	 * @brief Deserializes a nlohmann::json object and reconstructs the simulation world.

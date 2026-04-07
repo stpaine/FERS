@@ -188,3 +188,9 @@ TEST_CASE("Timing initializeModel is idempotent", "[timing]")
 	REQUIRE_THAT(sample0, WithinAbs(expectedSample(0.05, 1.0, 0), 1e-12));
 	REQUIRE_THAT(sample1, WithinAbs(expectedSample(0.05, 1.0, 1), 1e-12));
 }
+
+TEST_CASE("Timing exposes initial seed", "[timing]")
+{
+	timing::Timing timing_source("clk", 54321, 9);
+	REQUIRE(timing_source.getSeed() == 54321);
+}

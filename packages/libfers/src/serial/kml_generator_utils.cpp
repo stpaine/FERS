@@ -24,6 +24,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/rotation_angle_utils.h"
 #include "signal/radar_signal.h"
 
 namespace serial::kml_generator_utils
@@ -227,11 +228,11 @@ namespace serial::kml_generator_utils
 		bool has_transmitter = false;
 		for (const auto* obj : objects)
 		{
-			if (dynamic_cast<const radar::Receiver*>(obj))
+			if (dynamic_cast<const radar::Receiver*>(obj) != nullptr)
 			{
 				has_receiver = true;
 			}
-			if (dynamic_cast<const radar::Transmitter*>(obj))
+			if (dynamic_cast<const radar::Transmitter*>(obj) != nullptr)
 			{
 				has_transmitter = true;
 			}
@@ -252,7 +253,7 @@ namespace serial::kml_generator_utils
 	{
 		for (const auto* obj : objects)
 		{
-			if (const auto r = dynamic_cast<const radar::Radar*>(obj))
+			if (const auto* const r = dynamic_cast<const radar::Radar*>(obj))
 			{
 				return r;
 			}
@@ -295,6 +296,10 @@ namespace serial::kml_generator_utils
 		const std::string start_coords_str = formatCoordinates(start_lon, start_lat, start_alt);
 
 		const math::SVec3 initial_rotation = platform->getRotationPath()->getPosition(ctx.parameters.start);
+		const double display_azimuth = rotation_angle_utils::internal_azimuth_to_external(
+			initial_rotation.azimuth, ctx.parameters.rotation_angle_unit);
+		const double display_elevation = rotation_angle_utils::internal_elevation_to_external(
+			initial_rotation.elevation, ctx.parameters.rotation_angle_unit);
 
 		const double fers_azimuth_deg = initial_rotation.azimuth * 180.0 / PI;
 		double start_azimuth_deg_kml = 90.0 - fers_azimuth_deg;
@@ -312,7 +317,21 @@ namespace serial::kml_generator_utils
 		calculateDestinationCoordinate(start_lat, start_lon, start_azimuth_deg_kml, horizontal_distance, dest_lat,
 									   dest_lon);
 		const std::string end_coords_str = formatCoordinates(dest_lon, dest_lat, end_alt);
-		writeAntennaBeamLine(out, indent, "Antenna Boresight", "#lineStyle", start_coords_str, end_coords_str);
+		out << indent << "<Placemark>\n";
+		out << indent << "  <name>Antenna Boresight</name>\n";
+		out << indent << "  <ExtendedData>\n";
+		out << indent << "    <Data name=\"rotationangleunit\"><value>"
+			<< params::rotationAngleUnitToken(ctx.parameters.rotation_angle_unit) << "</value></Data>\n";
+		out << indent << "    <Data name=\"azimuth\"><value>" << display_azimuth << "</value></Data>\n";
+		out << indent << "    <Data name=\"elevation\"><value>" << display_elevation << "</value></Data>\n";
+		out << indent << "  </ExtendedData>\n";
+		out << indent << "  <styleUrl>#lineStyle</styleUrl>\n";
+		out << indent << "  <LineString>\n";
+		out << indent << "    <altitudeMode>absolute</altitudeMode>\n";
+		out << indent << "    <tessellate>1</tessellate>\n";
+		out << indent << "    <coordinates>" << start_coords_str << " " << end_coords_str << "</coordinates>\n";
+		out << indent << "  </LineString>\n";
+		out << indent << "</Placemark>\n";
 
 		if (angle3DbDropDeg.has_value() && *angle3DbDropDeg > EPSILON)
 		{
@@ -347,12 +366,12 @@ namespace serial::kml_generator_utils
 							const KmlContext& ctx, const std::string& indent)
 	{
 		const antenna::Antenna* ant = radar->getAntenna();
-		if (!ant || platform->getMotionPath()->getCoords().empty())
+		if ((ant == nullptr) || platform->getMotionPath()->getCoords().empty())
 		{
 			return;
 		}
 
-		if (dynamic_cast<const antenna::Isotropic*>(ant))
+		if (dynamic_cast<const antenna::Isotropic*>(ant) != nullptr)
 		{
 			const math::Vec3 initial_pos = platform->getMotionPath()->getCoords().front().pos;
 			generateIsotropicAntennaKml(out, initial_pos, ctx, indent);
@@ -364,7 +383,7 @@ namespace serial::kml_generator_utils
 			std::optional<double> wavelength;
 			if (const auto* tx = dynamic_cast<const radar::Transmitter*>(radar))
 			{
-				if (tx->getSignal())
+				if (tx->getSignal() != nullptr)
 				{
 					wavelength = ctx.parameters.c / tx->getSignal()->getCarrier();
 				}
@@ -373,7 +392,7 @@ namespace serial::kml_generator_utils
 			{
 				if (const auto* attached_tx = dynamic_cast<const radar::Transmitter*>(rx->getAttached()))
 				{
-					if (attached_tx->getSignal())
+					if (attached_tx->getSignal() != nullptr)
 					{
 						wavelength = ctx.parameters.c / attached_tx->getSignal()->getCarrier();
 					}
@@ -402,7 +421,8 @@ namespace serial::kml_generator_utils
 					angle_3db_drop_deg = findSquareHorn3DbDropAngle(squarehorn_ant, *wavelength);
 				}
 			}
-			else if (dynamic_cast<const antenna::XmlAntenna*>(ant) || dynamic_cast<const antenna::H5Antenna*>(ant))
+			else if ((dynamic_cast<const antenna::XmlAntenna*>(ant) != nullptr) ||
+					 (dynamic_cast<const antenna::H5Antenna*>(ant) != nullptr))
 			{
 				LOG(logging::Level::INFO,
 					"KML visualization for antenna '{}' ('{}') is symbolic. "

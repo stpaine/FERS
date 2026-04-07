@@ -71,6 +71,14 @@
                 "FERS_BUILD_TESTS": "ON",
                 "FERS_ENABLE_COVERAGE": "ON"
             }
+        },
+        {
+            "name": "coverage-ci",
+            "displayName": "Code Coverage (Ninja)",
+            "description": "Debug build with coverage generation enabled using Ninja for CI",
+            "inherits": "coverage",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/coverage-ci"
         }
     ],
     "buildPresets": [
@@ -79,7 +87,8 @@
         { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" },
         { "name": "asan", "configurePreset": "asan" },
         { "name": "tsan", "configurePreset": "tsan" },
-        { "name": "coverage", "configurePreset": "coverage" }
+        { "name": "coverage", "configurePreset": "coverage" },
+        { "name": "coverage-ci", "configurePreset": "coverage-ci" }
     ],
     "testPresets": [
         {
@@ -110,6 +119,11 @@
         {
             "name": "coverage",
             "configurePreset": "coverage",
+            "output": { "outputOnFailure": true }
+        },
+        {
+            "name": "coverage-ci",
+            "configurePreset": "coverage-ci",
             "output": { "outputOnFailure": true }
         }
     ]

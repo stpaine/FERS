@@ -110,6 +110,208 @@ TEST_CASE("World stores and retrieves added objects", "[core][world]")
 	REQUIRE(world.findTiming(9999) == nullptr);
 }
 
+TEST_CASE("World finds platform by ID", "[core][world]")
+{
+	core::World world;
+	auto platform = std::make_unique<radar::Platform>("FindMe", 777);
+	auto* plat_ptr = platform.get();
+	world.add(std::move(platform));
+
+	REQUIRE(world.findPlatform(777) == plat_ptr);
+	REQUIRE(world.findPlatform(999) == nullptr);
+}
+
+TEST_CASE("World finds radar components by ID", "[core][world]")
+{
+	core::World world;
+	auto platform = std::make_unique<radar::Platform>("Plat", 1);
+	auto* plat_ptr = platform.get();
+	world.add(std::move(platform));
+
+	auto tx = std::make_unique<radar::Transmitter>(plat_ptr, "Tx", radar::OperationMode::PULSED_MODE, 101);
+	auto rx = std::make_unique<radar::Receiver>(plat_ptr, "Rx", 42, radar::OperationMode::PULSED_MODE, 202);
+	auto tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "Tgt", 1.0, 42, 303);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	auto* tgt_ptr = tgt.get();
+
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+	world.add(std::move(tgt));
+
+	REQUIRE(world.findTransmitter(101) == tx_ptr);
+	REQUIRE(world.findReceiver(202) == rx_ptr);
+	REQUIRE(world.findTarget(303) == tgt_ptr);
+
+	REQUIRE(world.findTransmitter(999) == nullptr);
+	REQUIRE(world.findReceiver(999) == nullptr);
+	REQUIRE(world.findTarget(999) == nullptr);
+}
+
+TEST_CASE("World replaces target", "[core][world]")
+{
+	core::World world;
+	auto platform = std::make_unique<radar::Platform>("Plat", 1);
+	auto* plat_ptr = platform.get();
+	world.add(std::move(platform));
+
+	// 1. Add initial target
+	auto old_tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "OldTgt", 1.0, 42, 100);
+	world.add(std::move(old_tgt));
+
+	REQUIRE(world.getTargets().size() == 1);
+	REQUIRE(world.findTarget(100)->getName() == "OldTgt");
+
+	// 2. Replace existing target
+	auto new_tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "NewTgt", 5.0, 42, 100);
+	auto* new_tgt_ptr = new_tgt.get();
+	world.replace(std::move(new_tgt));
+
+	REQUIRE(world.getTargets().size() == 1);
+	REQUIRE(world.findTarget(100) == new_tgt_ptr);
+	REQUIRE(world.findTarget(100)->getName() == "NewTgt");
+
+	// 3. Replace (add) non-existent target
+	auto another_tgt = std::make_unique<radar::IsoTarget>(plat_ptr, "AnotherTgt", 10.0, 42, 200);
+	auto* another_tgt_ptr = another_tgt.get();
+	world.replace(std::move(another_tgt));
+
+	REQUIRE(world.getTargets().size() == 2);
+	REQUIRE(world.findTarget(200) == another_tgt_ptr);
+}
+
+TEST_CASE("World replaces antenna and updates dependent components", "[core][world]")
+{
+	core::World world;
+
+	// 1. Setup initial antenna
+	auto old_ant = std::make_unique<antenna::Isotropic>("OldAnt", 100);
+	auto* old_ant_ptr = old_ant.get();
+	world.add(std::move(old_ant));
+
+	// 2. Setup platform and components using the antenna
+	auto plat = std::make_unique<radar::Platform>("Plat", 1);
+	auto tx = std::make_unique<radar::Transmitter>(plat.get(), "Tx", radar::OperationMode::CW_MODE, 2);
+	auto rx = std::make_unique<radar::Receiver>(plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 3);
+
+	tx->setAntenna(old_ant_ptr);
+	rx->setAntenna(old_ant_ptr);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	world.add(std::move(plat));
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+
+	REQUIRE(tx_ptr->getAntenna() == old_ant_ptr);
+	REQUIRE(rx_ptr->getAntenna() == old_ant_ptr);
+
+	// 3. Replace the antenna
+	auto new_ant = std::make_unique<antenna::Isotropic>("NewAnt", 100); // Same ID
+	auto* new_ant_ptr = new_ant.get();
+	world.replace(std::move(new_ant));
+
+	// 4. Verify replacement and pointer updates
+	REQUIRE(world.findAntenna(100) == new_ant_ptr);
+	REQUIRE(world.findAntenna(100)->getName() == "NewAnt");
+	REQUIRE(tx_ptr->getAntenna() == new_ant_ptr);
+	REQUIRE(rx_ptr->getAntenna() == new_ant_ptr);
+}
+
+TEST_CASE("World replaces waveform and updates dependent components", "[core][world]")
+{
+	core::World world;
+
+	// 1. Setup initial waveform
+	auto old_wf = std::make_unique<fers_signal::RadarSignal>("OldWf", 1.0, 1e9, 1.0,
+															 std::make_unique<fers_signal::CwSignal>(), 200);
+	auto* old_wf_ptr = old_wf.get();
+	world.add(std::move(old_wf));
+
+	// 2. Setup platform and transmitter using the waveform
+	auto plat = std::make_unique<radar::Platform>("Plat", 1);
+	auto tx = std::make_unique<radar::Transmitter>(plat.get(), "Tx", radar::OperationMode::CW_MODE, 2);
+
+	tx->setSignal(old_wf_ptr);
+	auto* tx_ptr = tx.get();
+
+	world.add(std::move(plat));
+	world.add(std::move(tx));
+
+	REQUIRE(tx_ptr->getSignal() == old_wf_ptr);
+
+	// 3. Replace the waveform
+	auto new_wf = std::make_unique<fers_signal::RadarSignal>("NewWf", 2.0, 2e9, 1.0,
+															 std::make_unique<fers_signal::CwSignal>(), 200); // Same ID
+	auto* new_wf_ptr = new_wf.get();
+	world.replace(std::move(new_wf));
+
+	// 4. Verify replacement and pointer updates
+	REQUIRE(world.findWaveform(200) == new_wf_ptr);
+	REQUIRE(world.findWaveform(200)->getName() == "NewWf");
+	REQUIRE(tx_ptr->getSignal() == new_wf_ptr);
+}
+
+TEST_CASE("World replaces timing and refreshes dependent radar timing models", "[core][world]")
+{
+	core::World world;
+
+	auto old_timing = std::make_unique<timing::PrototypeTiming>("OldTiming", 300);
+	old_timing->setFrequency(1.0e6);
+	old_timing->setFreqOffset(2.0);
+	old_timing->setPhaseOffset(0.1);
+	world.add(std::move(old_timing));
+
+	auto plat = std::make_unique<radar::Platform>("Plat", 1);
+	auto tx = std::make_unique<radar::Transmitter>(plat.get(), "Tx", radar::OperationMode::CW_MODE, 2);
+	auto rx = std::make_unique<radar::Receiver>(plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 3);
+
+	auto tx_timing = std::make_shared<timing::Timing>("OldTiming", 12345, 300);
+	tx_timing->initializeModel(world.findTiming(300));
+	auto rx_timing = std::make_shared<timing::Timing>("OldTiming", 54321, 300);
+	rx_timing->initializeModel(world.findTiming(300));
+
+	tx->setTiming(tx_timing);
+	rx->setTiming(rx_timing);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	world.add(std::move(plat));
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+
+	auto new_timing = std::make_unique<timing::PrototypeTiming>("NewTiming", 300);
+	new_timing->setFrequency(2.5e6);
+	new_timing->setSyncOnPulse();
+	new_timing->setFreqOffset(7.5);
+	new_timing->setPhaseOffset(0.75);
+	new_timing->setAlpha(1.0, 0.5);
+	world.replace(std::move(new_timing));
+
+	auto* replaced = world.findTiming(300);
+	REQUIRE(replaced != nullptr);
+	REQUIRE(replaced->getName() == "NewTiming");
+	REQUIRE_THAT(replaced->getFrequency(), WithinAbs(2.5e6, 1e-9));
+
+	REQUIRE(tx_ptr->getTiming().get() != tx_timing.get());
+	REQUIRE(rx_ptr->getTiming().get() != rx_timing.get());
+	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
+	REQUIRE(rx_ptr->getTiming()->getSeed() == 54321);
+	REQUIRE(tx_ptr->getTiming()->getName() == "NewTiming");
+	REQUIRE(rx_ptr->getTiming()->getName() == "NewTiming");
+	REQUIRE_THAT(tx_ptr->getTiming()->getFrequency(), WithinAbs(2.5e6, 1e-9));
+	REQUIRE_THAT(rx_ptr->getTiming()->getFrequency(), WithinAbs(2.5e6, 1e-9));
+	REQUIRE(tx_ptr->getTiming()->getSyncOnPulse());
+	REQUIRE(rx_ptr->getTiming()->getSyncOnPulse());
+	REQUIRE_THAT(tx_ptr->getTiming()->getFreqOffset(), WithinAbs(7.5, 1e-9));
+	REQUIRE_THAT(rx_ptr->getTiming()->getFreqOffset(), WithinAbs(7.5, 1e-9));
+	REQUIRE_THAT(tx_ptr->getTiming()->getPhaseOffset(), WithinAbs(0.75, 1e-9));
+	REQUIRE_THAT(rx_ptr->getTiming()->getPhaseOffset(), WithinAbs(0.75, 1e-9));
+}
+
 TEST_CASE("World enforces unique ids for assets", "[core][world]")
 {
 	core::World world;

@@ -10,6 +10,7 @@ design_docs/
 latex/
 build/
 build_cov/
+fixes.yaml
 
 # JetBrains IDEs
 .idea/

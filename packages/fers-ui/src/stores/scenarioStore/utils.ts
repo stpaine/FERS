@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+import { Euler, Vector3 } from 'three';
 import {
-    ScenarioState,
-    ScenarioItem,
+    GlobalParameters,
     Platform,
     PlatformComponent,
+    ScenarioItem,
+    ScenarioState,
 } from './types';
-import { Euler, Vector3 } from 'three';
 
 // Helper to set nested properties safely
 export const setPropertyByPath = (
@@ -68,6 +69,13 @@ export const findComponentInStore = (
     }
     return null;
 };
+
+export function angleUnitToRadians(
+    value: number,
+    unit: GlobalParameters['rotationAngleUnit']
+): number {
+    return unit === 'deg' ? (value * Math.PI) / 180 : value;
+}
 
 /**
  * Calculates a platform's interpolated 3D position at a specific time.
@@ -183,7 +191,8 @@ export function calculateInterpolatedVelocity(
  */
 export function calculateInterpolatedRotation(
     platform: Platform,
-    currentTime: number
+    currentTime: number,
+    angleUnit: GlobalParameters['rotationAngleUnit']
 ): Euler {
     const { rotation } = platform;
     let azDeg = 0;
@@ -245,8 +254,8 @@ export function calculateInterpolatedRotation(
     // We apply Elevation as rotation around X.
 
     // Convert deg to rad
-    const azRad = -(azDeg * Math.PI) / 180; // Negate for CCW rotation in Three.js vs CW compass
-    const elRad = (elDeg * Math.PI) / 180;
+    const azRad = -angleUnitToRadians(azDeg, angleUnit); // Negate for CCW rotation in Three.js vs CW compass
+    const elRad = angleUnitToRadians(elDeg, angleUnit);
 
     // Order YXZ: Rotate Azimuth (Y) first, then Elevation (X) (Pitch)
     return new Euler(elRad, azRad, 0, 'YXZ');

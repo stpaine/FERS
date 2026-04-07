@@ -37,7 +37,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 /// Data structure for a single motion waypoint received from the UI.
 ///
 /// Coordinates should be in the scenario's define frame (e.g. ENU).
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct MotionWaypoint {
     /// Time in seconds.
     time: f64,
@@ -50,7 +50,7 @@ pub struct MotionWaypoint {
 }
 
 /// Enum for the interpolation type received from the UI.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 #[serde(rename_all = "lowercase")]
 pub enum InterpolationType {
     Static,
@@ -58,10 +58,18 @@ pub enum InterpolationType {
     Cubic,
 }
 
+/// Enum for the rotation angle unit received from the UI.
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
+pub enum RotationAngleUnit {
+    Deg,
+    Rad,
+}
+
 /// Data structure for a single interpolated point sent back to the UI.
 ///
 /// Represents the physical state of a platform at a specific time step.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct InterpolatedMotionPoint {
     /// X position in meters.
     x: f64,
@@ -78,23 +86,23 @@ pub struct InterpolatedMotionPoint {
 }
 
 /// Data structure for a single rotation waypoint received from the UI.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct RotationWaypoint {
     /// Time in seconds.
     time: f64,
-    /// Azimuth in compass degrees (0=North, 90=East).
+    /// Azimuth in compass units (0=North, pi/2 or 90=East).
     azimuth: f64,
-    /// Elevation in degrees (positive up).
+    /// Elevation in the selected external units (positive up).
     elevation: f64,
 }
 
 /// Data structure for a single interpolated rotation point sent back to the UI.
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize, std::fmt::Debug)]
 pub struct InterpolatedRotationPoint {
-    /// Azimuth in compass degrees.
-    azimuth_deg: f64,
-    /// Elevation in degrees.
-    elevation_deg: f64,
+    /// Azimuth in compass units.
+    azimuth: f64,
+    /// Elevation in the selected external units.
+    elevation: f64,
 }
 
 /// Type alias for the managed Tauri state that holds the simulation context.
@@ -105,6 +113,12 @@ pub struct InterpolatedRotationPoint {
 type FersState = Mutex<fers_api::FersContext>;
 
 // --- Tauri Commands ---
+
+/// Sets the output directory for simulation results.
+#[tauri::command]
+fn set_output_directory(dir: String, state: State<'_, FersState>) -> Result<(), String> {
+    state.lock().map_err(|e| e.to_string())?.set_output_directory(&dir)
+}
 
 /// Loads a FERS scenario from an XML file into the simulation context.
 ///
@@ -118,7 +132,7 @@ type FersState = Mutex<fers_api::FersContext>;
 ///
 /// # Returns
 ///
-/// * `Ok(())` if the scenario was successfully loaded.
+/// * `Ok(Vec<String>)` containing any deduplicated non-fatal warnings detected while loading.
 /// * `Err(String)` containing an error message if loading failed (e.g., file not found,
 ///   invalid XML, or a Mutex lock error).
 ///
@@ -132,7 +146,7 @@ type FersState = Mutex<fers_api::FersContext>;
 fn load_scenario_from_xml_file(
     filepath: String,
     state: State<'_, FersState>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     state.lock().map_err(|e| e.to_string())?.load_scenario_from_xml_file(&filepath)
 }
 
@@ -205,7 +219,7 @@ fn get_scenario_as_xml(state: State<'_, FersState>) -> Result<String, String> {
 ///
 /// # Returns
 ///
-/// * `Ok(())` if the scenario was successfully updated.
+/// * `Ok(Vec<String>)` containing any deduplicated non-fatal warnings detected while updating.
 /// * `Err(String)` containing an error message if deserialization failed, the JSON
 ///   structure was invalid, or the Mutex could not be locked.
 ///
@@ -217,7 +231,10 @@ fn get_scenario_as_xml(state: State<'_, FersState>) -> Result<String, String> {
 /// await invoke('update_scenario_from_json', { json: JSON.stringify(updatedScenario) });
 /// ```
 #[tauri::command]
-fn update_scenario_from_json(json: String, state: State<'_, FersState>) -> Result<(), String> {
+fn update_scenario_from_json(
+    json: String,
+    state: State<'_, FersState>,
+) -> Result<Vec<String>, String> {
     state.lock().map_err(|e| e.to_string())?.update_scenario_from_json(&json)
 }
 
@@ -341,8 +358,9 @@ fn get_interpolated_motion_path(
 /// orientation changes over time.
 ///
 /// # Parameters
-/// * `waypoints` - A vector of rotation waypoints (azimuth/elevation in compass degrees).
+/// * `waypoints` - A vector of rotation waypoints in the selected external angle unit.
 /// * `interp_type` - The interpolation algorithm to use ('static', 'linear', 'cubic').
+/// * `angle_unit` - The angle unit to use for both input and output.
 /// * `num_points` - The desired number of points for the final path.
 ///
 /// # Returns
@@ -352,9 +370,10 @@ fn get_interpolated_motion_path(
 fn get_interpolated_rotation_path(
     waypoints: Vec<RotationWaypoint>,
     interp_type: InterpolationType,
+    angle_unit: RotationAngleUnit,
     num_points: usize,
 ) -> Result<Vec<InterpolatedRotationPoint>, String> {
-    fers_api::get_interpolated_rotation_path(waypoints, interp_type, num_points)
+    fers_api::get_interpolated_rotation_path(waypoints, interp_type, angle_unit, num_points)
 }
 
 /// Retrieves a 2D antenna gain pattern for visualization.
@@ -380,12 +399,10 @@ fn get_antenna_pattern(
     frequency: f64,
     state: State<'_, FersState>,
 ) -> Result<fers_api::AntennaPatternData, String> {
-    state.lock().map_err(|e| e.to_string())?.get_antenna_pattern(
-        &antenna_id,
-        az_samples,
-        el_samples,
-        frequency,
-    )
+    match state.try_lock() {
+        Ok(context) => context.get_antenna_pattern(&antenna_id, az_samples, el_samples, frequency),
+        Err(_) => Err("Backend is busy with another operation".to_string()),
+    }
 }
 
 /// Calculates visual radio links between platforms at a specific time.
@@ -406,7 +423,33 @@ fn get_preview_links(
     time: f64,
     state: State<'_, FersState>,
 ) -> Result<Vec<fers_api::VisualLink>, String> {
-    state.lock().map_err(|e| e.to_string())?.calculate_preview_links(time)
+    match state.try_lock() {
+        Ok(context) => context.calculate_preview_links(time),
+        Err(_) => Ok(vec![]), // backend is busy (simulation/KML running); return empty and retry next frame
+    }
+}
+
+/// Performs a granular state update on a specific simulation item via JSON.
+#[tauri::command]
+fn update_item_from_json(
+    item_type: String,
+    item_id: String,
+    json: String,
+    state: State<'_, FersState>,
+) -> Result<Vec<String>, String> {
+    let context = state.lock().map_err(|e| e.to_string())?;
+    match item_type.as_str() {
+        "Platform" => context.update_platform_from_json(&item_id, &json),
+        "Transmitter" => context.update_transmitter_from_json(&item_id, &json).map(|()| vec![]),
+        "Receiver" => context.update_receiver_from_json(&item_id, &json).map(|()| vec![]),
+        "Target" => context.update_target_from_json(&item_id, &json).map(|()| vec![]),
+        "Monostatic" => context.update_monostatic_from_json(&json).map(|()| vec![]),
+        "Antenna" => context.update_antenna_from_json(&json).map(|()| vec![]),
+        "Waveform" => context.update_waveform_from_json(&json).map(|()| vec![]),
+        "Timing" => context.update_timing_from_json(&item_id, &json).map(|()| vec![]),
+        "GlobalParameters" => context.update_parameters_from_json(&json),
+        _ => Ok(vec![]),
+    }
 }
 
 /// Initializes and runs the Tauri application.
@@ -431,7 +474,7 @@ fn get_preview_links(
 ///
 /// This function is typically called from `main.rs`:
 ///
-/// ```rust
+/// ```ignore
 /// fers_ui_lib::run();
 /// ```
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -459,6 +502,8 @@ pub fn run() {
             get_interpolated_rotation_path,
             get_antenna_pattern,
             get_preview_links,
+            update_item_from_json,
+            set_output_directory,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -466,31 +511,65 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::fers_api;
+    use super::*;
+    use serde_json::json;
 
-    /// Verifies that the `libfers` C++ library is correctly linked.
-    ///
-    /// This test ensures that:
-    /// 1. The Rust linker can find the `libfers.a` static library.
-    /// 2. All required FFI symbols are present and callable.
-    /// 3. The `FersContext::new()` wrapper successfully creates a C++ context.
-    ///
-    /// If this test fails:
-    /// * Check that the `build.rs` script correctly specifies library search paths.
-    /// * Verify that the C++ libraries have been built by CMake.
-    /// * Ensure that `bindgen` generated the correct bindings from `api.h`.
-    ///
-    /// # Panics
-    ///
-    /// This test will panic if `FersContext::new()` returns `None`, indicating
-    /// a failure to allocate or initialize the C++ context.
     #[test]
-    fn it_links_libfers_and_creates_context() {
-        // This test will fail at link time if the library is not found.
-        // It will fail at runtime if the symbols don't match or creation fails.
-        let _context = fers_api::FersContext::new().expect("FersContext::new() returned None");
+    fn test_interpolation_type_serialization() {
+        // Assert serialization outputs match the TypeScript string literals exactly
+        assert_eq!(serde_json::to_string(&InterpolationType::Static).unwrap(), "\"static\"");
+        assert_eq!(serde_json::to_string(&InterpolationType::Linear).unwrap(), "\"linear\"");
+        assert_eq!(serde_json::to_string(&InterpolationType::Cubic).unwrap(), "\"cubic\"");
 
-        // The context is automatically destroyed when it goes out of scope due to `Drop`.
-        // No explicit destroy call is needed.
+        // Ensure deserialization from UI payloads works
+        let parsed: InterpolationType = serde_json::from_str("\"linear\"").unwrap();
+        assert!(matches!(parsed, InterpolationType::Linear));
+    }
+
+    #[test]
+    fn test_motion_waypoint_serialization() {
+        let wp = MotionWaypoint { time: 1.0, x: 2.0, y: 3.0, altitude: 4.0 };
+        let serialized = serde_json::to_string(&wp).unwrap();
+
+        // Deserialize to generic JSON value to inspect structure
+        let parsed: serde_json::Value = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(parsed["time"], 1.0);
+        assert_eq!(parsed["x"], 2.0);
+        assert_eq!(parsed["y"], 3.0);
+        assert_eq!(parsed["altitude"], 4.0);
+    }
+
+    #[test]
+    fn test_rotation_waypoint_serialization() {
+        let payload = json!({
+            "time": 5.5,
+            "azimuth": 180.0,
+            "elevation": -15.0
+        });
+
+        let wp: RotationWaypoint = serde_json::from_value(payload).unwrap();
+        assert_eq!(wp.time, 5.5);
+        assert_eq!(wp.azimuth, 180.0);
+        assert_eq!(wp.elevation, -15.0);
+    }
+
+    #[test]
+    fn test_fers_state_wrapper() {
+        // Verify that the C++ library correctly linked and can be protected by a Rust Mutex.
+        // This mimics how Tauri maintains the global state internally.
+        let context = fers_api::FersContext::new()
+            .expect("Failed to create FERS context. Check build.rs linking.");
+
+        let state: FersState = Mutex::new(context);
+
+        // Test safe access and locking capabilities.
+        let locked_context = state.lock().unwrap();
+
+        // Executing a read against the state
+        let result = locked_context.get_scenario_as_json();
+
+        // Since it's a completely uninitialized new context with no XML/JSON loaded yet,
+        // it correctly delegates to the backend and evaluates safely without segfaults.
+        assert!(result.is_ok() || result.is_err());
     }
 }

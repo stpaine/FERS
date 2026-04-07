@@ -1,23 +1,28 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+import { Alert, Box, Snackbar } from '@mui/material';
 import React, { useState } from 'react';
-import { Box, Snackbar, Alert } from '@mui/material';
 import AppRail from '@/components/AppRail';
-import { ScenarioView } from '@/views/ScenarioView';
-import { AssetLibraryView } from '@/views/AssetLibraryView';
-import { SimulationView } from '@/views/SimulationView';
-import { ResultsView } from '@/views/ResultsView';
 import SettingsDialog from '@/components/SettingsDialog';
 import { useScenarioStore } from '@/stores/scenarioStore';
+import { AssetLibraryView } from '@/views/AssetLibraryView';
+import { ResultsView } from '@/views/ResultsView';
+import { ScenarioView } from '@/views/ScenarioView';
+import { SimulationView } from '@/views/SimulationView';
 
 export function MainLayout() {
     const [activeView, setActiveView] = useState('scenario');
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const { open: errorOpen, message: errorMessage } = useScenarioStore(
-        (state) => state.errorSnackbar
+    const { open, message, severity } = useScenarioStore(
+        (state) => state.notificationSnackbar
     );
-    const hideError = useScenarioStore((state) => state.hideError);
+    const hideNotification = useScenarioStore(
+        (state) => state.hideNotification
+    );
+    const advanceNotification = useScenarioStore(
+        (state) => state.advanceNotification
+    );
 
     return (
         <Box
@@ -89,18 +94,19 @@ export function MainLayout() {
                 onClose={() => setSettingsOpen(false)}
             />
             <Snackbar
-                open={errorOpen}
+                open={open}
                 autoHideDuration={6000}
-                onClose={hideError}
+                onClose={hideNotification}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                TransitionProps={{ onExited: advanceNotification }}
             >
                 <Alert
-                    onClose={hideError}
-                    severity="error"
+                    onClose={hideNotification}
+                    severity={severity}
                     variant="filled"
                     sx={{ width: '100%' }}
                 >
-                    {errorMessage}
+                    {message}
                 </Alert>
             </Snackbar>
         </Box>
