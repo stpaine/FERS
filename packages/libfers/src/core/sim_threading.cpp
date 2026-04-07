@@ -284,7 +284,8 @@ namespace core
 			}
 			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
-				RenderingJob shutdown_job{.duration = -1.0};
+				RenderingJob shutdown_job{};
+				shutdown_job.duration = -1.0;
 				receiver_ptr->enqueueFinalizerJob(std::move(shutdown_job));
 			}
 		}

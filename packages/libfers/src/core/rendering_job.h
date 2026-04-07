@@ -32,15 +32,15 @@ namespace core
 	struct RenderingJob
 	{
 		/// The ideal, jitter-free start time of the receive window.
-		RealType ideal_start_time;
+		RealType ideal_start_time = 0.0;
 
 		/// The duration of the receive window in seconds.
-		RealType duration;
+		RealType duration = 0.0;
 
 		/// A list of all Response objects that overlap with this window.
-		std::vector<std::unique_ptr<serial::Response>> responses;
+		std::vector<std::unique_ptr<serial::Response>> responses{};
 
 		/// A list of all CW transmitters that were active during this window.
-		std::vector<radar::Transmitter*> active_cw_sources;
+		std::vector<radar::Transmitter*> active_cw_sources{};
 	};
 }

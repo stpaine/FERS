@@ -86,6 +86,9 @@ TEST_CASE("API motion path interpolation falls back to repeated positions for no
 		REQUIRE_THAT(point.x, WithinAbs(2.0, 1e-12));
 		REQUIRE_THAT(point.y, WithinAbs(3.0, 1e-12));
 		REQUIRE_THAT(point.z, WithinAbs(4.0, 1e-12));
+		REQUIRE_THAT(point.vx, WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(point.vy, WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(point.vz, WithinAbs(0.0, 1e-12));
 	}
 }
 

@@ -29,6 +29,14 @@ namespace interp
 			return std::nullopt;
 		}
 
+		// TODO: RealConcept is broader than the implementation really supports?
+		// std::is_arithmetic_v<T> admits integral types
+		// That may be intended, but for value(T x) it means interpolation with
+		// integer queries returns std::optional<int>, and the final interpolated
+		// double gets truncated by:
+		// return static_cast<T>(...)
+		// If the class is conceptually for real-valued interpolation,
+		// std::floating_point<T> would be a better constraint
 		const RealType x_value = static_cast<RealType>(x);
 		const auto iter = _data.lower_bound(x_value);
 

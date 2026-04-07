@@ -818,7 +818,7 @@ fers_interpolated_path_t* fers_get_interpolated_motion_path(const fers_motion_wa
 			const math::Vec3 pos = path.getPosition(start_time);
 			for (size_t i = 0; i < num_points; ++i)
 			{
-				result_path->points[i] = {pos.x, pos.y, pos.z};
+				result_path->points[i] = {pos.x, pos.y, pos.z, 0.0, 0.0, 0.0};
 			}
 			return result_path;
 		}
