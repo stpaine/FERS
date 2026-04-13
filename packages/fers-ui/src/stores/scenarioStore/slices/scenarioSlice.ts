@@ -2,6 +2,7 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
+import { cloneTemplateIntoScenarioData } from '../../assetTemplates';
 import { useSimulationProgressStore } from '../../simulationProgressStore';
 import { defaultGlobalParameters } from '../defaults';
 import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
@@ -327,5 +328,30 @@ export const createScenarioSlice: StateCreator<
         }
 
         set(buildHydratedScenarioState(get(), scenarioData, { isDirty: true }));
+    },
+    insertAssetTemplate: (template) => {
+        const { scenarioData, result } = cloneTemplateIntoScenarioData(
+            get(),
+            template
+        );
+
+        set((state) => {
+            state.waveforms = scenarioData.waveforms;
+            state.timings = scenarioData.timings;
+            state.antennas = scenarioData.antennas;
+            state.platforms = scenarioData.platforms;
+            state.selectedItemId = result.insertedItemId;
+            state.selectedComponentId = null;
+            state.isDirty = true;
+        });
+
+        // v1 loads library templates by cloning them into the active scenario.
+        // Replacing selected items or prompting for placement each time remain
+        // future options; nested component-only templates are intentionally out
+        // of scope until whole-platform reuse proves insufficient.
+        result.warnings.forEach((warning) => get().showWarning(warning));
+        void enqueueFullSync(() => buildScenarioJson(get()));
+
+        return result;
     },
 });

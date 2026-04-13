@@ -2,6 +2,10 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { z } from 'zod';
+import type {
+    AssetLibraryTemplate,
+    AssetTemplateInsertionResult,
+} from '../assetTemplates';
 import {
     AntennaSchema,
     FixedRotationSchema,
@@ -167,6 +171,9 @@ export type ScenarioActions = {
     resetScenario: () => void;
     setScenarioFilePath: (path: string | null) => void;
     setOutputDirectory: (dir: string | null) => void;
+    insertAssetTemplate: (
+        template: AssetLibraryTemplate
+    ) => AssetTemplateInsertionResult;
 };
 
 export type BackendActions = {
