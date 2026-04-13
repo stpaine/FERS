@@ -7,6 +7,14 @@ export type SimulationProgressState = {
     message: string;
     current: number;
     total: number;
+    details?: SimulationProgressDetail[];
+};
+
+export type SimulationProgressDetail = {
+    id: string;
+    message: string;
+    current: number;
+    total: number;
 };
 
 export type SimulationRunStatus = 'idle' | 'running' | 'completed' | 'failed';

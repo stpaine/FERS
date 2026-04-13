@@ -28,6 +28,11 @@ import {
     type SimulationProgressState,
     useSimulationProgressStore,
 } from '@/stores/simulationProgressStore';
+import {
+    addSimulationProgressEvent,
+    getSimulationProgressPercent,
+    normalizeCompletedProgressSnapshot,
+} from './simulationProgress';
 
 export const SimulationView = React.memo(function SimulationView() {
     const isSimulating = useSimulationProgressStore(
@@ -89,6 +94,9 @@ export const SimulationView = React.memo(function SimulationView() {
 
         const unlistenSimComplete = listen<void>('simulation-complete', () => {
             console.log('Simulation completed successfully.');
+            progressRef.current = normalizeCompletedProgressSnapshot(
+                progressRef.current
+            );
             flushProgress();
             completeSimulationRun();
             if (animationFrameId !== undefined) {
@@ -110,33 +118,10 @@ export const SimulationView = React.memo(function SimulationView() {
         const unlistenSimProgress = listen<SimulationProgressState>(
             'simulation-progress',
             (event) => {
-                const { message } = event.payload;
-                let key = message;
-
-                // Grouping logic to keep the list clean
-                if (
-                    message.startsWith('Simulating') ||
-                    message.startsWith('Initializing')
-                ) {
-                    key = 'main';
-                } else if (
-                    message.startsWith('Finalizing') ||
-                    message.startsWith('Exporting') ||
-                    message.startsWith('Rendering') ||
-                    message.startsWith('Applying') ||
-                    message.startsWith('Writing') ||
-                    message.startsWith('Finished')
-                ) {
-                    // Extract component name from format "Action {Name}: ..." or "Action {Name}"
-                    // e.g. "Exporting Receiver1: Chunk 50" -> key "Receiver1"
-                    const parts = message.split(/[:\s]+/);
-                    // Simple heuristic: 2nd word is often the name in our C++ format
-                    if (parts.length >= 2) {
-                        key = parts[1];
-                    }
-                }
-
-                progressRef.current[key] = event.payload;
+                progressRef.current = addSimulationProgressEvent(
+                    progressRef.current,
+                    event.payload
+                );
             }
         );
 
@@ -284,6 +269,42 @@ export const SimulationView = React.memo(function SimulationView() {
     const otherProgresses = Object.entries(simulationProgress)
         .filter(([key]) => key !== 'main')
         .sort((a, b) => a[0].localeCompare(b[0]));
+    const mainProgressPercent = mainProgress
+        ? getSimulationProgressPercent(mainProgress)
+        : null;
+    const renderProgressDetails = (
+        details: SimulationProgressState['details']
+    ) => {
+        if (!details || details.length === 0) {
+            return null;
+        }
+
+        return (
+            <Box component="ul" sx={{ m: 0, mt: 1, pl: 2 }}>
+                {details.map((detail) => {
+                    const detailPercent = getSimulationProgressPercent(detail);
+                    const detailSuffix =
+                        detailPercent !== null
+                            ? ` (${Math.round(detailPercent)}%)`
+                            : detail.current > 0
+                              ? ` (Chunk ${detail.current})`
+                              : '';
+
+                    return (
+                        <Typography
+                            component="li"
+                            variant="caption"
+                            color="text.secondary"
+                            key={detail.id}
+                        >
+                            {detail.message}
+                            {detailSuffix}
+                        </Typography>
+                    );
+                })}
+            </Box>
+        );
+    };
 
     return (
         <Box
@@ -450,7 +471,7 @@ export const SimulationView = React.memo(function SimulationView() {
                             {simulationRunError}
                         </Typography>
                     )}
-                    {mainProgress && mainProgress.total > 0 && (
+                    {mainProgressPercent !== null && (
                         <Box
                             sx={{
                                 display: 'flex',
@@ -462,25 +483,18 @@ export const SimulationView = React.memo(function SimulationView() {
                             <Box sx={{ width: '100%', mr: 1 }}>
                                 <LinearProgress
                                     variant="determinate"
-                                    value={
-                                        (mainProgress.current /
-                                            mainProgress.total) *
-                                        100
-                                    }
+                                    value={mainProgressPercent}
                                 />
                             </Box>
                             <Box sx={{ minWidth: 40 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
-                                >{`${Math.round(
-                                    (mainProgress.current /
-                                        mainProgress.total) *
-                                        100
-                                )}%`}</Typography>
+                                >{`${Math.round(mainProgressPercent)}%`}</Typography>
                             </Box>
                         </Box>
                     )}
+                    {renderProgressDetails(mainProgress?.details)}
 
                     {/* Finalizer Threads List */}
                     {otherProgresses.length > 0 && (
@@ -499,43 +513,73 @@ export const SimulationView = React.memo(function SimulationView() {
                                 Exporting Data:
                             </Typography>
                             <List dense>
-                                {otherProgresses.map(([key, prog]) => (
-                                    <ListItem key={key}>
-                                        <ListItemText
-                                            primary={prog.message}
-                                            secondary={
-                                                prog.total > 0 &&
-                                                prog.total !== 100
-                                                    ? 'Processing...'
-                                                    : ''
-                                            }
-                                        />
-                                        {prog.total > 0 &&
-                                            prog.total !== 100 && (
-                                                /* For chunks, we often don't know the exact total ahead of time,
-                                               so a determinate bar might jump, but passing a large number
-                                               or indeterminate looks better than flickering 100% */
+                                {otherProgresses.map(([key, prog]) => {
+                                    const progressPercent =
+                                        getSimulationProgressPercent(prog);
+                                    const showChunkLabel =
+                                        progressPercent === null &&
+                                        prog.current > 0;
+
+                                    return (
+                                        <ListItem key={key}>
+                                            <Box sx={{ width: '100%' }}>
                                                 <Box
-                                                    sx={{ width: '20%', ml: 2 }}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                    }}
                                                 >
-                                                    <Typography
-                                                        variant="caption"
-                                                        color="text.secondary"
-                                                    >
-                                                        Chunk {prog.current}
-                                                    </Typography>
+                                                    <ListItemText
+                                                        primary={prog.message}
+                                                        secondary={
+                                                            progressPercent !==
+                                                                null &&
+                                                            progressPercent <
+                                                                100
+                                                                ? 'Processing...'
+                                                                : ''
+                                                        }
+                                                    />
+                                                    {showChunkLabel && (
+                                                        <Box
+                                                            sx={{
+                                                                width: '20%',
+                                                                ml: 2,
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                            >
+                                                                Chunk{' '}
+                                                                {prog.current}
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                    {progressPercent !==
+                                                        null && (
+                                                        <Box
+                                                            sx={{
+                                                                width: '30%',
+                                                                ml: 2,
+                                                            }}
+                                                        >
+                                                            <LinearProgress
+                                                                variant="determinate"
+                                                                value={
+                                                                    progressPercent
+                                                                }
+                                                            />
+                                                        </Box>
+                                                    )}
                                                 </Box>
-                                            )}
-                                        {prog.total === 100 && (
-                                            <Box sx={{ width: '30%', ml: 2 }}>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={prog.current}
-                                                />
+                                                {renderProgressDetails(
+                                                    prog.details
+                                                )}
                                             </Box>
-                                        )}
-                                    </ListItem>
-                                ))}
+                                        </ListItem>
+                                    );
+                                })}
                             </List>
                         </Box>
                     )}
