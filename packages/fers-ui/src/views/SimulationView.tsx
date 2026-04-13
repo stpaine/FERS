@@ -23,21 +23,36 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { dirname, join } from '@tauri-apps/api/path';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
+import type { SimulationProgressState } from '@/stores/scenarioStore';
 import { useScenarioStore } from '@/stores/scenarioStore';
-
-interface ProgressState {
-    message: string;
-    current: number;
-    total: number;
-}
 
 export const SimulationView = React.memo(function SimulationView() {
     const isSimulating = useScenarioStore((state) => state.isSimulating);
-    const setIsSimulating = useScenarioStore((state) => state.setIsSimulating);
     const isGeneratingKml = useScenarioStore((state) => state.isGeneratingKml);
     const setIsGeneratingKml = useScenarioStore(
         (state) => state.setIsGeneratingKml
+    );
+    const simulationProgress = useScenarioStore(
+        (state) => state.simulationProgress
+    );
+    const simulationRunStatus = useScenarioStore(
+        (state) => state.simulationRunStatus
+    );
+    const simulationRunError = useScenarioStore(
+        (state) => state.simulationRunError
+    );
+    const startSimulationRun = useScenarioStore(
+        (state) => state.startSimulationRun
+    );
+    const setSimulationProgressSnapshot = useScenarioStore(
+        (state) => state.setSimulationProgressSnapshot
+    );
+    const completeSimulationRun = useScenarioStore(
+        (state) => state.completeSimulationRun
+    );
+    const failSimulationRun = useScenarioStore(
+        (state) => state.failSimulationRun
     );
     const showError = useScenarioStore((state) => state.showError);
     const scenarioFilePath = useScenarioStore(
@@ -49,42 +64,44 @@ export const SimulationView = React.memo(function SimulationView() {
     );
 
     // Use a Ref to store incoming data to avoid triggering re-renders on every event
-    const progressRef = useRef<Record<string, ProgressState>>({});
-    // Local state to trigger actual re-renders throttled by rAF
-    const [displayProgress, setDisplayProgress] = useState<
-        Record<string, ProgressState>
-    >({});
+    const progressRef = useRef<Record<string, SimulationProgressState>>({});
 
     useEffect(() => {
-        let animationFrameId: number;
+        let animationFrameId: number | undefined;
+
+        const flushProgress = () => {
+            setSimulationProgressSnapshot({ ...progressRef.current });
+        };
 
         // The update loop synchronizes the Ref data to the State at screen refresh rate
         const updateLoop = () => {
             if (useScenarioStore.getState().isSimulating) {
-                setDisplayProgress({ ...progressRef.current });
+                flushProgress();
                 animationFrameId = requestAnimationFrame(updateLoop);
             }
         };
 
         const unlistenSimComplete = listen<void>('simulation-complete', () => {
             console.log('Simulation completed successfully.');
-            setIsSimulating(false);
-            progressRef.current = {};
-            setDisplayProgress({});
-            cancelAnimationFrame(animationFrameId);
+            flushProgress();
+            completeSimulationRun();
+            if (animationFrameId !== undefined) {
+                cancelAnimationFrame(animationFrameId);
+            }
         });
 
         const unlistenSimError = listen<string>('simulation-error', (event) => {
             const errorMessage = `Simulation failed: ${event.payload}`;
             console.error(errorMessage);
             showError(errorMessage);
-            setIsSimulating(false);
-            progressRef.current = {};
-            setDisplayProgress({});
-            cancelAnimationFrame(animationFrameId);
+            flushProgress();
+            failSimulationRun(errorMessage);
+            if (animationFrameId !== undefined) {
+                cancelAnimationFrame(animationFrameId);
+            }
         });
 
-        const unlistenSimProgress = listen<ProgressState>(
+        const unlistenSimProgress = listen<SimulationProgressState>(
             'simulation-progress',
             (event) => {
                 const { message } = event.payload;
@@ -141,7 +158,9 @@ export const SimulationView = React.memo(function SimulationView() {
         }
 
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            if (animationFrameId !== undefined) {
+                cancelAnimationFrame(animationFrameId);
+            }
             Promise.all([
                 unlistenSimComplete,
                 unlistenSimError,
@@ -152,7 +171,14 @@ export const SimulationView = React.memo(function SimulationView() {
                 unlisteners.forEach((unlisten) => unlisten());
             });
         };
-    }, [isSimulating, setIsSimulating, showError]);
+    }, [
+        isSimulating,
+        setSimulationProgressSnapshot,
+        completeSimulationRun,
+        failSimulationRun,
+        setIsGeneratingKml,
+        showError,
+    ]);
 
     const getEffectiveOutputDir = async () => {
         if (outputDirectory) return outputDirectory;
@@ -183,8 +209,7 @@ export const SimulationView = React.memo(function SimulationView() {
 
     const handleRunSimulation = async () => {
         progressRef.current = {};
-        setDisplayProgress({});
-        setIsSimulating(true);
+        startSimulationRun();
         try {
             // Ensure the C++ backend has the latest scenario from the UI
             const effectiveDir = await getEffectiveOutputDir();
@@ -197,7 +222,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 err instanceof Error ? err.message : String(err);
             console.error('Failed to invoke simulation:', errorMessage);
             showError(`Failed to start simulation: ${errorMessage}`);
-            setIsSimulating(false); // Stop on invocation failure
+            failSimulationRun(`Failed to start simulation: ${errorMessage}`);
         }
     };
 
@@ -239,8 +264,18 @@ export const SimulationView = React.memo(function SimulationView() {
         }
     };
 
-    const mainProgress = displayProgress['main'];
-    const otherProgresses = Object.entries(displayProgress)
+    const hasProgress = Object.keys(simulationProgress).length > 0;
+    const progressPanelVisible =
+        isSimulating || hasProgress || simulationRunStatus === 'failed';
+    const mainProgress = simulationProgress['main'];
+    const progressHeading = mainProgress
+        ? mainProgress.message
+        : simulationRunStatus === 'completed'
+          ? 'Simulation complete'
+          : simulationRunStatus === 'failed'
+            ? 'Simulation failed'
+            : 'Preparing simulation...';
+    const otherProgresses = Object.entries(simulationProgress)
         .filter(([key]) => key !== 'main')
         .sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -382,7 +417,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 </Grid>
             </Grid>
 
-            <Fade in={isSimulating}>
+            <Fade in={progressPanelVisible}>
                 <Box
                     sx={{
                         mt: 4,
@@ -396,10 +431,17 @@ export const SimulationView = React.memo(function SimulationView() {
                         variant="h6"
                         sx={{ mb: 1, textAlign: 'center' }}
                     >
-                        {mainProgress
-                            ? mainProgress.message
-                            : 'Preparing simulation...'}
+                        {progressHeading}
                     </Typography>
+                    {simulationRunStatus === 'failed' && simulationRunError && (
+                        <Typography
+                            variant="body2"
+                            color="error"
+                            sx={{ mb: 2, textAlign: 'center' }}
+                        >
+                            {simulationRunError}
+                        </Typography>
+                    )}
                     {mainProgress && mainProgress.total > 0 && (
                         <Box
                             sx={{

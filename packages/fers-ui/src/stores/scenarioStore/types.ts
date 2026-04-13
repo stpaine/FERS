@@ -105,6 +105,14 @@ export type NotificationState = {
     severity: NotificationSeverity;
 };
 
+export type SimulationProgressState = {
+    message: string;
+    current: number;
+    total: number;
+};
+
+export type SimulationRunStatus = 'idle' | 'running' | 'completed' | 'failed';
+
 export type ScenarioState = ScenarioData & {
     selectedItemId: string | null;
     selectedComponentId: string | null;
@@ -114,6 +122,9 @@ export type ScenarioState = ScenarioData & {
     targetPlaybackDuration: number | null;
     isSimulating: boolean;
     isGeneratingKml: boolean;
+    simulationProgress: Record<string, SimulationProgressState>;
+    simulationRunStatus: SimulationRunStatus;
+    simulationRunError: string | null;
     isBackendSyncing: boolean;
     backendVersion: number;
     scenarioFilePath: string | null;
@@ -182,6 +193,13 @@ export type PlaybackActions = {
     setTargetPlaybackDuration: (duration: number | null) => void;
     setIsSimulating: (isSimulating: boolean) => void;
     setIsGeneratingKml: (isGeneratingKml: boolean) => void;
+    startSimulationRun: () => void;
+    setSimulationProgressSnapshot: (
+        progress: Record<string, SimulationProgressState>
+    ) => void;
+    completeSimulationRun: () => void;
+    failSimulationRun: (errorMessage: string) => void;
+    clearSimulationProgress: () => void;
 };
 
 export type ErrorActions = {

@@ -312,6 +312,10 @@ export const createScenarioSlice: StateCreator<
             selectedItemId: null,
             selectedComponentId: null,
             isDirty: false,
+            isSimulating: false,
+            simulationProgress: {},
+            simulationRunStatus: 'idle',
+            simulationRunError: null,
             antennaPreviewErrors: {},
             currentTime: defaultGlobalParameters.start,
         });

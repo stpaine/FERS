@@ -1143,6 +1143,19 @@ namespace serial
 		auto new_pattern = j.value("pattern", "isotropic");
 		bool type_changed = false;
 
+		const auto parse_required_antenna = [&j]()
+		{
+			auto parsed = parse_antenna_from_json(j);
+			if (parsed == nullptr)
+			{
+				const auto name = j.value("name", std::string{});
+				const auto pattern = j.value("pattern", "isotropic");
+				throw std::runtime_error("Cannot update antenna '" + name + "' to pattern '" + pattern +
+										 "' without a filename.");
+			}
+			return parsed;
+		};
+
 		if (new_pattern == "isotropic" && (dynamic_cast<antenna::Isotropic*>(ant) == nullptr))
 			type_changed = true;
 		else if (new_pattern == "sinc" && (dynamic_cast<antenna::Sinc*>(ant) == nullptr))
@@ -1160,7 +1173,7 @@ namespace serial
 
 		if (type_changed)
 		{
-			world.replace(parse_antenna_from_json(j));
+			world.replace(parse_required_antenna());
 			return;
 		}
 
@@ -1190,14 +1203,14 @@ namespace serial
 		{
 			if (xml->getFilename() != j.value("filename", ""))
 			{
-				world.replace(parse_antenna_from_json(j));
+				world.replace(parse_required_antenna());
 			}
 		}
 		else if (auto* h5 = dynamic_cast<antenna::H5Antenna*>(ant))
 		{
 			if (h5->getFilename() != j.value("filename", ""))
 			{
-				world.replace(parse_antenna_from_json(j));
+				world.replace(parse_required_antenna());
 			}
 		}
 	}

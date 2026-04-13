@@ -33,6 +33,9 @@ export const useScenarioStore = create<ScenarioStore>()(
         targetPlaybackDuration: null,
         isSimulating: false,
         isGeneratingKml: false,
+        simulationProgress: {},
+        simulationRunStatus: 'idle',
+        simulationRunError: null,
         isBackendSyncing: false,
         backendVersion: 0,
         scenarioFilePath: null,
@@ -85,6 +88,33 @@ export const useScenarioStore = create<ScenarioStore>()(
             }),
         setIsSimulating: (isSimulating) => set({ isSimulating }),
         setIsGeneratingKml: (isGeneratingKml) => set({ isGeneratingKml }),
+        startSimulationRun: () =>
+            set({
+                isSimulating: true,
+                simulationProgress: {},
+                simulationRunStatus: 'running',
+                simulationRunError: null,
+            }),
+        setSimulationProgressSnapshot: (progress) =>
+            set({ simulationProgress: progress }),
+        completeSimulationRun: () =>
+            set({
+                isSimulating: false,
+                simulationRunStatus: 'completed',
+                simulationRunError: null,
+            }),
+        failSimulationRun: (errorMessage) =>
+            set({
+                isSimulating: false,
+                simulationRunStatus: 'failed',
+                simulationRunError: errorMessage,
+            }),
+        clearSimulationProgress: () =>
+            set({
+                simulationProgress: {},
+                simulationRunStatus: 'idle',
+                simulationRunError: null,
+            }),
 
         frameScene: () =>
             set({
