@@ -439,7 +439,7 @@ namespace antenna
 		enum class AxisSymmetry
 		{
 			Mirrored,
-			Full,
+			None,
 		};
 
 		/**

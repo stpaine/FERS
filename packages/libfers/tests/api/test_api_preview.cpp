@@ -89,7 +89,7 @@ TEST_CASE("API antenna pattern previews XML antennas loaded from standalone file
 	api_test::writeTextFile(antenna_path.path,
 							R"(<?xml version="1.0" encoding="UTF-8"?>
 <antenna>
-  <azimuth unit="deg" format="dBi" symmetry="full">
+  <azimuth unit="deg" format="dBi" symmetry="none">
     <gainsample><angle>-90</angle><gain>10</gain></gainsample>
     <gainsample><angle>0</angle><gain>0</gain></gainsample>
     <gainsample><angle>90</angle><gain>-10</gain></gainsample>
