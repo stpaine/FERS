@@ -115,7 +115,6 @@ let theme = createTheme({
                             borderRadius: 8,
                             backgroundColor: '#30363d',
                             minHeight: 24,
-                            border: '2px solid #0b0e14',
                         },
                     '&::-webkit-scrollbar-thumb:focus, & *::-webkit-scrollbar-thumb:focus':
                         {
@@ -137,6 +136,13 @@ let theme = createTheme({
                 root: {
                     textTransform: 'none', // More modern text style
                     fontWeight: 600,
+                },
+            },
+        },
+        MuiLinearProgress: {
+            styleOverrides: {
+                bar: {
+                    transition: 'none',
                 },
             },
         },

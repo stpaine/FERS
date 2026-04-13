@@ -10,7 +10,6 @@ import {
     CardActions,
     CardContent,
     CircularProgress,
-    Fade,
     Grid,
     LinearProgress,
     List,
@@ -24,34 +23,41 @@ import { listen } from '@tauri-apps/api/event';
 import { dirname, join } from '@tauri-apps/api/path';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import React, { useEffect, useRef } from 'react';
-import type { SimulationProgressState } from '@/stores/scenarioStore';
 import { useScenarioStore } from '@/stores/scenarioStore';
+import {
+    type SimulationProgressState,
+    useSimulationProgressStore,
+} from '@/stores/simulationProgressStore';
 
 export const SimulationView = React.memo(function SimulationView() {
-    const isSimulating = useScenarioStore((state) => state.isSimulating);
-    const isGeneratingKml = useScenarioStore((state) => state.isGeneratingKml);
-    const setIsGeneratingKml = useScenarioStore(
+    const isSimulating = useSimulationProgressStore(
+        (state) => state.isSimulating
+    );
+    const isGeneratingKml = useSimulationProgressStore(
+        (state) => state.isGeneratingKml
+    );
+    const setIsGeneratingKml = useSimulationProgressStore(
         (state) => state.setIsGeneratingKml
     );
-    const simulationProgress = useScenarioStore(
+    const simulationProgress = useSimulationProgressStore(
         (state) => state.simulationProgress
     );
-    const simulationRunStatus = useScenarioStore(
+    const simulationRunStatus = useSimulationProgressStore(
         (state) => state.simulationRunStatus
     );
-    const simulationRunError = useScenarioStore(
+    const simulationRunError = useSimulationProgressStore(
         (state) => state.simulationRunError
     );
-    const startSimulationRun = useScenarioStore(
+    const startSimulationRun = useSimulationProgressStore(
         (state) => state.startSimulationRun
     );
-    const setSimulationProgressSnapshot = useScenarioStore(
+    const setSimulationProgressSnapshot = useSimulationProgressStore(
         (state) => state.setSimulationProgressSnapshot
     );
-    const completeSimulationRun = useScenarioStore(
+    const completeSimulationRun = useSimulationProgressStore(
         (state) => state.completeSimulationRun
     );
-    const failSimulationRun = useScenarioStore(
+    const failSimulationRun = useSimulationProgressStore(
         (state) => state.failSimulationRun
     );
     const showError = useScenarioStore((state) => state.showError);
@@ -75,7 +81,7 @@ export const SimulationView = React.memo(function SimulationView() {
 
         // The update loop synchronizes the Ref data to the State at screen refresh rate
         const updateLoop = () => {
-            if (useScenarioStore.getState().isSimulating) {
+            if (useSimulationProgressStore.getState().isSimulating) {
                 flushProgress();
                 animationFrameId = requestAnimationFrame(updateLoop);
             }
@@ -280,7 +286,9 @@ export const SimulationView = React.memo(function SimulationView() {
         .sort((a, b) => a[0].localeCompare(b[0]));
 
     return (
-        <Box sx={{ p: 4, height: '100%', overflowY: 'auto' }}>
+        <Box
+            sx={{ p: 4, height: '100%', overflowY: 'auto', contain: 'content' }}
+        >
             <Typography variant="h4" gutterBottom>
                 Simulation Runner
             </Typography>
@@ -289,7 +297,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 visualization. Ensure your scenario is fully configured before
                 proceeding.
             </Typography>
-            <Card sx={{ mb: 4 }}>
+            <Card elevation={0} sx={{ mb: 4 }}>
                 <CardContent>
                     <Typography variant="h6" gutterBottom>
                         Output Settings
@@ -343,7 +351,7 @@ export const SimulationView = React.memo(function SimulationView() {
             <Grid container spacing={4} sx={{ width: '100%' }}>
                 {/* ... existing Grid items for Run Simulation and Generate KML ... */}
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <Card sx={{ height: '100%' }}>
+                    <Card elevation={0} sx={{ height: '100%' }}>
                         <CardContent>
                             <Typography variant="h5" component="div">
                                 Run Full Simulation
@@ -378,7 +386,7 @@ export const SimulationView = React.memo(function SimulationView() {
                     </Card>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <Card sx={{ height: '100%' }}>
+                    <Card elevation={0} sx={{ height: '100%' }}>
                         <CardContent>
                             <Typography variant="h5" component="div">
                                 Generate KML
@@ -417,7 +425,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 </Grid>
             </Grid>
 
-            <Fade in={progressPanelVisible}>
+            {progressPanelVisible && (
                 <Box
                     sx={{
                         mt: 4,
@@ -532,7 +540,7 @@ export const SimulationView = React.memo(function SimulationView() {
                         </Box>
                     )}
                 </Box>
-            </Fade>
+            )}
         </Box>
     );
 });

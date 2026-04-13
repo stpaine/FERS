@@ -2,13 +2,13 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Typography,
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Typography,
 } from '@mui/material';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { NumberField } from './inspectors/InspectorControls';
@@ -19,8 +19,12 @@ interface SettingsDialogProps {
 }
 
 export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
-    const { targetPlaybackDuration, setTargetPlaybackDuration } =
-        useScenarioStore();
+    const targetPlaybackDuration = useScenarioStore(
+        (s) => s.targetPlaybackDuration
+    );
+    const setTargetPlaybackDuration = useScenarioStore(
+        (s) => s.setTargetPlaybackDuration
+    );
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
             <DialogTitle>Application Settings</DialogTitle>

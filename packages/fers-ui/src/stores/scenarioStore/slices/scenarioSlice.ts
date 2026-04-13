@@ -2,6 +2,7 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { StateCreator } from 'zustand';
+import { useSimulationProgressStore } from '../../simulationProgressStore';
 import { defaultGlobalParameters } from '../defaults';
 import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
 import {
@@ -312,13 +313,11 @@ export const createScenarioSlice: StateCreator<
             selectedItemId: null,
             selectedComponentId: null,
             isDirty: false,
-            isSimulating: false,
-            simulationProgress: {},
-            simulationRunStatus: 'idle',
-            simulationRunError: null,
             antennaPreviewErrors: {},
             currentTime: defaultGlobalParameters.start,
         });
+        useSimulationProgressStore.getState().clearSimulationProgress();
+        useSimulationProgressStore.setState({ isSimulating: false });
         void enqueueFullSync(() => buildScenarioJson(get()));
     },
     loadScenario: (backendData: unknown) => {

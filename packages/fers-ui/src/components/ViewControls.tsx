@@ -1,45 +1,43 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { useState } from 'react';
-import {
-    Box,
-    IconButton,
-    Tooltip,
-    Paper,
-    Collapse,
-    Typography,
-    Switch,
-    FormControlLabel,
-    Divider,
-    Stack,
-    Checkbox,
-    Accordion,
-    AccordionSummary,
-    AccordionDetails,
-} from '@mui/material';
+import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
+import CloseIcon from '@mui/icons-material/Close';
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong';
 import TravelExploreIcon from '@mui/icons-material/TravelExplore';
+import TuneIcon from '@mui/icons-material/Tune';
 import VideocamIcon from '@mui/icons-material/Videocam';
 import VideocamOffIcon from '@mui/icons-material/VideocamOff';
-import TuneIcon from '@mui/icons-material/Tune';
-import CloseIcon from '@mui/icons-material/Close';
+import {
+    Accordion,
+    AccordionDetails,
+    AccordionSummary,
+    Box,
+    Checkbox,
+    Collapse,
+    Divider,
+    FormControlLabel,
+    IconButton,
+    Paper,
+    Stack,
+    Switch,
+    Tooltip,
+    Typography,
+} from '@mui/material';
+import { useState } from 'react';
 import { useScenarioStore, VisualizationLayers } from '@/stores/scenarioStore';
 
 // TODO: users should be able to drag the view controls button or pane to relocate it in the preview area. It should dynamically determine whether to expand upwards or downwards depending on whether it is opening from the bottom of the preview area or the top of the preview area.
 
 export default function ViewControls() {
-    const {
-        frameScene,
-        focusOnItem,
-        toggleFollowItem,
-        selectedItemId,
-        viewControlAction,
-        visibility,
-        toggleLayer,
-    } = useScenarioStore();
+    const frameScene = useScenarioStore((s) => s.frameScene);
+    const focusOnItem = useScenarioStore((s) => s.focusOnItem);
+    const toggleFollowItem = useScenarioStore((s) => s.toggleFollowItem);
+    const selectedItemId = useScenarioStore((s) => s.selectedItemId);
+    const viewControlAction = useScenarioStore((s) => s.viewControlAction);
+    const visibility = useScenarioStore((s) => s.visibility);
+    const toggleLayer = useScenarioStore((s) => s.toggleLayer);
 
     const [expanded, setExpanded] = useState(true);
 

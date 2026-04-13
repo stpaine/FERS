@@ -59,7 +59,7 @@ export function MainLayout() {
                         width: '100%',
                     }}
                 >
-                    <ScenarioView />
+                    <ScenarioView isActive={activeView === 'scenario'} />
                 </Box>
                 <Box
                     sx={{

@@ -2,6 +2,7 @@
 // Copyright (c) 2026-present FERS Contributors (see AUTHORS.md).
 
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { useSimulationProgressStore } from '../simulationProgressStore';
 import { useScenarioStore } from './index';
 import {
     resetSyncQueueForTests,
@@ -15,7 +16,7 @@ describe('simulation progress lifecycle', () => {
     beforeEach(() => {
         resetSyncQueueForTests();
         setSyncQueueInvokerForTests((async () => []) as InvokeFn);
-        useScenarioStore.setState({
+        useSimulationProgressStore.setState({
             isSimulating: false,
             simulationProgress: {},
             simulationRunStatus: 'idle',
@@ -24,7 +25,7 @@ describe('simulation progress lifecycle', () => {
     });
 
     test('clears previous progress when a simulation starts', () => {
-        useScenarioStore.setState({
+        useSimulationProgressStore.setState({
             simulationProgress: {
                 main: {
                     message: 'Finished previous simulation',
@@ -36,9 +37,9 @@ describe('simulation progress lifecycle', () => {
             simulationRunError: 'old error',
         });
 
-        useScenarioStore.getState().startSimulationRun();
+        useSimulationProgressStore.getState().startSimulationRun();
 
-        const state = useScenarioStore.getState();
+        const state = useSimulationProgressStore.getState();
         expect(state.isSimulating).toBe(true);
         expect(state.simulationProgress).toEqual({});
         expect(state.simulationRunStatus).toBe('running');
@@ -59,11 +60,13 @@ describe('simulation progress lifecycle', () => {
             },
         };
 
-        useScenarioStore.getState().startSimulationRun();
-        useScenarioStore.getState().setSimulationProgressSnapshot(progress);
-        useScenarioStore.getState().completeSimulationRun();
+        useSimulationProgressStore.getState().startSimulationRun();
+        useSimulationProgressStore
+            .getState()
+            .setSimulationProgressSnapshot(progress);
+        useSimulationProgressStore.getState().completeSimulationRun();
 
-        const state = useScenarioStore.getState();
+        const state = useSimulationProgressStore.getState();
         expect(state.isSimulating).toBe(false);
         expect(state.simulationRunStatus).toBe('completed');
         expect(state.simulationRunError).toBeNull();
@@ -79,11 +82,15 @@ describe('simulation progress lifecycle', () => {
             },
         };
 
-        useScenarioStore.getState().startSimulationRun();
-        useScenarioStore.getState().setSimulationProgressSnapshot(progress);
-        useScenarioStore.getState().failSimulationRun('Simulation failed');
+        useSimulationProgressStore.getState().startSimulationRun();
+        useSimulationProgressStore
+            .getState()
+            .setSimulationProgressSnapshot(progress);
+        useSimulationProgressStore
+            .getState()
+            .failSimulationRun('Simulation failed');
 
-        const state = useScenarioStore.getState();
+        const state = useSimulationProgressStore.getState();
         expect(state.isSimulating).toBe(false);
         expect(state.simulationRunStatus).toBe('failed');
         expect(state.simulationRunError).toBe('Simulation failed');
@@ -91,7 +98,7 @@ describe('simulation progress lifecycle', () => {
     });
 
     test('resetScenario clears stored simulation progress', async () => {
-        useScenarioStore.setState({
+        useSimulationProgressStore.setState({
             isSimulating: true,
             simulationProgress: {
                 main: {
@@ -107,7 +114,7 @@ describe('simulation progress lifecycle', () => {
         useScenarioStore.getState().resetScenario();
         await waitForSyncIdle();
 
-        const state = useScenarioStore.getState();
+        const state = useSimulationProgressStore.getState();
         expect(state.isSimulating).toBe(false);
         expect(state.simulationProgress).toEqual({});
         expect(state.simulationRunStatus).toBe('idle');
