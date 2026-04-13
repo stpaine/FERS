@@ -241,6 +241,45 @@ struct LogPayload {
     line: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Eq, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum LogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warning,
+    Error,
+    Fatal,
+    Off,
+}
+
+impl LogLevel {
+    fn to_ffi(self) -> ffi::fers_log_level_t {
+        match self {
+            Self::Trace => 0,
+            Self::Debug => 1,
+            Self::Info => 2,
+            Self::Warning => 3,
+            Self::Error => 4,
+            Self::Fatal => 5,
+            Self::Off => 6,
+        }
+    }
+
+    fn from_ffi(level: ffi::fers_log_level_t) -> Self {
+        match level as u32 {
+            0 => Self::Trace,
+            1 => Self::Debug,
+            2 => Self::Info,
+            3 => Self::Warning,
+            4 => Self::Error,
+            5 => Self::Fatal,
+            6 => Self::Off,
+            _ => Self::Info,
+        }
+    }
+}
+
 fn log_level_label(level: ffi::fers_log_level_t) -> &'static str {
     match level as u32 {
         0 => "TRACE",
@@ -249,7 +288,22 @@ fn log_level_label(level: ffi::fers_log_level_t) -> &'static str {
         3 => "WARNING",
         4 => "ERROR",
         5 => "FATAL",
+        6 => "OFF",
         _ => "UNKNOWN",
+    }
+}
+
+pub fn get_log_level() -> LogLevel {
+    let level = unsafe { ffi::fers_get_log_level() };
+    LogLevel::from_ffi(level)
+}
+
+pub fn set_log_level(level: LogLevel) -> Result<(), String> {
+    let result = unsafe { ffi::fers_configure_logging(level.to_ffi(), std::ptr::null()) };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(get_last_error())
     }
 }
 

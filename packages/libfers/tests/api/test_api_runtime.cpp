@@ -49,7 +49,7 @@ namespace
 	}
 }
 
-TEST_CASE("API log level mapping covers all exported enum values", "[api][runtime]")
+TEST_CASE("API log level mapping writes emitted enum values", "[api][runtime]")
 {
 	const auto log_path = api_test::uniqueTempPath("api_log_levels", ".log");
 	api_test::ScopedPath log_guard(log_path);
@@ -63,11 +63,12 @@ TEST_CASE("API log level mapping covers all exported enum values", "[api][runtim
 	} cases[] = {
 		{FERS_LOG_TRACE, "trace"},
 		{FERS_LOG_DEBUG, "debug"},
+		{FERS_LOG_INFO, "info"},
 		{FERS_LOG_WARNING, "warning"},
 		{FERS_LOG_ERROR, "error"},
 		{FERS_LOG_FATAL, "fatal"},
 		// Exercise the fallback branch with a value outside the exported enum set but still representable.
-		{static_cast<fers_log_level_t>(FERS_LOG_FATAL + 1), "default"},
+		{static_cast<fers_log_level_t>(FERS_LOG_OFF + 1), "default"},
 	};
 
 	for (const auto& entry : cases)
@@ -80,6 +81,21 @@ TEST_CASE("API log level mapping covers all exported enum values", "[api][runtim
 		const std::string log_text = api_test::readTextFile(log_path);
 		REQUIRE_THAT(log_text, ContainsSubstring(message));
 	}
+}
+
+TEST_CASE("API log level getter round-trips configured levels", "[api][runtime]")
+{
+	const fers_log_level_t cases[] = {
+		FERS_LOG_TRACE, FERS_LOG_DEBUG, FERS_LOG_INFO, FERS_LOG_WARNING, FERS_LOG_ERROR, FERS_LOG_FATAL, FERS_LOG_OFF,
+	};
+
+	for (const auto level : cases)
+	{
+		REQUIRE(fers_configure_logging(level, nullptr) == 0);
+		REQUIRE(fers_get_log_level() == level);
+	}
+
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, nullptr) == 0);
 }
 
 TEST_CASE("API log ignores null messages", "[api][runtime]")
@@ -150,6 +166,27 @@ TEST_CASE("API log writes to configured file", "[api][runtime]")
 	const std::string log_text = api_test::readTextFile(log_path);
 	REQUIRE_THAT(log_text, ContainsSubstring(message));
 	REQUIRE_THAT(log_text, ContainsSubstring("INFO"));
+}
+
+TEST_CASE("API OFF log level suppresses file and callback output", "[api][runtime]")
+{
+	api_test::clearLastError();
+	const auto log_path = api_test::uniqueTempPath("api_log_off", ".log");
+	api_test::ScopedPath log_guard(log_path);
+	const auto rollover_path = api_test::uniqueTempPath("api_log_off_rollover", ".log");
+	api_test::ScopedPath rollover_guard(rollover_path);
+
+	LogCallbackState state;
+	fers_set_log_callback(recordLog, &state);
+
+	REQUIRE(fers_configure_logging(FERS_LOG_OFF, log_path.c_str()) == 0);
+	fers_log(FERS_LOG_FATAL, "suppressed fatal message");
+	fers_log(FERS_LOG_OFF, "suppressed off message");
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path.c_str()) == 0);
+	fers_set_log_callback(nullptr, nullptr);
+
+	REQUIRE(state.calls == 0);
+	REQUIRE(api_test::readTextFile(log_path).empty());
 }
 
 TEST_CASE("API log callback receives formatted accepted lines", "[api][runtime]")

@@ -131,6 +131,8 @@ static logging::Level map_api_log_level(fers_log_level_t level)
 		return logging::Level::ERROR;
 	case FERS_LOG_FATAL:
 		return logging::Level::FATAL;
+	case FERS_LOG_OFF:
+		return logging::Level::OFF;
 	default:
 		return logging::Level::INFO;
 	}
@@ -152,6 +154,8 @@ static fers_log_level_t map_internal_log_level(logging::Level level)
 		return FERS_LOG_ERROR;
 	case logging::Level::FATAL:
 		return FERS_LOG_FATAL;
+	case logging::Level::OFF:
+		return FERS_LOG_OFF;
 	default:
 		return FERS_LOG_INFO;
 	}
@@ -204,6 +208,8 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 		return 1;
 	}
 }
+
+fers_log_level_t fers_get_log_level() { return map_internal_log_level(logging::logger.getLevel()); }
 
 void fers_set_log_callback(fers_log_callback_t callback, void* user_data)
 {

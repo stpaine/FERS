@@ -10,6 +10,7 @@ export type FersLogLevel =
     | 'WARNING'
     | 'ERROR'
     | 'FATAL'
+    | 'OFF'
     | 'UNKNOWN';
 
 export type FersLogEntry = {
@@ -18,14 +19,18 @@ export type FersLogEntry = {
     line: string;
 };
 
+export type ConfigurableFersLogLevel = Exclude<FersLogLevel, 'UNKNOWN'>;
+
 type FersLogStore = {
     entries: FersLogEntry[];
     droppedCount: number;
     maxLines: number;
+    logLevel: ConfigurableFersLogLevel;
     isOpen: boolean;
     appendLog: (entry: FersLogEntry) => void;
     clearLogs: () => void;
     setMaxLines: (maxLines: number) => void;
+    setLogLevel: (logLevel: ConfigurableFersLogLevel) => void;
     setOpen: (isOpen: boolean) => void;
     toggleOpen: () => void;
 };
@@ -33,6 +38,21 @@ type FersLogStore = {
 export const DEFAULT_LOG_MAX_LINES = 2000;
 export const MIN_LOG_MAX_LINES = 100;
 export const MAX_LOG_MAX_LINES = 20_000;
+export const DEFAULT_LOG_LEVEL: ConfigurableFersLogLevel = 'INFO';
+export const LOG_LEVEL_OPTIONS: ConfigurableFersLogLevel[] = [
+    'TRACE',
+    'DEBUG',
+    'INFO',
+    'WARNING',
+    'ERROR',
+    'FATAL',
+    'OFF',
+];
+
+export const isConfigurableFersLogLevel = (
+    level: FersLogLevel
+): level is ConfigurableFersLogLevel =>
+    LOG_LEVEL_OPTIONS.some((option) => option === level);
 
 export const clampLogMaxLines = (maxLines: number) => {
     if (!Number.isFinite(maxLines)) {
@@ -63,6 +83,7 @@ export const useFersLogStore = create<FersLogStore>()((set) => ({
     entries: [],
     droppedCount: 0,
     maxLines: DEFAULT_LOG_MAX_LINES,
+    logLevel: DEFAULT_LOG_LEVEL,
     isOpen: false,
     appendLog: (entry) =>
         set((state) => {
@@ -88,6 +109,7 @@ export const useFersLogStore = create<FersLogStore>()((set) => ({
                 droppedCount: state.droppedCount + trimmed.dropped,
             };
         }),
+    setLogLevel: (logLevel) => set({ logLevel }),
     setOpen: (isOpen) => set({ isOpen }),
     toggleOpen: () => set((state) => ({ isOpen: !state.isOpen })),
 }));

@@ -22,6 +22,10 @@ namespace logging
 {
 	Logger logger;
 
+	void Logger::setLevel(const Level level) noexcept { _log_level.store(level, std::memory_order_relaxed); }
+
+	Level Logger::getLevel() const noexcept { return _log_level.load(std::memory_order_relaxed); }
+
 	std::string Logger::getCurrentTimestamp() noexcept
 	{
 		const auto now = std::chrono::system_clock::now();
@@ -36,7 +40,7 @@ namespace logging
 
 	void Logger::log(const Level level, const std::string& message, const std::source_location& location) noexcept
 	{
-		if (level >= _log_level)
+		if (level != Level::OFF && level >= getLevel())
 		{
 			Callback callback = nullptr;
 			void* callback_user_data = nullptr;

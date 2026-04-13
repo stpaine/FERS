@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
     clampLogMaxLines,
+    DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_MAX_LINES,
     MAX_LOG_MAX_LINES,
     MIN_LOG_MAX_LINES,
@@ -16,6 +17,7 @@ describe('fers log store', () => {
             entries: [],
             droppedCount: 0,
             maxLines: DEFAULT_LOG_MAX_LINES,
+            logLevel: DEFAULT_LOG_LEVEL,
             isOpen: false,
         });
     });
@@ -83,5 +85,15 @@ describe('fers log store', () => {
         expect(clampLogMaxLines(1)).toBe(MIN_LOG_MAX_LINES);
         expect(clampLogMaxLines(MAX_LOG_MAX_LINES + 1)).toBe(MAX_LOG_MAX_LINES);
         expect(clampLogMaxLines(1234.9)).toBe(1234);
+    });
+
+    test('log level defaults and updates', () => {
+        expect(useFersLogStore.getState().logLevel).toBe(DEFAULT_LOG_LEVEL);
+
+        useFersLogStore.getState().setLogLevel('TRACE');
+        expect(useFersLogStore.getState().logLevel).toBe('TRACE');
+
+        useFersLogStore.getState().setLogLevel('OFF');
+        expect(useFersLogStore.getState().logLevel).toBe('OFF');
     });
 });

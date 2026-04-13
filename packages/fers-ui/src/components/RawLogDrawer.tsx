@@ -19,6 +19,7 @@ import {
     type FersLogLevel,
     useFersLogStore,
 } from '@/stores/fersLogStore';
+import LogLevelSelect from './LogLevelSelect';
 
 const levelColor = (level: FersLogLevel) => {
     switch (level) {
@@ -30,6 +31,8 @@ const levelColor = (level: FersLogLevel) => {
         case 'TRACE':
         case 'DEBUG':
             return 'text.secondary';
+        case 'OFF':
+            return 'text.disabled';
         default:
             return 'text.primary';
     }
@@ -109,6 +112,7 @@ export default function RawLogDrawer() {
                     p: 2,
                     display: 'flex',
                     alignItems: 'center',
+                    flexWrap: 'wrap',
                     gap: 1.5,
                 }}
             >
@@ -118,6 +122,11 @@ export default function RawLogDrawer() {
                         {entries.length} lines retained
                     </Typography>
                 </Box>
+                <LogLevelSelect
+                    id="raw-log-level"
+                    label="Log level"
+                    sx={{ width: 150 }}
+                />
                 <TextField
                     label="Max lines"
                     type="number"

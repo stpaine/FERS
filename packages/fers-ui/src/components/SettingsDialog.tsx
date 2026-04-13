@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { NumberField } from './inspectors/InspectorControls';
+import LogLevelSelect from './LogLevelSelect';
 
 interface SettingsDialogProps {
     open: boolean;
@@ -41,6 +42,7 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                         Global application settings. Scenario parameters are
                         edited in the Property Inspector.
                     </Typography>
+                    <LogLevelSelect id="settings-log-level" />
                     <NumberField
                         label="Target Preview Playback Duration (s)"
                         value={targetPlaybackDuration}

@@ -120,6 +120,18 @@ fn set_output_directory(dir: String, state: State<'_, FersState>) -> Result<(), 
     state.lock().map_err(|e| e.to_string())?.set_output_directory(&dir)
 }
 
+/// Returns the current FERS logger level.
+#[tauri::command]
+fn get_log_level() -> fers_api::LogLevel {
+    fers_api::get_log_level()
+}
+
+/// Sets the current FERS logger level.
+#[tauri::command]
+fn set_log_level(level: fers_api::LogLevel) -> Result<(), String> {
+    fers_api::set_log_level(level)
+}
+
 /// Loads a FERS scenario from an XML file into the simulation context.
 ///
 /// This command replaces any existing in-memory scenario with the one parsed from
@@ -549,6 +561,8 @@ pub fn run() {
             get_preview_links,
             update_item_from_json,
             set_output_directory,
+            get_log_level,
+            set_log_level,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

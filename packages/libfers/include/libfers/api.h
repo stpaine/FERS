@@ -89,7 +89,8 @@ typedef enum // NOLINT(*-use-using)
 	FERS_LOG_INFO,
 	FERS_LOG_WARNING,
 	FERS_LOG_ERROR,
-	FERS_LOG_FATAL
+	FERS_LOG_FATAL,
+	FERS_LOG_OFF
 } fers_log_level_t;
 
 /**
@@ -108,6 +109,11 @@ typedef void (*fers_log_callback_t)(fers_log_level_t level, const char* line, vo
  * @return 0 on success, non-zero on error.
  */
 int fers_configure_logging(fers_log_level_t level, const char* log_file_path);
+
+/**
+ * @brief Returns the current internal logger level.
+ */
+fers_log_level_t fers_get_log_level();
 
 /**
  * @brief Registers a callback for formatted log lines.

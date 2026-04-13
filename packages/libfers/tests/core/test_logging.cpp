@@ -73,6 +73,18 @@ TEST_CASE("Logger respects log level filtering", "[core][logging]")
 	REQUIRE(output.find("ERROR") != std::string::npos);
 }
 
+TEST_CASE("Logger OFF level suppresses all log output", "[core][logging]")
+{
+	LogLevelGuard guard(logging::Level::OFF);
+	CerrCapture capture;
+
+	logging::logger.log(logging::Level::FATAL, "ignored fatal message");
+	logging::logger.log(logging::Level::OFF, "ignored off message");
+
+	REQUIRE(capture.str().empty());
+	REQUIRE(logging::logger.getLevel() == logging::Level::OFF);
+}
+
 TEST_CASE("Logger includes source location and formats messages", "[core][logging]")
 {
 	LogLevelGuard guard(logging::Level::TRACE);
