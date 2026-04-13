@@ -11,6 +11,7 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/math/geometry_ops.h
 	${CMAKE_CURRENT_LIST_DIR}/core/logging.h
 	${CMAKE_CURRENT_LIST_DIR}/radar/object.h
+	${CMAKE_CURRENT_LIST_DIR}/core/output_metadata.h
 	${CMAKE_CURRENT_LIST_DIR}/core/parameters.h
 	${CMAKE_CURRENT_LIST_DIR}/math/path.h
 	${CMAKE_CURRENT_LIST_DIR}/radar/platform.h
@@ -63,6 +64,7 @@ set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/processing/finalizer_pipeline.cpp
 	${CMAKE_CURRENT_LIST_DIR}/api.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/logging.cpp
+	${CMAKE_CURRENT_LIST_DIR}/core/output_metadata.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/sim_threading.cpp
 	${CMAKE_CURRENT_LIST_DIR}/simulation/channel_model.cpp
 	${CMAKE_CURRENT_LIST_DIR}/processing/signal_processor.cpp

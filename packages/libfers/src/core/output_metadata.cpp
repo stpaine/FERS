@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: GPL-2.0-only
+//
+// Copyright (c) 2026-present FERS Contributors (see AUTHORS.md).
+//
+// See the GNU GPLv2 LICENSE file in the FERS project root for more information.
+
+#include "output_metadata.h"
+
+#include <nlohmann/json.hpp>
+#include <utility>
+
+#include "core/parameters.h"
+
+namespace core
+{
+	namespace
+	{
+		nlohmann::json chunkToJson(const PulseChunkMetadata& chunk)
+		{
+			return {{"chunk_index", chunk.chunk_index},
+					{"i_dataset", chunk.i_dataset},
+					{"q_dataset", chunk.q_dataset},
+					{"start_time", chunk.start_time},
+					{"sample_count", chunk.sample_count},
+					{"sample_start", chunk.sample_start},
+					{"sample_end_exclusive", chunk.sample_end_exclusive}};
+		}
+
+		nlohmann::json cwSegmentToJson(const CwSegmentMetadata& segment)
+		{
+			return {{"start_time", segment.start_time},
+					{"end_time", segment.end_time},
+					{"sample_count", segment.sample_count},
+					{"sample_start", segment.sample_start},
+					{"sample_end_exclusive", segment.sample_end_exclusive}};
+		}
+
+		nlohmann::json fileToJson(const OutputFileMetadata& file)
+		{
+			nlohmann::json chunks = nlohmann::json::array();
+			for (const auto& chunk : file.chunks)
+			{
+				chunks.push_back(chunkToJson(chunk));
+			}
+
+			nlohmann::json cw_segments = nlohmann::json::array();
+			for (const auto& segment : file.cw_segments)
+			{
+				cw_segments.push_back(cwSegmentToJson(segment));
+			}
+
+			return {{"receiver_id", file.receiver_id},
+					{"receiver_name", file.receiver_name},
+					{"mode", file.mode},
+					{"path", file.path},
+					{"total_samples", file.total_samples},
+					{"sample_start", file.sample_start},
+					{"sample_end_exclusive", file.sample_end_exclusive},
+					{"pulse_count", file.pulse_count},
+					{"min_pulse_length_samples", file.min_pulse_length_samples},
+					{"max_pulse_length_samples", file.max_pulse_length_samples},
+					{"uniform_pulse_length", file.uniform_pulse_length},
+					{"chunks", chunks},
+					{"cw_segments", cw_segments}};
+		}
+
+		nlohmann::json metadataToJson(const OutputMetadata& metadata)
+		{
+			nlohmann::json files = nlohmann::json::array();
+			for (const auto& file : metadata.files)
+			{
+				files.push_back(fileToJson(file));
+			}
+
+			return {{"schema_version", metadata.schema_version},
+					{"simulation_name", metadata.simulation_name},
+					{"output_directory", metadata.output_directory},
+					{"start_time", metadata.start_time},
+					{"end_time", metadata.end_time},
+					{"sampling_rate", metadata.sampling_rate},
+					{"oversample_ratio", metadata.oversample_ratio},
+					{"files", files}};
+		}
+	}
+
+	OutputMetadataCollector::OutputMetadataCollector(std::string output_dir)
+	{
+		_metadata.output_directory = std::move(output_dir);
+		_metadata.simulation_name = params::params.simulation_name;
+		_metadata.start_time = params::startTime();
+		_metadata.end_time = params::endTime();
+		_metadata.sampling_rate = params::rate();
+		_metadata.oversample_ratio = params::oversampleRatio();
+	}
+
+	void OutputMetadataCollector::addFile(OutputFileMetadata file_metadata)
+	{
+		std::scoped_lock lock(_mutex);
+		_metadata.files.push_back(std::move(file_metadata));
+	}
+
+	OutputMetadata OutputMetadataCollector::snapshot() const
+	{
+		std::scoped_lock lock(_mutex);
+		return _metadata;
+	}
+
+	std::string outputFileMetadataToJsonString(const OutputFileMetadata& metadata)
+	{
+		return fileToJson(metadata).dump(2);
+	}
+
+	std::string outputMetadataToJsonString(const OutputMetadata& metadata) { return metadataToJson(metadata).dump(2); }
+}

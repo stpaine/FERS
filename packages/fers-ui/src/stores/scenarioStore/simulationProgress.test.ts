@@ -21,6 +21,7 @@ describe('simulation progress lifecycle', () => {
             simulationProgress: {},
             simulationRunStatus: 'idle',
             simulationRunError: null,
+            simulationOutputMetadata: null,
         });
     });
 
@@ -35,6 +36,16 @@ describe('simulation progress lifecycle', () => {
             },
             simulationRunStatus: 'completed',
             simulationRunError: 'old error',
+            simulationOutputMetadata: {
+                schema_version: 1,
+                simulation_name: 'previous',
+                output_directory: '.',
+                start_time: 0,
+                end_time: 1,
+                sampling_rate: 1000,
+                oversample_ratio: 1,
+                files: [],
+            },
         });
 
         useSimulationProgressStore.getState().startSimulationRun();
@@ -44,6 +55,7 @@ describe('simulation progress lifecycle', () => {
         expect(state.simulationProgress).toEqual({});
         expect(state.simulationRunStatus).toBe('running');
         expect(state.simulationRunError).toBeNull();
+        expect(state.simulationOutputMetadata).toBeNull();
     });
 
     test('preserves progress when a simulation completes', () => {
@@ -109,6 +121,16 @@ describe('simulation progress lifecycle', () => {
             },
             simulationRunStatus: 'running',
             simulationRunError: 'old error',
+            simulationOutputMetadata: {
+                schema_version: 1,
+                simulation_name: 'old',
+                output_directory: '.',
+                start_time: 0,
+                end_time: 1,
+                sampling_rate: 1000,
+                oversample_ratio: 1,
+                files: [],
+            },
         });
 
         useScenarioStore.getState().resetScenario();
@@ -119,5 +141,6 @@ describe('simulation progress lifecycle', () => {
         expect(state.simulationProgress).toEqual({});
         expect(state.simulationRunStatus).toBe('idle');
         expect(state.simulationRunError).toBeNull();
+        expect(state.simulationOutputMetadata).toBeNull();
     });
 });

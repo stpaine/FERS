@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import BarChartIcon from '@mui/icons-material/BarChart';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -27,7 +26,6 @@ const views = [
     { id: 'scenario', label: 'Scenario Builder', icon: <ViewInArIcon /> },
     { id: 'assets', label: 'Asset Library', icon: <WidgetsIcon /> },
     { id: 'simulation', label: 'Simulation Run', icon: <PlayArrowIcon /> },
-    { id: 'results', label: 'Results Analysis', icon: <BarChartIcon /> },
 ];
 
 export default function AppRail({

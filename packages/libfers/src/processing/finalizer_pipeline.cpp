@@ -12,6 +12,7 @@
 #include <ranges>
 
 #include "core/logging.h"
+#include "core/output_metadata.h"
 #include "core/parameters.h"
 #include "processing/signal_processor.h"
 #include "radar/receiver.h"
@@ -138,7 +139,7 @@ namespace processing::pipeline
 	}
 
 	void exportCwToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
-						const RealType fullscale, const RealType ref_freq)
+						const RealType fullscale, const RealType ref_freq, const core::OutputFileMetadata* metadata)
 	{
 		std::scoped_lock lock(serial::hdf5_global_mutex);
 		try
@@ -159,6 +160,10 @@ namespace processing::pipeline
 			file.createAttribute("start_time", params::startTime());
 			file.createAttribute("fullscale", fullscale);
 			file.createAttribute("reference_carrier_frequency", ref_freq);
+			if (metadata != nullptr)
+			{
+				serial::writeOutputFileMetadataAttributes(file, *metadata);
+			}
 
 			LOG(logging::Level::INFO, "Successfully exported CW data to '{}'", filename);
 		}

@@ -97,7 +97,7 @@ export type ViewControlAction = {
     timestamp: number;
 };
 
-export type NotificationSeverity = 'warning' | 'error';
+export type NotificationSeverity = 'success' | 'warning' | 'error';
 
 export type NotificationState = {
     open: boolean;
@@ -182,6 +182,7 @@ export type PlaybackActions = {
 
 export type ErrorActions = {
     showError: (message: string) => void;
+    showSuccess: (message: string) => void;
     showWarning: (message: string) => void;
     hideNotification: () => void;
     advanceNotification: () => void;

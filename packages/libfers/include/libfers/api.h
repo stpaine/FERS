@@ -200,6 +200,19 @@ char* fers_get_scenario_as_json(fers_context_t* context);
 char* fers_get_scenario_as_xml(fers_context_t* context);
 
 /**
+ * @brief Returns JSON metadata for the most recent simulation output files.
+ *
+ * The returned JSON describes generated HDF5 file structure and sample ranges.
+ * The caller owns the returned string and must free it with `fers_free_string`.
+ * If no simulation has completed yet, the returned JSON contains an empty `files`
+ * array.
+ *
+ * @param context A valid `fers_context_t` handle.
+ * @return A heap-allocated JSON string, or NULL on error.
+ */
+char* fers_get_last_output_metadata_json(fers_context_t* context);
+
+/**
  * @brief Updates the simulation scenario from a JSON string.
  *
  * This is the primary method for the UI to push its state back to the C++

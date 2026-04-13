@@ -15,6 +15,13 @@ import {
     List,
     ListItem,
     ListItemText,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
     TextField,
     Typography,
 } from '@mui/material';
@@ -22,9 +29,10 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { dirname, join } from '@tauri-apps/api/path';
 import { open, save } from '@tauri-apps/plugin-dialog';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import {
+    type SimulationOutputMetadata,
     type SimulationProgressState,
     useSimulationProgressStore,
 } from '@/stores/simulationProgressStore';
@@ -35,6 +43,9 @@ import {
 } from './simulationProgress';
 
 export const SimulationView = React.memo(function SimulationView() {
+    const [metadataExportPath, setMetadataExportPath] = useState<string | null>(
+        null
+    );
     const isSimulating = useSimulationProgressStore(
         (state) => state.isSimulating
     );
@@ -53,11 +64,17 @@ export const SimulationView = React.memo(function SimulationView() {
     const simulationRunError = useSimulationProgressStore(
         (state) => state.simulationRunError
     );
+    const simulationOutputMetadata = useSimulationProgressStore(
+        (state) => state.simulationOutputMetadata
+    );
     const startSimulationRun = useSimulationProgressStore(
         (state) => state.startSimulationRun
     );
     const setSimulationProgressSnapshot = useSimulationProgressStore(
         (state) => state.setSimulationProgressSnapshot
+    );
+    const setSimulationOutputMetadata = useSimulationProgressStore(
+        (state) => state.setSimulationOutputMetadata
     );
     const completeSimulationRun = useSimulationProgressStore(
         (state) => state.completeSimulationRun
@@ -66,6 +83,7 @@ export const SimulationView = React.memo(function SimulationView() {
         (state) => state.failSimulationRun
     );
     const showError = useScenarioStore((state) => state.showError);
+    const showSuccess = useScenarioStore((state) => state.showSuccess);
     const scenarioFilePath = useScenarioStore(
         (state) => state.scenarioFilePath
     );
@@ -125,6 +143,23 @@ export const SimulationView = React.memo(function SimulationView() {
             }
         );
 
+        const unlistenOutputMetadata = listen<string>(
+            'simulation-output-metadata',
+            (event) => {
+                try {
+                    setSimulationOutputMetadata(
+                        JSON.parse(event.payload) as SimulationOutputMetadata
+                    );
+                } catch (err) {
+                    const errorMessage =
+                        err instanceof Error ? err.message : String(err);
+                    showError(
+                        `Failed to decode simulation metadata: ${errorMessage}`
+                    );
+                }
+            }
+        );
+
         const unlistenKmlComplete = listen<string>(
             'kml-generation-complete',
             (event) => {
@@ -156,6 +191,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 unlistenSimComplete,
                 unlistenSimError,
                 unlistenSimProgress,
+                unlistenOutputMetadata,
                 unlistenKmlComplete,
                 unlistenKmlError,
             ]).then((unlisteners) => {
@@ -165,6 +201,7 @@ export const SimulationView = React.memo(function SimulationView() {
     }, [
         isSimulating,
         setSimulationProgressSnapshot,
+        setSimulationOutputMetadata,
         completeSimulationRun,
         failSimulationRun,
         setIsGeneratingKml,
@@ -200,6 +237,7 @@ export const SimulationView = React.memo(function SimulationView() {
 
     const handleRunSimulation = async () => {
         progressRef.current = {};
+        setMetadataExportPath(null);
         startSimulationRun();
         try {
             // Ensure the C++ backend has the latest scenario from the UI
@@ -304,6 +342,31 @@ export const SimulationView = React.memo(function SimulationView() {
                 })}
             </Box>
         );
+    };
+    const exportMetadataJson = async () => {
+        try {
+            const outputPath = await invoke<string>(
+                'export_output_metadata_json'
+            );
+            setMetadataExportPath(outputPath);
+            showSuccess(`Metadata JSON saved to ${outputPath}`);
+        } catch (err) {
+            const errorMessage =
+                err instanceof Error ? err.message : String(err);
+            showError(`Failed to export metadata JSON: ${errorMessage}`);
+        }
+    };
+    const formatSampleRange = (start: number, end: number) =>
+        `[${start}, ${end})`;
+    const formatPulseLength = (
+        minSamples: number,
+        maxSamples: number,
+        uniform: boolean
+    ) => {
+        if (minSamples === 0 && maxSamples === 0) {
+            return '0';
+        }
+        return uniform ? String(minSamples) : `${minSamples} - ${maxSamples}`;
     };
 
     return (
@@ -584,6 +647,119 @@ export const SimulationView = React.memo(function SimulationView() {
                         </Box>
                     )}
                 </Box>
+            )}
+
+            {simulationOutputMetadata && (
+                <Card elevation={0} sx={{ mt: 4 }}>
+                    <CardContent>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 2,
+                                mb: 2,
+                            }}
+                        >
+                            <Box>
+                                <Typography variant="h6">
+                                    Output Data Metadata
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                >
+                                    {simulationOutputMetadata.files.length} HDF5
+                                    output file
+                                    {simulationOutputMetadata.files.length === 1
+                                        ? ''
+                                        : 's'}{' '}
+                                    at {simulationOutputMetadata.sampling_rate}{' '}
+                                    samples/s.
+                                </Typography>
+                            </Box>
+                            <Button
+                                variant="outlined"
+                                onClick={exportMetadataJson}
+                            >
+                                Export JSON
+                            </Button>
+                        </Box>
+                        {metadataExportPath && (
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mb: 2, overflowWrap: 'anywhere' }}
+                            >
+                                Metadata JSON saved to {metadataExportPath}
+                            </Typography>
+                        )}
+
+                        {simulationOutputMetadata.files.length === 0 ? (
+                            <Typography color="text.secondary">
+                                No HDF5 output files were generated for this
+                                run.
+                            </Typography>
+                        ) : (
+                            <TableContainer
+                                component={Paper}
+                                variant="outlined"
+                            >
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Receiver</TableCell>
+                                            <TableCell>Mode</TableCell>
+                                            <TableCell align="right">
+                                                Samples
+                                            </TableCell>
+                                            <TableCell>Sample Range</TableCell>
+                                            <TableCell>Pulse/Segment</TableCell>
+                                            <TableCell>File</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {simulationOutputMetadata.files.map(
+                                            (file) => (
+                                                <TableRow key={file.path}>
+                                                    <TableCell>
+                                                        {file.receiver_name}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {file.mode}
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        {file.total_samples}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {formatSampleRange(
+                                                            file.sample_start,
+                                                            file.sample_end_exclusive
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {file.mode === 'pulsed'
+                                                            ? `${file.pulse_count} pulses, ${formatPulseLength(file.min_pulse_length_samples, file.max_pulse_length_samples, file.uniform_pulse_length)} samples`
+                                                            : `${file.cw_segments.length} CW segments`}
+                                                    </TableCell>
+                                                    <TableCell
+                                                        sx={{
+                                                            maxWidth: 360,
+                                                            overflowWrap:
+                                                                'anywhere',
+                                                        }}
+                                                    >
+                                                        {file.path}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        )}
+                    </CardContent>
+                </Card>
             )}
         </Box>
     );

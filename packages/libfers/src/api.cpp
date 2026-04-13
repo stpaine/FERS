@@ -418,6 +418,29 @@ char* fers_get_scenario_as_xml(fers_context_t* context)
 	}
 }
 
+char* fers_get_last_output_metadata_json(fers_context_t* context)
+{
+	last_error_message.clear();
+	if (context == nullptr)
+	{
+		last_error_message = "Invalid context provided to fers_get_last_output_metadata_json.";
+		LOG(logging::Level::ERROR, last_error_message);
+		return nullptr;
+	}
+
+	const auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		const std::string json_str = ctx->getLastOutputMetadataJson();
+		return strdup(json_str.c_str());
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_get_last_output_metadata_json");
+		return nullptr;
+	}
+}
+
 int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const char* json)
 {
 	last_error_message.clear();
@@ -753,8 +776,9 @@ int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callba
 	{
 		pool::ThreadPool pool(params::renderThreads());
 
-		// Pass the output directory to the engine
-		core::runEventDrivenSim(ctx->getWorld(), pool, progress_fn, ctx->getOutputDir());
+		ctx->clearLastOutputMetadata();
+		const auto output_metadata = core::runEventDrivenSim(ctx->getWorld(), pool, progress_fn, ctx->getOutputDir());
+		ctx->setLastOutputMetadata(output_metadata);
 
 		return 0;
 	}

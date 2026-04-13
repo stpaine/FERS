@@ -39,6 +39,10 @@ namespace serial
 {
 	class Response;
 }
+namespace core
+{
+	struct OutputFileMetadata;
+}
 
 namespace processing::pipeline
 {
@@ -144,5 +148,5 @@ namespace processing::pipeline
 	 * @param ref_freq The reference carrier frequency, saved as metadata.
 	 */
 	void exportCwToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer, RealType fullscale,
-						RealType ref_freq);
+						RealType ref_freq, const core::OutputFileMetadata* metadata = nullptr);
 }

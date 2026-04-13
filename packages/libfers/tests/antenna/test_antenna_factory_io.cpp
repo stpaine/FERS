@@ -133,13 +133,6 @@ namespace
 			makeAxisXml("elevation", elevation, "unit=\"deg\" format=\"dBi\" symmetry=\"mirrored\"") + "</antenna>";
 	}
 
-	std::string xmlLegacyFullSymmetryPatternFixture()
-	{
-		const std::vector<Sample> azimuth = {{-90.0, 10.0}, {0.0, 0.0}, {90.0, -10.0}};
-		const std::vector<Sample> elevation = {{0.0, 0.0}, {90.0, 0.0}};
-		return "<antenna>" + makeAxisXml("azimuth", azimuth, "unit=\"deg\" format=\"dBi\" symmetry=\"full\"") +
-			makeAxisXml("elevation", elevation, "unit=\"deg\" format=\"dBi\" symmetry=\"mirrored\"") + "</antenna>";
-	}
 }
 
 TEST_CASE("XmlAntenna loads gain axes and metadata", "[antenna][io]")

@@ -129,7 +129,36 @@ export const useScenarioStore = create<ScenarioStore>()(
                 state.visibility[layer] = !state.visibility[layer];
             }),
 
-        // Error Actions
+        // Notification Actions
+        showSuccess: (message) =>
+            set((state) => {
+                const notification = {
+                    open: true,
+                    message,
+                    severity: 'success' as const,
+                };
+                if (
+                    (state.notificationSnackbar.open &&
+                        state.notificationSnackbar.message === message &&
+                        state.notificationSnackbar.severity ===
+                            notification.severity) ||
+                    state.notificationQueue.some(
+                        (queued) =>
+                            queued.message === message &&
+                            queued.severity === notification.severity
+                    )
+                ) {
+                    return;
+                }
+                if (!state.notificationSnackbar.open) {
+                    state.notificationSnackbar = notification;
+                } else {
+                    state.notificationQueue.push({
+                        ...notification,
+                        open: false,
+                    });
+                }
+            }),
         showError: (message) =>
             set((state) => {
                 const notification = {

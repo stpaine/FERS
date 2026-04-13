@@ -695,9 +695,9 @@ impl FersContext {
     ///
     /// # Returns
     ///
-    /// * `Ok(())` - If the simulation completed successfully.
+    /// * `Ok(String)` - If the simulation completed successfully, containing output metadata JSON.
     /// * `Err(String)` - If the simulation failed.
-    pub fn run_simulation(&self, app_handle: &AppHandle) -> Result<(), String> {
+    pub fn run_simulation(&self, app_handle: &AppHandle) -> Result<String, String> {
         // The AppHandle is passed as a raw pointer through the `user_data` argument.
         // This is safe because this function is blocking, and the app_handle reference
         // will be valid for the entire duration of the C++ call.
@@ -710,10 +710,20 @@ impl FersContext {
         };
 
         if result == 0 {
-            Ok(())
+            self.get_last_output_metadata_json()
         } else {
             Err(get_last_error())
         }
+    }
+
+    /// Retrieves JSON metadata for the most recent simulation output files.
+    pub fn get_last_output_metadata_json(&self) -> Result<String, String> {
+        // SAFETY: We pass a valid context pointer. The returned C string is owned by the caller.
+        let metadata_ptr = unsafe { ffi::fers_get_last_output_metadata_json(self.ptr) };
+        if metadata_ptr.is_null() {
+            return Err(get_last_error());
+        }
+        FersOwnedString(metadata_ptr).into_string().map_err(|e| e.to_string())
     }
 
     /// Generates a KML file for the current scenario.

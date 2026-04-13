@@ -28,6 +28,18 @@ namespace serial
 {
 	std::mutex hdf5_global_mutex;
 
+	void writeOutputFileMetadataAttributes(HighFive::File& file, const core::OutputFileMetadata& metadata)
+	{
+		file.createAttribute("fers_metadata_schema_version", 1U);
+		file.createAttribute("fers_metadata_json", core::outputFileMetadataToJsonString(metadata));
+		file.createAttribute("receiver_id", static_cast<unsigned long long>(metadata.receiver_id));
+		file.createAttribute("receiver_name", metadata.receiver_name);
+		file.createAttribute("data_mode", metadata.mode);
+		file.createAttribute("total_samples", static_cast<unsigned long long>(metadata.total_samples));
+		file.createAttribute("sample_start", static_cast<unsigned long long>(metadata.sample_start));
+		file.createAttribute("sample_end_exclusive", static_cast<unsigned long long>(metadata.sample_end_exclusive));
+	}
+
 	void readPulseData(const std::string& name, std::vector<ComplexType>& data)
 	{
 		std::scoped_lock lock(hdf5_global_mutex);
@@ -78,7 +90,7 @@ namespace serial
 	}
 
 	void addChunkToFile(HighFive::File& file, const std::vector<ComplexType>& data, const RealType time,
-						const RealType fullscale, const unsigned count)
+						const RealType fullscale, const unsigned count, const core::PulseChunkMetadata* metadata)
 	{
 		std::scoped_lock lock(hdf5_global_mutex);
 
@@ -115,6 +127,14 @@ namespace serial
 				dataset.createAttribute("time", time);
 				dataset.createAttribute("rate", params::rate());
 				dataset.createAttribute("fullscale", fullscale);
+				if (metadata != nullptr)
+				{
+					dataset.createAttribute("chunk_index", metadata->chunk_index);
+					dataset.createAttribute("sample_count", static_cast<unsigned long long>(metadata->sample_count));
+					dataset.createAttribute("sample_start", static_cast<unsigned long long>(metadata->sample_start));
+					dataset.createAttribute("sample_end_exclusive",
+											static_cast<unsigned long long>(metadata->sample_end_exclusive));
+				}
 			}
 			catch (const HighFive::Exception& err)
 			{

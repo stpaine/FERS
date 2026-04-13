@@ -19,18 +19,67 @@ export type SimulationProgressDetail = {
 
 export type SimulationRunStatus = 'idle' | 'running' | 'completed' | 'failed';
 
+export type SimulationOutputChunkMetadata = {
+    chunk_index: number;
+    i_dataset: string;
+    q_dataset: string;
+    start_time: number;
+    sample_count: number;
+    sample_start: number;
+    sample_end_exclusive: number;
+};
+
+export type SimulationOutputCwSegmentMetadata = {
+    start_time: number;
+    end_time: number;
+    sample_count: number;
+    sample_start: number;
+    sample_end_exclusive: number;
+};
+
+export type SimulationOutputFileMetadata = {
+    receiver_id: number;
+    receiver_name: string;
+    mode: 'pulsed' | 'cw';
+    path: string;
+    total_samples: number;
+    sample_start: number;
+    sample_end_exclusive: number;
+    pulse_count: number;
+    min_pulse_length_samples: number;
+    max_pulse_length_samples: number;
+    uniform_pulse_length: boolean;
+    chunks: SimulationOutputChunkMetadata[];
+    cw_segments: SimulationOutputCwSegmentMetadata[];
+};
+
+export type SimulationOutputMetadata = {
+    schema_version: number;
+    simulation_name: string;
+    output_directory: string;
+    start_time: number;
+    end_time: number;
+    sampling_rate: number;
+    oversample_ratio: number;
+    files: SimulationOutputFileMetadata[];
+};
+
 type SimulationProgressStore = {
     isSimulating: boolean;
     isGeneratingKml: boolean;
     simulationProgress: Record<string, SimulationProgressState>;
     simulationRunStatus: SimulationRunStatus;
     simulationRunError: string | null;
+    simulationOutputMetadata: SimulationOutputMetadata | null;
 
     setIsSimulating: (isSimulating: boolean) => void;
     setIsGeneratingKml: (isGeneratingKml: boolean) => void;
     startSimulationRun: () => void;
     setSimulationProgressSnapshot: (
         progress: Record<string, SimulationProgressState>
+    ) => void;
+    setSimulationOutputMetadata: (
+        metadata: SimulationOutputMetadata | null
     ) => void;
     completeSimulationRun: () => void;
     failSimulationRun: (errorMessage: string) => void;
@@ -44,6 +93,7 @@ export const useSimulationProgressStore = create<SimulationProgressStore>()(
         simulationProgress: {},
         simulationRunStatus: 'idle',
         simulationRunError: null,
+        simulationOutputMetadata: null,
 
         setIsSimulating: (isSimulating) => set({ isSimulating }),
         setIsGeneratingKml: (isGeneratingKml) => set({ isGeneratingKml }),
@@ -53,9 +103,12 @@ export const useSimulationProgressStore = create<SimulationProgressStore>()(
                 simulationProgress: {},
                 simulationRunStatus: 'running',
                 simulationRunError: null,
+                simulationOutputMetadata: null,
             }),
         setSimulationProgressSnapshot: (progress) =>
             set({ simulationProgress: progress }),
+        setSimulationOutputMetadata: (metadata) =>
+            set({ simulationOutputMetadata: metadata }),
         completeSimulationRun: () =>
             set({
                 isSimulating: false,
@@ -73,6 +126,7 @@ export const useSimulationProgressStore = create<SimulationProgressStore>()(
                 simulationProgress: {},
                 simulationRunStatus: 'idle',
                 simulationRunError: null,
+                simulationOutputMetadata: null,
             }),
     })
 );

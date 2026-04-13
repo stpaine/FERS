@@ -31,7 +31,7 @@
 
 mod fers_api;
 
-use std::sync::Mutex;
+use std::{fs, path::PathBuf, sync::Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 /// Data structure for a single motion waypoint received from the UI.
@@ -252,6 +252,7 @@ fn update_scenario_from_json(
 ///
 /// # Events Emitted
 ///
+/// * `simulation-output-metadata` - Emitted with metadata JSON before completion.
 /// * `simulation-complete` - Emitted with `()` as payload on successful completion.
 /// * `simulation-error` - Emitted with a `String` error message on failure.
 /// * `simulation-progress` - Emitted periodically with `{ message: String, current: i32, total: i32 }`.
@@ -271,7 +272,10 @@ fn run_simulation(app_handle: AppHandle) -> Result<(), String> {
 
         // Emit an event to the frontend based on the simulation result.
         match result {
-            Ok(_) => {
+            Ok(metadata_json) => {
+                app_handle_clone
+                    .emit("simulation-output-metadata", metadata_json)
+                    .expect("Failed to emit simulation-output-metadata event");
                 app_handle_clone
                     .emit("simulation-complete", ())
                     .expect("Failed to emit simulation-complete event");
@@ -286,6 +290,42 @@ fn run_simulation(app_handle: AppHandle) -> Result<(), String> {
 
     // Return immediately, allowing the UI to remain responsive.
     Ok(())
+}
+
+fn sanitize_file_stem(name: &str) -> String {
+    let sanitized: String =
+        name.chars().map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' }).collect();
+    if sanitized.is_empty() {
+        "simulation".to_string()
+    } else {
+        sanitized
+    }
+}
+
+/// Writes the most recent simulation output metadata JSON next to the generated HDF5 files.
+#[tauri::command]
+fn export_output_metadata_json(state: State<'_, FersState>) -> Result<String, String> {
+    let metadata_json = state.lock().map_err(|e| e.to_string())?.get_last_output_metadata_json()?;
+    let metadata: serde_json::Value = serde_json::from_str(&metadata_json)
+        .map_err(|e| format!("Failed to parse output metadata JSON: {}", e))?;
+
+    let simulation_name =
+        metadata.get("simulation_name").and_then(serde_json::Value::as_str).unwrap_or("simulation");
+    let output_directory = metadata
+        .get("output_directory")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(".");
+
+    let mut output_path = PathBuf::from(output_directory);
+    fs::create_dir_all(&output_path)
+        .map_err(|e| format!("Failed to create metadata output directory: {}", e))?;
+    output_path.push(format!("{}_metadata.json", sanitize_file_stem(simulation_name)));
+
+    fs::write(&output_path, metadata_json)
+        .map_err(|e| format!("Failed to write metadata JSON: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
 }
 
 /// Generates a KML visualization file for the current in-memory scenario.
@@ -501,6 +541,7 @@ pub fn run() {
             get_scenario_as_xml,
             update_scenario_from_json,
             run_simulation,
+            export_output_metadata_json,
             generate_kml,
             get_interpolated_motion_path,
             get_interpolated_rotation_path,

@@ -10,7 +10,6 @@ import SettingsDialog from '@/components/SettingsDialog';
 import { type FersLogEntry, useFersLogStore } from '@/stores/fersLogStore';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { AssetLibraryView } from '@/views/AssetLibraryView';
-import { ResultsView } from '@/views/ResultsView';
 import { ScenarioView } from '@/views/ScenarioView';
 import { SimulationView } from '@/views/SimulationView';
 
@@ -104,15 +103,6 @@ export function MainLayout() {
                     }}
                 >
                     <SimulationView />
-                </Box>
-                <Box
-                    sx={{
-                        display: activeView === 'results' ? 'block' : 'none',
-                        height: '100%',
-                        width: '100%',
-                    }}
-                >
-                    <ResultsView />
                 </Box>
             </Box>
             <SettingsDialog
