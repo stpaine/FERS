@@ -22,6 +22,7 @@
 #include <format>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <source_location>
 #include <string>
 #include <utility>
@@ -50,12 +51,22 @@ namespace logging
 	class Logger
 	{
 	public:
+		using Callback = void (*)(Level level, const std::string& line, void* user_data);
+
 		/**
 		 * @brief Sets the logging level.
 		 *
 		 * @param level The logging level to set.
 		 */
 		void setLevel(const Level level) noexcept { _log_level = level; }
+
+		/**
+		 * @brief Sets an optional callback that receives each formatted log line.
+		 *
+		 * @param callback Callback to invoke after a log line is accepted, or nullptr to disable.
+		 * @param user_data Opaque caller data passed back to the callback.
+		 */
+		void setCallback(Callback callback, void* user_data) noexcept;
 
 		/**
 		 * @brief Logs a message with a specific log level and source location.
@@ -98,6 +109,8 @@ namespace logging
 	private:
 		Level _log_level = Level::INFO; ///< Current log level.
 		std::optional<std::ofstream> _log_file; ///< Output file stream for logging to a file.
+		Callback _callback = nullptr; ///< Optional callback for UI/session log streaming.
+		void* _callback_user_data = nullptr; ///< Opaque data passed to the callback.
 		std::mutex _log_mutex; ///< Mutex for thread-safe logging.
 
 		/**

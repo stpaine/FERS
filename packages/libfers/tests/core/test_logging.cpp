@@ -23,6 +23,26 @@ namespace
 		explicit LogLevelGuard(logging::Level level) { logging::logger.setLevel(level); }
 		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
+
+	struct LogCallbackGuard
+	{
+		~LogCallbackGuard() { logging::logger.setCallback(nullptr, nullptr); }
+	};
+
+	struct LogCallbackState
+	{
+		int calls = 0;
+		logging::Level level = logging::Level::OFF;
+		std::string line;
+	};
+
+	void recordLogCallback(logging::Level level, const std::string& line, void* user_data)
+	{
+		auto* state = static_cast<LogCallbackState*>(user_data);
+		++state->calls;
+		state->level = level;
+		state->line = line;
+	}
 }
 
 TEST_CASE("getLevelString maps levels", "[core][logging]")
@@ -95,4 +115,26 @@ TEST_CASE("Logger reports file open errors", "[core][logging]")
 	const auto result = logging::logger.logToFile(bad_path.string());
 
 	REQUIRE_FALSE(result.has_value());
+}
+
+TEST_CASE("Logger forwards accepted lines to callback", "[core][logging]")
+{
+	LogLevelGuard level_guard(logging::Level::WARNING);
+	LogCallbackGuard callback_guard;
+	CerrCapture capture;
+	LogCallbackState state;
+
+	logging::logger.setCallback(recordLogCallback, &state);
+	logging::logger.log(logging::Level::INFO, "ignored callback message");
+
+	REQUIRE(state.calls == 0);
+
+	logging::logger.log(logging::Level::ERROR, "callback message");
+
+	REQUIRE(state.calls == 1);
+	REQUIRE(state.level == logging::Level::ERROR);
+	REQUIRE(state.line.find("callback message") != std::string::npos);
+	REQUIRE(state.line.find("ERROR") != std::string::npos);
+	REQUIRE(state.line.back() != '\n');
+	REQUIRE(capture.str().find("callback message") != std::string::npos);
 }

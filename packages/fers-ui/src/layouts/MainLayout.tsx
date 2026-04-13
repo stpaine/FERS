@@ -2,9 +2,12 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { Alert, Box, Snackbar } from '@mui/material';
-import React, { useState } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import React, { useEffect, useState } from 'react';
 import AppRail from '@/components/AppRail';
+import RawLogDrawer from '@/components/RawLogDrawer';
 import SettingsDialog from '@/components/SettingsDialog';
+import { type FersLogEntry, useFersLogStore } from '@/stores/fersLogStore';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { AssetLibraryView } from '@/views/AssetLibraryView';
 import { ResultsView } from '@/views/ResultsView';
@@ -14,6 +17,8 @@ import { SimulationView } from '@/views/SimulationView';
 export function MainLayout() {
     const [activeView, setActiveView] = useState('scenario');
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const logOpen = useFersLogStore((state) => state.isOpen);
+    const appendLog = useFersLogStore((state) => state.appendLog);
     const { open, message, severity } = useScenarioStore(
         (state) => state.notificationSnackbar
     );
@@ -23,6 +28,26 @@ export function MainLayout() {
     const advanceNotification = useScenarioStore(
         (state) => state.advanceNotification
     );
+
+    useEffect(() => {
+        let active = true;
+        let unlistenLog: (() => void) | undefined;
+
+        listen<FersLogEntry>('fers-log', (event) => {
+            appendLog(event.payload);
+        }).then((unlisten) => {
+            if (active) {
+                unlistenLog = unlisten;
+            } else {
+                unlisten();
+            }
+        });
+
+        return () => {
+            active = false;
+            unlistenLog?.();
+        };
+    }, [appendLog]);
 
     return (
         <Box
@@ -41,6 +66,7 @@ export function MainLayout() {
                 onViewChange={setActiveView}
                 onSettingsClick={() => setSettingsOpen(true)}
             />
+            {logOpen && <RawLogDrawer />}
             <Box
                 component="main"
                 sx={{

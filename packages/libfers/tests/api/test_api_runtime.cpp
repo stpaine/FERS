@@ -23,12 +23,29 @@ namespace
 		std::vector<std::string> messages;
 	};
 
+	struct LogCallbackState
+	{
+		int calls = 0;
+		void* seen_user_data = nullptr;
+		std::vector<fers_log_level_t> levels;
+		std::vector<std::string> lines;
+	};
+
 	void recordProgress(const char* message, int /*current*/, int /*total*/, void* user_data)
 	{
 		auto* state = static_cast<CallbackState*>(user_data);
 		++state->calls;
 		state->seen_user_data = user_data;
 		state->messages.emplace_back(message ? message : "");
+	}
+
+	void recordLog(fers_log_level_t level, const char* line, void* user_data)
+	{
+		auto* state = static_cast<LogCallbackState*>(user_data);
+		++state->calls;
+		state->seen_user_data = user_data;
+		state->levels.push_back(level);
+		state->lines.emplace_back(line ? line : "");
 	}
 }
 
@@ -133,6 +150,34 @@ TEST_CASE("API log writes to configured file", "[api][runtime]")
 	const std::string log_text = api_test::readTextFile(log_path);
 	REQUIRE_THAT(log_text, ContainsSubstring(message));
 	REQUIRE_THAT(log_text, ContainsSubstring("INFO"));
+}
+
+TEST_CASE("API log callback receives formatted accepted lines", "[api][runtime]")
+{
+	api_test::clearLastError();
+	REQUIRE(fers_configure_logging(FERS_LOG_WARNING, nullptr) == 0);
+
+	LogCallbackState state;
+	fers_set_log_callback(recordLog, &state);
+
+	fers_log(FERS_LOG_INFO, "ignored by callback level");
+	REQUIRE(state.calls == 0);
+
+	const std::string message = uniqueLogMessage("api callback message");
+	fers_log(FERS_LOG_ERROR, message.c_str());
+
+	REQUIRE(state.calls == 1);
+	REQUIRE(state.seen_user_data == &state);
+	REQUIRE(state.levels.front() == FERS_LOG_ERROR);
+	REQUIRE_THAT(state.lines.front(), ContainsSubstring(message));
+	REQUIRE_THAT(state.lines.front(), ContainsSubstring("ERROR"));
+	REQUIRE(state.lines.front().back() != '\n');
+
+	fers_set_log_callback(nullptr, nullptr);
+	fers_log(FERS_LOG_ERROR, "callback disabled");
+	REQUIRE(state.calls == 1);
+
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, nullptr) == 0);
 }
 
 TEST_CASE("API warning getter returns deduplicated rotation-unit warnings", "[api][runtime]")

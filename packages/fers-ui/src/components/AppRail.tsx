@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+import BarChartIcon from '@mui/icons-material/BarChart';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import SettingsIcon from '@mui/icons-material/Settings';
+import TerminalIcon from '@mui/icons-material/Terminal';
+import ViewInArIcon from '@mui/icons-material/ViewInAr';
+import WidgetsIcon from '@mui/icons-material/Widgets';
 import {
+    Badge,
     Box,
     List,
     ListItemButton,
     ListItemIcon,
     Tooltip,
 } from '@mui/material';
-import ViewInArIcon from '@mui/icons-material/ViewInAr';
-import WidgetsIcon from '@mui/icons-material/Widgets';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import BarChartIcon from '@mui/icons-material/BarChart';
-import SettingsIcon from '@mui/icons-material/Settings';
+import { useFersLogStore } from '@/stores/fersLogStore';
 
 interface AppRailProps {
     activeView: string;
@@ -32,6 +35,10 @@ export default function AppRail({
     onViewChange,
     onSettingsClick,
 }: AppRailProps) {
+    const logOpen = useFersLogStore((state) => state.isOpen);
+    const toggleLogOpen = useFersLogStore((state) => state.toggleOpen);
+    const logCount = useFersLogStore((state) => state.entries.length);
+
     return (
         <Box
             sx={{
@@ -70,6 +77,30 @@ export default function AppRail({
                 ))}
             </List>
             <Box sx={{ pb: 1 }}>
+                <Tooltip title="Raw logs" placement="right">
+                    <ListItemButton
+                        selected={logOpen}
+                        onClick={toggleLogOpen}
+                        sx={{
+                            my: 1,
+                            justifyContent: 'center',
+                            '&.Mui-selected': {
+                                backgroundColor: 'action.selected',
+                            },
+                        }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 0 }}>
+                            <Badge
+                                badgeContent={logCount}
+                                max={999}
+                                color="secondary"
+                                invisible={logCount === 0}
+                            >
+                                <TerminalIcon />
+                            </Badge>
+                        </ListItemIcon>
+                    </ListItemButton>
+                </Tooltip>
                 <Tooltip title="Settings" placement="right">
                     <ListItemButton
                         onClick={onSettingsClick}

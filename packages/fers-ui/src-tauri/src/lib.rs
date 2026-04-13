@@ -488,6 +488,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            fers_api::register_log_callback(app.handle().clone());
+            Ok(())
+        })
         // Store the FersContext as managed state, accessible from all commands
         .manage(Mutex::new(context))
         // Register all Tauri commands that can be invoked from the frontend

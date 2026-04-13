@@ -93,12 +93,27 @@ typedef enum // NOLINT(*-use-using)
 } fers_log_level_t;
 
 /**
+ * @brief A function pointer type for receiving formatted log lines.
+ *
+ * @param level The severity level of the log line.
+ * @param line The full formatted log line, without a trailing newline.
+ * @param user_data An opaque pointer passed back to the caller.
+ */
+typedef void (*fers_log_callback_t)(fers_log_level_t level, const char* line, void* user_data); // NOLINT(*-use-using)
+
+/**
  * @brief Configures the internal logger.
  * @param level The minimum severity level to log.
  * @param log_file_path Optional path to a log file. Pass NULL to disable file logging.
  * @return 0 on success, non-zero on error.
  */
 int fers_configure_logging(fers_log_level_t level, const char* log_file_path);
+
+/**
+ * @brief Registers a callback for formatted log lines.
+ * Pass NULL as callback to disable log callbacks.
+ */
+void fers_set_log_callback(fers_log_callback_t callback, void* user_data);
 
 /**
  * @brief Submits a log message to the library's unified logging system.

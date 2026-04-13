@@ -21,6 +21,7 @@
 #include <libfers/api.h>
 #include <math/path.h>
 #include <math/rotation_path.h>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -114,7 +115,7 @@ void fers_context_destroy(fers_context_t* context)
 }
 
 // Helper to map C enum to internal C++ enum
-static logging::Level map_level(fers_log_level_t level)
+static logging::Level map_api_log_level(fers_log_level_t level)
 {
 	switch (level)
 	{
@@ -135,12 +136,57 @@ static logging::Level map_level(fers_log_level_t level)
 	}
 }
 
+static fers_log_level_t map_internal_log_level(logging::Level level)
+{
+	switch (level)
+	{
+	case logging::Level::TRACE:
+		return FERS_LOG_TRACE;
+	case logging::Level::DEBUG:
+		return FERS_LOG_DEBUG;
+	case logging::Level::INFO:
+		return FERS_LOG_INFO;
+	case logging::Level::WARNING:
+		return FERS_LOG_WARNING;
+	case logging::Level::ERROR:
+		return FERS_LOG_ERROR;
+	case logging::Level::FATAL:
+		return FERS_LOG_FATAL;
+	default:
+		return FERS_LOG_INFO;
+	}
+}
+
+namespace
+{
+	std::mutex log_callback_mutex;
+	fers_log_callback_t log_callback = nullptr;
+	void* log_callback_user_data = nullptr;
+
+	void forward_log_callback(const logging::Level level, const std::string& line, void* /*user_data*/)
+	{
+		fers_log_callback_t callback = nullptr;
+		void* user_data = nullptr;
+
+		{
+			std::scoped_lock lock(log_callback_mutex);
+			callback = log_callback;
+			user_data = log_callback_user_data;
+		}
+
+		if (callback != nullptr)
+		{
+			callback(map_internal_log_level(level), line.c_str(), user_data);
+		}
+	}
+}
+
 int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 {
 	last_error_message.clear();
 	try
 	{
-		logging::logger.setLevel(map_level(level));
+		logging::logger.setLevel(map_api_log_level(level));
 		if ((log_file_path != nullptr) && ((*log_file_path) != 0))
 		{
 			auto result = logging::logger.logToFile(log_file_path);
@@ -159,12 +205,23 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 	}
 }
 
+void fers_set_log_callback(fers_log_callback_t callback, void* user_data)
+{
+	{
+		std::scoped_lock lock(log_callback_mutex);
+		log_callback = callback;
+		log_callback_user_data = user_data;
+	}
+
+	logging::logger.setCallback(callback == nullptr ? nullptr : forward_log_callback, nullptr);
+}
+
 void fers_log(fers_log_level_t level, const char* message)
 {
 	if (message == nullptr)
 		return;
 	// We pass a default source_location because C-API calls don't provide C++ source info
-	logging::logger.log(map_level(level), message, std::source_location::current());
+	logging::logger.log(map_api_log_level(level), message, std::source_location::current());
 }
 
 int fers_set_thread_count(unsigned num_threads)
