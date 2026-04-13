@@ -126,12 +126,13 @@ namespace
 
 	std::string xmlAsymmetricPatternFixture(const bool explicit_symmetry)
 	{
-		const std::string symmetry = explicit_symmetry ? " symmetry=\"full\"" : "";
+		const std::string symmetry = explicit_symmetry ? " symmetry=\"none\"" : "";
 		const std::vector<Sample> azimuth = {{-90.0, 10.0}, {0.0, 0.0}, {90.0, -10.0}};
 		const std::vector<Sample> elevation = {{0.0, 0.0}, {90.0, 0.0}};
 		return "<antenna>" + makeAxisXml("azimuth", azimuth, std::string("unit=\"deg\" format=\"dBi\"") + symmetry) +
 			makeAxisXml("elevation", elevation, "unit=\"deg\" format=\"dBi\" symmetry=\"mirrored\"") + "</antenna>";
 	}
+
 }
 
 TEST_CASE("XmlAntenna loads gain axes and metadata", "[antenna][io]")
@@ -205,7 +206,7 @@ TEST_CASE("XmlAntenna converts degree and dBi axes to internal units", "[antenna
 	removeIfExists(converted_path);
 }
 
-TEST_CASE("XmlAntenna supports explicit full-range asymmetric lookup", "[antenna][io]")
+TEST_CASE("XmlAntenna supports explicit no-symmetry asymmetric lookup", "[antenna][io]")
 {
 	const std::filesystem::path path = tempFilePath(uniqueFileName("xml_antenna_asym_explicit", ".xml"));
 	removeIfExists(path);
@@ -221,7 +222,7 @@ TEST_CASE("XmlAntenna supports explicit full-range asymmetric lookup", "[antenna
 	removeIfExists(path);
 }
 
-TEST_CASE("XmlAntenna auto-detects full-range lookup from negative sample angles", "[antenna][io]")
+TEST_CASE("XmlAntenna auto-detects direct signed-angle lookup from negative sample angles", "[antenna][io]")
 {
 	const std::filesystem::path path = tempFilePath(uniqueFileName("xml_antenna_asym_auto", ".xml"));
 	removeIfExists(path);

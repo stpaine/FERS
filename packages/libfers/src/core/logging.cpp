@@ -22,6 +22,10 @@ namespace logging
 {
 	Logger logger;
 
+	void Logger::setLevel(const Level level) noexcept { _log_level.store(level, std::memory_order_relaxed); }
+
+	Level Logger::getLevel() const noexcept { return _log_level.load(std::memory_order_relaxed); }
+
 	std::string Logger::getCurrentTimestamp() noexcept
 	{
 		const auto now = std::chrono::system_clock::now();
@@ -36,25 +40,47 @@ namespace logging
 
 	void Logger::log(const Level level, const std::string& message, const std::source_location& location) noexcept
 	{
-		if (level >= _log_level)
+		if (level != Level::OFF && level >= getLevel())
 		{
-			std::scoped_lock lock(_log_mutex);
+			Callback callback = nullptr;
+			void* callback_user_data = nullptr;
+			std::string line;
 
-			const std::string filename = std::filesystem::path(location.file_name()).filename().string();
-			const std::string file_line = filename + ":" + std::to_string(location.line());
-
-			std::ostringstream oss;
-			oss << "[" << getCurrentTimestamp() << "] " << "[" << std::setw(7) << std::left << getLevelString(level)
-				<< "] " << "[" << std::setw(30) << std::left << file_line << "] " << message << '\n';
-
-			std::cerr << oss.str();
-
-			if (_log_file && _log_file->is_open())
 			{
-				*_log_file << oss.str();
-				_log_file->flush();
+				std::scoped_lock lock(_log_mutex);
+
+				const std::string filename = std::filesystem::path(location.file_name()).filename().string();
+				const std::string file_line = filename + ":" + std::to_string(location.line());
+
+				std::ostringstream oss;
+				oss << "[" << getCurrentTimestamp() << "] " << "[" << std::setw(7) << std::left << getLevelString(level)
+					<< "] " << "[" << std::setw(30) << std::left << file_line << "] " << message;
+				line = oss.str();
+
+				std::cerr << line << '\n';
+
+				if (_log_file && _log_file->is_open())
+				{
+					*_log_file << line << '\n';
+					_log_file->flush();
+				}
+
+				callback = _callback;
+				callback_user_data = _callback_user_data;
+			}
+
+			if (callback != nullptr)
+			{
+				callback(level, line, callback_user_data);
 			}
 		}
+	}
+
+	void Logger::setCallback(Callback callback, void* user_data) noexcept
+	{
+		std::scoped_lock lock(_log_mutex);
+		_callback = callback;
+		_callback_user_data = user_data;
 	}
 
 	std::expected<void, std::string> Logger::logToFile(const std::string& filePath) noexcept

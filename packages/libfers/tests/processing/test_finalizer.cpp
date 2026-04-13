@@ -286,7 +286,7 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
 												 { progress_calls.push_back({msg, current, total}); });
 
-	std::jthread worker(processing::runPulsedFinalizer, &receiver, &targets, reporter, out_dir.string());
+	std::jthread worker(processing::runPulsedFinalizer, &receiver, &targets, reporter, out_dir.string(), nullptr);
 	receiver.enqueueFinalizerJob(std::move(first_job));
 	std::this_thread::sleep_for(std::chrono::milliseconds(150));
 	receiver.enqueueFinalizerJob(std::move(second_job));

@@ -112,7 +112,7 @@ namespace
 
 	const char* axisSymmetryName(const antenna::XmlAntenna::AxisSymmetry symmetry) noexcept
 	{
-		return symmetry == antenna::XmlAntenna::AxisSymmetry::Full ? "full" : "mirrored";
+		return symmetry == antenna::XmlAntenna::AxisSymmetry::None ? "none" : "mirrored";
 	}
 
 	AxisMetadata parseAxisMetadata(const XmlElement& axisXml)
@@ -164,9 +164,9 @@ namespace
 			{
 				metadata.symmetry = antenna::XmlAntenna::AxisSymmetry::Mirrored;
 			}
-			else if (value == "full")
+			else if (value == "none")
 			{
-				metadata.symmetry = antenna::XmlAntenna::AxisSymmetry::Full;
+				metadata.symmetry = antenna::XmlAntenna::AxisSymmetry::None;
 			}
 			else
 			{
@@ -278,11 +278,11 @@ namespace
 				throw std::runtime_error("XML antenna <" + axis_name +
 										 "> axis uses symmetry='mirrored' but defines negative sample angles.");
 			}
-			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Full && !(min_angle < 0.0 && max_angle > 0.0))
+			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::None && !(min_angle < 0.0 && max_angle > 0.0))
 			{
 				throw std::runtime_error(
 					"XML antenna <" + axis_name +
-					"> axis uses symmetry='full' but does not span both negative and positive angles.");
+					"> axis uses symmetry='none' but does not span both negative and positive angles.");
 			}
 		}
 		else if (min_angle < 0.0)
@@ -291,16 +291,16 @@ namespace
 			{
 				throw std::runtime_error("XML antenna <" + axis_name +
 										 "> axis contains negative sample angles but does not span both sides of zero "
-										 "for full-range lookup.");
+										 "for direct signed-angle lookup.");
 			}
-			result.symmetry = antenna::XmlAntenna::AxisSymmetry::Full;
+			result.symmetry = antenna::XmlAntenna::AxisSymmetry::None;
 		}
 
 		const char* unit_source = metadata.unit_explicit ? "explicit" : "legacy default";
 		const char* format_source = metadata.format_explicit ? "explicit" : "legacy default";
 		const char* symmetry_source = metadata.symmetry_explicit
 			? "explicit"
-			: (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Full ? "auto-detected" : "legacy default");
+			: (result.symmetry == antenna::XmlAntenna::AxisSymmetry::None ? "auto-detected" : "legacy default");
 
 		LOG(Level::INFO,
 			"XML antenna axis '{}' using unit='{}' ({}) format='{}' ({}) symmetry='{}' ({}) with {} samples.",

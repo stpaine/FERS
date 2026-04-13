@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/output_metadata.h"
 
 namespace HighFive
 {
@@ -41,7 +42,14 @@ namespace serial
 	 * @throws std::runtime_error If there is an error writing data or setting attributes.
 	 */
 	void addChunkToFile(HighFive::File& file, const std::vector<ComplexType>& data, RealType time, RealType fullscale,
-						unsigned count);
+						unsigned count, const core::PulseChunkMetadata* metadata = nullptr);
+
+	/**
+	 * @brief Writes additive FERS output metadata attributes to an open HDF5 file.
+	 *
+	 * The caller must hold `hdf5_global_mutex`.
+	 */
+	void writeOutputFileMetadataAttributes(HighFive::File& file, const core::OutputFileMetadata& metadata);
 
 	/**
 	 * @brief Reads pulse data from an HDF5 file.

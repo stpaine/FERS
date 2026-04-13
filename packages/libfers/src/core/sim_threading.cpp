@@ -42,9 +42,10 @@ using radar::Transmitter;
 namespace core
 {
 	SimulationEngine::SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter,
-									   std::string output_dir) :
-		_world(world), _pool(pool), _reporter(std::move(reporter)), _last_report_time(std::chrono::steady_clock::now()),
-		_output_dir(std::move(output_dir))
+									   std::string output_dir,
+									   std::shared_ptr<OutputMetadataCollector> metadata_collector) :
+		_world(world), _pool(pool), _reporter(std::move(reporter)), _metadata_collector(std::move(metadata_collector)),
+		_last_report_time(std::chrono::steady_clock::now()), _output_dir(std::move(output_dir))
 	{
 	}
 
@@ -86,7 +87,7 @@ namespace core
 			if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
 				_finalizer_threads.emplace_back(processing::runPulsedFinalizer, receiver_ptr.get(),
-												&_world->getTargets(), _reporter, _output_dir);
+												&_world->getTargets(), _reporter, _output_dir, _metadata_collector);
 			}
 		}
 	}
@@ -280,7 +281,8 @@ namespace core
 		{
 			if (receiver_ptr->getMode() == OperationMode::CW_MODE)
 			{
-				_pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &_pool, _reporter, _output_dir);
+				_pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &_pool, _reporter, _output_dir,
+							  _metadata_collector);
 			}
 			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{
@@ -291,6 +293,13 @@ namespace core
 		}
 
 		_pool.wait();
+		for (auto& finalizer_thread : _finalizer_threads)
+		{
+			if (finalizer_thread.joinable())
+			{
+				finalizer_thread.join();
+			}
+		}
 
 		LOG(Level::INFO, "All finalization tasks complete.");
 		if (_reporter)
@@ -300,12 +309,14 @@ namespace core
 		LOG(Level::INFO, "Event-driven simulation loop finished.");
 	}
 
-	void runEventDrivenSim(World* world, pool::ThreadPool& pool,
-						   const std::function<void(const std::string&, int, int)>& progress_callback,
-						   const std::string& output_dir)
+	OutputMetadata runEventDrivenSim(World* world, pool::ThreadPool& pool,
+									 const std::function<void(const std::string&, int, int)>& progress_callback,
+									 const std::string& output_dir)
 	{
 		auto reporter = std::make_shared<ProgressReporter>(progress_callback);
-		SimulationEngine engine(world, pool, reporter, output_dir);
+		auto metadata_collector = std::make_shared<OutputMetadataCollector>(output_dir);
+		SimulationEngine engine(world, pool, reporter, output_dir, metadata_collector);
 		engine.run();
+		return metadata_collector->snapshot();
 	}
 }

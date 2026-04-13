@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/output_metadata.h"
 #include "core/sim_events.h"
 
 namespace pool
@@ -105,7 +106,7 @@ namespace core
 		 * @param output_dir Output directory for the simulation files.
 		 */
 		SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter,
-						 std::string output_dir);
+						 std::string output_dir, std::shared_ptr<OutputMetadataCollector> metadata_collector = nullptr);
 
 		/**
 		 * @brief Starts and runs the main simulation loop until completion.
@@ -206,6 +207,7 @@ namespace core
 		pool::ThreadPool& _pool; ///< Reference to the global thread pool.
 		std::shared_ptr<ProgressReporter> _reporter; ///< Shared progress reporter instance.
 		std::vector<std::jthread> _finalizer_threads; ///< Collection of dedicated pulsed finalizer threads.
+		std::shared_ptr<OutputMetadataCollector> _metadata_collector;
 
 		std::chrono::steady_clock::time_point _last_report_time; ///< Timestamp of the last progress report.
 		int _last_reported_percent = -1; ///< The last reported percentage to prevent redundant updates.
@@ -226,7 +228,7 @@ namespace core
 	 * @param progress_callback An optional callback function for reporting progress.
 	 * @param output_dir Output directory for the simulation files.
 	 */
-	void runEventDrivenSim(World* world, pool::ThreadPool& pool,
-						   const std::function<void(const std::string&, int, int)>& progress_callback,
-						   const std::string& output_dir);
+	OutputMetadata runEventDrivenSim(World* world, pool::ThreadPool& pool,
+									 const std::function<void(const std::string&, int, int)>& progress_callback,
+									 const std::string& output_dir);
 }

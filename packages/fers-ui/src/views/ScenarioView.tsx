@@ -28,6 +28,7 @@ import ViewControls from '@/components/ViewControls';
 import { ViewportErrorBoundary } from '@/components/ViewportErrorBoundary';
 import WorldView from '@/components/WorldView';
 import { useScenarioStore } from '@/stores/scenarioStore';
+import { useSimulationProgressStore } from '@/stores/simulationProgressStore';
 import { fersColors } from '@/theme';
 import {
     getWebGLSupportReport,
@@ -160,8 +161,14 @@ function ScenarioViewportFallback({
 /**
  * ScenarioView is the primary workbench for building and visualizing 3D scenes.
  */
-export const ScenarioView = React.memo(function ScenarioView() {
-    const isSimulating = useScenarioStore((state) => state.isSimulating);
+export const ScenarioView = React.memo(function ScenarioView({
+    isActive,
+}: {
+    isActive: boolean;
+}) {
+    const isSimulating = useSimulationProgressStore(
+        (state) => state.isSimulating
+    );
     const [isInspectorCollapsed, setIsInspectorCollapsed] = useState(false);
     const panelGroupRef = useRef<GroupImperativeHandle>(null);
     const [viewportState, setViewportState] = useState<ViewportState>({
@@ -280,7 +287,6 @@ export const ScenarioView = React.memo(function ScenarioView() {
                 position: 'relative', // Establish positioning context
                 pointerEvents: isSimulating ? 'none' : 'auto',
                 opacity: isSimulating ? 0.5 : 1,
-                transition: 'opacity 0.3s ease-in-out',
                 userSelect: 'none',
                 WebkitUserSelect: 'none',
             }}
@@ -350,6 +356,9 @@ export const ScenarioView = React.memo(function ScenarioView() {
                                         <Canvas
                                             key={viewportResetKey}
                                             shadows
+                                            frameloop={
+                                                isActive ? 'always' : 'never'
+                                            }
                                             camera={{
                                                 position: [100, 100, 100],
                                                 fov: 25,

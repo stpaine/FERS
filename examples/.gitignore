@@ -1,2 +1,4 @@
 *.h5
 *.png
+*.kml
+*_metadata.json

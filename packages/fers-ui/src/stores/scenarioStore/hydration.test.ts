@@ -71,8 +71,6 @@ function createState(overrides: Partial<ScenarioState> = {}): ScenarioState {
         isPlaying: false,
         currentTime: 0,
         targetPlaybackDuration: null,
-        isSimulating: false,
-        isGeneratingKml: false,
         isBackendSyncing: false,
         backendVersion: 0,
         scenarioFilePath: null,

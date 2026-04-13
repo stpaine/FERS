@@ -2,16 +2,17 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Typography,
     Box,
+    Button,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Typography,
 } from '@mui/material';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { NumberField } from './inspectors/InspectorControls';
+import LogLevelSelect from './LogLevelSelect';
 
 interface SettingsDialogProps {
     open: boolean;
@@ -19,8 +20,12 @@ interface SettingsDialogProps {
 }
 
 export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
-    const { targetPlaybackDuration, setTargetPlaybackDuration } =
-        useScenarioStore();
+    const targetPlaybackDuration = useScenarioStore(
+        (s) => s.targetPlaybackDuration
+    );
+    const setTargetPlaybackDuration = useScenarioStore(
+        (s) => s.setTargetPlaybackDuration
+    );
     return (
         <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
             <DialogTitle>Application Settings</DialogTitle>
@@ -37,6 +42,7 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                         Global application settings. Scenario parameters are
                         edited in the Property Inspector.
                     </Typography>
+                    <LogLevelSelect id="settings-log-level" />
                     <NumberField
                         label="Target Preview Playback Duration (s)"
                         value={targetPlaybackDuration}

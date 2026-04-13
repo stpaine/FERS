@@ -2,6 +2,10 @@
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
 import { z } from 'zod';
+import type {
+    AssetLibraryTemplate,
+    AssetTemplateInsertionResult,
+} from '../assetTemplates';
 import {
     AntennaSchema,
     FixedRotationSchema,
@@ -97,7 +101,7 @@ export type ViewControlAction = {
     timestamp: number;
 };
 
-export type NotificationSeverity = 'warning' | 'error';
+export type NotificationSeverity = 'success' | 'warning' | 'error';
 
 export type NotificationState = {
     open: boolean;
@@ -112,8 +116,6 @@ export type ScenarioState = ScenarioData & {
     isPlaying: boolean;
     currentTime: number;
     targetPlaybackDuration: number | null;
-    isSimulating: boolean;
-    isGeneratingKml: boolean;
     isBackendSyncing: boolean;
     backendVersion: number;
     scenarioFilePath: string | null;
@@ -169,6 +171,9 @@ export type ScenarioActions = {
     resetScenario: () => void;
     setScenarioFilePath: (path: string | null) => void;
     setOutputDirectory: (dir: string | null) => void;
+    insertAssetTemplate: (
+        template: AssetLibraryTemplate
+    ) => AssetTemplateInsertionResult;
 };
 
 export type BackendActions = {
@@ -180,12 +185,11 @@ export type PlaybackActions = {
     togglePlayPause: () => void;
     setCurrentTime: (time: number | ((prevTime: number) => number)) => void;
     setTargetPlaybackDuration: (duration: number | null) => void;
-    setIsSimulating: (isSimulating: boolean) => void;
-    setIsGeneratingKml: (isGeneratingKml: boolean) => void;
 };
 
 export type ErrorActions = {
     showError: (message: string) => void;
+    showSuccess: (message: string) => void;
     showWarning: (message: string) => void;
     hideNotification: () => void;
     advanceNotification: () => void;

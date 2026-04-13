@@ -12,6 +12,7 @@ import {
     Platform,
     useScenarioStore,
 } from '@/stores/scenarioStore';
+import { useSimulationProgressStore } from '@/stores/simulationProgressStore';
 import { fersColors } from '@/theme';
 
 const TYPE_MAP = ['monostatic', 'illuminator', 'scattered', 'direct'] as const;
@@ -197,8 +198,12 @@ export default function LinkVisualizer() {
     const currentTime = useScenarioStore((state) => state.currentTime);
     const platforms = useScenarioStore((state) => state.platforms);
     const visibility = useScenarioStore((state) => state.visibility);
-    const isSimulating = useScenarioStore((state) => state.isSimulating);
-    const isGeneratingKml = useScenarioStore((state) => state.isGeneratingKml);
+    const isSimulating = useSimulationProgressStore(
+        (state) => state.isSimulating
+    );
+    const isGeneratingKml = useSimulationProgressStore(
+        (state) => state.isGeneratingKml
+    );
     const {
         showLinkLabels,
         showLinkMonostatic,
@@ -259,11 +264,12 @@ export default function LinkVisualizer() {
     useFrame(() => {
         // Access store state imperatively to avoid dependency staleness
         const state = useScenarioStore.getState();
+        const simState = useSimulationProgressStore.getState();
 
         // 1. Concurrency & Sync Checks
         if (
-            state.isSimulating ||
-            state.isGeneratingKml ||
+            simState.isSimulating ||
+            simState.isGeneratingKml ||
             state.isBackendSyncing ||
             isFetchingRef.current
         ) {

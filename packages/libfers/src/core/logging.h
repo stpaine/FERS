@@ -18,10 +18,12 @@
 
 #define LOG(level, ...) log(level, std::source_location::current(), __VA_ARGS__)
 
+#include <atomic>
 #include <expected>
 #include <format>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <source_location>
 #include <string>
 #include <utility>
@@ -50,12 +52,29 @@ namespace logging
 	class Logger
 	{
 	public:
+		using Callback = void (*)(Level level, const std::string& line, void* user_data);
+
 		/**
 		 * @brief Sets the logging level.
 		 *
 		 * @param level The logging level to set.
 		 */
-		void setLevel(const Level level) noexcept { _log_level = level; }
+		void setLevel(Level level) noexcept;
+
+		/**
+		 * @brief Gets the current logging level.
+		 *
+		 * @return The current minimum logging level.
+		 */
+		[[nodiscard]] Level getLevel() const noexcept;
+
+		/**
+		 * @brief Sets an optional callback that receives each formatted log line.
+		 *
+		 * @param callback Callback to invoke after a log line is accepted, or nullptr to disable.
+		 * @param user_data Opaque caller data passed back to the callback.
+		 */
+		void setCallback(Callback callback, void* user_data) noexcept;
 
 		/**
 		 * @brief Logs a message with a specific log level and source location.
@@ -80,7 +99,7 @@ namespace logging
 		void log(const Level level, const std::source_location& location, const std::string& formatStr,
 				 Args&&... args) noexcept
 		{
-			if (level >= _log_level)
+			if (level != Level::OFF && level >= getLevel())
 			{
 				const std::string message = std::vformat(formatStr, std::make_format_args(args...));
 				log(level, message, location);
@@ -96,8 +115,10 @@ namespace logging
 		std::expected<void, std::string> logToFile(const std::string& filePath) noexcept;
 
 	private:
-		Level _log_level = Level::INFO; ///< Current log level.
+		std::atomic<Level> _log_level{Level::INFO}; ///< Current log level.
 		std::optional<std::ofstream> _log_file; ///< Output file stream for logging to a file.
+		Callback _callback = nullptr; ///< Optional callback for UI/session log streaming.
+		void* _callback_user_data = nullptr; ///< Opaque data passed to the callback.
 		std::mutex _log_mutex; ///< Mutex for thread-safe logging.
 
 		/**

@@ -31,8 +31,6 @@ export const useScenarioStore = create<ScenarioStore>()(
         isPlaying: false,
         currentTime: 0,
         targetPlaybackDuration: null,
-        isSimulating: false,
-        isGeneratingKml: false,
         isBackendSyncing: false,
         backendVersion: 0,
         scenarioFilePath: null,
@@ -83,9 +81,6 @@ export const useScenarioStore = create<ScenarioStore>()(
                 targetPlaybackDuration:
                     duration !== null && duration > 0 ? duration : null,
             }),
-        setIsSimulating: (isSimulating) => set({ isSimulating }),
-        setIsGeneratingKml: (isGeneratingKml) => set({ isGeneratingKml }),
-
         frameScene: () =>
             set({
                 viewControlAction: { type: 'frame', timestamp: Date.now() },
@@ -134,7 +129,36 @@ export const useScenarioStore = create<ScenarioStore>()(
                 state.visibility[layer] = !state.visibility[layer];
             }),
 
-        // Error Actions
+        // Notification Actions
+        showSuccess: (message) =>
+            set((state) => {
+                const notification = {
+                    open: true,
+                    message,
+                    severity: 'success' as const,
+                };
+                if (
+                    (state.notificationSnackbar.open &&
+                        state.notificationSnackbar.message === message &&
+                        state.notificationSnackbar.severity ===
+                            notification.severity) ||
+                    state.notificationQueue.some(
+                        (queued) =>
+                            queued.message === message &&
+                            queued.severity === notification.severity
+                    )
+                ) {
+                    return;
+                }
+                if (!state.notificationSnackbar.open) {
+                    state.notificationSnackbar = notification;
+                } else {
+                    state.notificationQueue.push({
+                        ...notification,
+                        open: false,
+                    });
+                }
+            }),
         showError: (message) =>
             set((state) => {
                 const notification = {

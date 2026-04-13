@@ -1,23 +1,23 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { useEffect, useMemo, useRef } from 'react';
-import { Box, Typography, Slider, IconButton } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
-import PauseIcon from '@mui/icons-material/Pause';
-import FastRewindIcon from '@mui/icons-material/FastRewind';
 import FastForwardIcon from '@mui/icons-material/FastForward';
+import FastRewindIcon from '@mui/icons-material/FastRewind';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import { Box, IconButton, Slider, Typography } from '@mui/material';
+import { useEffect, useMemo, useRef } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
 
 export default function Timeline() {
-    const {
-        globalParameters,
-        isPlaying,
-        currentTime,
-        togglePlayPause,
-        setCurrentTime,
-        targetPlaybackDuration,
-    } = useScenarioStore();
+    const globalParameters = useScenarioStore((s) => s.globalParameters);
+    const isPlaying = useScenarioStore((s) => s.isPlaying);
+    const currentTime = useScenarioStore((s) => s.currentTime);
+    const togglePlayPause = useScenarioStore((s) => s.togglePlayPause);
+    const setCurrentTime = useScenarioStore((s) => s.setCurrentTime);
+    const targetPlaybackDuration = useScenarioStore(
+        (s) => s.targetPlaybackDuration
+    );
 
     const animationFrameRef = useRef(0);
     const lastTimeRef = useRef(0);

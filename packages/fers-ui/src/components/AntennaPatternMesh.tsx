@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { useShallow } from 'zustand/react/shallow';
 import { useDynamicScale } from '@/hooks/useDynamicScale';
 import { PlatformComponent, useScenarioStore } from '@/stores/scenarioStore';
+import { isFileBackedAntennaPendingFile } from '@/stores/scenarioStore/serializers';
 
 const AZIMUTH_SEGMENTS = 64; // Resolution for azimuth sampling
 const ELEVATION_SEGMENTS = 32; // Resolution for elevation sampling
@@ -69,6 +70,7 @@ export function AntennaPatternMesh({
     // Determine the frequency to use for pattern calculation
     const frequency = useMemo(() => {
         if (!antenna) return null;
+        if (isFileBackedAntennaPendingFile(antenna)) return null;
 
         // 1. If the antenna is frequency-independent, we can render it regardless of waveform.
         const independentTypes = [

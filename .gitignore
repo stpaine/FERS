@@ -11,6 +11,9 @@ latex/
 build/
 build_cov/
 fixes.yaml
+.codex
+entities.json
+mempalace.yaml
 
 # JetBrains IDEs
 .idea/

@@ -593,6 +593,17 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 		REQUIRE(dynamic_cast<antenna::Sinc*>(new_ant) != nullptr);
 	}
 
+	SECTION("Update Antenna Rejects Empty File Replacement")
+	{
+		auto* ant_ptr = w.findAntenna(20);
+		json j = {{"id", 20}, {"name", "draft_h5"}, {"pattern", "file"}, {"filename", ""}};
+
+		REQUIRE_THROWS_WITH(serial::update_antenna_from_json(j, ant_ptr, w), ContainsSubstring("without a filename"));
+		REQUIRE(w.findAntenna(20) == ant_ptr);
+		REQUIRE(ant_ptr->getName() == "ant1");
+		REQUIRE(dynamic_cast<antenna::Isotropic*>(ant_ptr) != nullptr);
+	}
+
 	SECTION("Update Transmitter")
 	{
 		json j = {{"name", "tx_updated"}, {"pulsed_mode", {{"prf", 2000.0}}},

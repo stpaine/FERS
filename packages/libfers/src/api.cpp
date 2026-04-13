@@ -21,6 +21,7 @@
 #include <libfers/api.h>
 #include <math/path.h>
 #include <math/rotation_path.h>
+#include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
@@ -114,7 +115,7 @@ void fers_context_destroy(fers_context_t* context)
 }
 
 // Helper to map C enum to internal C++ enum
-static logging::Level map_level(fers_log_level_t level)
+static logging::Level map_api_log_level(fers_log_level_t level)
 {
 	switch (level)
 	{
@@ -130,8 +131,57 @@ static logging::Level map_level(fers_log_level_t level)
 		return logging::Level::ERROR;
 	case FERS_LOG_FATAL:
 		return logging::Level::FATAL;
+	case FERS_LOG_OFF:
+		return logging::Level::OFF;
 	default:
 		return logging::Level::INFO;
+	}
+}
+
+static fers_log_level_t map_internal_log_level(logging::Level level)
+{
+	switch (level)
+	{
+	case logging::Level::TRACE:
+		return FERS_LOG_TRACE;
+	case logging::Level::DEBUG:
+		return FERS_LOG_DEBUG;
+	case logging::Level::INFO:
+		return FERS_LOG_INFO;
+	case logging::Level::WARNING:
+		return FERS_LOG_WARNING;
+	case logging::Level::ERROR:
+		return FERS_LOG_ERROR;
+	case logging::Level::FATAL:
+		return FERS_LOG_FATAL;
+	case logging::Level::OFF:
+		return FERS_LOG_OFF;
+	default:
+		return FERS_LOG_INFO;
+	}
+}
+
+namespace
+{
+	std::mutex log_callback_mutex;
+	fers_log_callback_t log_callback = nullptr;
+	void* log_callback_user_data = nullptr;
+
+	void forward_log_callback(const logging::Level level, const std::string& line, void* /*user_data*/)
+	{
+		fers_log_callback_t callback = nullptr;
+		void* user_data = nullptr;
+
+		{
+			std::scoped_lock lock(log_callback_mutex);
+			callback = log_callback;
+			user_data = log_callback_user_data;
+		}
+
+		if (callback != nullptr)
+		{
+			callback(map_internal_log_level(level), line.c_str(), user_data);
+		}
 	}
 }
 
@@ -140,7 +190,7 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 	last_error_message.clear();
 	try
 	{
-		logging::logger.setLevel(map_level(level));
+		logging::logger.setLevel(map_api_log_level(level));
 		if ((log_file_path != nullptr) && ((*log_file_path) != 0))
 		{
 			auto result = logging::logger.logToFile(log_file_path);
@@ -159,12 +209,25 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 	}
 }
 
+fers_log_level_t fers_get_log_level() { return map_internal_log_level(logging::logger.getLevel()); }
+
+void fers_set_log_callback(fers_log_callback_t callback, void* user_data)
+{
+	{
+		std::scoped_lock lock(log_callback_mutex);
+		log_callback = callback;
+		log_callback_user_data = user_data;
+	}
+
+	logging::logger.setCallback(callback == nullptr ? nullptr : forward_log_callback, nullptr);
+}
+
 void fers_log(fers_log_level_t level, const char* message)
 {
 	if (message == nullptr)
 		return;
 	// We pass a default source_location because C-API calls don't provide C++ source info
-	logging::logger.log(map_level(level), message, std::source_location::current());
+	logging::logger.log(map_api_log_level(level), message, std::source_location::current());
 }
 
 int fers_set_thread_count(unsigned num_threads)
@@ -357,6 +420,29 @@ char* fers_get_scenario_as_xml(fers_context_t* context)
 	catch (const std::exception& e)
 	{
 		handle_api_exception(e, "fers_get_scenario_as_xml");
+		return nullptr;
+	}
+}
+
+char* fers_get_last_output_metadata_json(fers_context_t* context)
+{
+	last_error_message.clear();
+	if (context == nullptr)
+	{
+		last_error_message = "Invalid context provided to fers_get_last_output_metadata_json.";
+		LOG(logging::Level::ERROR, last_error_message);
+		return nullptr;
+	}
+
+	const auto* ctx = reinterpret_cast<FersContext*>(context);
+	try
+	{
+		const std::string json_str = ctx->getLastOutputMetadataJson();
+		return strdup(json_str.c_str());
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_get_last_output_metadata_json");
 		return nullptr;
 	}
 }
@@ -696,8 +782,9 @@ int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callba
 	{
 		pool::ThreadPool pool(params::renderThreads());
 
-		// Pass the output directory to the engine
-		core::runEventDrivenSim(ctx->getWorld(), pool, progress_fn, ctx->getOutputDir());
+		ctx->clearLastOutputMetadata();
+		const auto output_metadata = core::runEventDrivenSim(ctx->getWorld(), pool, progress_fn, ctx->getOutputDir());
+		ctx->setLastOutputMetadata(output_metadata);
 
 		return 0;
 	}

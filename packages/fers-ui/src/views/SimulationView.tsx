@@ -10,12 +10,18 @@ import {
     CardActions,
     CardContent,
     CircularProgress,
-    Fade,
     Grid,
     LinearProgress,
     List,
     ListItem,
     ListItemText,
+    Paper,
+    Table,
+    TableBody,
+    TableCell,
+    TableContainer,
+    TableHead,
+    TableRow,
     TextField,
     Typography,
 } from '@mui/material';
@@ -25,21 +31,59 @@ import { dirname, join } from '@tauri-apps/api/path';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
-
-interface ProgressState {
-    message: string;
-    current: number;
-    total: number;
-}
+import {
+    type SimulationOutputMetadata,
+    type SimulationProgressState,
+    useSimulationProgressStore,
+} from '@/stores/simulationProgressStore';
+import {
+    addSimulationProgressEvent,
+    getSimulationProgressPercent,
+    normalizeCompletedProgressSnapshot,
+} from './simulationProgress';
 
 export const SimulationView = React.memo(function SimulationView() {
-    const isSimulating = useScenarioStore((state) => state.isSimulating);
-    const setIsSimulating = useScenarioStore((state) => state.setIsSimulating);
-    const isGeneratingKml = useScenarioStore((state) => state.isGeneratingKml);
-    const setIsGeneratingKml = useScenarioStore(
+    const [metadataExportPath, setMetadataExportPath] = useState<string | null>(
+        null
+    );
+    const isSimulating = useSimulationProgressStore(
+        (state) => state.isSimulating
+    );
+    const isGeneratingKml = useSimulationProgressStore(
+        (state) => state.isGeneratingKml
+    );
+    const setIsGeneratingKml = useSimulationProgressStore(
         (state) => state.setIsGeneratingKml
     );
+    const simulationProgress = useSimulationProgressStore(
+        (state) => state.simulationProgress
+    );
+    const simulationRunStatus = useSimulationProgressStore(
+        (state) => state.simulationRunStatus
+    );
+    const simulationRunError = useSimulationProgressStore(
+        (state) => state.simulationRunError
+    );
+    const simulationOutputMetadata = useSimulationProgressStore(
+        (state) => state.simulationOutputMetadata
+    );
+    const startSimulationRun = useSimulationProgressStore(
+        (state) => state.startSimulationRun
+    );
+    const setSimulationProgressSnapshot = useSimulationProgressStore(
+        (state) => state.setSimulationProgressSnapshot
+    );
+    const setSimulationOutputMetadata = useSimulationProgressStore(
+        (state) => state.setSimulationOutputMetadata
+    );
+    const completeSimulationRun = useSimulationProgressStore(
+        (state) => state.completeSimulationRun
+    );
+    const failSimulationRun = useSimulationProgressStore(
+        (state) => state.failSimulationRun
+    );
     const showError = useScenarioStore((state) => state.showError);
+    const showSuccess = useScenarioStore((state) => state.showSuccess);
     const scenarioFilePath = useScenarioStore(
         (state) => state.scenarioFilePath
     );
@@ -49,71 +93,70 @@ export const SimulationView = React.memo(function SimulationView() {
     );
 
     // Use a Ref to store incoming data to avoid triggering re-renders on every event
-    const progressRef = useRef<Record<string, ProgressState>>({});
-    // Local state to trigger actual re-renders throttled by rAF
-    const [displayProgress, setDisplayProgress] = useState<
-        Record<string, ProgressState>
-    >({});
+    const progressRef = useRef<Record<string, SimulationProgressState>>({});
 
     useEffect(() => {
-        let animationFrameId: number;
+        let animationFrameId: number | undefined;
+
+        const flushProgress = () => {
+            setSimulationProgressSnapshot({ ...progressRef.current });
+        };
 
         // The update loop synchronizes the Ref data to the State at screen refresh rate
         const updateLoop = () => {
-            if (useScenarioStore.getState().isSimulating) {
-                setDisplayProgress({ ...progressRef.current });
+            if (useSimulationProgressStore.getState().isSimulating) {
+                flushProgress();
                 animationFrameId = requestAnimationFrame(updateLoop);
             }
         };
 
         const unlistenSimComplete = listen<void>('simulation-complete', () => {
             console.log('Simulation completed successfully.');
-            setIsSimulating(false);
-            progressRef.current = {};
-            setDisplayProgress({});
-            cancelAnimationFrame(animationFrameId);
+            progressRef.current = normalizeCompletedProgressSnapshot(
+                progressRef.current
+            );
+            flushProgress();
+            completeSimulationRun();
+            if (animationFrameId !== undefined) {
+                cancelAnimationFrame(animationFrameId);
+            }
         });
 
         const unlistenSimError = listen<string>('simulation-error', (event) => {
             const errorMessage = `Simulation failed: ${event.payload}`;
             console.error(errorMessage);
             showError(errorMessage);
-            setIsSimulating(false);
-            progressRef.current = {};
-            setDisplayProgress({});
-            cancelAnimationFrame(animationFrameId);
+            flushProgress();
+            failSimulationRun(errorMessage);
+            if (animationFrameId !== undefined) {
+                cancelAnimationFrame(animationFrameId);
+            }
         });
 
-        const unlistenSimProgress = listen<ProgressState>(
+        const unlistenSimProgress = listen<SimulationProgressState>(
             'simulation-progress',
             (event) => {
-                const { message } = event.payload;
-                let key = message;
+                progressRef.current = addSimulationProgressEvent(
+                    progressRef.current,
+                    event.payload
+                );
+            }
+        );
 
-                // Grouping logic to keep the list clean
-                if (
-                    message.startsWith('Simulating') ||
-                    message.startsWith('Initializing')
-                ) {
-                    key = 'main';
-                } else if (
-                    message.startsWith('Finalizing') ||
-                    message.startsWith('Exporting') ||
-                    message.startsWith('Rendering') ||
-                    message.startsWith('Applying') ||
-                    message.startsWith('Writing') ||
-                    message.startsWith('Finished')
-                ) {
-                    // Extract component name from format "Action {Name}: ..." or "Action {Name}"
-                    // e.g. "Exporting Receiver1: Chunk 50" -> key "Receiver1"
-                    const parts = message.split(/[:\s]+/);
-                    // Simple heuristic: 2nd word is often the name in our C++ format
-                    if (parts.length >= 2) {
-                        key = parts[1];
-                    }
+        const unlistenOutputMetadata = listen<string>(
+            'simulation-output-metadata',
+            (event) => {
+                try {
+                    setSimulationOutputMetadata(
+                        JSON.parse(event.payload) as SimulationOutputMetadata
+                    );
+                } catch (err) {
+                    const errorMessage =
+                        err instanceof Error ? err.message : String(err);
+                    showError(
+                        `Failed to decode simulation metadata: ${errorMessage}`
+                    );
                 }
-
-                progressRef.current[key] = event.payload;
             }
         );
 
@@ -141,18 +184,29 @@ export const SimulationView = React.memo(function SimulationView() {
         }
 
         return () => {
-            cancelAnimationFrame(animationFrameId);
+            if (animationFrameId !== undefined) {
+                cancelAnimationFrame(animationFrameId);
+            }
             Promise.all([
                 unlistenSimComplete,
                 unlistenSimError,
                 unlistenSimProgress,
+                unlistenOutputMetadata,
                 unlistenKmlComplete,
                 unlistenKmlError,
             ]).then((unlisteners) => {
                 unlisteners.forEach((unlisten) => unlisten());
             });
         };
-    }, [isSimulating, setIsSimulating, showError]);
+    }, [
+        isSimulating,
+        setSimulationProgressSnapshot,
+        setSimulationOutputMetadata,
+        completeSimulationRun,
+        failSimulationRun,
+        setIsGeneratingKml,
+        showError,
+    ]);
 
     const getEffectiveOutputDir = async () => {
         if (outputDirectory) return outputDirectory;
@@ -183,8 +237,8 @@ export const SimulationView = React.memo(function SimulationView() {
 
     const handleRunSimulation = async () => {
         progressRef.current = {};
-        setDisplayProgress({});
-        setIsSimulating(true);
+        setMetadataExportPath(null);
+        startSimulationRun();
         try {
             // Ensure the C++ backend has the latest scenario from the UI
             const effectiveDir = await getEffectiveOutputDir();
@@ -197,7 +251,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 err instanceof Error ? err.message : String(err);
             console.error('Failed to invoke simulation:', errorMessage);
             showError(`Failed to start simulation: ${errorMessage}`);
-            setIsSimulating(false); // Stop on invocation failure
+            failSimulationRun(`Failed to start simulation: ${errorMessage}`);
         }
     };
 
@@ -239,13 +293,86 @@ export const SimulationView = React.memo(function SimulationView() {
         }
     };
 
-    const mainProgress = displayProgress['main'];
-    const otherProgresses = Object.entries(displayProgress)
+    const hasProgress = Object.keys(simulationProgress).length > 0;
+    const progressPanelVisible =
+        isSimulating || hasProgress || simulationRunStatus === 'failed';
+    const mainProgress = simulationProgress['main'];
+    const progressHeading = mainProgress
+        ? mainProgress.message
+        : simulationRunStatus === 'completed'
+          ? 'Simulation complete'
+          : simulationRunStatus === 'failed'
+            ? 'Simulation failed'
+            : 'Preparing simulation...';
+    const otherProgresses = Object.entries(simulationProgress)
         .filter(([key]) => key !== 'main')
         .sort((a, b) => a[0].localeCompare(b[0]));
+    const mainProgressPercent = mainProgress
+        ? getSimulationProgressPercent(mainProgress)
+        : null;
+    const renderProgressDetails = (
+        details: SimulationProgressState['details']
+    ) => {
+        if (!details || details.length === 0) {
+            return null;
+        }
+
+        return (
+            <Box component="ul" sx={{ m: 0, mt: 1, pl: 2 }}>
+                {details.map((detail) => {
+                    const detailPercent = getSimulationProgressPercent(detail);
+                    const detailSuffix =
+                        detailPercent !== null
+                            ? ` (${Math.round(detailPercent)}%)`
+                            : detail.current > 0
+                              ? ` (Chunk ${detail.current})`
+                              : '';
+
+                    return (
+                        <Typography
+                            component="li"
+                            variant="caption"
+                            color="text.secondary"
+                            key={detail.id}
+                        >
+                            {detail.message}
+                            {detailSuffix}
+                        </Typography>
+                    );
+                })}
+            </Box>
+        );
+    };
+    const exportMetadataJson = async () => {
+        try {
+            const outputPath = await invoke<string>(
+                'export_output_metadata_json'
+            );
+            setMetadataExportPath(outputPath);
+            showSuccess(`Metadata JSON saved to ${outputPath}`);
+        } catch (err) {
+            const errorMessage =
+                err instanceof Error ? err.message : String(err);
+            showError(`Failed to export metadata JSON: ${errorMessage}`);
+        }
+    };
+    const formatSampleRange = (start: number, end: number) =>
+        `[${start}, ${end})`;
+    const formatPulseLength = (
+        minSamples: number,
+        maxSamples: number,
+        uniform: boolean
+    ) => {
+        if (minSamples === 0 && maxSamples === 0) {
+            return '0';
+        }
+        return uniform ? String(minSamples) : `${minSamples} - ${maxSamples}`;
+    };
 
     return (
-        <Box sx={{ p: 4, height: '100%', overflowY: 'auto' }}>
+        <Box
+            sx={{ p: 4, height: '100%', overflowY: 'auto', contain: 'content' }}
+        >
             <Typography variant="h4" gutterBottom>
                 Simulation Runner
             </Typography>
@@ -254,7 +381,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 visualization. Ensure your scenario is fully configured before
                 proceeding.
             </Typography>
-            <Card sx={{ mb: 4 }}>
+            <Card elevation={0} sx={{ mb: 4 }}>
                 <CardContent>
                     <Typography variant="h6" gutterBottom>
                         Output Settings
@@ -308,7 +435,7 @@ export const SimulationView = React.memo(function SimulationView() {
             <Grid container spacing={4} sx={{ width: '100%' }}>
                 {/* ... existing Grid items for Run Simulation and Generate KML ... */}
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <Card sx={{ height: '100%' }}>
+                    <Card elevation={0} sx={{ height: '100%' }}>
                         <CardContent>
                             <Typography variant="h5" component="div">
                                 Run Full Simulation
@@ -343,7 +470,7 @@ export const SimulationView = React.memo(function SimulationView() {
                     </Card>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
-                    <Card sx={{ height: '100%' }}>
+                    <Card elevation={0} sx={{ height: '100%' }}>
                         <CardContent>
                             <Typography variant="h5" component="div">
                                 Generate KML
@@ -382,7 +509,7 @@ export const SimulationView = React.memo(function SimulationView() {
                 </Grid>
             </Grid>
 
-            <Fade in={isSimulating}>
+            {progressPanelVisible && (
                 <Box
                     sx={{
                         mt: 4,
@@ -396,11 +523,18 @@ export const SimulationView = React.memo(function SimulationView() {
                         variant="h6"
                         sx={{ mb: 1, textAlign: 'center' }}
                     >
-                        {mainProgress
-                            ? mainProgress.message
-                            : 'Preparing simulation...'}
+                        {progressHeading}
                     </Typography>
-                    {mainProgress && mainProgress.total > 0 && (
+                    {simulationRunStatus === 'failed' && simulationRunError && (
+                        <Typography
+                            variant="body2"
+                            color="error"
+                            sx={{ mb: 2, textAlign: 'center' }}
+                        >
+                            {simulationRunError}
+                        </Typography>
+                    )}
+                    {mainProgressPercent !== null && (
                         <Box
                             sx={{
                                 display: 'flex',
@@ -412,25 +546,18 @@ export const SimulationView = React.memo(function SimulationView() {
                             <Box sx={{ width: '100%', mr: 1 }}>
                                 <LinearProgress
                                     variant="determinate"
-                                    value={
-                                        (mainProgress.current /
-                                            mainProgress.total) *
-                                        100
-                                    }
+                                    value={mainProgressPercent}
                                 />
                             </Box>
                             <Box sx={{ minWidth: 40 }}>
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
-                                >{`${Math.round(
-                                    (mainProgress.current /
-                                        mainProgress.total) *
-                                        100
-                                )}%`}</Typography>
+                                >{`${Math.round(mainProgressPercent)}%`}</Typography>
                             </Box>
                         </Box>
                     )}
+                    {renderProgressDetails(mainProgress?.details)}
 
                     {/* Finalizer Threads List */}
                     {otherProgresses.length > 0 && (
@@ -449,48 +576,191 @@ export const SimulationView = React.memo(function SimulationView() {
                                 Exporting Data:
                             </Typography>
                             <List dense>
-                                {otherProgresses.map(([key, prog]) => (
-                                    <ListItem key={key}>
-                                        <ListItemText
-                                            primary={prog.message}
-                                            secondary={
-                                                prog.total > 0 &&
-                                                prog.total !== 100
-                                                    ? 'Processing...'
-                                                    : ''
-                                            }
-                                        />
-                                        {prog.total > 0 &&
-                                            prog.total !== 100 && (
-                                                /* For chunks, we often don't know the exact total ahead of time,
-                                               so a determinate bar might jump, but passing a large number
-                                               or indeterminate looks better than flickering 100% */
+                                {otherProgresses.map(([key, prog]) => {
+                                    const progressPercent =
+                                        getSimulationProgressPercent(prog);
+                                    const showChunkLabel =
+                                        progressPercent === null &&
+                                        prog.current > 0;
+
+                                    return (
+                                        <ListItem key={key}>
+                                            <Box sx={{ width: '100%' }}>
                                                 <Box
-                                                    sx={{ width: '20%', ml: 2 }}
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                    }}
                                                 >
-                                                    <Typography
-                                                        variant="caption"
-                                                        color="text.secondary"
-                                                    >
-                                                        Chunk {prog.current}
-                                                    </Typography>
+                                                    <ListItemText
+                                                        primary={prog.message}
+                                                        secondary={
+                                                            progressPercent !==
+                                                                null &&
+                                                            progressPercent <
+                                                                100
+                                                                ? 'Processing...'
+                                                                : ''
+                                                        }
+                                                    />
+                                                    {showChunkLabel && (
+                                                        <Box
+                                                            sx={{
+                                                                width: '20%',
+                                                                ml: 2,
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                variant="caption"
+                                                                color="text.secondary"
+                                                            >
+                                                                Chunk{' '}
+                                                                {prog.current}
+                                                            </Typography>
+                                                        </Box>
+                                                    )}
+                                                    {progressPercent !==
+                                                        null && (
+                                                        <Box
+                                                            sx={{
+                                                                width: '30%',
+                                                                ml: 2,
+                                                            }}
+                                                        >
+                                                            <LinearProgress
+                                                                variant="determinate"
+                                                                value={
+                                                                    progressPercent
+                                                                }
+                                                            />
+                                                        </Box>
+                                                    )}
                                                 </Box>
-                                            )}
-                                        {prog.total === 100 && (
-                                            <Box sx={{ width: '30%', ml: 2 }}>
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={prog.current}
-                                                />
+                                                {renderProgressDetails(
+                                                    prog.details
+                                                )}
                                             </Box>
-                                        )}
-                                    </ListItem>
-                                ))}
+                                        </ListItem>
+                                    );
+                                })}
                             </List>
                         </Box>
                     )}
                 </Box>
-            </Fade>
+            )}
+
+            {simulationOutputMetadata && (
+                <Card elevation={0} sx={{ mt: 4 }}>
+                    <CardContent>
+                        <Box
+                            sx={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                gap: 2,
+                                mb: 2,
+                            }}
+                        >
+                            <Box>
+                                <Typography variant="h6">
+                                    Output Data Metadata
+                                </Typography>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                >
+                                    {simulationOutputMetadata.files.length} HDF5
+                                    output file
+                                    {simulationOutputMetadata.files.length === 1
+                                        ? ''
+                                        : 's'}{' '}
+                                    at {simulationOutputMetadata.sampling_rate}{' '}
+                                    samples/s.
+                                </Typography>
+                            </Box>
+                            <Button
+                                variant="outlined"
+                                onClick={exportMetadataJson}
+                            >
+                                Export JSON
+                            </Button>
+                        </Box>
+                        {metadataExportPath && (
+                            <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                sx={{ mb: 2, overflowWrap: 'anywhere' }}
+                            >
+                                Metadata JSON saved to {metadataExportPath}
+                            </Typography>
+                        )}
+
+                        {simulationOutputMetadata.files.length === 0 ? (
+                            <Typography color="text.secondary">
+                                No HDF5 output files were generated for this
+                                run.
+                            </Typography>
+                        ) : (
+                            <TableContainer
+                                component={Paper}
+                                variant="outlined"
+                            >
+                                <Table size="small">
+                                    <TableHead>
+                                        <TableRow>
+                                            <TableCell>Receiver</TableCell>
+                                            <TableCell>Mode</TableCell>
+                                            <TableCell align="right">
+                                                Samples
+                                            </TableCell>
+                                            <TableCell>Sample Range</TableCell>
+                                            <TableCell>Pulse/Segment</TableCell>
+                                            <TableCell>File</TableCell>
+                                        </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                        {simulationOutputMetadata.files.map(
+                                            (file) => (
+                                                <TableRow key={file.path}>
+                                                    <TableCell>
+                                                        {file.receiver_name}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {file.mode}
+                                                    </TableCell>
+                                                    <TableCell align="right">
+                                                        {file.total_samples}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {formatSampleRange(
+                                                            file.sample_start,
+                                                            file.sample_end_exclusive
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {file.mode === 'pulsed'
+                                                            ? `${file.pulse_count} pulses, ${formatPulseLength(file.min_pulse_length_samples, file.max_pulse_length_samples, file.uniform_pulse_length)} samples`
+                                                            : `${file.cw_segments.length} CW segments`}
+                                                    </TableCell>
+                                                    <TableCell
+                                                        sx={{
+                                                            maxWidth: 360,
+                                                            overflowWrap:
+                                                                'anywhere',
+                                                        }}
+                                                    >
+                                                        {file.path}
+                                                    </TableCell>
+                                                </TableRow>
+                                            )
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </TableContainer>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
         </Box>
     );
 });

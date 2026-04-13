@@ -27,6 +27,7 @@ namespace pool
 
 namespace core
 {
+	class OutputMetadataCollector;
 	class ProgressReporter;
 }
 
@@ -45,7 +46,8 @@ namespace processing
 	 * @param output_dir Output directory for the simulation files.
 	 */
 	void runPulsedFinalizer(radar::Receiver* receiver, const std::vector<std::unique_ptr<radar::Target>>* targets,
-							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir);
+							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
+							std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr);
 
 	/**
 	 * @brief The finalization task for a continuous-wave (CW) mode receiver.
@@ -60,5 +62,6 @@ namespace processing
 	 * @param output_dir Output directory for the simulation files.
 	 */
 	void finalizeCwReceiver(radar::Receiver* receiver, pool::ThreadPool* pool,
-							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir);
+							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
+							std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr);
 }

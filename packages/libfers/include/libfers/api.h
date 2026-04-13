@@ -89,8 +89,18 @@ typedef enum // NOLINT(*-use-using)
 	FERS_LOG_INFO,
 	FERS_LOG_WARNING,
 	FERS_LOG_ERROR,
-	FERS_LOG_FATAL
+	FERS_LOG_FATAL,
+	FERS_LOG_OFF
 } fers_log_level_t;
+
+/**
+ * @brief A function pointer type for receiving formatted log lines.
+ *
+ * @param level The severity level of the log line.
+ * @param line The full formatted log line, without a trailing newline.
+ * @param user_data An opaque pointer passed back to the caller.
+ */
+typedef void (*fers_log_callback_t)(fers_log_level_t level, const char* line, void* user_data); // NOLINT(*-use-using)
 
 /**
  * @brief Configures the internal logger.
@@ -99,6 +109,17 @@ typedef enum // NOLINT(*-use-using)
  * @return 0 on success, non-zero on error.
  */
 int fers_configure_logging(fers_log_level_t level, const char* log_file_path);
+
+/**
+ * @brief Returns the current internal logger level.
+ */
+fers_log_level_t fers_get_log_level();
+
+/**
+ * @brief Registers a callback for formatted log lines.
+ * Pass NULL as callback to disable log callbacks.
+ */
+void fers_set_log_callback(fers_log_callback_t callback, void* user_data);
 
 /**
  * @brief Submits a log message to the library's unified logging system.
@@ -183,6 +204,19 @@ char* fers_get_scenario_as_json(fers_context_t* context);
  *         XML representation of the scenario. Returns NULL on failure.
  */
 char* fers_get_scenario_as_xml(fers_context_t* context);
+
+/**
+ * @brief Returns JSON metadata for the most recent simulation output files.
+ *
+ * The returned JSON describes generated HDF5 file structure and sample ranges.
+ * The caller owns the returned string and must free it with `fers_free_string`.
+ * If no simulation has completed yet, the returned JSON contains an empty `files`
+ * array.
+ *
+ * @param context A valid `fers_context_t` handle.
+ * @return A heap-allocated JSON string, or NULL on error.
+ */
+char* fers_get_last_output_metadata_json(fers_context_t* context);
 
 /**
  * @brief Updates the simulation scenario from a JSON string.

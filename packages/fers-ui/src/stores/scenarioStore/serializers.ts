@@ -11,6 +11,19 @@ import {
     Waveform,
 } from './types';
 
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+    ? Omit<T, Extract<keyof T, K>>
+    : never;
+
+type SerializedAntenna =
+    | DistributiveOmit<Antenna, 'type' | 'meshScale'>
+    | {
+          id: Antenna['id'];
+          name: Antenna['name'];
+          pattern: 'isotropic';
+          efficiency: Antenna['efficiency'];
+      };
+
 /**
  * Recursively removes null or undefined values from an object or array.
  */
@@ -185,9 +198,22 @@ export const serializeTiming = (t: Timing) => {
     return cleanObject(timingObj);
 };
 
-export const serializeAntenna = (a: Antenna) => {
+export const isFileBackedAntennaPendingFile = (a: Antenna): boolean =>
+    (a.pattern === 'xml' || a.pattern === 'file') &&
+    (a.filename ?? '').trim().length === 0;
+
+export const serializeAntenna = (a: Antenna): SerializedAntenna => {
+    if (isFileBackedAntennaPendingFile(a)) {
+        return cleanObject({
+            id: a.id,
+            name: a.name,
+            pattern: 'isotropic',
+            efficiency: a.efficiency,
+        });
+    }
+
     const rest = omit(a, 'type', 'meshScale');
-    return cleanObject(rest);
+    return cleanObject(rest) as SerializedAntenna;
 };
 
 export const serializeGlobalParameters = (gp: GlobalParameters) => {

@@ -162,6 +162,68 @@ TEST_CASE("addChunkToFile writes I/Q datasets with attributes", "[serial][hdf5]"
 	removeIfExists(path);
 }
 
+TEST_CASE("HDF5 writer adds backward-compatible output metadata attributes", "[serial][hdf5]")
+{
+	const std::string path = tempFilePath(uniqueFileName("metadata"));
+	removeIfExists(path);
+
+	RateGuard rate_guard(4'000.0);
+	core::OutputFileMetadata file_metadata{.receiver_id = 42,
+										   .receiver_name = "RxMetadata",
+										   .mode = "pulsed",
+										   .path = path,
+										   .total_samples = 2,
+										   .sample_start = 0,
+										   .sample_end_exclusive = 2,
+										   .pulse_count = 1,
+										   .min_pulse_length_samples = 2,
+										   .max_pulse_length_samples = 2,
+										   .uniform_pulse_length = true};
+	core::PulseChunkMetadata chunk_metadata{.chunk_index = 0,
+											.i_dataset = "chunk_000000_I",
+											.q_dataset = "chunk_000000_Q",
+											.start_time = 1.25,
+											.sample_count = 2,
+											.sample_start = 0,
+											.sample_end_exclusive = 2};
+	file_metadata.chunks.push_back(chunk_metadata);
+
+	{
+		HighFive::File file(path, HighFive::File::Overwrite);
+		serial::addChunkToFile(file, {ComplexType(1.0, 0.0), ComplexType(2.0, 0.5)}, 1.25, 8.0, 0, &chunk_metadata);
+		std::scoped_lock lock(serial::hdf5_global_mutex);
+		serial::writeOutputFileMetadataAttributes(file, file_metadata);
+	}
+
+	{
+		HighFive::File file(path, HighFive::File::ReadOnly);
+		unsigned schema_version = 0;
+		unsigned long long total_samples = 0;
+		std::string receiver_name;
+		std::string metadata_json;
+		file.getAttribute("fers_metadata_schema_version").read(schema_version);
+		file.getAttribute("receiver_name").read(receiver_name);
+		file.getAttribute("total_samples").read(total_samples);
+		file.getAttribute("fers_metadata_json").read(metadata_json);
+
+		REQUIRE(schema_version == 1U);
+		REQUIRE(receiver_name == "RxMetadata");
+		REQUIRE(total_samples == 2ULL);
+		REQUIRE(metadata_json.find("\"receiver_name\": \"RxMetadata\"") != std::string::npos);
+
+		const auto i_dataset = file.getDataSet("chunk_000000_I");
+		unsigned chunk_index = 1;
+		unsigned long long sample_count = 0;
+		i_dataset.getAttribute("chunk_index").read(chunk_index);
+		i_dataset.getAttribute("sample_count").read(sample_count);
+
+		REQUIRE(chunk_index == 0U);
+		REQUIRE(sample_count == 2ULL);
+	}
+
+	removeIfExists(path);
+}
+
 TEST_CASE("addChunkToFile throws when dataset already exists", "[serial][hdf5]")
 {
 	const std::string path = tempFilePath(uniqueFileName("chunk_exists"));

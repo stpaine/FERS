@@ -26,7 +26,11 @@ interface GlobalParametersInspectorProps {
 export function GlobalParametersInspector({
     item,
 }: GlobalParametersInspectorProps) {
-    const { updateItem, setRotationAngleUnit, platforms } = useScenarioStore();
+    const updateItem = useScenarioStore((s) => s.updateItem);
+    const setRotationAngleUnit = useScenarioStore(
+        (s) => s.setRotationAngleUnit
+    );
+    const platforms = useScenarioStore((s) => s.platforms);
     const handleChange = (path: string, value: unknown) =>
         updateItem(item.id, path, value);
     const [pendingRotationUnit, setPendingRotationUnit] = useState<
