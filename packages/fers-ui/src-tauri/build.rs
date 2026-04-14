@@ -36,6 +36,16 @@ fn linux_triplet(target: &str) -> Option<&'static str> {
     }
 }
 
+fn windows_triplet(target: &str) -> Option<&'static str> {
+    if target.starts_with("x86_64-pc-windows") {
+        Some("x64-windows-static-md")
+    } else if target.starts_with("aarch64-pc-windows") {
+        Some("arm64-windows-static-md")
+    } else {
+        None
+    }
+}
+
 fn static_library_name(path: &Path) -> Option<String> {
     let file_name = path.file_name()?.to_str()?;
     let name = file_name.strip_suffix(".a").or_else(|| file_name.strip_suffix(".lib"))?;
@@ -85,23 +95,28 @@ fn main() {
     // Resolution order:
     //   1. VCPKG_ROOT environment variable (explicit, always wins)
     //   2. repo-local vcpkg/ directory (convenient for contributors who clone vcpkg alongside)
-    //   3. ~/vcpkg (common global install location)
+    //   3. ~/vcpkg or %USERPROFILE%\vcpkg (common global install locations)
     // Note: a sibling ../vcpkg is intentionally not searched; contributors should set VCPKG_ROOT
     // or install vcpkg into one of the two locations above.
     let vcpkg_root = env::var("VCPKG_ROOT")
         .or_else(|_| {
-            let home = env::var("HOME").unwrap_or_default();
-            let candidates = [
-                repo_root.join("vcpkg"),
-                PathBuf::from(home).join("vcpkg"),
-            ];
+            let mut candidates = vec![repo_root.join("vcpkg")];
+            if let Some(home) = env_var("HOME") {
+                candidates.push(PathBuf::from(home).join("vcpkg"));
+            }
+            if let Some(userprofile) = env_var("USERPROFILE") {
+                candidates.push(PathBuf::from(userprofile).join("vcpkg"));
+            }
+
             candidates
                 .into_iter()
                 .find(|p| p.exists())
                 .map(|p| p.to_string_lossy().into_owned())
                 .ok_or("VCPKG_ROOT not found")
         })
-        .expect("VCPKG_ROOT must be set in your environment, or vcpkg must exist at <repo>/vcpkg or ~/vcpkg");
+        .expect(
+            "VCPKG_ROOT must be set in your environment, or vcpkg must exist at <repo>/vcpkg, ~/vcpkg, or %USERPROFILE%\\vcpkg",
+        );
 
     // --- 2. Invoke CMake to build libfers ---
     // Note: libfers is always built in Release mode regardless of the Cargo profile.
@@ -115,6 +130,8 @@ fn main() {
         apple_triplet(&target).map(str::to_owned)
     } else if target.contains("linux") {
         linux_triplet(&target).map(str::to_owned)
+    } else if target.contains("windows") {
+        windows_triplet(&target).map(str::to_owned)
     } else {
         None
     };

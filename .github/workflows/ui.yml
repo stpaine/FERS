@@ -47,11 +47,32 @@ jobs:
     build-ui:
         name: Build UI (${{ matrix.os }})
         runs-on: ${{ matrix.os }}
-        timeout-minutes: 30
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26]
+                include:
+                    - os: ubuntu-24.04
+                      vcpkg_triplet: x64-linux
+                      rust_target: x86_64-unknown-linux-gnu
+                    - os: ubuntu-24.04-arm
+                      vcpkg_triplet: arm64-linux
+                      rust_target: aarch64-unknown-linux-gnu
+                    - os: macos-26-intel
+                      vcpkg_triplet: x64-osx
+                      rust_target: x86_64-apple-darwin
+                    - os: macos-26
+                      vcpkg_triplet: arm64-osx
+                      rust_target: aarch64-apple-darwin
+                    - os: windows-2025
+                      vcpkg_triplet: x64-windows-static-md
+                      rust_target: x86_64-pc-windows-msvc
+                    - os: windows-11-arm
+                      vcpkg_triplet: arm64-windows-static-md
+                      rust_target: aarch64-pc-windows-msvc
+        env:
+            VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+            VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
 
         steps:
             - name: Checkout repository
@@ -61,7 +82,7 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y xxd pkg-config build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev xdg-utils
+                  sudo apt-get install -y pkg-config build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev xdg-utils
 
             - name: Get CMake
               uses: lukka/get-cmake@latest
@@ -73,21 +94,27 @@ jobs:
                   ninja --version
 
             - name: Setup ccache
+              if: runner.os != 'Windows'
               uses: hendrikmuhs/ccache-action@v1.2
               with:
                   key: ui-${{ matrix.os }}
                   variant: ccache
                   max-size: 500M
 
-            - name: Configure ccache environment
+            - name: Configure vcpkg downloads
               shell: bash
               run: |
-                echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
-                echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
-                echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
-                # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
-                echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
-                mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+                  echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
+                  mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+
+            - name: Configure ccache environment
+              if: runner.os != 'Windows'
+              shell: bash
+              run: |
+                  echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
+                  echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
 
             - name: Cache vcpkg downloads
               uses: actions/cache@v5
@@ -120,6 +147,10 @@ jobs:
             - name: Install Rust toolchain
               run: rustup show
 
+            - name: Install Windows Rust target
+              if: runner.os == 'Windows'
+              run: rustup target add ${{ matrix.rust_target }}
+
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
               with:
@@ -134,6 +165,8 @@ jobs:
                   CMAKE_GENERATOR: Ninja
                   # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
                   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+                  VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+                  VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
               shell: bash
               run: |
                   for attempt in 1 2 3; do
@@ -150,6 +183,6 @@ jobs:
                   done
 
             - name: ccache stats
-              if: always()
+              if: always() && runner.os != 'Windows'
               shell: bash
               run: ccache --show-stats

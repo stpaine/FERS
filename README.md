@@ -59,11 +59,50 @@ Ensure you have the following tools installed on your system:
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
 - [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
 - [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
-- **Other notable dependencies (for linux):** `build-essential`, `pkg-config`, and `xxd`.
+- **Other notable dependencies (for Linux):** `build-essential` and `pkg-config`.
 
 > [!TIP]
 > Ninja is available in all major package managers: `sudo apt install ninja-build` (Debian/Ubuntu),
 > `brew install ninja` (macOS), or `choco install ninja` (Windows).
+
+#### Windows Native Setup
+
+FERS supports native Windows builds with MSVC. WSL is not required.
+
+Install these prerequisites:
+
+- Visual Studio 2022 Build Tools with the MSVC v143 toolset and Windows SDK.
+- Git for Windows.
+- CMake 3.22+ and Ninja.
+- Rust stable MSVC toolchain, such as `stable-x86_64-pc-windows-msvc` on x64 Windows.
+- Bun.
+- vcpkg.
+- WebView2 Runtime for the Tauri UI. It is preinstalled on Windows 11.
+
+Set `VCPKG_ROOT` to your vcpkg checkout. In PowerShell:
+
+```powershell
+$env:VCPKG_ROOT = "C:\src\vcpkg"
+$env:PATH = "$env:VCPKG_ROOT;$env:PATH"
+```
+
+The build commands are the same as Linux and macOS:
+
+```powershell
+cmake --preset=release
+cmake --build --preset=release
+bun ui:dev
+```
+
+To build and run the C++ unit tests, use the `coverage` preset:
+
+```powershell
+cmake --preset=coverage
+cmake --build --preset=coverage
+ctest --preset=coverage --output-on-failure
+```
+
+For pre-commit formatting on Windows, ensure `clang-format` is available in `PATH`, for example through LLVM installed by `winget` or Chocolatey.
 
 ### 2. Clone the Repository
 
