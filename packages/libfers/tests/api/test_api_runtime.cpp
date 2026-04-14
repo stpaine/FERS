@@ -74,9 +74,11 @@ TEST_CASE("API log level mapping writes emitted enum values", "[api][runtime]")
 	for (const auto& entry : cases)
 	{
 		const std::string message = uniqueLogMessage(std::string("api_level_") + entry.label);
-		REQUIRE(fers_configure_logging(entry.level, log_path.c_str()) == 0);
+		const std::string log_path_string = api_test::pathString(log_path);
+		const std::string rollover_path_string = api_test::pathString(rollover_path);
+		REQUIRE(fers_configure_logging(entry.level, log_path_string.c_str()) == 0);
 		fers_log(entry.level, message.c_str());
-		REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path.c_str()) == 0);
+		REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path_string.c_str()) == 0);
 
 		const std::string log_text = api_test::readTextFile(log_path);
 		REQUIRE_THAT(log_text, ContainsSubstring(message));
@@ -104,10 +106,12 @@ TEST_CASE("API log ignores null messages", "[api][runtime]")
 	api_test::ScopedPath log_guard(log_path);
 	const auto rollover_path = api_test::uniqueTempPath("api_log_null_message_rollover", ".log");
 	api_test::ScopedPath rollover_guard(rollover_path);
+	const std::string log_path_string = api_test::pathString(log_path);
+	const std::string rollover_path_string = api_test::pathString(rollover_path);
 
-	REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path.c_str()) == 0);
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path_string.c_str()) == 0);
 	fers_log(FERS_LOG_INFO, nullptr);
-	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path.c_str()) == 0);
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path_string.c_str()) == 0);
 
 	REQUIRE(api_test::readTextFile(log_path).empty());
 }
@@ -127,8 +131,9 @@ TEST_CASE("API configure logging accepts null and writable file destinations", "
 	{
 		const auto log_path = api_test::uniqueTempPath("api_runtime", ".log");
 		api_test::ScopedPath log_guard(log_path);
+		const std::string log_path_string = api_test::pathString(log_path);
 
-		REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path.c_str()) == 0);
+		REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path_string.c_str()) == 0);
 		REQUIRE(std::filesystem::exists(log_path));
 
 		api_test::ApiString error = api_test::lastError();
@@ -142,8 +147,9 @@ TEST_CASE("API configure logging reports file open failures", "[api][runtime]")
 	const auto missing_parent = api_test::uniqueTempPath("api_log_dir");
 	api_test::ScopedPath missing_guard(missing_parent);
 	const auto log_path = missing_parent / "runtime.log";
+	const std::string log_path_string = api_test::pathString(log_path);
 
-	REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path.c_str()) == 1);
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path_string.c_str()) == 1);
 
 	api_test::ApiString error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
@@ -157,11 +163,13 @@ TEST_CASE("API log writes to configured file", "[api][runtime]")
 	api_test::ScopedPath log_guard(log_path);
 	const auto rollover_path = api_test::uniqueTempPath("api_log_rollover", ".log");
 	api_test::ScopedPath rollover_guard(rollover_path);
+	const std::string log_path_string = api_test::pathString(log_path);
+	const std::string rollover_path_string = api_test::pathString(rollover_path);
 
-	REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path.c_str()) == 0);
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, log_path_string.c_str()) == 0);
 	const std::string message = uniqueLogMessage("api runtime logging smoke message");
 	fers_log(FERS_LOG_INFO, message.c_str());
-	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path.c_str()) == 0);
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path_string.c_str()) == 0);
 
 	const std::string log_text = api_test::readTextFile(log_path);
 	REQUIRE_THAT(log_text, ContainsSubstring(message));
@@ -175,14 +183,16 @@ TEST_CASE("API OFF log level suppresses file and callback output", "[api][runtim
 	api_test::ScopedPath log_guard(log_path);
 	const auto rollover_path = api_test::uniqueTempPath("api_log_off_rollover", ".log");
 	api_test::ScopedPath rollover_guard(rollover_path);
+	const std::string log_path_string = api_test::pathString(log_path);
+	const std::string rollover_path_string = api_test::pathString(rollover_path);
 
 	LogCallbackState state;
 	fers_set_log_callback(recordLog, &state);
 
-	REQUIRE(fers_configure_logging(FERS_LOG_OFF, log_path.c_str()) == 0);
+	REQUIRE(fers_configure_logging(FERS_LOG_OFF, log_path_string.c_str()) == 0);
 	fers_log(FERS_LOG_FATAL, "suppressed fatal message");
 	fers_log(FERS_LOG_OFF, "suppressed off message");
-	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path.c_str()) == 0);
+	REQUIRE(fers_configure_logging(FERS_LOG_INFO, rollover_path_string.c_str()) == 0);
 	fers_set_log_callback(nullptr, nullptr);
 
 	REQUIRE(state.calls == 0);

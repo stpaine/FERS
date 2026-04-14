@@ -75,10 +75,11 @@ TEST_CASE("API loading scenario from XML file rejects null arguments", "[api][sc
 	const auto xml_path = api_test::uniqueTempPath("api_minimal_scenario", ".xml");
 	api_test::ScopedPath xml_guard(xml_path);
 	api_test::writeTextFile(xml_path, api_test::minimalScenarioXml());
+	const std::string xml_path_string = api_test::pathString(xml_path);
 
 	SECTION("null context")
 	{
-		REQUIRE(fers_load_scenario_from_xml_file(nullptr, xml_path.c_str(), 0) == -1);
+		REQUIRE(fers_load_scenario_from_xml_file(nullptr, xml_path_string.c_str(), 0) == -1);
 		api_test::ApiString error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or xml_filepath is NULL"));
 	}
@@ -120,8 +121,9 @@ TEST_CASE("API loads a minimal scenario from XML file and exports XML", "[api][s
 	const auto xml_path = api_test::uniqueTempPath("api_minimal_scenario", ".xml");
 	api_test::ScopedPath xml_guard(xml_path);
 	api_test::writeTextFile(xml_path, api_test::minimalScenarioXml("XML File Scenario"));
+	const std::string xml_path_string = api_test::pathString(xml_path);
 
-	REQUIRE(fers_load_scenario_from_xml_file(context.get(), xml_path.c_str(), 0) == 0);
+	REQUIRE(fers_load_scenario_from_xml_file(context.get(), xml_path_string.c_str(), 0) == 0);
 
 	api_test::ApiString xml_text = api_test::scenarioAsXml(context.get());
 	REQUIRE(xml_text.get() != nullptr);
@@ -222,7 +224,8 @@ TEST_CASE("API generate KML writes a file for a loaded scenario", "[api][scenari
 
 	const auto kml_path = api_test::uniqueTempPath("api_scenario", ".kml");
 	api_test::ScopedPath kml_guard(kml_path);
-	REQUIRE(fers_generate_kml(context.get(), kml_path.c_str()) == 0);
+	const std::string kml_path_string = api_test::pathString(kml_path);
+	REQUIRE(fers_generate_kml(context.get(), kml_path_string.c_str()) == 0);
 	REQUIRE(std::filesystem::exists(kml_path));
 	REQUIRE(std::filesystem::file_size(kml_path) > 0);
 }
@@ -235,8 +238,9 @@ TEST_CASE("API missing XML file returns a populated last error", "[api][scenario
 
 	const auto missing_path = api_test::uniqueTempPath("api_missing", ".xml");
 	api_test::ScopedPath missing_guard(missing_path);
+	const std::string missing_path_string = api_test::pathString(missing_path);
 
-	REQUIRE(fers_load_scenario_from_xml_file(context.get(), missing_path.c_str(), 0) == 1);
+	REQUIRE(fers_load_scenario_from_xml_file(context.get(), missing_path_string.c_str(), 0) == 1);
 
 	api_test::ApiString error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
@@ -269,8 +273,9 @@ TEST_CASE("API KML generation reports non-creatable output paths", "[api][scenar
 	const auto missing_parent = api_test::uniqueTempPath("api_missing_kml_dir");
 	api_test::ScopedPath missing_guard(missing_parent);
 	const auto kml_path = missing_parent / "out.kml";
+	const std::string kml_path_string = api_test::pathString(kml_path);
 
-	REQUIRE(fers_generate_kml(context.get(), kml_path.c_str()) == 2);
+	REQUIRE(fers_generate_kml(context.get(), kml_path_string.c_str()) == 2);
 
 	api_test::ApiString error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);

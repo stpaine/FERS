@@ -50,7 +50,9 @@ fn static_library_name(path: &Path) -> Option<String> {
     let file_name = path.file_name()?.to_str()?;
     let name = file_name.strip_suffix(".a").or_else(|| file_name.strip_suffix(".lib"))?;
 
-    let name = name.strip_prefix("lib").unwrap_or(name);
+    let name =
+        if file_name.ends_with(".a") { name.strip_prefix("lib").unwrap_or(name) } else { name };
+
     if name.is_empty() {
         None
     } else {

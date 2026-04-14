@@ -246,6 +246,8 @@ namespace api_test
 			(prefix + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + extension);
 	}
 
+	inline std::string pathString(const std::filesystem::path& path) { return path.string(); }
+
 	inline void writeTextFile(const std::filesystem::path& path, const std::string& content)
 	{
 		std::ofstream out(path, std::ios::binary);
