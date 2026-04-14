@@ -209,27 +209,29 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies determini
 
 	processing::finalizeCwReceiver(&receiver, nullptr, reporter, out_dir.string());
 
-	HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
-	const auto i_data = readDataset(file, "I_data");
-	const auto q_data = readDataset(file, "Q_data");
+	{
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		const auto i_data = readDataset(file, "I_data");
+		const auto q_data = readDataset(file, "Q_data");
 
-	RealType fullscale = 0.0;
-	RealType reference_frequency = 0.0;
-	file.getAttribute("fullscale").read(fullscale);
-	file.getAttribute("reference_carrier_frequency").read(reference_frequency);
+		RealType fullscale = 0.0;
+		RealType reference_frequency = 0.0;
+		file.getAttribute("fullscale").read(fullscale);
+		file.getAttribute("reference_carrier_frequency").read(reference_frequency);
 
-	REQUIRE(i_data.size() == 4u);
-	REQUIRE(q_data.size() == 4u);
-	REQUIRE_THAT(i_data[0], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(i_data[1], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(i_data[2], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(i_data[3], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(q_data[0], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(q_data[1], WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(q_data[2], WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(q_data[3], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(fullscale, WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(reference_frequency, WithinAbs(77.0, 1e-12));
+		REQUIRE(i_data.size() == 4u);
+		REQUIRE(q_data.size() == 4u);
+		REQUIRE_THAT(i_data[0], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(i_data[1], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(i_data[2], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(i_data[3], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_data[0], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_data[1], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_data[2], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_data[3], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(fullscale, WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(reference_frequency, WithinAbs(77.0, 1e-12));
+	}
 
 	const std::vector<int> expected_progress = {0, 25, 50, 75, 100};
 	REQUIRE(progress_calls.size() == expected_progress.size());
@@ -295,40 +297,42 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 	receiver.enqueueFinalizerJob(std::move(shutdown_job));
 	worker.join();
 
-	HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
-	const auto i_chunk_0 = readDataset(file, "chunk_000000_I");
-	const auto q_chunk_0 = readDataset(file, "chunk_000000_Q");
-	const auto i_chunk_1 = readDataset(file, "chunk_000001_I");
-	const auto q_chunk_1 = readDataset(file, "chunk_000001_Q");
-
-	RealType time_attr_0 = 0.0;
-	RealType time_attr_1 = 0.0;
-	file.getDataSet("chunk_000000_I").getAttribute("time").read(time_attr_0);
-	file.getDataSet("chunk_000001_I").getAttribute("time").read(time_attr_1);
-
-	REQUIRE(i_chunk_0.size() == 4u);
-	REQUIRE(q_chunk_0.size() == 4u);
-	REQUIRE(i_chunk_1.size() == 4u);
-	REQUIRE(q_chunk_1.size() == 4u);
-
-	for (const auto& sample : i_chunk_0)
 	{
-		REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		const auto i_chunk_0 = readDataset(file, "chunk_000000_I");
+		const auto q_chunk_0 = readDataset(file, "chunk_000000_Q");
+		const auto i_chunk_1 = readDataset(file, "chunk_000001_I");
+		const auto q_chunk_1 = readDataset(file, "chunk_000001_Q");
+
+		RealType time_attr_0 = 0.0;
+		RealType time_attr_1 = 0.0;
+		file.getDataSet("chunk_000000_I").getAttribute("time").read(time_attr_0);
+		file.getDataSet("chunk_000001_I").getAttribute("time").read(time_attr_1);
+
+		REQUIRE(i_chunk_0.size() == 4u);
+		REQUIRE(q_chunk_0.size() == 4u);
+		REQUIRE(i_chunk_1.size() == 4u);
+		REQUIRE(q_chunk_1.size() == 4u);
+
+		for (const auto& sample : i_chunk_0)
+		{
+			REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
+		}
+		for (const auto& sample : i_chunk_1)
+		{
+			REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
+		}
+		REQUIRE_THAT(q_chunk_0[0], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_0[1], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_0[2], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_chunk_0[3], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[0], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[1], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[2], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[3], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(time_attr_0, WithinAbs(0.125, 1e-12));
+		REQUIRE_THAT(time_attr_1, WithinAbs(1.125, 1e-12));
 	}
-	for (const auto& sample : i_chunk_1)
-	{
-		REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
-	}
-	REQUIRE_THAT(q_chunk_0[0], WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(q_chunk_0[1], WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(q_chunk_0[2], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(q_chunk_0[3], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(q_chunk_1[0], WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(q_chunk_1[1], WithinAbs(1.0, 1e-12));
-	REQUIRE_THAT(q_chunk_1[2], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(q_chunk_1[3], WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(time_attr_0, WithinAbs(0.125, 1e-12));
-	REQUIRE_THAT(time_attr_1, WithinAbs(1.125, 1e-12));
 
 	REQUIRE(std::ranges::any_of(progress_calls, [](const ProgressCall& call)
 								{ return call.message.find("Chunk 2") != std::string::npos; }));
