@@ -285,6 +285,10 @@ endif ()
 if (FERS_BUILD_SHARED_LIBS)
 	add_library(fers_shared SHARED $<TARGET_OBJECTS:fers_objects>)
 	set_target_properties(fers_shared PROPERTIES OUTPUT_NAME "fers")
+	if (WIN32)
+		# Avoid an MSVC Ninja conflict with the static library's fers.lib.
+		set_target_properties(fers_shared PROPERTIES ARCHIVE_OUTPUT_NAME "fers_shared")
+	endif ()
 
 	target_include_directories(fers_shared PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

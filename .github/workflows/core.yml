@@ -64,10 +64,11 @@ jobs:
 
             - name: Force MSVC compilers
               if: runner.os == 'Windows'
-              shell: bash
+              shell: pwsh
               run: |
-                  echo "CC=cl" >> "$GITHUB_ENV"
-                  echo "CXX=cl" >> "$GITHUB_ENV"
+                  "CC=cl" >> $env:GITHUB_ENV
+                  "CXX=cl" >> $env:GITHUB_ENV
+                  "VCPKG_ROOT=${{ github.workspace }}\vcpkg" >> $env:GITHUB_ENV
 
             - name: Verify build tools
               shell: bash
@@ -112,7 +113,7 @@ jobs:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
                   runVcpkgInstall: true
-                  doNotCache: false
+                  doNotCache: true
 
             - name: Configure CMake
               shell: bash

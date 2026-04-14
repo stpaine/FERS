@@ -97,10 +97,18 @@ jobs:
 
             - name: Force MSVC compilers
               if: runner.os == 'Windows'
-              shell: bash
+              shell: pwsh
               run: |
-                  echo "CC=cl" >> "$GITHUB_ENV"
-                  echo "CXX=cl" >> "$GITHUB_ENV"
+                  $linker = (where.exe link.exe | Select-Object -First 1)
+                  if (-not $linker) {
+                      throw "MSVC link.exe not found"
+                  }
+
+                  "CC=cl" >> $env:GITHUB_ENV
+                  "CXX=cl" >> $env:GITHUB_ENV
+                  "VCPKG_ROOT=${{ github.workspace }}\vcpkg" >> $env:GITHUB_ENV
+                  "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" >> $env:GITHUB_ENV
+                  "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER=$linker" >> $env:GITHUB_ENV
 
             - name: Verify build tools
               shell: bash
@@ -144,7 +152,7 @@ jobs:
               with:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
-                  doNotCache: false
+                  doNotCache: true
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -176,6 +184,7 @@ jobs:
               run: bun install
 
             - name: Build UI
+              if: runner.os != 'Windows'
               env:
                   CMAKE_GENERATOR: Ninja
                   # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
@@ -196,6 +205,30 @@ jobs:
                       echo "UI build failed on attempt $attempt. Retrying in 15 seconds..."
                       sleep 15
                   done
+
+            - name: Build UI (Windows)
+              if: runner.os == 'Windows'
+              env:
+                  CMAKE_GENERATOR: Ninja
+                  # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
+                  VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+                  VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+                  VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+              shell: pwsh
+              run: |
+                  for ($attempt = 1; $attempt -le 3; $attempt++) {
+                      bun run ui:build
+                      if ($LASTEXITCODE -eq 0) {
+                          exit 0
+                      }
+
+                      if ($attempt -eq 3) {
+                          exit $LASTEXITCODE
+                      }
+
+                      Write-Host "UI build failed on attempt $attempt. Retrying in 15 seconds..."
+                      Start-Sleep -Seconds 15
+                  }
 
             - name: ccache stats
               if: always() && runner.os != 'Windows'
