@@ -90,6 +90,14 @@ jobs:
                   echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
                   mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
 
+            - name: Configure Windows vcpkg binary cache
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $binaryCache = "${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}" -replace '\\', '/'
+                  New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
+                  "VCPKG_BINARY_SOURCES=clear;files,$binaryCache,readwrite" >> $env:GITHUB_ENV
+
             - name: Configure ccache environment
               if: runner.os != 'Windows'
               shell: bash
@@ -106,6 +114,15 @@ jobs:
                   key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
                   restore-keys: |
                       ${{ runner.os }}-vcpkg-downloads-
+
+            - name: Cache Windows vcpkg binary packages
+              if: runner.os == 'Windows'
+              uses: actions/cache@v5
+              with:
+                  path: ${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}
+                  key: ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-
 
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
