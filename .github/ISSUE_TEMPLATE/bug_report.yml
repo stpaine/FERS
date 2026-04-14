@@ -1,20 +1,21 @@
 ---
 name: 🐛 Bug Report
 description: Create a report to help us improve the FERS simulator or UI.
-title: '[Bug] <A brief, descriptive title of the bug>'
+title: '[Bug] '
 labels: ['type: bug', 'status: triage']
 body:
     - type: dropdown
       id: scope
       attributes:
           label: Affected Package / Scope
-          description: Which part of the project is affected by this bug? This will help us route your issue to the right people.
+          description: Which part of the project is affected by this bug?
           options:
-              - Core Simulator (fers)
+              - Core Simulator (libfers / fers-cli)
               - Desktop UI (fers-ui)
               - XML Schema (schema)
               - Build Process / CI
               - Testing Framework
+              - Not Sure / General
       validations:
           required: true
 
@@ -30,38 +31,26 @@ body:
       id: steps-to-reproduce
       attributes:
           label: Steps to Reproduce
-          description: Please provide detailed steps to reproduce the behavior. If applicable, attach a minimal XML scenario file by dragging it into this text box.
-          placeholder: |
-              1. Run FERS with the attached XML file...
-              2. Observe the output in 'results.h5'...
-              3. The Doppler shift value is incorrect...
+          description: Please provide steps to reproduce the behavior. If applicable, attach a minimal XML scenario file by dragging it into this text box.
       validations:
           required: true
 
     - type: textarea
       id: expected-behavior
       attributes:
-          label: Expected Behavior
-          description: A clear and concise description of what you expected to happen.
+          label: Expected vs. Actual Behavior (Optional)
+          description: What did you expect to happen, and what actually happened? Include logs, error messages, or screenshots if helpful.
       validations:
-          required: true
-
-    - type: textarea
-      id: actual-behavior
-      attributes:
-          label: Actual Behavior
-          description: A clear and concise description of what actually happened. Include logs, error messages, or screenshots.
-      validations:
-          required: true
+          required: false
 
     - type: textarea
       id: environment
       attributes:
-          label: Environment
+          label: Environment (Optional)
           description: Please provide details about the environment where you encountered the bug.
           placeholder: |
-              - OS: [e.g., Ubuntu 22.04, Windows 11, macOS Sonoma]
-              - For `fers`: [e.g., g++ 11.2, FERS commit hash `abcdef`]
-              - For `fers-ui`: [e.g., FERS-UI v0.1.0]
+              - OS: [e.g., Ubuntu 24.04, Windows 11, macOS Sonoma]
+              - Compiler/Toolchain: [e.g., MSVC v143, Clang 16]
+              - FERS UI Version: [e.g., v0.1.0]
       validations:
-          required: true
+          required: false
