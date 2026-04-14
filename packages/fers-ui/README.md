@@ -62,11 +62,35 @@ export VCPKG_ROOT=/path/to/vcpkg
 export PATH=$VCPKG_ROOT:$PATH
 ```
 
+On Windows PowerShell:
+
+```powershell
+$env:VCPKG_ROOT = "C:\src\vcpkg"
+$env:PATH = "$env:VCPKG_ROOT;$env:PATH"
+```
+
+Windows builds are native MSVC builds. Use Developer PowerShell so Cargo, CMake, and vcpkg find `cl.exe` and MSVC `link.exe` before Git/MinGW tools. The UI build uses:
+
+| Windows target | Rust target | vcpkg triplet |
+| -------------- | ----------- | ------------- |
+| x64 | `x86_64-pc-windows-msvc` | `x64-windows-static-md` |
+| ARM64 | `aarch64-pc-windows-msvc` | `arm64-windows-static-md` |
+
+The Windows triplet is selected automatically from Cargo's `TARGET`, but `VCPKG_TARGET_TRIPLET` can override it when needed.
+
 Once the environment is set up, you can run the UI from the **repository root** with:
 
 ```bash
 bun ui:dev
 ```
+
+To build a release bundle:
+
+```bash
+bun ui:build
+```
+
+On Windows, the MSI bundle is generated under `packages/fers-ui/src-tauri/target/release/bundle/msi/`.
 
 > [!WARNING]
 > The UI is currently in active development and may be unstable. Expect crashes and incomplete features.

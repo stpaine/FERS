@@ -74,6 +74,16 @@ The core simulator is written in C++.
 2. **Clone the repo**: `git clone https://github.com/stpaine/FERS.git`
 3. **Build**: Follow the build instructions in the [`README.md`](README.md).
 
+For unit tests, use the `coverage` preset:
+
+```bash
+cmake --preset=coverage
+cmake --build --preset=coverage --parallel
+ctest --preset=coverage --output-on-failure
+```
+
+The `release` preset is for build artifacts and does not enable the Catch2 unit tests.
+
 ### User Interface (`fers-ui`) Setup
 
 The UI is a Tauri desktop application built with React and TypeScript.
@@ -88,9 +98,19 @@ The UI is a Tauri desktop application built with React and TypeScript.
 
 For more details, see the [`packages/fers-ui/README.md`](packages/fers-ui/README.md).
 
+### Windows Development
+
+Windows development is native MSVC.
+
+- Visual Studio 2022 or later, using the MSVC v143 toolset (recommended), and Windows SDK. Newer MSVC toolsets may work but are not officially tested.
+- Use Developer PowerShell for VS, or otherwise ensure `cl.exe` and MSVC `link.exe` come before Git and MinGW tools in `PATH`.
+- Use the MSVC Rust targets: `x86_64-pc-windows-msvc` or `aarch64-pc-windows-msvc`.
+- Keep `VCPKG_ROOT` pointed at the intended vcpkg checkout. Visual Studio can inject its bundled vcpkg path after environment setup; re-set `VCPKG_ROOT` if needed.
+- Default Windows vcpkg triplets are `x64-windows-static-md` and `arm64-windows-static-md`.
+
 ## Pull Request Process
 
-1. Fork the repository and create your branch from `main`.
+1. Fork the repository and create your branch from `master`.
 2. If you've added code that should be tested, add tests.
 3. Make sure your code lints and follows the style guides below.
 4. Open a pull request with a clear title and a detailed description of your changes. Link to any relevant issues.
@@ -112,8 +132,11 @@ Please adhere to the existing code style. We use `.clang-format` to enforce form
 
 ### TypeScript/React (`fers-ui`) Style Guide
 
-We use ESLint and Prettier to enforce a consistent code style. Please run `pnpm lint` and `pnpm format` before
-committing.
+We use Biome and Bun to enforce a consistent code style. Please run the UI lint task before committing:
+
+```bash
+bun lint:js
+```
 
 - **Naming Conventions**:
     - Components and Types: `PascalCase`
@@ -145,5 +168,5 @@ feat(ui): add property inspector for antennas
 Implemented a new component in the left sidebar that displays
 and allows editing of properties for the selected antenna element.
 
-Fixes #42
+Closes #42
 ```

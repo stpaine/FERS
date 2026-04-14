@@ -22,7 +22,10 @@ terminal and to maintain backward compatibility with the original FERS workflow.
 The `fers-cli` executable is built as part of the main C++ build process for the monorepo. Please see the build
 instructions in the [`packages/libfers/README.md`](https://github.com/stpaine/FERS/blob/master/packages/libfers/README.md) file.
 
-After a successful build, the executable can be found at `build/release/packages/fers-cli/fers-cli` (e.g., `build/release/packages/fers-cli/fers-cli`).
+After a successful build, the executable can be found at:
+
+- Linux/macOS: `build/release/packages/fers-cli/fers-cli`
+- Windows: `build/release/packages/fers-cli/fers-cli.exe`
 
 ## Usage
 
@@ -31,6 +34,12 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 ```bash
 # From the project root
 ./build/release/packages/fers-cli/fers-cli path/to/your/scenario.fersxml [options]
+```
+
+On Windows PowerShell:
+
+```powershell
+.\build\release\packages\fers-cli\fers-cli.exe path\to\your\scenario.fersxml --out-dir=.\results --log-level=INFO
 ```
 
 ### Options

@@ -49,11 +49,22 @@ This monorepo contains the following packages:
 
 Follow these steps to set up a development environment for building the C++ core and running the UI.
 
+### Supported Development Targets
+
+FERS is tested on Linux, macOS, and native Windows. Windows support targets MSVC, not MinGW, and does not require WSL.
+
+| Platform | Core build | UI build | Notes |
+| -------- | ---------- | -------- | ----- |
+| Linux x64 / ARM64 | Supported | Supported | Requires standard Tauri Linux system packages for the UI. |
+| macOS Intel / Apple Silicon | Supported | Supported | `MACOSX_DEPLOYMENT_TARGET=14.0` is used for CI and recommended locally. |
+| Windows x64 | Supported | Supported | Use Visual Studio 2022 Build Tools and the MSVC Rust toolchain. |
+| Windows ARM64 | Supported | Supported | Use native ARM64 MSVC tools and the `aarch64-pc-windows-msvc` Rust target. |
+
 ### 1. Prerequisites
 
 Ensure you have the following tools installed on your system:
 
-- A C++23 compatible compiler (e.g., GCC 11+, Clang 14+), **CMake** (3.22+), and [**Ninja**](https://ninja-build.org/).
+- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143), **CMake** (3.22+), and [**Ninja**](https://ninja-build.org/).
 - [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment.
 - [**Bun**](https://bun.sh/).
 - The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
@@ -65,19 +76,32 @@ Ensure you have the following tools installed on your system:
 > Ninja is available in all major package managers: `sudo apt install ninja-build` (Debian/Ubuntu),
 > `brew install ninja` (macOS), or `choco install ninja` (Windows).
 
-#### Windows Native Setup
+#### Windows Prerequisites (MSVC)
 
 FERS supports native Windows builds with MSVC. WSL is not required.
 
 Install these prerequisites:
 
-- Visual Studio 2022 Build Tools with the MSVC v143 toolset and Windows SDK.
+- Visual Studio 2022 or later, using the MSVC v143 toolset (recommended), and Windows SDK. Newer MSVC toolsets may work but are not officially tested.
 - Git for Windows.
 - CMake 3.22+ and Ninja.
 - Rust stable MSVC toolchain, such as `stable-x86_64-pc-windows-msvc` on x64 Windows.
 - Bun.
 - vcpkg.
 - WebView2 Runtime for the Tauri UI. It is preinstalled on Windows 11.
+
+Use the MSVC Rust toolchain. On x64 Windows, the default target is:
+
+```powershell
+rustup default stable-x86_64-pc-windows-msvc
+rustup target add x86_64-pc-windows-msvc
+```
+
+On native Windows ARM64:
+
+```powershell
+rustup target add aarch64-pc-windows-msvc
+```
 
 Set `VCPKG_ROOT` to your vcpkg checkout. In PowerShell:
 
@@ -86,20 +110,19 @@ $env:VCPKG_ROOT = "C:\src\vcpkg"
 $env:PATH = "$env:VCPKG_ROOT;$env:PATH"
 ```
 
-The build commands are the same as Linux and macOS:
+Use the Developer PowerShell for Visual Studio (or run the Visual Studio environment setup script) before using CMake, Cargo, or Bun build commands. This ensures `cl.exe`, `link.exe`, the Windows SDK, and the correct MSVC libraries are first in `PATH`.
+
+Windows uses vcpkg static-library triplets with the dynamic MSVC runtime:
+
+| Windows target | vcpkg triplet |
+| -------------- | ------------- |
+| x64 | `x64-windows-static-md` |
+| ARM64 | `arm64-windows-static-md` |
+
+The top-level CMake build and Tauri `build.rs` select these triplets automatically on native Windows. To override the triplet explicitly:
 
 ```powershell
-cmake --preset=release
-cmake --build --preset=release
-bun ui:dev
-```
-
-To build and run the C++ unit tests, use the `coverage` preset:
-
-```powershell
-cmake --preset=coverage
-cmake --build --preset=coverage
-ctest --preset=coverage --output-on-failure
+$env:VCPKG_TARGET_TRIPLET = "x64-windows-static-md"
 ```
 
 For pre-commit formatting on Windows, ensure `clang-format` is available in `PATH`, for example through LLVM installed by `winget` or Chocolatey.
@@ -139,6 +162,20 @@ cmake --build --preset=release
 >
 > This installs to `/usr/local` by default, which may require `sudo`.
 
+On Windows, run the same commands from Developer PowerShell:
+
+```powershell
+cmake --preset=release
+cmake --build --preset=release
+```
+
+Expected C++ artifacts:
+
+- Linux/macOS CLI: `build/release/packages/fers-cli/fers-cli`
+- Windows CLI: `build/release/packages/fers-cli/fers-cli.exe`
+- Static library: `build/release/packages/libfers/fers.lib` on Windows, or `build/release/packages/libfers/libfers.a` on Linux/macOS
+- Shared library: `build/release/bin/fers.dll` on Windows when shared libraries are enabled
+
 ### 5. Run the UI
 
 The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
@@ -159,6 +196,49 @@ Navigate to the root of the repository and start the development server:
 ```bash
 bun ui:dev
 ```
+
+On Windows, use Developer PowerShell:
+
+```powershell
+bun ui:dev
+```
+
+To build a release UI bundle:
+
+```bash
+bun ui:build
+```
+
+On Windows, the MSI bundle is generated under `packages/fers-ui/src-tauri/target/release/bundle/msi/`.
+
+### 6. Run C++ Unit Tests (optional)
+
+Use the `coverage` preset to compile and run the Catch2 unit tests. Despite the name, this preset is also the cross-platform test preset because it enables `FERS_BUILD_TESTS`; coverage flags are only applied where supported.
+
+```bash
+cmake --preset=coverage
+cmake --build --preset=coverage --parallel
+ctest --preset=coverage --output-on-failure
+```
+
+On Windows:
+
+```powershell
+cmake --preset=coverage
+cmake --build --preset=coverage
+ctest --preset=coverage --output-on-failure
+```
+
+## CI Workflows
+
+The GitHub Actions workflows validate both the C++ core and Tauri UI across Linux, macOS, and Windows:
+
+- Core CI: `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26-intel`, `macos-26`, `windows-2025`, and `windows-11-arm`.
+- UI CI: same build matrix, plus a Linux UI lint job.
+
+Core CI uses the `coverage` preset on every platform because it enables the Catch2 unit tests. It does not call `scripts/run_tests_gen_coverage.sh`; that script is reserved for local Linux coverage generation.
+
+Windows CI jobs use native MSVC through the Visual Studio environment. They explicitly force `cl.exe`/MSVC `link.exe`, use `x64-windows-static-md` or `arm64-windows-static-md`, and skip Bun dependency caching on Windows to avoid Git tar post-job cleanup failures on Windows ARM runners.
 
 ## Using Old XML Scenarios
 
@@ -245,6 +325,14 @@ The following notice was part of the original FERS distribution:
 
 1. `The system library glib-2.0 was not found` or similar errors related to system packages.
     - Ensure you have installed the necessary Tauri prerequisites for your operating system. On Debian-based Linux distributions, you can install the required packages by following https://tauri.app/start/prerequisites/
+2. Windows build uses `C:\mingw64\bin\c++.exe` or Git `link.exe`.
+    - Use Developer PowerShell and ensure the MSVC paths appear before Git and MinGW paths in `PATH`.
+    - For GitHub Actions, the workflows set up `ilammy/msvc-dev-cmd` and force `CC=cl`, `CXX=cl`.
+3. Windows vcpkg uses the wrong installation root.
+    - Set `VCPKG_ROOT` to the intended vcpkg checkout before running CMake or `bun ui:build`.
+    - If Visual Studio injects its bundled vcpkg path, re-set `VCPKG_ROOT` after activating the VS environment.
+4. `ctest --preset=release` finds no tests.
+    - Use the `coverage` preset for C++ tests. The `release` preset is for build artifacts only.
 
 ## Disclaimer & Development Status
 

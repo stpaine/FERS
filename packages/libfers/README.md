@@ -21,7 +21,7 @@ including the official `fers-cli` and `fers-ui` applications.
 
 ## Dependencies
 
-- A C++23 compatible compiler (e.g., GCC 11+, Clang 14+)
+- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143)
 - **CMake** (3.22+) and [**Ninja**](https://ninja-build.org/)
 - **vcpkg** for C++ package management. All third-party libraries (like HDF5, libxml2, etc.) are managed through the `vcpkg.json` manifest at the repository root.
 - **Doxygen** & **Graphviz** (for documentation generation, optional)
@@ -42,6 +42,27 @@ cmake --build --preset=release
 
 The compiled artifacts will be located in the `build/release/` directory. Libraries (`.a`, `.so`) are in `build/release/packages/libfers/`,
 and the `fers-cli` executable is in `build/release/packages/fers-cli/`. DLLs on Windows will be placed in `build/release/bin/`.
+
+On Windows, build from Developer PowerShell. Native Windows builds use MSVC and these vcpkg triplets by default:
+
+| Target | Triplet |
+| ------ | ------- |
+| x64 | `x64-windows-static-md` |
+| ARM64 | `arm64-windows-static-md` |
+
+These triplets build static vcpkg libraries while using the dynamic MSVC runtime. This matches the Tauri build and avoids static CRT conflicts with HDF5/libxml2 on MSVC.
+
+### Running Tests
+
+The `release` preset builds the library and CLI but does not enable unit tests. Use the `coverage` preset when you need to compile and run the Catch2 test suite:
+
+```bash
+cmake --fresh --preset=coverage
+cmake --build --preset=coverage --parallel
+ctest --preset=coverage --output-on-failure
+```
+
+The `coverage` preset is used in Core CI on Linux, macOS, and Windows. Coverage instrumentation is only applied on supported compilers; the preset is also the cross-platform test preset.
 
 ### Build Options
 
