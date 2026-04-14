@@ -19,38 +19,22 @@ including the official `fers-cli` and `fers-ui` applications.
 - **Geographic Visualization:** Generate KML files from scenarios.
 - **Performance:** A unified event-driven architecture for efficient simulation of both pulsed and continuous-wave scenarios, with a global thread pool for parallelizing tasks.
 
-## Dependencies
+## Building the Library
 
-- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143)
-- **CMake** (3.22+) and [**Ninja**](https://ninja-build.org/)
-- **vcpkg** for C++ package management. All third-party libraries (like HDF5, libxml2, etc.) are managed through the `vcpkg.json` manifest at the repository root.
-- **Doxygen** & **Graphviz** (for documentation generation, optional)
-
-## Building the Library and CLI
-
-The C++ components are built using CMake from the repository root. For a complete development setup guide, please refer to the **[root `README.md`](../../README.md)**.
+The C++ components are built using CMake from the repository root. For a complete list of prerequisites and environment setup instructions (including setting `VCPKG_ROOT`), please refer to the [root `README.md`](https://github.com/stpaine/FERS/blob/master/README.md).
 
 ### 1. Configure and Build
 
-From the root of the repository, use the CMake presets to configure and build the project. This will automatically use `vcpkg` to manage dependencies. Ensure to install [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash) before running the following commands.
+From the root of the repository, use the CMake presets to configure and build the project. This will automatically use `vcpkg` to manage dependencies.
 
 ```bash
-# From the root FERS directory
 cmake --preset=release
 cmake --build --preset=release
 ```
 
-The compiled artifacts will be located in the `build/release/` directory. Libraries (`.a`, `.so`) are in `build/release/packages/libfers/`,
-and the `fers-cli` executable is in `build/release/packages/fers-cli/`. DLLs on Windows will be placed in `build/release/bin/`.
+The compiled artifacts will be located in the `build/release/` directory. Libraries (`.a`, `.lib`, `.so`, `.dll`) are in `build/release/packages/libfers/` or `build/release/bin/`.
 
-On Windows, build from Developer PowerShell. Native Windows builds use MSVC and these vcpkg triplets by default:
-
-| Target | Triplet |
-| ------ | ------- |
-| x64 | `x64-windows-static-md` |
-| ARM64 | `arm64-windows-static-md` |
-
-These triplets build static vcpkg libraries while using the dynamic MSVC runtime. This matches the Tauri build and avoids static CRT conflicts with HDF5/libxml2 on MSVC.
+**Windows Note:** Native Windows builds use MSVC. Ensure you are running these commands from the **Developer PowerShell for VS**.
 
 ### Running Tests
 
@@ -62,8 +46,6 @@ cmake --build --preset=coverage --parallel
 ctest --preset=coverage --output-on-failure
 ```
 
-The `coverage` preset is used in Core CI on Linux, macOS, and Windows. Coverage instrumentation is only applied on supported compilers; the preset is also the cross-platform test preset.
-
 ### Build Options
 
 You can customize the build by passing CMake options alongside the preset:
@@ -71,41 +53,38 @@ You can customize the build by passing CMake options alongside the preset:
 | Option                        | Description                                     | Default |
 | ----------------------------- | ----------------------------------------------- | ------- |
 | `-DFERS_BUILD_SHARED_LIBS=ON` | Build the shared library (`.so`/`.dll`).        | ON      |
-| `-DFERS_BUILD_STATIC_LIBS=ON` | Build the static library (`.a`).                | ON      |
+| `-DFERS_BUILD_STATIC_LIBS=ON` | Build the static library (`.a`/`.lib`).         | ON      |
 | `-DFERS_BUILD_DOCS=ON`        | Enable the `doc` target for Doxygen generation. | OFF     |
-
-Example of a debug build that only creates a static library:
-
-```bash
-# From the root FERS directory
-cmake --preset debug -DFERS_BUILD_SHARED_LIBS=OFF
-cmake --build --preset debug
-```
 
 ### 2. Install (Optional)
 
 You can install the libraries, headers, and CLI executable to your system.
 
+#### Linux / macOS:
 ```bash
-# From the root FERS directory
 sudo cmake --install build/release
-sudo ldconfig # On Linux, to update the cache
+sudo ldconfig # On Linux, to update the library cache
+```
+
+#### Windows:
+Open an **Administrator** Developer PowerShell and run:
+```powershell
+cmake --install build/release
 ```
 
 ## Documentation
 
 The source code documentation is automatically built and deployed to our [GitHub Pages site](https://davidbits.github.io/FERS/). If you wish to build it locally, you will need **Doxygen** and **Graphviz** installed.
 
-1. **Configure with documentation enabled:**
+### Configure with documentation enabled:
 
-    ```bash
-    # From the root FERS directory
-    cmake --preset release -DFERS_BUILD_DOCS=ON
-    ```
+```bash
+cmake --preset release -DFERS_BUILD_DOCS=ON
+```
 
-2. **Build the `doc` target:**
-    ```bash
-    cmake --build --preset release --target doc
-    ```
+### Build the `doc` target:
+```bash
+cmake --build --preset release --target doc
+```
 
 The HTML output will be generated in the `build/release/docs/html/` directory. You can open `index.html` in your browser to view the documentation.

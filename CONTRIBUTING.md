@@ -12,12 +12,9 @@ To ensure a smooth and effective process, please read these guidelines before yo
 - [Suggesting Enhancements](#suggesting-enhancements)
 - [Your First Code Contribution](#your-first-code-contribution)
 - [Development Setup](#development-setup)
-    - [Core Simulator (`fers`) Setup](#core-simulator-fers-setup)
-    - [User Interface (`fers-ui`) Setup](#user-interface-fers-ui-setup)
+- [Continuous Integration](#continuous-integration)
 - [Pull Request Process](#pull-request-process)
 - [Style Guides](#style-guides)
-    - [C++ (`fers`) Style Guide](#c-fers-style-guide)
-    - [TypeScript/React (`fers-ui`) Style Guide](#typescriptreact-fers-ui-style-guide)
 - [Commit Message Guidelines](#commit-message-guidelines)
 
 ## Ways to Contribute
@@ -63,50 +60,13 @@ issues:
 
 ## Development Setup
 
-This is a monorepo containing two main packages. Please follow the setup instructions for the package you intend to work
-on.
+This is a monorepo containing the C++ core simulator (`libfers` / `fers-cli`) and the Tauri desktop application (`fers-ui`).
 
-### Core Simulator (`libfers`) Setup
+For complete instructions on installing prerequisites (CMake, vcpkg, Bun, Rust) and building the project across Windows, macOS, and Linux, please refer to the **[Development Setup section in the root README.md](README.md#development-setup)**.
 
-The core simulator is written in C++.
+## Continuous Integration
 
-1. **Prerequisites**: Ensure you have all prerequisities installed as outlined in the [README.md](README.md).
-2. **Clone the repo**: `git clone https://github.com/stpaine/FERS.git`
-3. **Build**: Follow the build instructions in the [`README.md`](README.md).
-
-For unit tests, use the `coverage` preset:
-
-```bash
-cmake --preset=coverage
-cmake --build --preset=coverage --parallel
-ctest --preset=coverage --output-on-failure
-```
-
-The `release` preset is for build artifacts and does not enable the Catch2 unit tests.
-
-### User Interface (`fers-ui`) Setup
-
-The UI is a Tauri desktop application built with React and TypeScript.
-
-1. **Prerequisites**: Ensure you have Node.js, bun, and the Rust toolchain installed.
-2. **Setup Tauri**: Follow the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/) for your OS.
-3. **Install & Run**:
-    ```bash
-    bun install
-    bun ui:dev
-    ```
-
-For more details, see the [`packages/fers-ui/README.md`](packages/fers-ui/README.md).
-
-### Windows Development
-
-Windows development is native MSVC.
-
-- Visual Studio 2022 or later, using the MSVC v143 toolset (recommended), and Windows SDK. Newer MSVC toolsets may work but are not officially tested.
-- Use Developer PowerShell for VS, or otherwise ensure `cl.exe` and MSVC `link.exe` come before Git and MinGW tools in `PATH`.
-- Use the MSVC Rust targets: `x86_64-pc-windows-msvc` or `aarch64-pc-windows-msvc`.
-- Keep `VCPKG_ROOT` pointed at the intended vcpkg checkout. Visual Studio can inject its bundled vcpkg path after environment setup; re-set `VCPKG_ROOT` if needed.
-- Default Windows vcpkg triplets are `x64-windows-static-md` and `arm64-windows-static-md`.
+Continuous Integration (CI) workflows run on every pull request and push to the `master` branch to verify the core build and tests, as well as the UI build. Please ensure your code passes locally before submitting a PR.
 
 ## Pull Request Process
 

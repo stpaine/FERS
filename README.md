@@ -47,124 +47,62 @@ This monorepo contains the following packages:
 
 ## Development Setup
 
-Follow these steps to set up a development environment for building the C++ core and running the UI.
+FERS supports native development on Linux, macOS, and Windows.
 
 ### Supported Development Targets
-
-FERS is tested on Linux, macOS, and native Windows. Windows support targets MSVC, not MinGW, and does not require WSL.
 
 | Platform | Core build | UI build | Notes |
 | -------- | ---------- | -------- | ----- |
 | Linux x64 / ARM64 | Supported | Supported | Requires standard Tauri Linux system packages for the UI. |
-| macOS Intel / Apple Silicon | Supported | Supported | `MACOSX_DEPLOYMENT_TARGET=14.0` is used for CI and recommended locally. |
-| Windows x64 | Supported | Supported | Use Visual Studio 2022 Build Tools and the MSVC Rust toolchain. |
+| macOS Intel / Apple Silicon | Supported | Supported | `MACOSX_DEPLOYMENT_TARGET=14.0` is recommended locally. |
+| Windows x64 | Supported | Supported | Use Visual Studio 2022 Build Tools (or later) and the MSVC Rust toolchain. |
 | Windows ARM64 | Supported | Supported | Use native ARM64 MSVC tools and the `aarch64-pc-windows-msvc` Rust target. |
 
 ### 1. Prerequisites
 
-Ensure you have the following tools installed on your system:
+Please install the following external dependencies using their official guides:
 
-- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143), **CMake** (3.22+), and [**Ninja**](https://ninja-build.org/).
-- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment.
-- [**Bun**](https://bun.sh/).
-- The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
-- [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
-- [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
-- **Other notable dependencies (for Linux):** `build-essential` and `pkg-config`.
+- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143+)
+- [**CMake**](https://cmake.org/download/) (3.22+) and [**Ninja**](https://ninja-build.org/)
+- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (C++ package manager)
+- [**Bun**](https://bun.sh/) (JavaScript runtime and package manager)
+- [**Rust**](https://www.rust-lang.org/tools/install) (Required for the Tauri UI)
+- [**Tauri Prerequisites**](https://tauri.app/start/prerequisites/) (OS-specific system dependencies for the UI)
 
-> [!TIP]
-> Ninja is available in all major package managers: `sudo apt install ninja-build` (Debian/Ubuntu),
-> `brew install ninja` (macOS), or `choco install ninja` (Windows).
+#### Platform-Specific Notes:
 
-#### Windows Prerequisites (MSVC)
+- **Windows:** FERS requires native MSVC (Visual Studio 2022 Build Tools, or later). MinGW and WSL are not officially supported. You should use the **Developer PowerShell for VS** when running build commands so that `cl.exe` and the Windows SDK are correctly prioritized in your `PATH`. Ensure you install the MSVC Rust toolchain.
+- **macOS:** It is highly recommended to set `MACOSX_DEPLOYMENT_TARGET=14.0` in your environment to ensure modern C++ filesystem support.
 
-FERS supports native Windows builds with MSVC. WSL is not required.
+### 2. Environment Configuration
 
-Install these prerequisites:
+**Important:** FERS relies on `vcpkg` to manage its C++ dependencies. You **must** set the `VCPKG_ROOT` environment variable to point to your vcpkg installation directory before building.
 
-- Visual Studio 2022 or later, using the MSVC v143 toolset (recommended), and Windows SDK. Newer MSVC toolsets may work but are not officially tested.
-- Git for Windows.
-- CMake 3.22+ and Ninja.
-- Rust stable MSVC toolchain, such as `stable-x86_64-pc-windows-msvc` on x64 Windows.
-- Bun.
-- vcpkg.
-- WebView2 Runtime for the Tauri UI. It is preinstalled on Windows 11.
-
-Use the MSVC Rust toolchain. On x64 Windows, the default target is:
-
-```powershell
-rustup default stable-x86_64-pc-windows-msvc
-rustup target add x86_64-pc-windows-msvc
+*Linux / macOS:*
+```bash
+export VCPKG_ROOT=/path/to/vcpkg
 ```
 
-On native Windows ARM64:
-
+*Windows (PowerShell):*
 ```powershell
-rustup target add aarch64-pc-windows-msvc
+$env:VCPKG_ROOT = "C:\path\to\vcpkg"
 ```
 
-Set `VCPKG_ROOT` to your vcpkg checkout. In PowerShell:
+### 3. Clone and Install JS Dependencies
 
-```powershell
-$env:VCPKG_ROOT = "C:\src\vcpkg"
-$env:PATH = "$env:VCPKG_ROOT;$env:PATH"
-```
-
-Use the Developer PowerShell for Visual Studio (or run the Visual Studio environment setup script) before using CMake, Cargo, or Bun build commands. This ensures `cl.exe`, `link.exe`, the Windows SDK, and the correct MSVC libraries are first in `PATH`.
-
-Windows uses vcpkg static-library triplets with the dynamic MSVC runtime:
-
-| Windows target | vcpkg triplet |
-| -------------- | ------------- |
-| x64 | `x64-windows-static-md` |
-| ARM64 | `arm64-windows-static-md` |
-
-The top-level CMake build and Tauri `build.rs` select these triplets automatically on native Windows. To override the triplet explicitly:
-
-```powershell
-$env:VCPKG_TARGET_TRIPLET = "x64-windows-static-md"
-```
-
-For pre-commit formatting on Windows, ensure `clang-format` is available in `PATH`, for example through LLVM installed by `winget` or Chocolatey.
-
-### 2. Clone the Repository
-
-Clone the repository from the root of the monorepo.
+Clone the repository and install the frontend dependencies. This will also set up pre-commit hooks.
 
 ```bash
 git clone https://github.com/stpaine/FERS.git
 cd FERS
-```
-
-### 3. Install Dependencies
-
-From the **root of the repository**, install all JavaScript dependencies. This also sets up pre-commit hooks using
-Husky. See the [bun.sh documentation](https://bun.com/docs/installation) for details on installing Bun.
-
-```bash
 bun install
 ```
 
 ### 4. Build the Standalone C++ Core
 
-You can configure and compile the C++ libraries directly using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies. Ensure to install [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash) before running the following commands.
+You can configure and compile the C++ libraries and CLI directly using our CMake presets. This will automatically invoke `vcpkg` to fetch and build the required C++ dependencies (like HDF5 and libxml2).
 
 ```bash
-# From the root FERS directory
-cmake --preset=release
-cmake --build --preset=release
-```
-
-> [!TIP]
-> On Linux and macOS, you can install the built `fers-cli` release to your system using:
->
-> `cmake --install build/release`
->
-> This installs to `/usr/local` by default, which may require `sudo`.
-
-On Windows, run the same commands from Developer PowerShell:
-
-```powershell
 cmake --preset=release
 cmake --build --preset=release
 ```
@@ -173,33 +111,30 @@ Expected C++ artifacts:
 
 - Linux/macOS CLI: `build/release/packages/fers-cli/fers-cli`
 - Windows CLI: `build/release/packages/fers-cli/fers-cli.exe`
-- Static library: `build/release/packages/libfers/fers.lib` on Windows, or `build/release/packages/libfers/libfers.a` on Linux/macOS
-- Shared library: `build/release/bin/fers.dll` on Windows when shared libraries are enabled
+
+> [!TIP]
+> You can install the built `fers-cli` release to your system using:
+>
+> **Linux / macOS:**
+> ```bash
+> sudo cmake --install build/release
+> sudo ldconfig # For Linux only, to update the library cache
+> ```
+> This installs to `/usr/local` by default.
+>
+> **Windows:**
+> Open an **Administrator** Developer PowerShell and run:
+> ```powershell
+> cmake --install build/release
+> ```
+> This installs to `C:\Program Files (x86)\FERS` by default.
 
 ### 5. Run the UI
 
-The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
+The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory and link it to the Tauri application.
 
-**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set in `PATH`.
-
-```env
-export VCPKG_ROOT=/path/to/vcpkg
-export PATH=$VCPKG_ROOT:$PATH
-```
-
-Navigate to the root of the repository and start the development server:
-
-> [!WARNING]
-> The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
-> On some Intel macOS systems, especially older WKWebView/WebKit runtimes, WebGL may be unavailable at startup and the 3D Scenario view cannot be created. This is a system WebKit limitation rather than a FERS scene-content bug. FERS now detects that condition and disables the viewport gracefully instead of crashing, but the underlying fix still requires a working Safari/WKWebView WebGL stack on the host machine. See https://github.com/davidbits/FERS/issues/181 for details.
-
+To start the development server:
 ```bash
-bun ui:dev
-```
-
-On Windows, use Developer PowerShell:
-
-```powershell
 bun ui:dev
 ```
 
@@ -209,11 +144,12 @@ To build a release UI bundle:
 bun ui:build
 ```
 
-On Windows, the MSI bundle is generated under `packages/fers-ui/src-tauri/target/release/bundle/msi/`.
+> [!WARNING]
+> On some Intel macOS systems, WebGL may be unavailable at startup due to a system WebKit limitation. FERS detects this and disables the 3D viewport gracefully. See issue #181 for details.
 
 ### 6. Run C++ Unit Tests (optional)
 
-Use the `coverage` preset to compile and run the Catch2 unit tests. Despite the name, this preset is also the cross-platform test preset because it enables `FERS_BUILD_TESTS`; coverage flags are only applied where supported.
+Use the `coverage` preset to compile and run the Catch2 unit tests. This preset enables `FERS_BUILD_TESTS` across all platforms.
 
 ```bash
 cmake --preset=coverage
@@ -221,44 +157,19 @@ cmake --build --preset=coverage --parallel
 ctest --preset=coverage --output-on-failure
 ```
 
-On Windows:
-
-```powershell
-cmake --preset=coverage
-cmake --build --preset=coverage
-ctest --preset=coverage --output-on-failure
-```
-
-## CI Workflows
-
-The GitHub Actions workflows validate both the C++ core and Tauri UI across Linux, macOS, and Windows:
-
-- Core CI: `ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-26-intel`, `macos-26`, `windows-2025`, and `windows-11-arm`.
-- UI CI: same build matrix, plus a Linux UI lint job.
-
-Core CI uses the `coverage` preset on every platform because it enables the Catch2 unit tests. It does not call `scripts/run_tests_gen_coverage.sh`; that script is reserved for local Linux coverage generation.
-
-Windows CI jobs use native MSVC through the Visual Studio environment. They explicitly force `cl.exe`/MSVC `link.exe`, use `x64-windows-static-md` or `arm64-windows-static-md`, and skip Bun dependency caching on Windows to avoid Git tar post-job cleanup failures on Windows ARM runners.
-
 ## Using Old XML Scenarios
 
-The new FERS uses a different XML schema for scenarios than the original version
-(see https://github.com/stpaine/FERS/tree/526d412cbe06e6824c0ac9b35782dac09f726791).
-If you have existing scenarios in the old format, you can convert them to the new format using the `migrate_fers_xml.py`
-tool.
+The new FERS uses a different XML schema for scenarios than the original version. If you have existing scenarios in the old format, you can convert them to the new format using the included migration script:
 
 ```bash
-# From the root of the repository
-python3 migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
+python3 scripts/migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
 ```
 
 ## Contributing
 
 We welcome contributions to the FERS project! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide to get started.
 
-Note that this repository uses **Husky** to enforce code quality with pre-commit hooks. When you commit, your staged
-files will be automatically formatted and linted. Ensure you have `clang-format`, `prettier`, and the Rust toolchain
-installed.
+Note that this repository uses **Husky** to enforce code quality with pre-commit hooks. When you commit, your staged files will be automatically formatted and linted.
 
 ## License
 
@@ -279,60 +190,9 @@ the [GNU General Public License](https://github.com/stpaine/FERS/blob/master/LIC
 if not, write to
 the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-### User-Generated Files
-
-Please note that this license only covers the source code, program binaries, and build system of FERS. Any input files
-you create (such as simulation scenarios) and any results generated by the simulator are not covered by this license and
-remain the copyright of their original author.
-
 ### Third-Party Libraries
 
-FERS incorporates code from the following third-party libraries, which are provided under their own licenses. The full
-text for these licenses can be found in the `THIRD_PARTY_LICENSES` directory.
-
-- **libxml2:** Used for XML parsing. Licensed under the [MIT License](THIRD_PARTY_LICENSES/libxml2-LICENSE.txt).
-- **HighFive:** A C++ header-only library for HDF5. Licensed under
-  the [Boost Software License 1.0](THIRD_PARTY_LICENSES/HighFive-LICENSE.txt).
-- **GeographicLib:** A library for geographic calculations. Licensed under
-  the [MIT License](THIRD_PARTY_LICENSES/GeographicLib-LICENSE.txt).
-- **libhdf5:** Used for HDF5 file handling. Licensed under
-  the [BSD 3-Clause License](THIRD_PARTY_LICENSES/libhdf5-LICENSE.txt).
-- **nlohmann/json:** A JSON library for C++. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/nlohmann-json-LICENSE.txt).
-- **Tauri:** A framework for building desktop applications. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/tauri-LICENSE.txt).
-- **React:** A JavaScript library for building user interfaces. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/react-LICENSE.txt).
-- **MUI:** A React component library. Licensed under the [MIT License](THIRD_PARTY_LICENSES/mui-LICENSE.txt).
-- **Three.js:** A 3D JavaScript library. Licensed under the [MIT License](THIRD_PARTY_LICENSES/threejs-LICENSE.txt).
-- **Zustand:** A small, fast state-management library for React. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/zustand-LICENSE.txt).
-- **Zod:** A TypeScript-first schema declaration and validation library. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/zod-LICENSE.txt).
-- **React Three Fiber:** A React renderer for Three.js. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/react-three-fiber-LICENSE.txt).
-
-### Historical Notice from Original Distribution
-
-The following notice was part of the original FERS distribution:
-
-> Should you wish to acquire a copy of FERS not covered by these terms, please contact the Department of
-> Electrical Engineering at the University of Cape Town.
-
-### Troubleshooting
-
-#### Common Issues
-
-1. `The system library glib-2.0 was not found` or similar errors related to system packages.
-    - Ensure you have installed the necessary Tauri prerequisites for your operating system. On Debian-based Linux distributions, you can install the required packages by following https://tauri.app/start/prerequisites/
-2. Windows build uses `C:\mingw64\bin\c++.exe` or Git `link.exe`.
-    - Use Developer PowerShell and ensure the MSVC paths appear before Git and MinGW paths in `PATH`.
-    - For GitHub Actions, the workflows set up `ilammy/msvc-dev-cmd` and force `CC=cl`, `CXX=cl`.
-3. Windows vcpkg uses the wrong installation root.
-    - Set `VCPKG_ROOT` to the intended vcpkg checkout before running CMake or `bun ui:build`.
-    - If Visual Studio injects its bundled vcpkg path, re-set `VCPKG_ROOT` after activating the VS environment.
-4. `ctest --preset=release` finds no tests.
-    - Use the `coverage` preset for C++ tests. The `release` preset is for build artifacts only.
+FERS incorporates code from several third-party libraries, which are provided under their own licenses (MIT, BSD, Boost). The full text for these licenses can be found in the `THIRD_PARTY_LICENSES` directory.
 
 ## Disclaimer & Development Status
 
@@ -344,5 +204,3 @@ This means:
 - **Stability:** Expect bugs, crashes, and incomplete features.
 - **Breaking Changes:** The C-API, JSON/XML schemas, and internal architecture are subject to change without notice as the new foundation is stabilized.
 - **Use Case:** This version is intended for development, testing, and community feedback. It is **not yet recommended for production or critical simulation work.**
-
-We welcome and appreciate community involvement. Please report any issues you encounter on our [GitHub Issues](https://github.com/stpaine/FERS/issues) page.

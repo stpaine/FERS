@@ -15,68 +15,26 @@
 - **Integrated Simulation Runner:** A focused workspace to configure global simulation parameters, trigger the FERS core engine, and monitor progress.
 - **FERS XML Import/Export:** Generate a valid FERS XML configuration file directly from the visual scenario, or load an existing one to begin editing.
 
-## Future Roadmap
-
-The following major features are planned for future releases:
-
-- **Centralized Asset Library:** A dedicated view for creating, managing, and reusing simulation components like radar pulses, antenna patterns, and timing sources across different scenarios.
-- **Dynamic Results Analysis:** A post-simulation view for loading FERS output data to visualize target trajectories, platform movements, and analyze collected signals.
-
 ## Technology Stack
 
 fers-ui is built with a modern technology stack to provide a powerful, cross-platform, and maintainable application.
 
-- **Application Framework:** [**Tauri**](https://tauri.app/) (v2) - Provides a lightweight, secure, and performant way to build a native desktop application using a web front-end.
-- **UI Library:** [**React**](https://react.dev/) with [**TypeScript**](https://www.typescriptlang.org/) - Offers a robust, component-based architecture for building complex UIs with the safety of static typing.
-- **Component Library:** [**Material-UI (MUI)**](https://mui.com/material-ui/) & [**MUI X**](https://mui.com/x/) - A comprehensive library of UI components that accelerates development and ensures a consistent, modern design.
-- **3D Rendering:** [**Three.js**](https://threejs.org/) via [**React Three Fiber**](https://docs.pmnd.rs/react-three-fiber) - Simplifies managing a 3D scene within a React application, powering the visual scenario builder.
-- **State Management:** [**Zustand**](https://docs.pmnd.rs/zustand) - A minimal, fast, and scalable state management solution for a centralized application state.
-- **Schema Validation:** [**Zod**](https://zod.dev/) - A TypeScript-first schema declaration and validation library, used for ensuring the integrity of scenario data on the front-end.
-
-## Software Architecture
-
-The application is architected as a multi-modal "Workbench" to provide a clean, context-focused user experience.
-
-- **App Rail & Views:** The primary navigation is a vertical `AppRail` that allows switching between distinct workspaces called "Views" (e.g., `ScenarioView`, `AssetLibraryView`). This isolates different stages of the simulation workflow, preventing UI clutter.
-- **Layouts:** The top-level `MainLayout` component orchestrates the active view and global UI structure.
-- **Views:** These are high-level components that represent a complete user workspace. Each view is self-contained and manages its own panel arrangement (e.g., `ScenarioView` combines the 3D world, scene tree, and timeline).
-- **Components:** The UI is built from small, reusable React components (`SceneTree`, `Timeline`, `PropertyInspector`, `ResizablePanel`) that encapsulate specific functionality and are composed within Views.
-
-## Design Principles
-
-- **Context-Focused Workflow:** The UI is designed to only present tools and information relevant to the user's current task. Switching from the "Scenario" to the "Asset Library" view changes the entire workspace context.
-- **Component Modularity:** By breaking the UI into a clear hierarchy of `Layouts`, `Views`, and `Components`, we ensure the codebase is maintainable, testable, and easy to extend.
-- **State-Driven UI:** The application relies on a centralized state managed by Zustand. UI components react to state changes, ensuring consistency across all panels and views.
-- **Ergonomic Layout:** The use of resizable panels gives users full control over their workspace, allowing them to tailor the interface to their specific needs and monitor size.
+- **Application Framework:** [**Tauri**](https://tauri.app/) (v2)
+- **UI Library:** [**React**](https://react.dev/) with [**TypeScript**](https://www.typescriptlang.org/)
+- **Component Library:** [**Material-UI (MUI)**](https://mui.com/material-ui/)
+- **3D Rendering:** [**Three.js**](https://threejs.org/) via [**React Three Fiber**](https://docs.pmnd.rs/react-three-fiber)
+- **State Management:** [**Zustand**](https://docs.pmnd.rs/zustand)
+- **Schema Validation:** [**Zod**](https://zod.dev/)
 
 ## Getting Started
 
 This application is part of a monorepo that includes the core C++ `libfers` library. The UI build process is entirely self-contained: Cargo will automatically invoke CMake to compile the C++ backend in an isolated directory during the build.
 
-To set up the complete development environment, please follow the unified **[Development Setup guide in the root README.md](https://github.com/stpaine/FERS/blob/master/README.md)**.
+To set up the complete development environment, please follow the unified [Development Setup guide in the root README.md](https://github.com/stpaine/FERS/blob/master/README.md).
 
-**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set.
-
-```env
-export VCPKG_ROOT=/path/to/vcpkg
-export PATH=$VCPKG_ROOT:$PATH
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:VCPKG_ROOT = "C:\src\vcpkg"
-$env:PATH = "$env:VCPKG_ROOT;$env:PATH"
-```
-
-Windows builds are native MSVC builds. Use Developer PowerShell so Cargo, CMake, and vcpkg find `cl.exe` and MSVC `link.exe` before Git/MinGW tools. The UI build uses:
-
-| Windows target | Rust target | vcpkg triplet |
-| -------------- | ----------- | ------------- |
-| x64 | `x86_64-pc-windows-msvc` | `x64-windows-static-md` |
-| ARM64 | `aarch64-pc-windows-msvc` | `arm64-windows-static-md` |
-
-The Windows triplet is selected automatically from Cargo's `TARGET`, but `VCPKG_TARGET_TRIPLET` can override it when needed.
+### Important Reminders:
+1. You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set.
+2. On Windows, you must use the **Developer PowerShell for VS** to ensure the MSVC toolchain (`cl.exe`, `link.exe`) is used instead of MinGW.
 
 Once the environment is set up, you can run the UI from the **repository root** with:
 
@@ -89,8 +47,6 @@ To build a release bundle:
 ```bash
 bun ui:build
 ```
-
-On Windows, the MSI bundle is generated under `packages/fers-ui/src-tauri/target/release/bundle/msi/`.
 
 > [!WARNING]
 > The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
