@@ -95,7 +95,7 @@ namespace fers_signal
 		 * @param fracWinDelay Fractional window delay to apply.
 		 * @return A tuple containing amplitude, phase, fractional delay, and sample unwrap index.
 		 */
-		[[nodiscard]] constexpr std::tuple<double, double, double, int>
+		[[nodiscard]] std::tuple<double, double, double, int>
 		calculateWeightsAndDelays(std::vector<interp::InterpPoint>::const_iterator iter,
 								  std::vector<interp::InterpPoint>::const_iterator next, double sampleTime,
 								  double idelay, double fracWinDelay) const noexcept;

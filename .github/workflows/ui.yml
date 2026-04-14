@@ -67,9 +67,11 @@ jobs:
                     - os: windows-2025
                       vcpkg_triplet: x64-windows-static-md
                       rust_target: x86_64-pc-windows-msvc
+                      msvc_arch: x64
                     - os: windows-11-arm
                       vcpkg_triplet: arm64-windows-static-md
                       rust_target: aarch64-pc-windows-msvc
+                      msvc_arch: arm64
         env:
             VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
             VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
@@ -86,6 +88,19 @@ jobs:
 
             - name: Get CMake
               uses: lukka/get-cmake@latest
+
+            - name: Setup MSVC
+              if: runner.os == 'Windows'
+              uses: ilammy/msvc-dev-cmd@v1
+              with:
+                  arch: ${{ matrix.msvc_arch }}
+
+            - name: Force MSVC compilers
+              if: runner.os == 'Windows'
+              shell: bash
+              run: |
+                  echo "CC=cl" >> "$GITHUB_ENV"
+                  echo "CXX=cl" >> "$GITHUB_ENV"
 
             - name: Verify build tools
               shell: bash

@@ -117,7 +117,7 @@ namespace fers_signal
 		return out;
 	}
 
-	constexpr std::tuple<RealType, RealType, RealType, int>
+	std::tuple<RealType, RealType, RealType, int>
 	Signal::calculateWeightsAndDelays(const std::vector<interp::InterpPoint>::const_iterator iter,
 									  const std::vector<interp::InterpPoint>::const_iterator next,
 									  const RealType sampleTime, const RealType idelay,
