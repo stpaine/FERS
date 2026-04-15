@@ -145,6 +145,16 @@ fn main() {
     let vcpkg_triplet =
         vcpkg_triplet.unwrap_or_else(|| panic!("unsupported target for Tauri C++ build: {target}"));
 
+    // Use Ninja on all platforms so that build outputs land directly in the
+    // expected directories. Without this, Windows defaults to the Visual Studio
+    // multi-config generator which places artifacts in a Release/ subdirectory,
+    // causing a path mismatch when Cargo tries to link `fers.lib`.
+    if let Some(generator) = env_var("CMAKE_GENERATOR") {
+        config.generator(generator);
+    } else {
+        config.generator("Ninja");
+    }
+
     config
         .define("CMAKE_TOOLCHAIN_FILE", &vcpkg_toolchain)
         .define("FERS_BUILD_TESTS", "OFF")

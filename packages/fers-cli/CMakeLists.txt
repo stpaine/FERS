@@ -14,7 +14,11 @@ target_include_directories(fers-cli-core PUBLIC
 						   ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(fers-cli-core PUBLIC fers::fers)
+if (TARGET fers::fers_static)
+    target_link_libraries(fers-cli-core PUBLIC fers::fers_static)
+else ()
+    target_link_libraries(fers-cli-core PUBLIC fers::fers)
+endif ()
 
 # Create the executable target
 add_executable(fers-cli)

@@ -69,10 +69,7 @@ Please install the following external dependencies using their official guides:
 - [**Rust**](https://www.rust-lang.org/tools/install) (Required for the Tauri UI)
 - [**Tauri Prerequisites**](https://tauri.app/start/prerequisites/) (OS-specific system dependencies for the UI)
 
-#### Platform-Specific Notes:
-
-- **Windows:** FERS requires native MSVC (Visual Studio 2022 Build Tools, or later). MinGW and WSL are not officially supported. You should use the **Developer PowerShell for VS** when running build commands so that `cl.exe` and the Windows SDK are correctly prioritized in your `PATH`. Ensure you install the MSVC Rust toolchain.
-- **macOS:** It is highly recommended to set `MACOSX_DEPLOYMENT_TARGET=14.0` in your environment to ensure modern C++ filesystem support.
+Then also review [Platform-Specific Notes](#platform-specific-notes) below.
 
 ### 2. Environment Configuration
 
@@ -87,6 +84,9 @@ export VCPKG_ROOT=/path/to/vcpkg
 ```powershell
 $env:VCPKG_ROOT = "C:\path\to\vcpkg"
 ```
+
+> [!TIP]
+> Installing Visual Studio should provide and link vcpkg if selected during installation, in which case the VCPKG_ROOT envvar is automatically set.
 
 ### 3. Clone and Install JS Dependencies
 
@@ -164,6 +164,38 @@ The new FERS uses a different XML schema for scenarios than the original version
 ```bash
 python3 scripts/migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
 ```
+
+## Platform-Specific Notes
+
+- **Windows:** FERS requires native MSVC (Visual Studio 2022 Build Tools, or later). MinGW and WSL are not officially supported. You should use the **Developer PowerShell for VS** when running build commands so that `cl.exe` and the Windows SDK are correctly prioritized in your `PATH`. Ensure you install the MSVC Rust toolchain.
+- **macOS:** It is highly recommended to set `MACOSX_DEPLOYMENT_TARGET=14.0` in your environment to ensure modern C++ filesystem support.
+
+> [!IMPORTANT]
+> **Windows: Ensuring the x64 Toolchain**
+>
+> The default Developer PowerShell in Visual Studio may launch with the **x86** host toolchain, even on a 64-bit
+> system. This causes CMake to detect a 32-bit compiler, which will fail when linking against the 64-bit vcpkg
+> packages (you will see an error like `HighFiveConfig.cmake, version: 3.3.0 (64bit) ... not compatible`).
+>
+> To fix this, you must ensure the x64 toolchain is active. Before running any build commands, execute:
+> ```powershell
+> & "C:\Program Files\Microsoft Visual Studio\<VS_VERSION>\<EDITION>\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64
+> ```
+> Replace `<VS_VERSION>` and `<EDITION>` with your installation values (e.g., `18` and `Community`).
+>
+> You can verify the correct compiler is active by running:
+> ```powershell
+> (Get-Command cl.exe).Source  # Should contain Hostx64\x64
+> ```
+>
+> **Note:** If you get a script execution policy error, run
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` first.
+>
+> To make this permanent, edit the Developer PowerShell profile in **Tools → Options → Environment → Terminal
+> Profiles** and set the arguments to:
+> ```
+> -NoExit -Command "& { & 'C:\Program Files\Microsoft Visual Studio\<VS_VERSION>\<EDITION>\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 }"
+> ```
 
 ## Contributing
 
