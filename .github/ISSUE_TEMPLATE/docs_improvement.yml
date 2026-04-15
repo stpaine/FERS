@@ -1,7 +1,7 @@
 ---
 name: 📖 Documentation Improvement
 description: Report an issue or suggest an improvement for the documentation.
-title: '[Docs] <A brief title for the documentation change>'
+title: '[Docs] '
 labels: ['type: documentation', 'status: triage']
 body:
     - type: dropdown
@@ -13,6 +13,7 @@ body:
               - Core Simulator Docs (C++ API, concepts)
               - UI Docs (User guide, features)
               - Project Docs (README, CONTRIBUTING, etc.)
+              - Not Sure / General
       validations:
           required: true
 
@@ -27,7 +28,7 @@ body:
     - type: textarea
       id: suggested-change
       attributes:
-          label: What is your suggested improvement?
+          label: What is your suggested improvement? (Optional)
           description: Please provide the corrected or new text, or describe the changes you'd like to see.
       validations:
-          required: true
+          required: false

@@ -20,11 +20,28 @@ jobs:
     build-and-test:
         name: Build & Test (${{ matrix.os }})
         runs-on: ${{ matrix.os }}
-        timeout-minutes: 30
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26]
+                include:
+                    - os: ubuntu-24.04
+                      vcpkg_triplet: x64-linux
+                    - os: ubuntu-24.04-arm
+                      vcpkg_triplet: arm64-linux
+                    - os: macos-26-intel
+                      vcpkg_triplet: x64-osx
+                    - os: macos-26
+                      vcpkg_triplet: arm64-osx
+                    - os: windows-2025
+                      vcpkg_triplet: x64-windows-static-md
+                      msvc_arch: x64
+                    - os: windows-11-arm
+                      vcpkg_triplet: arm64-windows-static-md
+                      msvc_arch: arm64
+        env:
+            VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+            VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
 
         steps:
             - name: Checkout repository
@@ -34,10 +51,24 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y xxd pkg-config build-essential
+                  sudo apt-get install -y pkg-config build-essential
 
             - name: Get CMake
               uses: lukka/get-cmake@latest
+
+            - name: Setup MSVC
+              if: runner.os == 'Windows'
+              uses: ilammy/msvc-dev-cmd@v1
+              with:
+                  arch: ${{ matrix.msvc_arch }}
+
+            - name: Force MSVC compilers
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  "CC=cl" >> $env:GITHUB_ENV
+                  "CXX=cl" >> $env:GITHUB_ENV
+                  "VCPKG_ROOT=${{ github.workspace }}\vcpkg" >> $env:GITHUB_ENV
 
             - name: Verify build tools
               shell: bash
@@ -46,21 +77,35 @@ jobs:
                   ninja --version
 
             - name: Setup ccache
+              if: runner.os != 'Windows'
               uses: hendrikmuhs/ccache-action@v1.2
               with:
                   key: ${{ matrix.os }}-coverage
                   variant: ccache
                   max-size: 500M
 
+            - name: Configure vcpkg downloads
+              shell: bash
+              run: |
+                  echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
+                  mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+
+            - name: Configure Windows vcpkg binary cache
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $binaryCache = "${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}" -replace '\\', '/'
+                  New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
+                  "VCPKG_BINARY_SOURCES=clear;files,$binaryCache,readwrite" >> $env:GITHUB_ENV
+
             - name: Configure ccache environment
+              if: runner.os != 'Windows'
               shell: bash
               run: |
                   echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
                   echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
-                  echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
                   # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
                   echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
-                  mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
 
             - name: Cache vcpkg downloads
               uses: actions/cache@v5
@@ -70,19 +115,28 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-vcpkg-downloads-
 
+            - name: Cache Windows vcpkg binary packages
+              if: runner.os == 'Windows'
+              uses: actions/cache@v5
+              with:
+                  path: ${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}
+                  key: ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-
+
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
               with:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
                   runVcpkgInstall: true
-                  doNotCache: false
+                  doNotCache: true
 
-            - name: Configure CMake (coverage)
+            - name: Configure CMake
               shell: bash
               run: |
                   for attempt in 1 2 3; do
-                      if cmake --fresh --preset=coverage-ci; then
+                      if cmake --fresh --preset=coverage -DVCPKG_TARGET_TRIPLET="${{ matrix.vcpkg_triplet }}"; then
                           exit 0
                       fi
 
@@ -94,13 +148,13 @@ jobs:
                       sleep 15
                   done
 
-            - name: Build (coverage)
-              run: cmake --build --preset=coverage-ci --parallel
+            - name: Build
+              run: cmake --build --preset=coverage --parallel
 
             - name: Run Tests
-              run: ctest --preset=coverage-ci --output-on-failure
+              run: ctest --preset=coverage --output-on-failure
 
             - name: ccache stats
-              if: always()
+              if: always() && runner.os != 'Windows'
               shell: bash
               run: ccache --show-stats

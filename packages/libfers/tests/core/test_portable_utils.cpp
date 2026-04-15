@@ -8,15 +8,27 @@
 
 using Catch::Matchers::WithinRel;
 
+namespace
+{
+	RealType expectedBesselJ1(const RealType x) noexcept
+	{
+#ifdef _MSC_VER
+		return _j1(x);
+#else
+		return j1(x);
+#endif
+	}
+}
+
 TEST_CASE("besselJ1 matches standard library j1", "[core][portable]")
 {
 	const RealType x1 = 0.0;
 	const RealType x2 = 1.0;
 	const RealType x3 = -2.5;
 
-	REQUIRE_THAT(core::besselJ1(x1), WithinRel(j1(x1), 1e-12));
-	REQUIRE_THAT(core::besselJ1(x2), WithinRel(j1(x2), 1e-12));
-	REQUIRE_THAT(core::besselJ1(x3), WithinRel(j1(x3), 1e-12));
+	REQUIRE_THAT(core::besselJ1(x1), WithinRel(expectedBesselJ1(x1), 1e-12));
+	REQUIRE_THAT(core::besselJ1(x2), WithinRel(expectedBesselJ1(x2), 1e-12));
+	REQUIRE_THAT(core::besselJ1(x3), WithinRel(expectedBesselJ1(x3), 1e-12));
 }
 
 TEST_CASE("countProcessors returns a valid count", "[core][portable]")

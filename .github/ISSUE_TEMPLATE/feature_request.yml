@@ -1,7 +1,7 @@
 ---
 name: 💡 Feature Request
 description: Suggest a new feature or enhancement for FERS.
-title: '[Feature] <A brief, descriptive title for the feature>'
+title: '[Feature] '
 labels: ['type: enhancement', 'status: triage']
 body:
     - type: dropdown
@@ -10,39 +10,44 @@ body:
           label: Related Package / Scope
           description: Which part of the project would this feature affect?
           options:
-              - Core Simulator (fers)
+              - Core Simulator (libfers / fers-cli)
               - Desktop UI (fers-ui)
               - XML Schema (schema)
               - Build Process / CI
               - Testing Framework
-      validations:
-          required: true
-
-    - type: textarea
-      id: problem-statement
-      attributes:
-          label: Is your feature request related to a problem? Please describe.
-          description: A clear and concise description of what the problem is.
-          placeholder: "e.g., I'm always frustrated when I have to manually calculate..."
+              - Not Sure / General
       validations:
           required: true
 
     - type: textarea
       id: proposed-solution
       attributes:
-          label: Describe the solution you'd like
+          label: Describe the feature you'd like to see
           description: A clear and concise description of what you want to happen. How would this feature work?
       validations:
           required: true
 
     - type: textarea
+      id: problem-statement
+      attributes:
+          label: Is your feature request related to a problem? (Optional)
+          description: A clear and concise description of what the problem is.
+          placeholder: "e.g., I'm always frustrated when I have to manually calculate..."
+      validations:
+          required: false
+
+    - type: textarea
       id: alternatives
       attributes:
-          label: Describe alternatives you've considered
+          label: Describe alternatives you've considered (Optional)
           description: A clear and concise description of any alternative solutions or features you've considered.
+      validations:
+          required: false
 
     - type: textarea
       id: additional-context
       attributes:
-          label: Additional Context
+          label: Additional Context (Optional)
           description: Add any other context, mockups, or screenshots about the feature request here.
+      validations:
+          required: false

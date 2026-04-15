@@ -25,7 +25,14 @@ namespace core
 	 * @param x The value for which the Bessel function is to be computed.
 	 * @return The computed value of the Bessel function of the first kind (order 1).
 	 */
-	inline RealType besselJ1(const RealType x) noexcept { return j1(x); }
+	inline RealType besselJ1(const RealType x) noexcept
+	{
+#ifdef _MSC_VER
+		return _j1(x);
+#else
+		return j1(x);
+#endif
+	}
 
 	/**
 	 * @brief Detects the number of CPUs on the machine.

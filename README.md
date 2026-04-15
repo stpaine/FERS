@@ -47,99 +47,161 @@ This monorepo contains the following packages:
 
 ## Development Setup
 
-Follow these steps to set up a development environment for building the C++ core and running the UI.
+FERS supports native development on Linux, macOS, and Windows.
+
+### Supported Development Targets
+
+| Platform | Core build | UI build | Notes |
+| -------- | ---------- | -------- | ----- |
+| Linux x64 / ARM64 | Supported | Supported | Requires standard Tauri Linux system packages for the UI. |
+| macOS Intel / Apple Silicon | Supported | Supported | `MACOSX_DEPLOYMENT_TARGET=14.0` is recommended locally. |
+| Windows x64 | Supported | Supported | Use Visual Studio 2022 Build Tools (or later) and the MSVC Rust toolchain. |
+| Windows ARM64 | Supported | Supported | Use native ARM64 MSVC tools and the `aarch64-pc-windows-msvc` Rust target. |
 
 ### 1. Prerequisites
 
-Ensure you have the following tools installed on your system:
+Please install the following external dependencies using their official guides:
 
-- A C++23 compatible compiler (e.g., GCC 11+, Clang 14+), **CMake** (3.22+), and [**Ninja**](https://ninja-build.org/).
-- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (for C++ dependencies). Ensure `VCPKG_ROOT` is set in your environment.
-- [**Bun**](https://bun.sh/).
-- The [**Rust toolchain**](https://www.rust-lang.org/tools/install).
-- [**Tauri prerequisites**](https://tauri.app/start/prerequisites/) for your operating system.
-- [**clang-format**](https://clang.llvm.org/docs/ClangFormat.html) (for code formatting).
-- **Other notable dependencies (for linux):** `build-essential`, `pkg-config`, and `xxd`.
+- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143+)
+- [**CMake**](https://cmake.org/download/) (3.22+) and [**Ninja**](https://ninja-build.org/)
+- [**vcpkg**](https://vcpkg.io/en/getting-started.html) (C++ package manager)
+- [**Bun**](https://bun.sh/) (JavaScript runtime and package manager)
+- [**Rust**](https://www.rust-lang.org/tools/install) (Required for the Tauri UI)
+- [**Tauri Prerequisites**](https://tauri.app/start/prerequisites/) (OS-specific system dependencies for the UI)
+
+Then also review [Platform-Specific Notes](#platform-specific-notes) below.
+
+### 2. Environment Configuration
+
+**Important:** FERS relies on `vcpkg` to manage its C++ dependencies. You **must** set the `VCPKG_ROOT` environment variable to point to your vcpkg installation directory before building.
+
+*Linux / macOS:*
+```bash
+export VCPKG_ROOT=/path/to/vcpkg
+```
+
+*Windows (PowerShell):*
+```powershell
+$env:VCPKG_ROOT = "C:\path\to\vcpkg"
+```
 
 > [!TIP]
-> Ninja is available in all major package managers: `sudo apt install ninja-build` (Debian/Ubuntu),
-> `brew install ninja` (macOS), or `choco install ninja` (Windows).
+> Installing Visual Studio should provide and link vcpkg if selected during installation, in which case the VCPKG_ROOT envvar is automatically set.
 
-### 2. Clone the Repository
+### 3. Clone and Install JS Dependencies
 
-Clone the repository from the root of the monorepo.
+Clone the repository and install the frontend dependencies. This will also set up pre-commit hooks.
 
 ```bash
 git clone https://github.com/stpaine/FERS.git
 cd FERS
-```
-
-### 3. Install Dependencies
-
-From the **root of the repository**, install all JavaScript dependencies. This also sets up pre-commit hooks using
-Husky. See the [bun.sh documentation](https://bun.com/docs/installation) for details on installing Bun.
-
-```bash
 bun install
 ```
 
 ### 4. Build the Standalone C++ Core
 
-You can configure and compile the C++ libraries directly using CMake presets. This command will automatically invoke `vcpkg` to install the required C++ dependencies. Ensure to install [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash) before running the following commands.
+You can configure and compile the C++ libraries and CLI directly using our CMake presets. This will automatically invoke `vcpkg` to fetch and build the required C++ dependencies (like HDF5 and libxml2).
 
 ```bash
-# From the root FERS directory
 cmake --preset=release
 cmake --build --preset=release
 ```
 
+Expected C++ artifacts:
+
+- Linux/macOS CLI: `build/release/packages/fers-cli/fers-cli`
+- Windows CLI: `build/release/packages/fers-cli/fers-cli.exe`
+
 > [!TIP]
-> On Linux and macOS, you can install the built `fers-cli` release to your system using:
+> You can install the built `fers-cli` release to your system using:
 >
-> `cmake --install build/release`
+> **Linux / macOS:**
+> ```bash
+> sudo cmake --install build/release
+> sudo ldconfig # For Linux only, to update the library cache
+> ```
+> This installs to `/usr/local` by default.
 >
-> This installs to `/usr/local` by default, which may require `sudo`.
+> **Windows:**
+> Open an **Administrator** Developer PowerShell and run:
+> ```powershell
+> cmake --install build/release
+> ```
+> This installs to `C:\Program Files (x86)\FERS` by default.
 
 ### 5. Run the UI
 
-The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory.
+The UI build process is completely self-contained. When you run the UI, Cargo will automatically invoke CMake to build the C++ backend in an isolated directory and link it to the Tauri application.
 
-**Important:** You must have `vcpkg` installed and the `VCPKG_ROOT` environment variable set in `PATH`.
-
-```env
-export VCPKG_ROOT=/path/to/vcpkg
-export PATH=$VCPKG_ROOT:$PATH
-```
-
-Navigate to the root of the repository and start the development server:
-
-> [!WARNING]
-> The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
-> On some Intel macOS systems, especially older WKWebView/WebKit runtimes, WebGL may be unavailable at startup and the 3D Scenario view cannot be created. This is a system WebKit limitation rather than a FERS scene-content bug. FERS now detects that condition and disables the viewport gracefully instead of crashing, but the underlying fix still requires a working Safari/WKWebView WebGL stack on the host machine. See https://github.com/davidbits/FERS/issues/181 for details.
-
+To start the development server:
 ```bash
 bun ui:dev
 ```
 
-## Using Old XML Scenarios
-
-The new FERS uses a different XML schema for scenarios than the original version
-(see https://github.com/stpaine/FERS/tree/526d412cbe06e6824c0ac9b35782dac09f726791).
-If you have existing scenarios in the old format, you can convert them to the new format using the `migrate_fers_xml.py`
-tool.
+To build a release UI bundle:
 
 ```bash
-# From the root of the repository
-python3 migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
+bun ui:build
 ```
+
+> [!WARNING]
+> On some Intel macOS systems, WebGL may be unavailable at startup due to a system WebKit limitation. FERS detects this and disables the 3D viewport gracefully. See issue #181 for details.
+
+### 6. Run C++ Unit Tests (optional)
+
+Use the `coverage` preset to compile and run the Catch2 unit tests. This preset enables `FERS_BUILD_TESTS` across all platforms.
+
+```bash
+cmake --preset=coverage
+cmake --build --preset=coverage --parallel
+ctest --preset=coverage --output-on-failure
+```
+
+## Using Old XML Scenarios
+
+The new FERS uses a different XML schema for scenarios than the original version. If you have existing scenarios in the old format, you can convert them to the new format using the included migration script:
+
+```bash
+python3 scripts/migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
+```
+
+## Platform-Specific Notes
+
+- **Windows:** FERS requires native MSVC (Visual Studio 2022 Build Tools, or later). MinGW and WSL are not officially supported. You should use the **Developer PowerShell for VS** when running build commands so that `cl.exe` and the Windows SDK are correctly prioritized in your `PATH`. Ensure you install the MSVC Rust toolchain.
+- **macOS:** It is highly recommended to set `MACOSX_DEPLOYMENT_TARGET=14.0` in your environment to ensure modern C++ filesystem support.
+
+> [!IMPORTANT]
+> **Windows: Ensuring the x64 Toolchain**
+>
+> The default Developer PowerShell in Visual Studio may launch with the **x86** host toolchain, even on a 64-bit
+> system. This causes CMake to detect a 32-bit compiler, which will fail when linking against the 64-bit vcpkg
+> packages (you will see an error like `HighFiveConfig.cmake, version: 3.3.0 (64bit) ... not compatible`).
+>
+> To fix this, you must ensure the x64 toolchain is active. Before running any build commands, execute:
+> ```powershell
+> & "C:\Program Files\Microsoft Visual Studio\<VS_VERSION>\<EDITION>\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64
+> ```
+> Replace `<VS_VERSION>` and `<EDITION>` with your installation values (e.g., `18` and `Community`).
+>
+> You can verify the correct compiler is active by running:
+> ```powershell
+> (Get-Command cl.exe).Source  # Should contain Hostx64\x64
+> ```
+>
+> **Note:** If you get a script execution policy error, run
+> `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` first.
+>
+> To make this permanent, edit the Developer PowerShell profile in **Tools → Options → Environment → Terminal
+> Profiles** and set the arguments to:
+> ```
+> -NoExit -Command "& { & 'C:\Program Files\Microsoft Visual Studio\<VS_VERSION>\<EDITION>\Common7\Tools\Launch-VsDevShell.ps1' -Arch amd64 -HostArch amd64 }"
+> ```
 
 ## Contributing
 
 We welcome contributions to the FERS project! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) guide to get started.
 
-Note that this repository uses **Husky** to enforce code quality with pre-commit hooks. When you commit, your staged
-files will be automatically formatted and linted. Ensure you have `clang-format`, `prettier`, and the Rust toolchain
-installed.
+Note that this repository uses **Husky** to enforce code quality with pre-commit hooks. When you commit, your staged files will be automatically formatted and linted.
 
 ## License
 
@@ -160,52 +222,9 @@ the [GNU General Public License](https://github.com/stpaine/FERS/blob/master/LIC
 if not, write to
 the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 
-### User-Generated Files
-
-Please note that this license only covers the source code, program binaries, and build system of FERS. Any input files
-you create (such as simulation scenarios) and any results generated by the simulator are not covered by this license and
-remain the copyright of their original author.
-
 ### Third-Party Libraries
 
-FERS incorporates code from the following third-party libraries, which are provided under their own licenses. The full
-text for these licenses can be found in the `THIRD_PARTY_LICENSES` directory.
-
-- **libxml2:** Used for XML parsing. Licensed under the [MIT License](THIRD_PARTY_LICENSES/libxml2-LICENSE.txt).
-- **HighFive:** A C++ header-only library for HDF5. Licensed under
-  the [Boost Software License 1.0](THIRD_PARTY_LICENSES/HighFive-LICENSE.txt).
-- **GeographicLib:** A library for geographic calculations. Licensed under
-  the [MIT License](THIRD_PARTY_LICENSES/GeographicLib-LICENSE.txt).
-- **libhdf5:** Used for HDF5 file handling. Licensed under
-  the [BSD 3-Clause License](THIRD_PARTY_LICENSES/libhdf5-LICENSE.txt).
-- **nlohmann/json:** A JSON library for C++. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/nlohmann-json-LICENSE.txt).
-- **Tauri:** A framework for building desktop applications. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/tauri-LICENSE.txt).
-- **React:** A JavaScript library for building user interfaces. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/react-LICENSE.txt).
-- **MUI:** A React component library. Licensed under the [MIT License](THIRD_PARTY_LICENSES/mui-LICENSE.txt).
-- **Three.js:** A 3D JavaScript library. Licensed under the [MIT License](THIRD_PARTY_LICENSES/threejs-LICENSE.txt).
-- **Zustand:** A small, fast state-management library for React. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/zustand-LICENSE.txt).
-- **Zod:** A TypeScript-first schema declaration and validation library. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/zod-LICENSE.txt).
-- **React Three Fiber:** A React renderer for Three.js. Licensed under the
-  [MIT License](THIRD_PARTY_LICENSES/react-three-fiber-LICENSE.txt).
-
-### Historical Notice from Original Distribution
-
-The following notice was part of the original FERS distribution:
-
-> Should you wish to acquire a copy of FERS not covered by these terms, please contact the Department of
-> Electrical Engineering at the University of Cape Town.
-
-### Troubleshooting
-
-#### Common Issues
-
-1. `The system library glib-2.0 was not found` or similar errors related to system packages.
-    - Ensure you have installed the necessary Tauri prerequisites for your operating system. On Debian-based Linux distributions, you can install the required packages by following https://tauri.app/start/prerequisites/
+FERS incorporates code from several third-party libraries, which are provided under their own licenses (MIT, BSD, Boost). The full text for these licenses can be found in the `THIRD_PARTY_LICENSES` directory.
 
 ## Disclaimer & Development Status
 
@@ -217,5 +236,3 @@ This means:
 - **Stability:** Expect bugs, crashes, and incomplete features.
 - **Breaking Changes:** The C-API, JSON/XML schemas, and internal architecture are subject to change without notice as the new foundation is stabilized.
 - **Use Case:** This version is intended for development, testing, and community feedback. It is **not yet recommended for production or critical simulation work.**
-
-We welcome and appreciate community involvement. Please report any issues you encounter on our [GitHub Issues](https://github.com/stpaine/FERS/issues) page.

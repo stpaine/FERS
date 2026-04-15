@@ -165,15 +165,26 @@ add_custom_command(
 		${GENERATED_HEADERS_DIR}/antenna_pattern_dtd.h
 		${GENERATED_HEADERS_DIR}/antenna_pattern_xsd.h
 		COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_HEADERS_DIR}
-		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.dtd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.dtd
-		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/fers-xml.xsd ${CMAKE_CURRENT_BINARY_DIR}/fers-xml.xsd
-		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/antenna-pattern.dtd ${CMAKE_CURRENT_BINARY_DIR}/antenna-pattern.dtd
-		COMMAND ${CMAKE_COMMAND} -E copy ${SCHEMA_DIR}/antenna-pattern.xsd ${CMAKE_CURRENT_BINARY_DIR}/antenna-pattern.xsd
-		COMMAND xxd -i fers-xml.dtd > ${GENERATED_HEADERS_DIR}/fers_xml_dtd.h
-		COMMAND xxd -i fers-xml.xsd > ${GENERATED_HEADERS_DIR}/fers_xml_xsd.h
-		COMMAND xxd -i antenna-pattern.dtd > ${GENERATED_HEADERS_DIR}/antenna_pattern_dtd.h
-		COMMAND xxd -i antenna-pattern.xsd > ${GENERATED_HEADERS_DIR}/antenna_pattern_xsd.h
-		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND ${CMAKE_COMMAND}
+				"-DINPUT=${SCHEMA_DIR}/fers-xml.dtd"
+				"-DOUTPUT=${GENERATED_HEADERS_DIR}/fers_xml_dtd.h"
+				-DVAR=fers_xml_dtd
+				-P "${CMAKE_SOURCE_DIR}/cmake/FersEmbedFile.cmake"
+		COMMAND ${CMAKE_COMMAND}
+				"-DINPUT=${SCHEMA_DIR}/fers-xml.xsd"
+				"-DOUTPUT=${GENERATED_HEADERS_DIR}/fers_xml_xsd.h"
+				-DVAR=fers_xml_xsd
+				-P "${CMAKE_SOURCE_DIR}/cmake/FersEmbedFile.cmake"
+		COMMAND ${CMAKE_COMMAND}
+				"-DINPUT=${SCHEMA_DIR}/antenna-pattern.dtd"
+				"-DOUTPUT=${GENERATED_HEADERS_DIR}/antenna_pattern_dtd.h"
+				-DVAR=antenna_pattern_dtd
+				-P "${CMAKE_SOURCE_DIR}/cmake/FersEmbedFile.cmake"
+		COMMAND ${CMAKE_COMMAND}
+				"-DINPUT=${SCHEMA_DIR}/antenna-pattern.xsd"
+				"-DOUTPUT=${GENERATED_HEADERS_DIR}/antenna_pattern_xsd.h"
+				-DVAR=antenna_pattern_xsd
+				-P "${CMAKE_SOURCE_DIR}/cmake/FersEmbedFile.cmake"
 		DEPENDS
 		${SCHEMA_DIR}/fers-xml.dtd
 		${SCHEMA_DIR}/fers-xml.xsd
@@ -274,6 +285,10 @@ endif ()
 if (FERS_BUILD_SHARED_LIBS)
 	add_library(fers_shared SHARED $<TARGET_OBJECTS:fers_objects>)
 	set_target_properties(fers_shared PROPERTIES OUTPUT_NAME "fers")
+	if (WIN32)
+		# Avoid an MSVC Ninja conflict with the static library's fers.lib.
+		set_target_properties(fers_shared PROPERTIES ARCHIVE_OUTPUT_NAME "fers_shared")
+	endif ()
 
 	target_include_directories(fers_shared PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

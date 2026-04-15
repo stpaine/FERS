@@ -19,6 +19,18 @@ if (NOT FERS_DOCS_ONLY)
 	# Note: when building via `cargo build` (the Tauri path), CMAKE_TOOLCHAIN_FILE is always passed
 	# explicitly by build.rs, so this block is effectively dead in that path. It is retained here
 	# for developers who invoke CMake directly (e.g. cmake --preset=release from the repo root).
+	if (NOT DEFINED VCPKG_TARGET_TRIPLET)
+		if (DEFINED ENV{VCPKG_TARGET_TRIPLET})
+			set(VCPKG_TARGET_TRIPLET "$ENV{VCPKG_TARGET_TRIPLET}" CACHE STRING "vcpkg target triplet")
+		elseif (CMAKE_HOST_WIN32)
+			if (CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(ARM64|AARCH64|aarch64)")
+				set(VCPKG_TARGET_TRIPLET "arm64-windows-static-md" CACHE STRING "vcpkg target triplet")
+			else ()
+				set(VCPKG_TARGET_TRIPLET "x64-windows-static-md" CACHE STRING "vcpkg target triplet")
+			endif ()
+		endif ()
+	endif ()
+
 	if (NOT DEFINED CMAKE_TOOLCHAIN_FILE)
 		set(_fers_vcpkg_candidates)
 
@@ -28,6 +40,10 @@ if (NOT FERS_DOCS_ONLY)
 
 		if (DEFINED ENV{HOME})
 			list(APPEND _fers_vcpkg_candidates "$ENV{HOME}/vcpkg")
+		endif ()
+
+		if (DEFINED ENV{USERPROFILE})
+			list(APPEND _fers_vcpkg_candidates "$ENV{USERPROFILE}/vcpkg")
 		endif ()
 
 		list(APPEND _fers_vcpkg_candidates "${CMAKE_SOURCE_DIR}/vcpkg")

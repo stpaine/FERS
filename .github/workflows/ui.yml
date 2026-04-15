@@ -31,6 +31,7 @@ jobs:
                   bun-version: latest
 
             - name: Cache Bun dependencies
+              if: runner.os != 'Windows'
               uses: actions/cache@v5
               with:
                   path: ~/.bun/install/cache
@@ -47,11 +48,34 @@ jobs:
     build-ui:
         name: Build UI (${{ matrix.os }})
         runs-on: ${{ matrix.os }}
-        timeout-minutes: 30
+        timeout-minutes: 60
         strategy:
             fail-fast: false
             matrix:
-                os: [ubuntu-24.04, ubuntu-24.04-arm, macos-26-intel, macos-26]
+                include:
+                    - os: ubuntu-24.04
+                      vcpkg_triplet: x64-linux
+                      rust_target: x86_64-unknown-linux-gnu
+                    - os: ubuntu-24.04-arm
+                      vcpkg_triplet: arm64-linux
+                      rust_target: aarch64-unknown-linux-gnu
+                    - os: macos-26-intel
+                      vcpkg_triplet: x64-osx
+                      rust_target: x86_64-apple-darwin
+                    - os: macos-26
+                      vcpkg_triplet: arm64-osx
+                      rust_target: aarch64-apple-darwin
+                    - os: windows-2025
+                      vcpkg_triplet: x64-windows-static-md
+                      rust_target: x86_64-pc-windows-msvc
+                      msvc_arch: x64
+                    - os: windows-11-arm
+                      vcpkg_triplet: arm64-windows-static-md
+                      rust_target: aarch64-pc-windows-msvc
+                      msvc_arch: arm64
+        env:
+            VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+            VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
 
         steps:
             - name: Checkout repository
@@ -61,10 +85,31 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo apt-get update
-                  sudo apt-get install -y xxd pkg-config build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev xdg-utils
+                  sudo apt-get install -y pkg-config build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libwebkit2gtk-4.1-dev xdg-utils
 
             - name: Get CMake
               uses: lukka/get-cmake@latest
+
+            - name: Setup MSVC
+              if: runner.os == 'Windows'
+              uses: ilammy/msvc-dev-cmd@v1
+              with:
+                  arch: ${{ matrix.msvc_arch }}
+
+            - name: Force MSVC compilers
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $linker = (where.exe link.exe | Select-Object -First 1)
+                  if (-not $linker) {
+                      throw "MSVC link.exe not found"
+                  }
+
+                  "CC=cl" >> $env:GITHUB_ENV
+                  "CXX=cl" >> $env:GITHUB_ENV
+                  "VCPKG_ROOT=${{ github.workspace }}\vcpkg" >> $env:GITHUB_ENV
+                  "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER=$linker" >> $env:GITHUB_ENV
+                  "CARGO_TARGET_AARCH64_PC_WINDOWS_MSVC_LINKER=$linker" >> $env:GITHUB_ENV
 
             - name: Verify build tools
               shell: bash
@@ -73,21 +118,35 @@ jobs:
                   ninja --version
 
             - name: Setup ccache
+              if: runner.os != 'Windows'
               uses: hendrikmuhs/ccache-action@v1.2
               with:
                   key: ui-${{ matrix.os }}
                   variant: ccache
                   max-size: 500M
 
-            - name: Configure ccache environment
+            - name: Configure vcpkg downloads
               shell: bash
               run: |
-                echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
-                echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
-                echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
-                # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
-                echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
-                mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+                  echo "VCPKG_DOWNLOADS=${{ github.workspace }}/.cache/vcpkg/downloads" >> "$GITHUB_ENV"
+                  mkdir -p "${{ github.workspace }}/.cache/vcpkg/downloads"
+
+            - name: Configure Windows vcpkg binary cache
+              if: runner.os == 'Windows'
+              shell: pwsh
+              run: |
+                  $binaryCache = "${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}" -replace '\\', '/'
+                  New-Item -ItemType Directory -Force -Path $binaryCache | Out-Null
+                  "VCPKG_BINARY_SOURCES=clear;files,$binaryCache,readwrite" >> $env:GITHUB_ENV
+
+            - name: Configure ccache environment
+              if: runner.os != 'Windows'
+              shell: bash
+              run: |
+                  echo "CMAKE_C_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> "$GITHUB_ENV"
+                  # Let vcpkg's port builds inherit ccache + the GHA cache credentials.
+                  echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
 
             - name: Cache vcpkg downloads
               uses: actions/cache@v5
@@ -97,12 +156,21 @@ jobs:
                   restore-keys: |
                       ${{ runner.os }}-vcpkg-downloads-
 
+            - name: Cache Windows vcpkg binary packages
+              if: runner.os == 'Windows'
+              uses: actions/cache@v5
+              with:
+                  path: ${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}
+                  key: ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json') }}
+                  restore-keys: |
+                      ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-
+
             - name: Setup vcpkg
               uses: lukka/run-vcpkg@v11
               with:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
-                  doNotCache: false
+                  doNotCache: true
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -120,6 +188,10 @@ jobs:
             - name: Install Rust toolchain
               run: rustup show
 
+            - name: Install Windows Rust target
+              if: runner.os == 'Windows'
+              run: rustup target add ${{ matrix.rust_target }}
+
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
               with:
@@ -130,10 +202,13 @@ jobs:
               run: bun install
 
             - name: Build UI
+              if: runner.os != 'Windows'
               env:
                   CMAKE_GENERATOR: Ninja
                   # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
                   VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+                  VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+                  VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
               shell: bash
               run: |
                   for attempt in 1 2 3; do
@@ -149,7 +224,31 @@ jobs:
                       sleep 15
                   done
 
+            - name: Build UI (Windows)
+              if: runner.os == 'Windows'
+              env:
+                  CMAKE_GENERATOR: Ninja
+                  # Explicitly pass VCPKG_ROOT so build.rs can locate the vcpkg toolchain
+                  VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+                  VCPKG_DEFAULT_TRIPLET: ${{ matrix.vcpkg_triplet }}
+                  VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+              shell: pwsh
+              run: |
+                  for ($attempt = 1; $attempt -le 3; $attempt++) {
+                      bun run ui:build
+                      if ($LASTEXITCODE -eq 0) {
+                          exit 0
+                      }
+
+                      if ($attempt -eq 3) {
+                          exit $LASTEXITCODE
+                      }
+
+                      Write-Host "UI build failed on attempt $attempt. Retrying in 15 seconds..."
+                      Start-Sleep -Seconds 15
+                  }
+
             - name: ccache stats
-              if: always()
+              if: always() && runner.os != 'Windows'
               shell: bash
               run: ccache --show-stats

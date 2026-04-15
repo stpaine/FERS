@@ -12,12 +12,9 @@ To ensure a smooth and effective process, please read these guidelines before yo
 - [Suggesting Enhancements](#suggesting-enhancements)
 - [Your First Code Contribution](#your-first-code-contribution)
 - [Development Setup](#development-setup)
-    - [Core Simulator (`fers`) Setup](#core-simulator-fers-setup)
-    - [User Interface (`fers-ui`) Setup](#user-interface-fers-ui-setup)
+- [Continuous Integration](#continuous-integration)
 - [Pull Request Process](#pull-request-process)
 - [Style Guides](#style-guides)
-    - [C++ (`fers`) Style Guide](#c-fers-style-guide)
-    - [TypeScript/React (`fers-ui`) Style Guide](#typescriptreact-fers-ui-style-guide)
 - [Commit Message Guidelines](#commit-message-guidelines)
 
 ## Ways to Contribute
@@ -63,34 +60,17 @@ issues:
 
 ## Development Setup
 
-This is a monorepo containing two main packages. Please follow the setup instructions for the package you intend to work
-on.
+This is a monorepo containing the C++ core simulator (`libfers` / `fers-cli`) and the Tauri desktop application (`fers-ui`).
 
-### Core Simulator (`libfers`) Setup
+For complete instructions on installing prerequisites (CMake, vcpkg, Bun, Rust) and building the project across Windows, macOS, and Linux, please refer to the **[Development Setup section in the root README.md](README.md#development-setup)**.
 
-The core simulator is written in C++.
+## Continuous Integration
 
-1. **Prerequisites**: Ensure you have all prerequisities installed as outlined in the [README.md](README.md).
-2. **Clone the repo**: `git clone https://github.com/stpaine/FERS.git`
-3. **Build**: Follow the build instructions in the [`README.md`](README.md).
-
-### User Interface (`fers-ui`) Setup
-
-The UI is a Tauri desktop application built with React and TypeScript.
-
-1. **Prerequisites**: Ensure you have Node.js, bun, and the Rust toolchain installed.
-2. **Setup Tauri**: Follow the [Tauri prerequisites guide](https://tauri.app/start/prerequisites/) for your OS.
-3. **Install & Run**:
-    ```bash
-    bun install
-    bun ui:dev
-    ```
-
-For more details, see the [`packages/fers-ui/README.md`](packages/fers-ui/README.md).
+Continuous Integration (CI) workflows run on every pull request and push to the `master` branch to verify the core build and tests, as well as the UI build. Please ensure your code passes locally before submitting a PR.
 
 ## Pull Request Process
 
-1. Fork the repository and create your branch from `main`.
+1. Fork the repository and create your branch from `master`.
 2. If you've added code that should be tested, add tests.
 3. Make sure your code lints and follows the style guides below.
 4. Open a pull request with a clear title and a detailed description of your changes. Link to any relevant issues.
@@ -112,8 +92,11 @@ Please adhere to the existing code style. We use `.clang-format` to enforce form
 
 ### TypeScript/React (`fers-ui`) Style Guide
 
-We use ESLint and Prettier to enforce a consistent code style. Please run `pnpm lint` and `pnpm format` before
-committing.
+We use Biome and Bun to enforce a consistent code style. Please run the UI lint task before committing:
+
+```bash
+bun lint:js
+```
 
 - **Naming Conventions**:
     - Components and Types: `PascalCase`
@@ -145,5 +128,5 @@ feat(ui): add property inspector for antennas
 Implemented a new component in the left sidebar that displays
 and allows editing of properties for the selected antenna element.
 
-Fixes #42
+Closes #42
 ```
