@@ -1,24 +1,76 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2026-present FERS Contributors (see AUTHORS.md).
 
-import { beforeEach, describe, expect, test } from 'bun:test';
 import {
+    afterAll,
+    beforeAll,
+    beforeEach,
+    describe,
+    expect,
+    test,
+} from 'bun:test';
+import {
+    clampLogDrawerWidth,
     clampLogMaxLines,
+    DEFAULT_LOG_DRAWER_WIDTH,
     DEFAULT_LOG_LEVEL,
     DEFAULT_LOG_MAX_LINES,
+    getEffectiveLogDrawerWidth,
+    MAX_LOG_DRAWER_WIDTH,
     MAX_LOG_MAX_LINES,
+    MIN_LOG_DRAWER_WIDTH,
     MIN_LOG_MAX_LINES,
+    readStoredLogDrawerWidth,
     useFersLogStore,
 } from './fersLogStore';
 
+type StorageMock = {
+    clear: () => void;
+    getItem: (key: string) => string | null;
+    removeItem: (key: string) => void;
+    setItem: (key: string, value: string) => void;
+};
+
+function createStorageMock(): StorageMock {
+    const values = new Map<string, string>();
+
+    return {
+        clear: () => values.clear(),
+        getItem: (key) => values.get(key) ?? null,
+        removeItem: (key) => values.delete(key),
+        setItem: (key, value) => {
+            values.set(key, value);
+        },
+    };
+}
+
+const localStorageMock = createStorageMock();
+const originalLocalStorage = globalThis.localStorage;
+
 describe('fers log store', () => {
+    beforeAll(() => {
+        Object.defineProperty(globalThis, 'localStorage', {
+            value: localStorageMock,
+            configurable: true,
+        });
+    });
+
+    afterAll(() => {
+        Object.defineProperty(globalThis, 'localStorage', {
+            value: originalLocalStorage,
+            configurable: true,
+        });
+    });
+
     beforeEach(() => {
+        globalThis.localStorage.clear();
         useFersLogStore.setState({
             entries: [],
             droppedCount: 0,
             maxLines: DEFAULT_LOG_MAX_LINES,
             logLevel: DEFAULT_LOG_LEVEL,
             isOpen: false,
+            drawerWidth: DEFAULT_LOG_DRAWER_WIDTH,
         });
     });
 
@@ -87,6 +139,15 @@ describe('fers log store', () => {
         expect(clampLogMaxLines(1234.9)).toBe(1234);
     });
 
+    test('clampLogDrawerWidth handles invalid and out-of-range values', () => {
+        expect(clampLogDrawerWidth(Number.NaN)).toBe(DEFAULT_LOG_DRAWER_WIDTH);
+        expect(clampLogDrawerWidth(1)).toBe(MIN_LOG_DRAWER_WIDTH);
+        expect(clampLogDrawerWidth(MAX_LOG_DRAWER_WIDTH + 1)).toBe(
+            MAX_LOG_DRAWER_WIDTH
+        );
+        expect(clampLogDrawerWidth(733.6)).toBe(734);
+    });
+
     test('log level defaults and updates', () => {
         expect(useFersLogStore.getState().logLevel).toBe(DEFAULT_LOG_LEVEL);
 
@@ -95,5 +156,35 @@ describe('fers log store', () => {
 
         useFersLogStore.getState().setLogLevel('OFF');
         expect(useFersLogStore.getState().logLevel).toBe('OFF');
+    });
+
+    test('setDrawerWidth updates state and persists width', () => {
+        useFersLogStore.getState().setDrawerWidth(734);
+
+        expect(useFersLogStore.getState().drawerWidth).toBe(734);
+        expect(
+            JSON.parse(
+                globalThis.localStorage.getItem('fers.logViewer.v1') ?? '{}'
+            )
+        ).toEqual({ drawerWidth: 734 });
+    });
+
+    test('readStoredLogDrawerWidth hydrates persisted width', () => {
+        globalThis.localStorage.setItem(
+            'fers.logViewer.v1',
+            JSON.stringify({ drawerWidth: 1440 })
+        );
+
+        expect(readStoredLogDrawerWidth()).toBe(MAX_LOG_DRAWER_WIDTH);
+    });
+
+    test('effective width clamps to viewport without mutating preferred width', () => {
+        useFersLogStore.getState().setDrawerWidth(800);
+
+        const preferredWidth = useFersLogStore.getState().drawerWidth;
+        const effectiveWidth = getEffectiveLogDrawerWidth(preferredWidth, 500);
+
+        expect(preferredWidth).toBe(800);
+        expect(effectiveWidth).toBe(500);
     });
 });
