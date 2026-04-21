@@ -41,7 +41,7 @@ export default function AppRail({
         <Box
             sx={{
                 width: 60,
-                height: '100%', // Use percentage instead of vh
+                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -49,7 +49,7 @@ export default function AppRail({
                 borderColor: 'divider',
                 bgcolor: 'background.paper',
                 flexShrink: 0,
-                overflow: 'hidden', // Prevent overflow
+                overflow: 'hidden',
             }}
         >
             <List sx={{ flexGrow: 1, overflow: 'auto', width: '100%' }}>

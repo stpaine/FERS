@@ -7,7 +7,12 @@ import React, { useEffect, useState } from 'react';
 import AppRail from '@/components/AppRail';
 import RawLogDrawer from '@/components/RawLogDrawer';
 import SettingsDialog from '@/components/SettingsDialog';
-import { type FersLogEntry, useFersLogStore } from '@/stores/fersLogStore';
+import {
+    clampLogDrawerWidth,
+    type FersLogEntry,
+    getEffectiveLogDrawerWidth,
+    useFersLogStore,
+} from '@/stores/fersLogStore';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { AssetLibraryView } from '@/views/AssetLibraryView';
 import { ScenarioView } from '@/views/ScenarioView';
@@ -16,8 +21,20 @@ import { SimulationView } from '@/views/SimulationView';
 export function MainLayout() {
     const [activeView, setActiveView] = useState('scenario');
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [viewportWidth, setViewportWidth] = useState(() =>
+        typeof window === 'undefined' ? 1440 : window.innerWidth
+    );
+    const [liveLogDrawerWidth, setLiveLogDrawerWidth] = useState<number | null>(
+        null
+    );
     const logOpen = useFersLogStore((state) => state.isOpen);
     const appendLog = useFersLogStore((state) => state.appendLog);
+    const preferredLogDrawerWidth = useFersLogStore(
+        (state) => state.drawerWidth
+    );
+    const setPreferredLogDrawerWidth = useFersLogStore(
+        (state) => state.setDrawerWidth
+    );
     const { open, message, severity } = useScenarioStore(
         (state) => state.notificationSnackbar
     );
@@ -48,6 +65,43 @@ export function MainLayout() {
         };
     }, [appendLog]);
 
+    useEffect(() => {
+        const handleResize = () => {
+            setViewportWidth(window.innerWidth);
+        };
+
+        handleResize();
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!logOpen) {
+            setLiveLogDrawerWidth(null);
+        }
+    }, [logOpen]);
+
+    const sidebarWidth = 60;
+    const requestedLogDrawerWidth =
+        liveLogDrawerWidth ?? preferredLogDrawerWidth;
+    const maxLogDrawerWidth = Math.max(0, viewportWidth - sidebarWidth);
+    const effectiveLogDrawerWidth = logOpen
+        ? getEffectiveLogDrawerWidth(requestedLogDrawerWidth, maxLogDrawerWidth)
+        : 0;
+
+    const handleLogDrawerResize = (nextWidth: number) => {
+        setLiveLogDrawerWidth(clampLogDrawerWidth(nextWidth));
+    };
+
+    const handleLogDrawerResizeEnd = (nextWidth: number) => {
+        const clampedWidth = clampLogDrawerWidth(nextWidth);
+        setLiveLogDrawerWidth(null);
+        setPreferredLogDrawerWidth(clampedWidth);
+    };
+
     return (
         <Box
             sx={{
@@ -58,6 +112,7 @@ export function MainLayout() {
                 position: 'fixed', // Ensure it stays in viewport
                 top: 0,
                 left: 0,
+                bgcolor: 'background.default',
             }}
         >
             <AppRail
@@ -65,7 +120,14 @@ export function MainLayout() {
                 onViewChange={setActiveView}
                 onSettingsClick={() => setSettingsOpen(true)}
             />
-            {logOpen && <RawLogDrawer />}
+            {logOpen && effectiveLogDrawerWidth > 0 && (
+                <RawLogDrawer
+                    leftOffset={sidebarWidth}
+                    width={effectiveLogDrawerWidth}
+                    onResize={handleLogDrawerResize}
+                    onResizeEnd={handleLogDrawerResizeEnd}
+                />
+            )}
             <Box
                 component="main"
                 sx={{
@@ -74,6 +136,7 @@ export function MainLayout() {
                     height: '100%',
                     overflow: 'hidden', // Prevent overflow
                     position: 'relative',
+                    bgcolor: 'background.default',
                 }}
             >
                 {/* Render all views but only display the active one */}

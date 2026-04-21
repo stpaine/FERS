@@ -719,19 +719,28 @@ TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][c
 	world.add(std::move(wave));
 
 	const auto links = simulation::calculatePreviewLinks(world, 0.0);
+	bool saw_monostatic = false;
+	bool saw_tx_tgt = false;
 
 	for (const auto& link : links)
 	{
 		if (link.type == simulation::LinkType::Monostatic)
 		{
-			// Label format: "{:.1f} dBm (RCS: {:.1f}m²)"
+			saw_monostatic = true;
 			REQUIRE(link.label.find("dBm") != std::string::npos);
-			REQUIRE(link.label.find("RCS") != std::string::npos);
+			REQUIRE_THAT(link.rcs, WithinAbs(10.0, 1e-12));
+			REQUIRE(link.actual_power_dbm > -999.0);
+
+			const double label_power_dbm = std::stod(link.label);
+			REQUIRE_THAT(link.actual_power_dbm, WithinAbs(label_power_dbm + 10.0 * std::log10(link.rcs), 0.1));
 		}
 		if (link.type == simulation::LinkType::BistaticTxTgt)
 		{
-			// Label format: "{:.1f} dBW/m²"
+			saw_tx_tgt = true;
 			REQUIRE(link.label.find("dBW") != std::string::npos);
 		}
 	}
+
+	REQUIRE(saw_monostatic);
+	REQUIRE(saw_tx_tgt);
 }

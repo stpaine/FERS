@@ -145,7 +145,7 @@ bun ui:build
 ```
 
 > [!WARNING]
-> On some Intel macOS systems, WebGL may be unavailable at startup due to a system WebKit limitation. FERS detects this and disables the 3D viewport gracefully. See issue #181 for details.
+> On some Intel macOS systems, WebGL may be unavailable at startup due to a system WebKit limitation. FERS detects this and disables the 3D viewport gracefully. See issue [#181](https://github.com/davidbits/FERS/issues/181) for details.
 
 ### 6. Run C++ Unit Tests (optional)
 

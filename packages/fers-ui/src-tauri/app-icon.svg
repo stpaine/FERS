@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0f2236"/>
+      <stop offset="100%" stop-color="#0a1520"/>
+    </radialGradient>
+    <radialGradient id="sweepGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00d4c8" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#00d4c8" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="circleClip">
+      <circle cx="512" cy="512" r="440"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background: rounded square -->
+  <rect width="1024" height="1024" rx="180" ry="180" fill="url(#bgGrad)"/>
+
+  <!-- Radar rings -->
+  <circle cx="512" cy="512" r="110" fill="none" stroke="#1a8fa0" stroke-width="8" opacity="0.9"/>
+  <circle cx="512" cy="512" r="220" fill="none" stroke="#1a8fa0" stroke-width="6" opacity="0.65"/>
+  <circle cx="512" cy="512" r="330" fill="none" stroke="#1a8fa0" stroke-width="5" opacity="0.45"/>
+  <circle cx="512" cy="512" r="440" fill="none" stroke="#1a8fa0" stroke-width="4" opacity="0.3"/>
+
+  <!-- Cross-hair lines (faint) -->
+  <line x1="512" y1="72" x2="512" y2="952" stroke="#1a8fa0" stroke-width="2" opacity="0.2"/>
+  <line x1="72" y1="512" x2="952" y2="512" stroke="#1a8fa0" stroke-width="2" opacity="0.2"/>
+
+  <!-- Sweep wedge (~70° arc from ~320° to ~30°, i.e. upper-right quadrant)
+       Using a path: move to center, arc to edge, close.
+       Sweep from angle -90° (top, 12 o'clock) going clockwise ~70°.
+       In SVG coords: start point at top (512, 72), end point at ~70° clockwise from top.
+       70° clockwise from top = -90 + 70 = -20° standard = 360-20 = 340° from east
+       End point: cx + r*cos(-20°*π/180), cy + r*sin(-20°*π/180)
+         = 512 + 440*cos(-0.349) ≈ 512 + 440*0.9397 ≈ 512 + 413 = 925
+         = 512 + 440*sin(-0.349) ≈ 512 + 440*(-0.342) ≈ 512 - 150 = 362
+  -->
+  <path d="M512,512 L512,72 A440,440 0 0,1 925,362 Z"
+        fill="url(#sweepGrad)" clip-path="url(#circleClip)"/>
+
+  <!-- Sweep leading edge line (bright) -->
+  <line x1="512" y1="512" x2="925" y2="362"
+        stroke="#00d4c8" stroke-width="4" opacity="0.9"/>
+
+  <!-- Center dot -->
+  <circle cx="512" cy="512" r="18" fill="#00d4c8" opacity="1"/>
+  <circle cx="512" cy="512" r="8" fill="#ffffff" opacity="0.9"/>
+</svg>

@@ -1188,6 +1188,8 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 				dst.source_id = static_cast<uint64_t>(src.source_id);
 				dst.dest_id = static_cast<uint64_t>(src.dest_id);
 				dst.origin_id = static_cast<uint64_t>(src.origin_id);
+				dst.rcs = src.rcs;
+				dst.actual_power_dbm = src.actual_power_dbm;
 			}
 		}
 		else

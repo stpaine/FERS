@@ -1,8 +1,8 @@
 {
     "$schema": "https://schema.tauri.app/config/2",
-    "productName": "fers-ui",
+    "productName": "FERS",
     "version": "0.1.0",
-    "identifier": "com.rrsg.fers-ui",
+    "identifier": "com.rrsg.fers",
     "build": {
         "beforeDevCommand": "bun run dev",
         "devUrl": "http://localhost:1420",

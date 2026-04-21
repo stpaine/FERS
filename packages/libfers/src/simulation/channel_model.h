@@ -195,6 +195,8 @@ namespace simulation
 		SimId source_id; // The start of this specific link segment
 		SimId dest_id; // The end of this specific link segment
 		SimId origin_id; // The original source of energy (Transmitter)
+		double rcs{-1.0}; // RCS in m^2 for this path; -1.0 if not applicable
+		double actual_power_dbm{-999.0}; // Received power with actual RCS applied; -999 if not applicable
 	};
 
 	/**

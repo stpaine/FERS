@@ -3,9 +3,9 @@
 
 import { Box, Tooltip, Typography } from '@mui/material';
 import { Html, Line } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
     calculateInterpolatedPosition,
@@ -41,6 +41,15 @@ interface LinkMetadata {
     source_id: string;
     dest_id: string;
     origin_id: string;
+    rcs: number; // RCS in m^2; negative if not applicable
+    actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
+}
+
+interface LinkRange {
+    powerMin: number;
+    powerMax: number;
+    rcsMin: number;
+    rcsMax: number;
 }
 
 // Derived object used for actual rendering
@@ -48,6 +57,10 @@ interface RenderableLink extends LinkMetadata {
     start: THREE.Vector3;
     end: THREE.Vector3;
     distance: number;
+    source_name: string;
+    dest_name: string;
+    origin_name: string;
+    range: LinkRange | null;
 }
 
 // Define the shape coming from Rust
@@ -58,6 +71,8 @@ interface RustVisualLink {
     source_id: string;
     dest_id: string;
     origin_id: string;
+    rcs: number; // RCS in m^2; negative if not applicable
+    actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
 }
 
 // Helper to determine color based on link type and quality
@@ -115,11 +130,12 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
                         Link Details
                     </Typography>
                     <Typography variant="caption" display="block">
-                        <b>Path Segment:</b> {link.source_id} → {link.dest_id}
+                        <b>Path Segment:</b> {link.source_name} →{' '}
+                        {link.dest_name}
                     </Typography>
                     {link.link_type === 'scattered' && (
                         <Typography variant="caption" display="block">
-                            <b>Illuminator:</b> {link.origin_id}
+                            <b>Illuminator:</b> {link.origin_name}
                         </Typography>
                     )}
                     <Typography variant="caption" display="block">
@@ -131,6 +147,43 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
                     <Typography variant="caption" display="block">
                         <b>Value:</b> {link.label}
                     </Typography>
+                    {link.actual_power_dbm > -990 && (
+                        <>
+                            <Typography variant="caption" display="block">
+                                <b>Actual Power:</b>{' '}
+                                {link.actual_power_dbm.toFixed(1)} dBm
+                            </Typography>
+                            {link.range &&
+                                link.range.powerMin < link.range.powerMax && (
+                                    <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ pl: 1.5, opacity: 0.7 }}
+                                    >
+                                        range: {link.range.powerMin.toFixed(1)}{' '}
+                                        to {link.range.powerMax.toFixed(1)} dBm
+                                    </Typography>
+                                )}
+                        </>
+                    )}
+                    {link.rcs >= 0 && (
+                        <>
+                            <Typography variant="caption" display="block">
+                                <b>RCS:</b> {link.rcs.toFixed(2)} m^2
+                            </Typography>
+                            {link.range &&
+                                link.range.rcsMin < link.range.rcsMax && (
+                                    <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ pl: 1.5, opacity: 0.7 }}
+                                    >
+                                        range: {link.range.rcsMin.toFixed(2)} to{' '}
+                                        {link.range.rcsMax.toFixed(2)} m^2
+                                    </Typography>
+                                )}
+                        </>
+                    )}
                 </Box>
             }
         >
@@ -160,13 +213,16 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
 function LabelCluster({
     position,
     links,
+    divRef,
 }: {
     position: THREE.Vector3;
     links: RenderableLink[];
+    divRef: React.Ref<HTMLDivElement>;
 }) {
     return (
         <Html position={position} center zIndexRange={[100, 0]}>
             <div
+                ref={divRef}
                 style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -184,15 +240,16 @@ function LabelCluster({
     );
 }
 
+// Minimum screen-space separation (px) enforced between label cluster centers.
+const LABEL_OVERLAP_PX = 60;
+
 /**
  * Renders radio frequency links between platforms.
  *
  * Performance Design:
- * 1. Metadata Fetching: Throttled to ~10 FPS. Fetches connectivity status and text labels.
- * 2. Geometry Rendering: Runs at 60 FPS (driven by store.currentTime).
- *
- * This ensures the lines "stick" to platforms smoothly while avoiding FFI/Text updates
- * overload on every frame.
+ * 1. Metadata Fetching: 60 FPS. Labels and quality update at full rate.
+ * 2. Range Tracking: Per-link min/max accumulated in a ref (no re-render cost); read in useMemo.
+ * 3. Geometry Rendering: 60 FPS (driven by store.currentTime). Lines always stick to platforms.
  */
 export default function LinkVisualizer() {
     const currentTime = useScenarioStore((state) => state.currentTime);
@@ -212,14 +269,18 @@ export default function LinkVisualizer() {
         showLinkDirect,
     } = visibility;
 
+    const { camera, gl } = useThree();
+
     // Store only the metadata (connectivity/labels), not positions
     const [linkMetadata, setLinkMetadata] = useState<LinkMetadata[]>([]);
+
+    // Accumulates observed min/max per link key — never causes re-renders, read in useMemo
+    const linkRangesRef = useRef<Map<string, LinkRange>>(new Map());
 
     // Throttle control
     const lastFetchTimeRef = useRef<number>(0);
     const isFetchingRef = useRef<boolean>(false);
     const isMountedRef = useRef<boolean>(true);
-    // Updated to 16ms to target 60FPS updates during playback
     const FETCH_INTERVAL_MS = 16;
 
     // Track component mount status to prevent setting state on unmounted component
@@ -234,6 +295,7 @@ export default function LinkVisualizer() {
     useEffect(() => {
         if (isSimulating || isGeneratingKml) {
             setLinkMetadata([]);
+            linkRangesRef.current.clear();
         }
     }, [isSimulating, isGeneratingKml]);
 
@@ -253,9 +315,26 @@ export default function LinkVisualizer() {
         return map;
     }, [platforms]);
 
-    // Reset throttle when the scenario structure changes
+    // Maps component/sub-component IDs to display names.
+    // Monostatic txId/rxId are internal sub-IDs — map them to the parent component name.
+    const componentToName = useMemo(() => {
+        const map = new Map<string, string>();
+        platforms.forEach((p) => {
+            p.components.forEach((c) => {
+                map.set(c.id, c.name);
+                if (c.type === 'monostatic') {
+                    map.set(c.txId, c.name);
+                    map.set(c.rxId, c.name);
+                }
+            });
+        });
+        return map;
+    }, [platforms]);
+
+    // Reset throttle and accumulated ranges when the scenario structure changes
     useEffect(() => {
         lastFetchTimeRef.current = 0;
+        linkRangesRef.current.clear();
     }, [componentToPlatform]);
 
     // REPLACED: useFrame loop handles fetching instead of useEffect.
@@ -310,9 +389,52 @@ export default function LinkVisualizer() {
                             source_id: l.source_id,
                             dest_id: l.dest_id,
                             origin_id: l.origin_id,
+                            rcs: l.rcs,
+                            actual_power_dbm: l.actual_power_dbm,
                         })
                     );
                     setLinkMetadata(reconstructedLinks);
+
+                    // Accumulate observed min/max per link (ranges only ever expand)
+                    reconstructedLinks.forEach((m) => {
+                        const key = `${m.link_type}_${m.source_id}_${m.dest_id}_${m.origin_id}`;
+                        const existing = linkRangesRef.current.get(key);
+                        if (existing) {
+                            if (m.actual_power_dbm > -990) {
+                                existing.powerMin = Math.min(
+                                    existing.powerMin,
+                                    m.actual_power_dbm
+                                );
+                                existing.powerMax = Math.max(
+                                    existing.powerMax,
+                                    m.actual_power_dbm
+                                );
+                            }
+                            if (m.rcs >= 0) {
+                                existing.rcsMin = Math.min(
+                                    existing.rcsMin,
+                                    m.rcs
+                                );
+                                existing.rcsMax = Math.max(
+                                    existing.rcsMax,
+                                    m.rcs
+                                );
+                            }
+                        } else {
+                            linkRangesRef.current.set(key, {
+                                powerMin:
+                                    m.actual_power_dbm > -990
+                                        ? m.actual_power_dbm
+                                        : Infinity,
+                                powerMax:
+                                    m.actual_power_dbm > -990
+                                        ? m.actual_power_dbm
+                                        : -Infinity,
+                                rcsMin: m.rcs >= 0 ? m.rcs : Infinity,
+                                rcsMax: m.rcs >= 0 ? m.rcs : -Infinity,
+                            });
+                        }
+                    });
                 }
             } catch (e) {
                 console.error('Link preview error:', e);
@@ -325,6 +447,65 @@ export default function LinkVisualizer() {
         };
 
         void fetchLinks();
+    });
+
+    // Refs to each rendered LabelCluster's inner div for direct DOM transform updates
+    const clusterDivRefs = useRef<(HTMLDivElement | null)[]>([]);
+    // Latest clusters held in a ref so useFrame always reads the current value
+    const clustersRef = useRef<
+        Array<{ position: THREE.Vector3; links: RenderableLink[] }>
+    >([]);
+    // Scratch vector reused each frame to avoid per-frame allocation
+    const ndcScratch = useMemo(() => new THREE.Vector3(), []);
+
+    // Screen-space label placement: runs every frame, nudges overlapping cluster
+    // divs apart via CSS transform so all labels remain visible.
+    useFrame(() => {
+        const clusterCount = clustersRef.current.length;
+        if (clusterCount === 0) return;
+
+        const w = gl.domElement.clientWidth;
+        const h = gl.domElement.clientHeight;
+
+        // Project all cluster anchor positions to screen space
+        const sx = new Float32Array(clusterCount);
+        const sy = new Float32Array(clusterCount);
+        for (let i = 0; i < clusterCount; i++) {
+            ndcScratch.copy(clustersRef.current[i].position).project(camera);
+            sx[i] = (ndcScratch.x * 0.5 + 0.5) * w;
+            sy[i] = (-ndcScratch.y * 0.5 + 0.5) * h;
+        }
+
+        // Iterative force-push: separate overlapping label centers
+        const ox = new Float32Array(clusterCount); // x offsets (pixels)
+        const oy = new Float32Array(clusterCount); // y offsets (pixels)
+        for (let iter = 0; iter < 8; iter++) {
+            for (let i = 0; i < clusterCount; i++) {
+                for (let j = i + 1; j < clusterCount; j++) {
+                    const dx = sx[j] + ox[j] - (sx[i] + ox[i]);
+                    const dy = sy[j] + oy[j] - (sy[i] + oy[i]);
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq >= LABEL_OVERLAP_PX * LABEL_OVERLAP_PX) continue;
+
+                    const dist = Math.sqrt(distSq);
+                    const push = (LABEL_OVERLAP_PX - dist) * 0.5;
+                    // Push apart along the separation vector; use (1, 0) as fallback
+                    const nx = dist > 0.5 ? dx / dist : 1;
+                    const ny = dist > 0.5 ? dy / dist : 0;
+                    ox[i] -= nx * push;
+                    oy[i] -= ny * push;
+                    ox[j] += nx * push;
+                    oy[j] += ny * push;
+                }
+            }
+        }
+
+        // Apply computed offsets as CSS transforms on each cluster div
+        for (let i = 0; i < clusterCount; i++) {
+            const div = clusterDivRefs.current[i];
+            if (!div) continue;
+            div.style.transform = `translate(${ox[i].toFixed(1)}px, ${oy[i].toFixed(1)}px)`;
+        }
     });
 
     // 2. High-Frequency Geometry Calculation (Runs every render/frame)
@@ -357,11 +538,21 @@ export default function LinkVisualizer() {
                 );
                 const dist = startPos.distanceTo(endPos);
 
+                const rangeKey = `${meta.link_type}_${meta.source_id}_${meta.dest_id}_${meta.origin_id}`;
+                const range = linkRangesRef.current.get(rangeKey) ?? null;
+
                 const renderLink: RenderableLink = {
                     ...meta,
                     start: startPos,
                     end: endPos,
                     distance: dist,
+                    source_name:
+                        componentToName.get(meta.source_id) ?? meta.source_id,
+                    dest_name:
+                        componentToName.get(meta.dest_id) ?? meta.dest_id,
+                    origin_name:
+                        componentToName.get(meta.origin_id) ?? meta.origin_id,
+                    range,
                 };
 
                 calculatedLinks.push(renderLink);
@@ -380,14 +571,17 @@ export default function LinkVisualizer() {
             }
         });
 
+        const computedClusters = Array.from(clusterMap.values());
+        clustersRef.current = computedClusters;
         return {
-            clusters: Array.from(clusterMap.values()),
+            clusters: computedClusters,
             flatLinks: calculatedLinks,
         };
     }, [
         linkMetadata,
         currentTime,
         componentToPlatform,
+        componentToName,
         showLinkLabels,
         showLinkMonostatic,
         showLinkIlluminator,
@@ -408,6 +602,9 @@ export default function LinkVisualizer() {
                     key={`cluster-${i}`}
                     position={cluster.position}
                     links={cluster.links}
+                    divRef={(el) => {
+                        clusterDivRefs.current[i] = el;
+                    }}
                 />
             ))}
         </group>

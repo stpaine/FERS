@@ -592,14 +592,21 @@ namespace simulation
 
 						const RealType pr_watts = pt * power_ratio;
 
-						links.push_back(
-							{.type = LinkType::Monostatic,
-							 .quality = isSignalStrong(pr_watts, rx->getNoiseTemperature()) ? LinkQuality::Strong
-																							: LinkQuality::Weak,
-							 .label = std::format("{:.1f} dBm (RCS: {:.1f}m\u00B2)", wattsToDbm(pr_watts), rcs),
-							 .source_id = tx->getId(), // Monostatic implies Tx/Rx is same platform/system
-							 .dest_id = tgt->getId(),
-							 .origin_id = tx->getId()});
+						// Label shows power with unit RCS (sigma=1) so it varies only with geometry,
+						// not with the fluctuation model. Actual RCS is carried separately for the tooltip.
+						const RealType pr_unit_watts =
+							pt * computeReflectedPathPower(gt, gr, 1.0, lambda, dist, dist, no_loss);
+
+						links.push_back({.type = LinkType::Monostatic,
+										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
+											 ? LinkQuality::Strong
+											 : LinkQuality::Weak,
+										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_unit_watts)),
+										 .source_id = tx->getId(),
+										 .dest_id = tgt->getId(),
+										 .origin_id = tx->getId(),
+										 .rcs = rcs,
+										 .actual_power_dbm = wattsToDbm(pr_watts)});
 					}
 				}
 				else
@@ -662,17 +669,23 @@ namespace simulation
 						const RealType power_ratio = computeReflectedPathPower(gt, gr, rcs, lambda, r1, r2, no_loss);
 						const RealType pr_watts = pt * power_ratio;
 
+						// Label shows power with unit RCS (sigma=1) so it varies only with geometry.
+						const RealType pr_unit_watts =
+							pt * computeReflectedPathPower(gt, gr, 1.0, lambda, r1, r2, no_loss);
+
 						// Note: Illuminator leg (Tx->Tgt) was handled in the outer loop.
 
 						// Leg 2: Scattered
 						links.push_back({.type = LinkType::BistaticTgtRx,
-										 .quality = isSignalStrong(pr_watts, rx->getNoiseTemperature())
+										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_watts)),
+										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_unit_watts)),
 										 .source_id = tgt->getId(),
 										 .dest_id = rx->getId(),
-										 .origin_id = tx->getId()});
+										 .origin_id = tx->getId(),
+										 .rcs = rcs,
+										 .actual_power_dbm = wattsToDbm(pr_watts)});
 					}
 				}
 			}
