@@ -14,8 +14,10 @@
 #include <complex>
 #include <numeric>
 #include <ranges>
+#include <set>
 #include <stdexcept>
 
+#include "core/logging.h"
 #include "core/parameters.h"
 
 constexpr RealType BLACKMAN_A0 = 0.42;
@@ -26,11 +28,47 @@ namespace
 {
 	constexpr RealType sinc(const RealType x) noexcept { return x == 0 ? 1.0 : std::sin(x * PI) / (x * PI); }
 
-	std::vector<RealType> blackmanFir(const RealType cutoff, unsigned& filtLength) noexcept
+	struct BlackmanFirDesign
 	{
-		filtLength = params::renderFilterLength() * 2;
-		std::vector<RealType> coeffs(filtLength);
-		const RealType n = filtLength / 2.0;
+		std::vector<RealType> coeffs;
+		RealType coeff_sum = 0.0;
+	};
+
+	void warnIfUnderspecified(const unsigned ratio, const unsigned filter_length, const RealType coeff_sum) noexcept
+	{
+		if (ratio <= 1)
+		{
+			return;
+		}
+
+		const RealType relative_error = std::abs(coeff_sum - static_cast<RealType>(ratio)) / static_cast<RealType>(ratio);
+		if (relative_error <= 0.01)
+		{
+			return;
+		}
+
+		static std::set<std::pair<unsigned, unsigned>> warned_pairs;
+		const auto [_, inserted] = warned_pairs.emplace(ratio, filter_length);
+		if (!inserted)
+		{
+			return;
+		}
+
+		const RealType dc_gain = coeff_sum / static_cast<RealType>(ratio);
+		const RealType roundtrip_gain = dc_gain * dc_gain;
+		LOG(logging::Level::WARNING,
+			"Oversampling FIR under-spec'd for ratio=", ratio,
+			", filter_length=", filter_length,
+			", fir_sum=", coeff_sum,
+			", estimated_roundtrip_gain=", roundtrip_gain,
+			". Practical envelope roughly filter_length >= 4 * ratio.");
+	}
+
+	BlackmanFirDesign blackmanFir(const RealType cutoff, const unsigned ratio, const unsigned filter_length) noexcept
+	{
+		const unsigned filt_length = filter_length * 2;
+		std::vector<RealType> coeffs(filt_length);
+		const RealType n = filt_length / 2.0;
 		const RealType pi_n = PI / n;
 
 		std::ranges::for_each(coeffs,
@@ -39,11 +77,14 @@ namespace
 								  const RealType sinc_val = sinc(cutoff * (i - n));
 								  const RealType window = BLACKMAN_A0 - BLACKMAN_A1 * std::cos(pi_n * i) +
 									  BLACKMAN_A2 * std::cos(2 * pi_n * i);
-								  coeff = sinc_val * window;
-								  ++i;
-							  });
+									  coeff = sinc_val * window;
+									  ++i;
+								  });
 
-		return coeffs;
+		BlackmanFirDesign design{std::move(coeffs)};
+		design.coeff_sum = std::accumulate(design.coeffs.begin(), design.coeffs.end(), 0.0);
+		warnIfUnderspecified(ratio, filter_length, design.coeff_sum);
+		return design;
 	}
 }
 
@@ -52,8 +93,9 @@ namespace fers_signal
 	void upsample(const std::span<const ComplexType> in, const unsigned size, std::span<ComplexType> out)
 	{
 		const unsigned ratio = params::oversampleRatio();
-		unsigned filt_length;
-		const auto coeffs = blackmanFir(1 / static_cast<RealType>(ratio), filt_length);
+		const unsigned filter_length = params::renderFilterLength();
+		const auto design = blackmanFir(1 / static_cast<RealType>(ratio), ratio, filter_length);
+		const unsigned filt_length = static_cast<unsigned>(design.coeffs.size());
 
 		std::vector tmp(static_cast<size_t>(size * ratio + filt_length), ComplexType{0.0, 0.0});
 
@@ -62,7 +104,7 @@ namespace fers_signal
 			tmp[static_cast<size_t>(i * ratio)] = in[i];
 		}
 
-		const FirFilter filt(coeffs);
+		const FirFilter filt(design.coeffs);
 		filt.filter(tmp);
 
 		const auto delay = filt_length / 2;
@@ -77,13 +119,14 @@ namespace fers_signal
 		}
 
 		const unsigned ratio = params::oversampleRatio();
-		unsigned filt_length = 0;
-		const auto coeffs = blackmanFir(1 / static_cast<RealType>(ratio), filt_length);
+		const unsigned filter_length = params::renderFilterLength();
+		const auto design = blackmanFir(1 / static_cast<RealType>(ratio), ratio, filter_length);
+		const unsigned filt_length = static_cast<unsigned>(design.coeffs.size());
 
 		std::vector tmp(in.size() + filt_length, ComplexType{0, 0});
 		std::ranges::copy(in, tmp.begin());
 
-		const FirFilter filt(coeffs);
+		const FirFilter filt(design.coeffs);
 		filt.filter(tmp);
 
 		const auto downsampled_size = in.size() / ratio;
@@ -182,4 +225,3 @@ namespace fers_signal
 		_filter->filter(out);
 	}
 }
-

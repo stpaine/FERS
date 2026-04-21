@@ -2,6 +2,16 @@
 
 This directory contains a standalone C++ executable for auditing the oversampling implementation used by `libfers`.
 
+## Practical Envelope
+
+The copied resampler uses a single-stage Blackman-windowed sinc with `2 * filter_length` taps and cutoff `1 / oversample_ratio`.
+
+- For modest ratios, this is adequate.
+- For high ratios with short filters, the FIR sum falls well below `oversample_ratio`, so the harness now emits a runtime warning with the measured FIR sum and estimated round-trip gain.
+- As a practical rule of thumb, settings around `filter_length >= 4 * oversample_ratio` keep the DC-gain error small enough for the current design to behave predictably.
+
+Warnings are advisory only in this harness version. Out-of-envelope cases still run so the matrix can record how far performance degrades.
+
 ## Scope
 
 - Source-faithful copies of the core oversampling path:
@@ -77,6 +87,12 @@ Generated analysis artifacts:
 - `suite_summary.csv`: pass/fail rollup by suite
 - `global_summary.json`: machine-readable aggregate report
 - `report.md`: human-readable Markdown report with key findings and failing cases
+
+Analysis notes:
+
+- Render expected-value checks include the upsample FIR DC gain, so they isolate interpolation behavior instead of conflating interpolation with resampler gain loss.
+- Resampler cases can still fail by policy when the FIR sum deviates materially from the requested ratio; those failures should be read as out-of-envelope configuration warnings, not harness-oracle bugs.
+- Pipeline downsampling RMS uses a `0.06` threshold, and resampler peak alignment allows a `+/-1` sample shift.
 
 Default comprehensive sweep:
 

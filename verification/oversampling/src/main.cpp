@@ -403,20 +403,15 @@ namespace
 		return result;
 	}
 
-	ComplexType expectedConstantRender(const std::span<const RealType> filter, const RealType amplitude,
-									   const RealType phase)
+	RealType filterTapSum(const std::span<const RealType> filter)
 	{
-		const int filt_length = static_cast<int>(filter.size());
-		RealType sum = 0.0;
-		for (int j = -filt_length / 2; j < filt_length / 2; ++j)
-		{
-			const int idx = j + filt_length / 2;
-			if (idx >= 0 && idx < filt_length)
-			{
-				sum += filter[static_cast<size_t>(idx)];
-			}
-		}
-		return amplitude * std::exp(ComplexType{0.0, 1.0} * phase) * sum;
+		return std::accumulate(filter.begin(), filter.end(), 0.0);
+	}
+
+	ComplexType expectedConstantRender(const std::span<const RealType> filter, const RealType amplitude,
+									   const RealType phase, const RealType upsample_dc_gain)
+	{
+		return amplitude * upsample_dc_gain * std::exp(ComplexType{0.0, 1.0} * phase) * filterTapSum(filter);
 	}
 
 	RealType wrappedDelayFromFracWinDelay(const RealType frac_win_delay)
@@ -557,6 +552,10 @@ namespace
 		const auto coeffs = blackmanFirAudit(1.0 / static_cast<RealType>(options.ratio), options.filter_length);
 		RealType coeff_sum = std::accumulate(coeffs.begin(), coeffs.end(), 0.0);
 		RealType coeff_energy = std::inner_product(coeffs.begin(), coeffs.end(), coeffs.begin(), 0.0);
+		const RealType coeff_relative_error =
+			options.ratio == 0 ? 0.0 : std::abs(coeff_sum - static_cast<RealType>(options.ratio)) / static_cast<RealType>(options.ratio);
+		const RealType estimated_roundtrip_gain =
+			options.ratio == 0 ? 0.0 : std::pow(coeff_sum / static_cast<RealType>(options.ratio), 2);
 
 		{
 			std::vector<std::vector<std::string>> rows;
@@ -702,6 +701,8 @@ namespace
 			{"fir_coefficient_count", toString(static_cast<unsigned>(coeffs.size()))},
 			{"fir_sum", toString(coeff_sum)},
 			{"fir_energy", toString(coeff_energy)},
+			{"fir_sum_relative_error", toString(coeff_relative_error)},
+			{"estimated_roundtrip_gain", toString(estimated_roundtrip_gain)},
 		};
 
 		writeSummaryFile(result);
@@ -740,6 +741,9 @@ namespace
 		const unsigned filter_length = params::renderFilterLength();
 		const unsigned sample_count = filter_length * 8;
 		const std::vector<ComplexType> input(sample_count, ComplexType{1.0, 0.0});
+		const auto upsample_coeffs = blackmanFirAudit(1.0 / static_cast<RealType>(options.ratio), filter_length);
+		const RealType upsample_coeff_sum = std::accumulate(upsample_coeffs.begin(), upsample_coeffs.end(), 0.0);
+		const RealType upsample_dc_gain = upsample_coeff_sum / static_cast<RealType>(options.ratio);
 
 		fers_signal::Signal signal;
 		signal.load(input, sample_count, params::rate());
@@ -762,7 +766,7 @@ namespace
 			unsigned size = 0;
 			const auto data = signal.render(points, size, 0.0);
 			const auto filter = interp_filter.getFilter(0.0);
-			const auto expected = expectedConstantRender(filter, std::sqrt(power), phase);
+			const auto expected = expectedConstantRender(filter, std::sqrt(power), phase, upsample_dc_gain);
 
 			std::vector<std::vector<std::string>> rows;
 			for (size_t i = 0; i < data.size(); ++i)
@@ -777,6 +781,7 @@ namespace
 			result.summary_rows.push_back({"constant_expected_imag", toString(expected.imag())});
 			result.summary_rows.push_back({"constant_observed_center_real", toString(data[filter_length].real())});
 			result.summary_rows.push_back({"constant_observed_center_imag", toString(data[filter_length].imag())});
+			result.summary_rows.push_back({"upsample_dc_gain", toString(upsample_dc_gain)});
 		}
 
 		{
@@ -803,7 +808,7 @@ namespace
 				const RealType bw = sample_time / (2.0 * filter_length / signal.getRate());
 				const RealType amplitude = std::lerp(std::sqrt(power_a), std::sqrt(power_b), std::clamp(bw, 0.0, 1.0));
 				const RealType phase = std::lerp(phase_a, phase_b, std::clamp(bw, 0.0, 1.0));
-				const auto expected = expectedConstantRender(filter, amplitude, phase);
+				const auto expected = expectedConstantRender(filter, amplitude, phase, upsample_dc_gain);
 				rows.push_back({std::to_string(index), toString(sample_time), toString(expected.real()), toString(expected.imag()),
 								toString(data[index].real()), toString(data[index].imag())});
 			}
@@ -821,7 +826,7 @@ namespace
 				const auto data = signal.render(points, size, frac_delay);
 				const RealType effective_delay = wrappedDelayFromFracWinDelay(frac_delay);
 				const auto filter = interp_filter.getFilter(effective_delay);
-				const auto expected = expectedConstantRender(filter, 1.0, 0.0);
+				const auto expected = expectedConstantRender(filter, 1.0, 0.0, upsample_dc_gain);
 				rows.push_back({toString(frac_delay, 8), toString(effective_delay, 8), toString(expected.real()),
 								toString(data[filter_length].real()), toString(data[filter_length].imag())});
 			}
