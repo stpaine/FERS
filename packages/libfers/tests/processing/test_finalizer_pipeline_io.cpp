@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
 #include <filesystem>
 #include <highfive/highfive.hpp>
@@ -11,6 +12,7 @@
 #include "processing/finalizer_pipeline.h"
 #include "signal/dsp_filters.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace
@@ -90,6 +92,19 @@ TEST_CASE("applyDownsamplingAndQuantization preserves low-frequency oversampled 
 	const RealType normalized_correlation = std::abs(correlation) / std::sqrt(output_energy * reference_energy);
 
 	REQUIRE(normalized_correlation > 0.98);
+}
+
+TEST_CASE("applyDownsamplingAndQuantization fails fast when oversample ratio exceeds fixed-filter limit",
+		  "[processing][finalizer][io]")
+{
+	ParamGuard guard;
+	params::params.oversample_ratio = 16;
+	params::setAdcBits(0);
+
+	std::vector<ComplexType> buffer = {ComplexType{1.0, 0.0}, ComplexType{0.0, 1.0}, ComplexType{-1.0, 0.5}};
+
+	REQUIRE_THROWS_WITH(processing::pipeline::applyDownsamplingAndQuantization(buffer),
+						ContainsSubstring("Oversampling ratios > 8 are not supported"));
 }
 
 TEST_CASE("exportCwToHdf5 writes physically meaningful datasets and metadata", "[processing][finalizer][io]")

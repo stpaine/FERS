@@ -1,10 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <string>
 
 #include "core/logging.h"
 #include "core/parameters.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace
@@ -79,6 +81,7 @@ TEST_CASE("Parameters setters validate inputs", "[core][parameters]")
 	REQUIRE_THROWS_AS(params::setRate(-1.0), std::runtime_error);
 
 	REQUIRE_THROWS_AS(params::setOversampleRatio(0), std::runtime_error);
+	REQUIRE_THROWS_WITH(params::setOversampleRatio(9), ContainsSubstring("Oversampling ratios > 8 are not supported"));
 }
 
 TEST_CASE("Parameters origin and coordinate settings", "[core][parameters]")

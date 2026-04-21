@@ -232,6 +232,12 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 										"</parameters>"),
 						  std::runtime_error);
 
+		REQUIRE_THROWS_WITH(parse_invalid("<parameters>"
+										  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+										  "  <oversample>9</oversample>"
+										  "</parameters>"),
+							ContainsSubstring("Oversampling ratios > 8 are not supported"));
+
 		REQUIRE_THROWS_AS(parse_invalid(std::string("<parameters>") +
 										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>" +
 										"  <adc_bits>" + too_large_unsigned + "</adc_bits>" + "</parameters>"),

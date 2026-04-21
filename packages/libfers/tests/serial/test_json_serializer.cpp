@@ -569,6 +569,19 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 		REQUIRE(params::coordinateFrame() == params::CoordinateFrame::ECEF);
 	}
 
+	SECTION("Update Parameters rejects unsupported oversample ratios")
+	{
+		json j = {{"starttime", 1.0},
+				  {"endtime", 20.0},
+				  {"rate", 2000.0},
+				  {"oversample", 9},
+				  {"origin", {{"latitude", 10.0}, {"longitude", 20.0}, {"altitude", 30.0}}},
+				  {"coordinatesystem", {{"frame", "ECEF"}}}};
+
+		REQUIRE_THROWS_WITH(serial::update_parameters_from_json(j, seeder),
+							ContainsSubstring("Oversampling ratios > 8 are not supported"));
+	}
+
 	SECTION("Update Antenna In-Place")
 	{
 		auto* ant_ptr = w.findAntenna(20);

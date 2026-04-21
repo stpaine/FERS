@@ -18,8 +18,10 @@
 #include <complex>
 #include <numeric>
 #include <ranges>
+#include <set>
 #include <stdexcept>
 
+#include "core/logging.h"
 #include "core/parameters.h"
 
 constexpr RealType BLACKMAN_A0 = 0.42;
@@ -37,21 +39,76 @@ namespace
 	constexpr RealType sinc(const RealType x) noexcept { return x == 0 ? 1.0 : std::sin(x * PI) / (x * PI); }
 
 	/**
-	 * @brief Generates FIR filter coefficients using the Blackman window.
+	 * @brief Stores a generated Blackman-windowed FIR design and its coefficient sum.
 	 *
-	 * @param cutoff Cutoff frequency for the filter.
-	 * @param filtLength Length of the filter.
-	 * @return Vector of FIR filter coefficients.
+	 * The coefficient sum approximates the interpolator DC gain and is used to detect
+	 * under-specified oversampling configurations.
 	 */
-	std::vector<RealType> blackmanFir(const RealType cutoff, unsigned& filtLength) noexcept
+	struct BlackmanFirDesign
 	{
-		filtLength = params::renderFilterLength() * 2;
-		std::vector<RealType> coeffs(filtLength);
-		const RealType n = filtLength / 2.0;
+		std::vector<RealType> coeffs;
+		RealType coeff_sum = 0.0;
+	};
+
+	/**
+	 * @brief Enforces production oversampling limits for the fixed-length FIR design.
+	 *
+	 * @param ratio Requested oversampling ratio.
+	 * @throws std::runtime_error if the configured ratio is unsupported.
+	 */
+	void validateOversamplingConfig(const unsigned ratio) { params::validateOversampleRatio(ratio); }
+
+	/**
+	 * @brief Emits a one-time warning when the FIR tap budget is too small for the ratio.
+	 *
+	 * @param ratio Oversampling ratio used to design the FIR.
+	 * @param filter_length Configured half-length of the production FIR kernel.
+	 * @param coeff_sum Sum of the generated FIR coefficients.
+	 */
+	void warnIfUnderspecified(const unsigned ratio, const unsigned filter_length, const RealType coeff_sum)
+	{
+		if (ratio <= 1)
+		{
+			return;
+		}
+
+		const RealType relative_error =
+			std::abs(coeff_sum - static_cast<RealType>(ratio)) / static_cast<RealType>(ratio);
+		if (relative_error <= 0.01)
+		{
+			return;
+		}
+
+		// TODO: warning deduplication via static set has data race potential
+		static std::set<std::pair<unsigned, unsigned>> warned_pairs;
+		const auto [_, inserted] = warned_pairs.emplace(ratio, filter_length);
+		if (!inserted)
+		{
+			return;
+		}
+
+		const RealType dc_gain = coeff_sum / static_cast<RealType>(ratio);
+		const RealType roundtrip_gain = dc_gain * dc_gain;
+		LOG(logging::Level::WARNING, "Oversampling FIR under-spec'd for ratio=", ratio,
+			", filter_length=", filter_length, ", fir_sum=", coeff_sum, ", estimated_roundtrip_gain=", roundtrip_gain,
+			". Practical envelope roughly filter_length >= 4 * ratio.");
+	}
+
+	/**
+	 * @brief Generates a Blackman-windowed low-pass FIR for the oversampling stage.
+	 *
+	 * @param cutoff Normalized cutoff frequency for the anti-imaging / anti-alias filter.
+	 * @param ratio Oversampling ratio associated with this design.
+	 * @param filter_length Configured half-length of the FIR kernel.
+	 * @return FIR coefficients plus their sum for DC-gain auditing.
+	 */
+	BlackmanFirDesign blackmanFir(const RealType cutoff, const unsigned ratio, const unsigned filter_length)
+	{
+		const unsigned filt_length = filter_length * 2;
+		std::vector<RealType> coeffs(filt_length);
+		const RealType n = filt_length / 2.0;
 		const RealType pi_n = PI / n;
 
-		// We use the Blackman window, for a suitable tradeoff between rolloff and stopband attenuation
-		// Equivalent Kaiser beta = 7.04 (Oppenhiem and Schaffer, Hamming)
 		std::ranges::for_each(coeffs,
 							  [cutoff, n, pi_n, i = 0u](RealType& coeff) mutable
 							  {
@@ -62,35 +119,62 @@ namespace
 								  ++i;
 							  });
 
-		return coeffs;
+		BlackmanFirDesign design{std::move(coeffs)};
+		design.coeff_sum = std::accumulate(design.coeffs.begin(), design.coeffs.end(), 0.0);
+		warnIfUnderspecified(ratio, filter_length, design.coeff_sum);
+		return design;
 	}
 }
 
 namespace fers_signal
 {
+	/**
+	 * @brief Upsamples a complex waveform with zero-stuffing followed by Blackman FIR filtering.
+	 *
+	 * The production path uses a fixed-length single-stage FIR, so unsupported ratios
+	 * fail fast before filtering begins.
+	 *
+	 * @param in Input span of base-rate complex samples.
+	 * @param size Number of input samples to process from @p in.
+	 * @param out Output span receiving @p size * oversampleRatio() filtered samples.
+	 * @throws std::runtime_error if the configured oversampling ratio is unsupported.
+	 */
 	void upsample(const std::span<const ComplexType> in, const unsigned size, std::span<ComplexType> out)
 	{
 		const unsigned ratio = params::oversampleRatio();
 		// TODO: this would be better as a multirate upsampler
 		// This implementation is functional but suboptimal.
 		// Users requiring higher accuracy should oversample outside FERS until this is addressed.
-		unsigned filt_length;
-		const auto coeffs = blackmanFir(1 / static_cast<RealType>(ratio), filt_length);
+		validateOversamplingConfig(ratio);
+		const unsigned filter_length = params::renderFilterLength();
+		const auto design = blackmanFir(1 / static_cast<RealType>(ratio), ratio, filter_length);
+		const unsigned filt_length = static_cast<unsigned>(design.coeffs.size());
 
-		std::vector tmp(size * ratio + filt_length, ComplexType{0.0, 0.0});
+		std::vector tmp(static_cast<size_t>(size * ratio + filt_length), ComplexType{0.0, 0.0});
 
 		for (unsigned i = 0; i < size; ++i)
 		{
-			tmp[i * ratio] = in[i];
+			tmp[static_cast<size_t>(i * ratio)] = in[i];
 		}
 
-		const FirFilter filt(coeffs);
+		const FirFilter filt(design.coeffs);
 		filt.filter(tmp);
 
 		const auto delay = filt_length / 2;
 		std::ranges::copy_n(tmp.begin() + delay, size * ratio, out.begin());
 	}
 
+	/**
+	 * @brief Low-pass filters and decimates an oversampled complex waveform back to base rate.
+	 *
+	 * The same fixed-length FIR design is reused for anti-alias filtering, and unsupported
+	 * ratios fail fast before filtering begins.
+	 *
+	 * @param in Input span of oversampled complex samples.
+	 * @return Base-rate complex samples truncated to floor(in.size() / oversampleRatio()).
+	 * @throws std::invalid_argument if @p in is empty.
+	 * @throws std::runtime_error if the configured oversampling ratio is unsupported.
+	 */
 	std::vector<ComplexType> downsample(std::span<const ComplexType> in)
 	{
 		if (in.empty())
@@ -100,21 +184,23 @@ namespace fers_signal
 
 		const unsigned ratio = params::oversampleRatio();
 		// TODO: Replace with a more efficient multirate downsampling implementation.
-		unsigned filt_length = 0;
-		const auto coeffs = blackmanFir(1 / static_cast<RealType>(ratio), filt_length);
+		validateOversamplingConfig(ratio);
+		const unsigned filter_length = params::renderFilterLength();
+		const auto design = blackmanFir(1 / static_cast<RealType>(ratio), ratio, filter_length);
+		const unsigned filt_length = static_cast<unsigned>(design.coeffs.size());
 
 		std::vector tmp(in.size() + filt_length, ComplexType{0, 0});
 
 		std::ranges::copy(in, tmp.begin());
 
-		const FirFilter filt(coeffs);
+		const FirFilter filt(design.coeffs);
 		filt.filter(tmp);
 
 		const auto downsampled_size = in.size() / ratio;
 		std::vector<ComplexType> out(downsampled_size);
 		for (unsigned i = 0; i < downsampled_size; ++i)
 		{
-			out[i] = tmp[i * ratio + filt_length / 2] / static_cast<RealType>(ratio);
+			out[i] = tmp[static_cast<size_t>(i * ratio + filt_length / 2)] / static_cast<RealType>(ratio);
 		}
 
 		return out;
