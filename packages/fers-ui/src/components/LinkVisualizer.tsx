@@ -48,6 +48,9 @@ interface RenderableLink extends LinkMetadata {
     start: THREE.Vector3;
     end: THREE.Vector3;
     distance: number;
+    source_name: string;
+    dest_name: string;
+    origin_name: string;
 }
 
 // Define the shape coming from Rust
@@ -115,11 +118,12 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
                         Link Details
                     </Typography>
                     <Typography variant="caption" display="block">
-                        <b>Path Segment:</b> {link.source_id} → {link.dest_id}
+                        <b>Path Segment:</b> {link.source_name} →{' '}
+                        {link.dest_name}
                     </Typography>
                     {link.link_type === 'scattered' && (
                         <Typography variant="caption" display="block">
-                            <b>Illuminator:</b> {link.origin_id}
+                            <b>Illuminator:</b> {link.origin_name}
                         </Typography>
                     )}
                     <Typography variant="caption" display="block">
@@ -255,6 +259,22 @@ export default function LinkVisualizer() {
                 if (c.type === 'monostatic') {
                     map.set(c.txId, p);
                     map.set(c.rxId, p);
+                }
+            });
+        });
+        return map;
+    }, [platforms]);
+
+    // Maps component/sub-component IDs to display names.
+    // Monostatic txId/rxId are internal sub-IDs — map them to the parent component name.
+    const componentToName = useMemo(() => {
+        const map = new Map<string, string>();
+        platforms.forEach((p) => {
+            p.components.forEach((c) => {
+                map.set(c.id, c.name);
+                if (c.type === 'monostatic') {
+                    map.set(c.txId, c.name);
+                    map.set(c.rxId, c.name);
                 }
             });
         });
@@ -429,6 +449,12 @@ export default function LinkVisualizer() {
                     start: startPos,
                     end: endPos,
                     distance: dist,
+                    source_name:
+                        componentToName.get(meta.source_id) ?? meta.source_id,
+                    dest_name:
+                        componentToName.get(meta.dest_id) ?? meta.dest_id,
+                    origin_name:
+                        componentToName.get(meta.origin_id) ?? meta.origin_id,
                 };
 
                 calculatedLinks.push(renderLink);
@@ -457,6 +483,7 @@ export default function LinkVisualizer() {
         linkMetadata,
         currentTime,
         componentToPlatform,
+        componentToName,
         showLinkLabels,
         showLinkMonostatic,
         showLinkIlluminator,
