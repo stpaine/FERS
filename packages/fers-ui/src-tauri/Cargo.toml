@@ -2,7 +2,7 @@
 name = "fers-ui"
 version = "0.1.0"
 license = "GPL-2.0-only"
-description = "A Tauri App"
+description = "The Flexible Extensible Radar Simulator"
 authors = ["David Young"]
 edition = "2021"
 
