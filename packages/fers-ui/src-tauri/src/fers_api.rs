@@ -439,6 +439,10 @@ pub struct VisualLink {
     pub dest_id: String,
     /// The ID of the original transmitter (useful for scattered paths).
     pub origin_id: String,
+    /// RCS in m^2 for this path. Negative if not applicable (non-monostatic links).
+    pub rcs: f64,
+    /// Received power in dBm with actual RCS applied. -999 if not applicable.
+    pub actual_power_dbm: f64,
 }
 
 impl FersContext {
@@ -902,6 +906,8 @@ impl FersContext {
                     source_id,
                     dest_id,
                     origin_id,
+                    rcs: l.rcs,
+                    actual_power_dbm: l.actual_power_dbm,
                 });
             }
         }

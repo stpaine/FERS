@@ -609,6 +609,8 @@ typedef struct // NOLINT(*-use-using)
 	uint64_t source_id; /**< ID of the source component (e.g. Transmitter). */
 	uint64_t dest_id; /**< ID of the destination component (e.g. Receiver/Target). */
 	uint64_t origin_id; /**< ID of the originating Transmitter (for scattered paths). */
+	double rcs; /**< RCS in m^2 for this path. Negative if not applicable (e.g., non-monostatic links). */
+	double actual_power_dbm; /**< Received power in dBm with actual RCS applied. -999 if not applicable. */
 } fers_visual_link_t;
 
 /**

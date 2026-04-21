@@ -41,6 +41,15 @@ interface LinkMetadata {
     source_id: string;
     dest_id: string;
     origin_id: string;
+    rcs: number; // RCS in m^2; negative if not applicable
+    actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
+}
+
+interface LinkRange {
+    powerMin: number;
+    powerMax: number;
+    rcsMin: number;
+    rcsMax: number;
 }
 
 // Derived object used for actual rendering
@@ -51,6 +60,7 @@ interface RenderableLink extends LinkMetadata {
     source_name: string;
     dest_name: string;
     origin_name: string;
+    range: LinkRange | null;
 }
 
 // Define the shape coming from Rust
@@ -61,6 +71,8 @@ interface RustVisualLink {
     source_id: string;
     dest_id: string;
     origin_id: string;
+    rcs: number; // RCS in m^2; negative if not applicable
+    actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
 }
 
 // Helper to determine color based on link type and quality
@@ -135,6 +147,43 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
                     <Typography variant="caption" display="block">
                         <b>Value:</b> {link.label}
                     </Typography>
+                    {link.actual_power_dbm > -990 && (
+                        <>
+                            <Typography variant="caption" display="block">
+                                <b>Actual Power:</b>{' '}
+                                {link.actual_power_dbm.toFixed(1)} dBm
+                            </Typography>
+                            {link.range &&
+                                link.range.powerMin < link.range.powerMax && (
+                                    <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ pl: 1.5, opacity: 0.7 }}
+                                    >
+                                        range: {link.range.powerMin.toFixed(1)}{' '}
+                                        to {link.range.powerMax.toFixed(1)} dBm
+                                    </Typography>
+                                )}
+                        </>
+                    )}
+                    {link.rcs >= 0 && (
+                        <>
+                            <Typography variant="caption" display="block">
+                                <b>RCS:</b> {link.rcs.toFixed(2)} m^2
+                            </Typography>
+                            {link.range &&
+                                link.range.rcsMin < link.range.rcsMax && (
+                                    <Typography
+                                        variant="caption"
+                                        display="block"
+                                        sx={{ pl: 1.5, opacity: 0.7 }}
+                                    >
+                                        range: {link.range.rcsMin.toFixed(2)} to{' '}
+                                        {link.range.rcsMax.toFixed(2)} m^2
+                                    </Typography>
+                                )}
+                        </>
+                    )}
                 </Box>
             }
         >
@@ -198,11 +247,9 @@ const LABEL_OVERLAP_PX = 60;
  * Renders radio frequency links between platforms.
  *
  * Performance Design:
- * 1. Metadata Fetching: Throttled to ~10 FPS. Fetches connectivity status and text labels.
- * 2. Geometry Rendering: Runs at 60 FPS (driven by store.currentTime).
- *
- * This ensures the lines "stick" to platforms smoothly while avoiding FFI/Text updates
- * overload on every frame.
+ * 1. Metadata Fetching: 60 FPS. Labels and quality update at full rate.
+ * 2. Range Tracking: Per-link min/max accumulated in a ref (no re-render cost); read in useMemo.
+ * 3. Geometry Rendering: 60 FPS (driven by store.currentTime). Lines always stick to platforms.
  */
 export default function LinkVisualizer() {
     const currentTime = useScenarioStore((state) => state.currentTime);
@@ -227,11 +274,13 @@ export default function LinkVisualizer() {
     // Store only the metadata (connectivity/labels), not positions
     const [linkMetadata, setLinkMetadata] = useState<LinkMetadata[]>([]);
 
+    // Accumulates observed min/max per link key — never causes re-renders, read in useMemo
+    const linkRangesRef = useRef<Map<string, LinkRange>>(new Map());
+
     // Throttle control
     const lastFetchTimeRef = useRef<number>(0);
     const isFetchingRef = useRef<boolean>(false);
     const isMountedRef = useRef<boolean>(true);
-    // Updated to 16ms to target 60FPS updates during playback
     const FETCH_INTERVAL_MS = 16;
 
     // Track component mount status to prevent setting state on unmounted component
@@ -246,6 +295,7 @@ export default function LinkVisualizer() {
     useEffect(() => {
         if (isSimulating || isGeneratingKml) {
             setLinkMetadata([]);
+            linkRangesRef.current.clear();
         }
     }, [isSimulating, isGeneratingKml]);
 
@@ -281,9 +331,10 @@ export default function LinkVisualizer() {
         return map;
     }, [platforms]);
 
-    // Reset throttle when the scenario structure changes
+    // Reset throttle and accumulated ranges when the scenario structure changes
     useEffect(() => {
         lastFetchTimeRef.current = 0;
+        linkRangesRef.current.clear();
     }, [componentToPlatform]);
 
     // REPLACED: useFrame loop handles fetching instead of useEffect.
@@ -338,9 +389,52 @@ export default function LinkVisualizer() {
                             source_id: l.source_id,
                             dest_id: l.dest_id,
                             origin_id: l.origin_id,
+                            rcs: l.rcs,
+                            actual_power_dbm: l.actual_power_dbm,
                         })
                     );
                     setLinkMetadata(reconstructedLinks);
+
+                    // Accumulate observed min/max per link (ranges only ever expand)
+                    reconstructedLinks.forEach((m) => {
+                        const key = `${m.link_type}_${m.source_id}_${m.dest_id}_${m.origin_id}`;
+                        const existing = linkRangesRef.current.get(key);
+                        if (existing) {
+                            if (m.actual_power_dbm > -990) {
+                                existing.powerMin = Math.min(
+                                    existing.powerMin,
+                                    m.actual_power_dbm
+                                );
+                                existing.powerMax = Math.max(
+                                    existing.powerMax,
+                                    m.actual_power_dbm
+                                );
+                            }
+                            if (m.rcs >= 0) {
+                                existing.rcsMin = Math.min(
+                                    existing.rcsMin,
+                                    m.rcs
+                                );
+                                existing.rcsMax = Math.max(
+                                    existing.rcsMax,
+                                    m.rcs
+                                );
+                            }
+                        } else {
+                            linkRangesRef.current.set(key, {
+                                powerMin:
+                                    m.actual_power_dbm > -990
+                                        ? m.actual_power_dbm
+                                        : Infinity,
+                                powerMax:
+                                    m.actual_power_dbm > -990
+                                        ? m.actual_power_dbm
+                                        : -Infinity,
+                                rcsMin: m.rcs >= 0 ? m.rcs : Infinity,
+                                rcsMax: m.rcs >= 0 ? m.rcs : -Infinity,
+                            });
+                        }
+                    });
                 }
             } catch (e) {
                 console.error('Link preview error:', e);
@@ -444,6 +538,9 @@ export default function LinkVisualizer() {
                 );
                 const dist = startPos.distanceTo(endPos);
 
+                const rangeKey = `${meta.link_type}_${meta.source_id}_${meta.dest_id}_${meta.origin_id}`;
+                const range = linkRangesRef.current.get(rangeKey) ?? null;
+
                 const renderLink: RenderableLink = {
                     ...meta,
                     start: startPos,
@@ -455,6 +552,7 @@ export default function LinkVisualizer() {
                         componentToName.get(meta.dest_id) ?? meta.dest_id,
                     origin_name:
                         componentToName.get(meta.origin_id) ?? meta.origin_id,
+                    range,
                 };
 
                 calculatedLinks.push(renderLink);
