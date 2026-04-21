@@ -3,9 +3,9 @@
 
 import { Box, Tooltip, Typography } from '@mui/material';
 import { Html, Line } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
+import { useFrame, useThree } from '@react-three/fiber';
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import {
     calculateInterpolatedPosition,
@@ -160,13 +160,16 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
 function LabelCluster({
     position,
     links,
+    divRef,
 }: {
     position: THREE.Vector3;
     links: RenderableLink[];
+    divRef: React.Ref<HTMLDivElement>;
 }) {
     return (
         <Html position={position} center zIndexRange={[100, 0]}>
             <div
+                ref={divRef}
                 style={{
                     display: 'flex',
                     flexDirection: 'column',
@@ -183,6 +186,9 @@ function LabelCluster({
         </Html>
     );
 }
+
+// Minimum screen-space separation (px) enforced between label cluster centers.
+const LABEL_OVERLAP_PX = 60;
 
 /**
  * Renders radio frequency links between platforms.
@@ -211,6 +217,8 @@ export default function LinkVisualizer() {
         showLinkScattered,
         showLinkDirect,
     } = visibility;
+
+    const { camera, gl } = useThree();
 
     // Store only the metadata (connectivity/labels), not positions
     const [linkMetadata, setLinkMetadata] = useState<LinkMetadata[]>([]);
@@ -327,6 +335,65 @@ export default function LinkVisualizer() {
         void fetchLinks();
     });
 
+    // Refs to each rendered LabelCluster's inner div for direct DOM transform updates
+    const clusterDivRefs = useRef<(HTMLDivElement | null)[]>([]);
+    // Latest clusters held in a ref so useFrame always reads the current value
+    const clustersRef = useRef<
+        Array<{ position: THREE.Vector3; links: RenderableLink[] }>
+    >([]);
+    // Scratch vector reused each frame to avoid per-frame allocation
+    const ndcScratch = useMemo(() => new THREE.Vector3(), []);
+
+    // Screen-space label placement: runs every frame, nudges overlapping cluster
+    // divs apart via CSS transform so all labels remain visible.
+    useFrame(() => {
+        const clusterCount = clustersRef.current.length;
+        if (clusterCount === 0) return;
+
+        const w = gl.domElement.clientWidth;
+        const h = gl.domElement.clientHeight;
+
+        // Project all cluster anchor positions to screen space
+        const sx = new Float32Array(clusterCount);
+        const sy = new Float32Array(clusterCount);
+        for (let i = 0; i < clusterCount; i++) {
+            ndcScratch.copy(clustersRef.current[i].position).project(camera);
+            sx[i] = (ndcScratch.x * 0.5 + 0.5) * w;
+            sy[i] = (-ndcScratch.y * 0.5 + 0.5) * h;
+        }
+
+        // Iterative force-push: separate overlapping label centers
+        const ox = new Float32Array(clusterCount); // x offsets (pixels)
+        const oy = new Float32Array(clusterCount); // y offsets (pixels)
+        for (let iter = 0; iter < 8; iter++) {
+            for (let i = 0; i < clusterCount; i++) {
+                for (let j = i + 1; j < clusterCount; j++) {
+                    const dx = sx[j] + ox[j] - (sx[i] + ox[i]);
+                    const dy = sy[j] + oy[j] - (sy[i] + oy[i]);
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq >= LABEL_OVERLAP_PX * LABEL_OVERLAP_PX) continue;
+
+                    const dist = Math.sqrt(distSq);
+                    const push = (LABEL_OVERLAP_PX - dist) * 0.5;
+                    // Push apart along the separation vector; use (1, 0) as fallback
+                    const nx = dist > 0.5 ? dx / dist : 1;
+                    const ny = dist > 0.5 ? dy / dist : 0;
+                    ox[i] -= nx * push;
+                    oy[i] -= ny * push;
+                    ox[j] += nx * push;
+                    oy[j] += ny * push;
+                }
+            }
+        }
+
+        // Apply computed offsets as CSS transforms on each cluster div
+        for (let i = 0; i < clusterCount; i++) {
+            const div = clusterDivRefs.current[i];
+            if (!div) continue;
+            div.style.transform = `translate(${ox[i].toFixed(1)}px, ${oy[i].toFixed(1)}px)`;
+        }
+    });
+
     // 2. High-Frequency Geometry Calculation (Runs every render/frame)
     const { clusters, flatLinks } = useMemo(() => {
         const calculatedLinks: RenderableLink[] = [];
@@ -380,8 +447,10 @@ export default function LinkVisualizer() {
             }
         });
 
+        const computedClusters = Array.from(clusterMap.values());
+        clustersRef.current = computedClusters;
         return {
-            clusters: Array.from(clusterMap.values()),
+            clusters: computedClusters,
             flatLinks: calculatedLinks,
         };
     }, [
@@ -408,6 +477,9 @@ export default function LinkVisualizer() {
                     key={`cluster-${i}`}
                     position={cluster.position}
                     links={cluster.links}
+                    divRef={(el) => {
+                        clusterDivRefs.current[i] = el;
+                    }}
                 />
             ))}
         </group>
