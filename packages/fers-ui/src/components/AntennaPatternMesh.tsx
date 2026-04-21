@@ -8,10 +8,14 @@ import { useShallow } from 'zustand/react/shallow';
 import { useDynamicScale } from '@/hooks/useDynamicScale';
 import { PlatformComponent, useScenarioStore } from '@/stores/scenarioStore';
 import { isFileBackedAntennaPendingFile } from '@/stores/scenarioStore/serializers';
+import { useSimulationProgressStore } from '@/stores/simulationProgressStore';
 
 const AZIMUTH_SEGMENTS = 64; // Resolution for azimuth sampling
 const ELEVATION_SEGMENTS = 32; // Resolution for elevation sampling
 const BASE_MESH_RADIUS = 3; // Base visual scaling factor for the main lobe.
+const PREVIEW_RETRY_DELAY_MS = 250;
+
+export const BACKEND_BUSY_MESSAGE = 'Backend is busy with another operation';
 
 interface AntennaPatternData {
     gains: number[];
@@ -23,6 +27,44 @@ interface AntennaPatternData {
 interface AntennaPatternMeshProps {
     antennaId: string;
     component: PlatformComponent;
+}
+
+type AntennaPreviewBusyState = {
+    hasRequest: boolean;
+    isBackendSyncing: boolean;
+    isSimulating: boolean;
+    isGeneratingKml: boolean;
+};
+
+type AntennaPreviewErrorAction = {
+    clearError: boolean;
+    clearPattern: boolean;
+    scheduleRetry: boolean;
+};
+
+export function isBackendBusyError(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes(BACKEND_BUSY_MESSAGE);
+}
+
+export function getAntennaPreviewErrorAction(
+    error: unknown
+): AntennaPreviewErrorAction {
+    const isBusy = isBackendBusyError(error);
+    return {
+        clearError: isBusy,
+        clearPattern: !isBusy,
+        scheduleRetry: isBusy,
+    };
+}
+
+export function shouldDeferAntennaPreviewFetch({
+    hasRequest,
+    isBackendSyncing,
+    isSimulating,
+    isGeneratingKml,
+}: AntennaPreviewBusyState) {
+    return hasRequest && (isBackendSyncing || isSimulating || isGeneratingKml);
 }
 
 /**
@@ -39,8 +81,15 @@ export function AntennaPatternMesh({
         null
     );
 
-    // Select antenna, potential waveform, and backend version
-    const { antenna, waveform, backendVersion } = useScenarioStore(
+    const isSimulating = useSimulationProgressStore(
+        (state) => state.isSimulating
+    );
+    const isGeneratingKml = useSimulationProgressStore(
+        (state) => state.isGeneratingKml
+    );
+
+    // Select antenna, potential waveform, and backend sync state
+    const { antenna, waveform, isBackendSyncing } = useScenarioStore(
         useShallow((state) => {
             const ant = state.antennas.find((a) => a.id === antennaId);
             const wf =
@@ -50,7 +99,7 @@ export function AntennaPatternMesh({
             return {
                 antenna: ant,
                 waveform: wf,
-                backendVersion: state.backendVersion,
+                isBackendSyncing: state.isBackendSyncing,
             };
         })
     );
@@ -60,6 +109,9 @@ export function AntennaPatternMesh({
     const antennaIdStr = antenna?.id;
     const userScale = antenna?.meshScale ?? 1.0;
     const groupRef = useRef<THREE.Group>(null!);
+    const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const lastRequestKeyRef = useRef<string | null>(null);
+    const [retryNonce, setRetryNonce] = useState(0);
 
     // Create a stable hash of the antenna's properties to trigger real-time updates
     const antennaHash = JSON.stringify(antenna);
@@ -100,21 +152,59 @@ export function AntennaPatternMesh({
         // 3. If prerequisites are not met, return null to suppress rendering.
         return null;
     }, [antenna, waveform]);
+    const requestKey =
+        antennaIdStr && frequency !== null
+            ? `${antennaIdStr}:${frequency}:${antennaHash}`
+            : null;
+    const shouldDeferFetch = shouldDeferAntennaPreviewFetch({
+        hasRequest: requestKey !== null,
+        isBackendSyncing,
+        isSimulating,
+        isGeneratingKml,
+    });
+
+    useEffect(() => {
+        return () => {
+            if (retryTimerRef.current !== null) {
+                clearTimeout(retryTimerRef.current);
+                retryTimerRef.current = null;
+            }
+        };
+    }, []);
 
     useEffect(() => {
         let isCancelled = false;
 
-        const fetchPattern = async () => {
-            // If we don't have a valid frequency or name, we simply exit.
-            // The cleanup function from the previous run will have already cleared the data,
-            // so the component will render nothing (which is correct).
-            if (!antennaIdStr || frequency === null) {
-                if (antennaIdStr) {
-                    clearAntennaPreviewError(antennaIdStr);
-                }
-                return;
-            }
+        if (retryTimerRef.current !== null) {
+            clearTimeout(retryTimerRef.current);
+            retryTimerRef.current = null;
+        }
 
+        if (!requestKey || !antennaIdStr || frequency === null) {
+            lastRequestKeyRef.current = null;
+            setPatternData(null);
+            if (antennaIdStr) {
+                clearAntennaPreviewError(antennaIdStr);
+            }
+            return () => {
+                isCancelled = true;
+            };
+        }
+
+        const requestKeyChanged = lastRequestKeyRef.current !== requestKey;
+        lastRequestKeyRef.current = requestKey;
+        if (requestKeyChanged) {
+            setPatternData(null);
+        }
+
+        if (shouldDeferFetch) {
+            clearAntennaPreviewError(antennaIdStr);
+            return () => {
+                isCancelled = true;
+            };
+        }
+
+        const fetchPattern = async () => {
             try {
                 const data = await invoke<AntennaPatternData>(
                     'get_antenna_pattern',
@@ -122,7 +212,7 @@ export function AntennaPatternMesh({
                         antennaId: antennaIdStr,
                         azSamples: AZIMUTH_SEGMENTS + 1,
                         elSamples: ELEVATION_SEGMENTS + 1,
-                        frequency: frequency,
+                        frequency,
                     }
                 );
 
@@ -131,15 +221,31 @@ export function AntennaPatternMesh({
                     setPatternData(data);
                 }
             } catch (error) {
+                if (isCancelled) {
+                    return;
+                }
+
                 const message =
                     error instanceof Error ? error.message : String(error);
-                console.error(
-                    `Failed to fetch pattern for antenna ${antennaIdStr}:`,
-                    error
-                );
-                if (!isCancelled) {
+                const action = getAntennaPreviewErrorAction(error);
+
+                if (action.clearError) {
+                    clearAntennaPreviewError(antennaIdStr);
+                }
+
+                if (action.clearPattern) {
+                    console.error(
+                        `Failed to fetch pattern for antenna ${antennaIdStr}:`,
+                        error
+                    );
                     setAntennaPreviewError(antennaIdStr, message);
                     setPatternData(null);
+                }
+
+                if (action.scheduleRetry) {
+                    retryTimerRef.current = setTimeout(() => {
+                        setRetryNonce((current) => current + 1);
+                    }, PREVIEW_RETRY_DELAY_MS);
                 }
             }
         };
@@ -148,10 +254,8 @@ export function AntennaPatternMesh({
 
         return () => {
             isCancelled = true;
-            // Clear data on cleanup to prevent "stale" patterns flashing when switching configurations
-            setPatternData(null);
         };
-    }, [antennaIdStr, frequency, antennaHash, backendVersion]);
+    }, [antennaIdStr, frequency, requestKey, retryNonce, shouldDeferFetch]);
 
     const geometry = useMemo(() => {
         if (!patternData) return new THREE.BufferGeometry();
