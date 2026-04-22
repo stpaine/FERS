@@ -224,7 +224,16 @@ the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 0211
 
 ### Third-Party Libraries
 
-FERS incorporates code from several third-party libraries, which are provided under their own licenses (MIT, BSD, Boost). The full text for these licenses can be found in the `THIRD_PARTY_LICENSES` directory.
+FERS incorporates code from several third-party libraries provided under their own licenses (MIT, BSD, Boost, MPL-2.0). License texts are in the `THIRD_PARTY_LICENSES` directory.
+
+The JS and Rust license files are auto-generated and must be kept in sync with the dependency lock files:
+
+```bash
+bun run licenses:js    # regenerate THIRD_PARTY_LICENSES/js-licenses.txt
+bun run licenses:rust  # regenerate THIRD_PARTY_LICENSES/rust-licenses.html
+```
+
+Run these after updating `packages/fers-ui/package.json` or `packages/fers-ui/src-tauri/Cargo.toml`. CI will fail if they are stale.
 
 ## Disclaimer & Development Status
 
