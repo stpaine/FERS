@@ -150,6 +150,21 @@ namespace params
 	 */
 	inline unsigned oversampleRatio() noexcept { return params.oversample_ratio; }
 
+	inline constexpr unsigned maxSupportedOversampleRatio() noexcept { return 8u; }
+
+	inline void validateOversampleRatio(const unsigned ratio)
+	{
+		if (ratio == 0)
+		{
+			throw std::runtime_error("Oversample ratio must be >= 1");
+		}
+		if (ratio > maxSupportedOversampleRatio())
+		{
+			throw std::runtime_error("Oversampling ratios > 8 are not supported with the current fixed filter length "
+									 "of 33. Signal attenuation will occur.");
+		}
+	}
+
 	/**
 	 * @brief Set the speed of light.
 	 * @param cValue The new speed of light.
@@ -223,10 +238,7 @@ namespace params
 	 */
 	inline void setOversampleRatio(unsigned ratio)
 	{
-		if (ratio == 0)
-		{
-			throw std::runtime_error("Oversample ratio must be >= 1");
-		}
+		validateOversampleRatio(ratio);
 		params.oversample_ratio = ratio;
 		LOG(logging::Level::DEBUG, "Oversampling enabled with ratio: {}", ratio);
 	}

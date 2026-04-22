@@ -1,5 +1,17 @@
 cmake_minimum_required(VERSION 3.22)
 
+set(FERS_VERSION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/version.txt")
+if (NOT EXISTS "${FERS_VERSION_FILE}")
+	message(FATAL_ERROR "Missing version file: ${FERS_VERSION_FILE}")
+endif ()
+
+file(READ "${FERS_VERSION_FILE}" FERS_PROJECT_VERSION)
+string(STRIP "${FERS_PROJECT_VERSION}" FERS_PROJECT_VERSION)
+
+if (NOT FERS_PROJECT_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
+	message(FATAL_ERROR "Invalid FERS version '${FERS_PROJECT_VERSION}' in ${FERS_VERSION_FILE}")
+endif ()
+
 # --- Enforce macOS Deployment Target ---
 if (APPLE)
 	if (NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
@@ -80,7 +92,7 @@ if (NOT FERS_DOCS_ONLY)
 endif ()
 
 project(FERS
-		VERSION 1.0.0
+		VERSION ${FERS_PROJECT_VERSION}
 		DESCRIPTION "The Flexible Extensible Radar Simulator"
 		LANGUAGES CXX)
 

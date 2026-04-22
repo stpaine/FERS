@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TerminalIcon from '@mui/icons-material/Terminal';
@@ -20,6 +21,7 @@ interface AppRailProps {
     activeView: string;
     onViewChange: (view: string) => void;
     onSettingsClick: () => void;
+    onAboutClick: () => void;
 }
 
 const views = [
@@ -32,6 +34,7 @@ export default function AppRail({
     activeView,
     onViewChange,
     onSettingsClick,
+    onAboutClick,
 }: AppRailProps) {
     const logOpen = useFersLogStore((state) => state.isOpen);
     const toggleLogOpen = useFersLogStore((state) => state.toggleOpen);
@@ -106,6 +109,16 @@ export default function AppRail({
                     >
                         <ListItemIcon sx={{ minWidth: 0 }}>
                             <SettingsIcon />
+                        </ListItemIcon>
+                    </ListItemButton>
+                </Tooltip>
+                <Tooltip title="About" placement="right">
+                    <ListItemButton
+                        onClick={onAboutClick}
+                        sx={{ my: 1, justifyContent: 'center' }}
+                    >
+                        <ListItemIcon sx={{ minWidth: 0 }}>
+                            <InfoOutlinedIcon />
                         </ListItemIcon>
                     </ListItemButton>
                 </Tooltip>

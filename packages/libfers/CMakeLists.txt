@@ -158,6 +158,11 @@ include(src/CMakeLists.txt)
 set(SCHEMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../schema)
 set(GENERATED_HEADERS_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated_headers)
 
+file(MAKE_DIRECTORY ${GENERATED_HEADERS_DIR})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/fers_version.h.in
+			   ${GENERATED_HEADERS_DIR}/fers_version.h
+			   @ONLY)
+
 add_custom_command(
 		OUTPUT
 		${GENERATED_HEADERS_DIR}/fers_xml_dtd.h

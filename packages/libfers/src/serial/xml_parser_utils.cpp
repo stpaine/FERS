@@ -215,10 +215,7 @@ namespace serial::xml_parser_utils
 		set_optional_unsigned_parameter("oversample", 1,
 										[&](const unsigned value)
 										{
-											if (value == 0)
-											{
-												throw std::runtime_error("Oversample ratio must be >= 1");
-											}
+											params::validateOversampleRatio(value);
 											params_out.oversample_ratio = value;
 											LOG(logging::Level::DEBUG, "Oversampling enabled with ratio: {}", value);
 										});

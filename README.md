@@ -203,6 +203,14 @@ We welcome contributions to the FERS project! Please read our [CONTRIBUTING.md](
 
 Note that this repository uses **Husky** to enforce code quality with pre-commit hooks. When you commit, your staged files will be automatically formatted and linted.
 
+## Versioning
+
+FERS uses a single repo-wide semantic version across the C++ core, CLI, UI, and release metadata.
+
+- `version.txt` is the single source of truth for the managed release version.
+- `CMakeLists.txt`, `vcpkg.json`, `packages/fers-ui/package.json`, and `packages/fers-ui/src-tauri/Cargo.toml` are kept aligned with that shared version.
+- `packages/fers-ui/src-tauri/tauri.conf.json` reads the UI package version indirectly via `../package.json`.
+
 ## License
 
 - Copyright (C) 2006-2008 Marc Brooker and Michael Inggs.
@@ -224,7 +232,16 @@ the Free Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 0211
 
 ### Third-Party Libraries
 
-FERS incorporates code from several third-party libraries, which are provided under their own licenses (MIT, BSD, Boost). The full text for these licenses can be found in the `THIRD_PARTY_LICENSES` directory.
+FERS incorporates code from several third-party libraries provided under their own licenses (MIT, BSD, Boost, MPL-2.0). License texts are in the `THIRD_PARTY_LICENSES` directory.
+
+The JS and Rust license files are auto-generated and must be kept in sync with the dependency lock files:
+
+```bash
+bun run licenses:js    # regenerate THIRD_PARTY_LICENSES/js-licenses.txt
+bun run licenses:rust  # regenerate THIRD_PARTY_LICENSES/rust-licenses.html
+```
+
+Run these after updating `packages/fers-ui/package.json` or `packages/fers-ui/src-tauri/Cargo.toml`. CI will fail if they are stale.
 
 ## Disclaimer & Development Status
 

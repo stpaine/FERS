@@ -4,7 +4,9 @@
 import { Alert, Box, Snackbar } from '@mui/material';
 import { listen } from '@tauri-apps/api/event';
 import React, { useEffect, useState } from 'react';
+import AboutDialog from '@/components/AboutDialog';
 import AppRail from '@/components/AppRail';
+import LicensesDialog from '@/components/LicensesDialog';
 import RawLogDrawer from '@/components/RawLogDrawer';
 import SettingsDialog from '@/components/SettingsDialog';
 import {
@@ -21,6 +23,8 @@ import { SimulationView } from '@/views/SimulationView';
 export function MainLayout() {
     const [activeView, setActiveView] = useState('scenario');
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [aboutOpen, setAboutOpen] = useState(false);
+    const [licensesOpen, setLicensesOpen] = useState(false);
     const [viewportWidth, setViewportWidth] = useState(() =>
         typeof window === 'undefined' ? 1440 : window.innerWidth
     );
@@ -119,6 +123,7 @@ export function MainLayout() {
                 activeView={activeView}
                 onViewChange={setActiveView}
                 onSettingsClick={() => setSettingsOpen(true)}
+                onAboutClick={() => setAboutOpen(true)}
             />
             {logOpen && effectiveLogDrawerWidth > 0 && (
                 <RawLogDrawer
@@ -171,6 +176,18 @@ export function MainLayout() {
             <SettingsDialog
                 open={settingsOpen}
                 onClose={() => setSettingsOpen(false)}
+            />
+            <AboutDialog
+                open={aboutOpen}
+                onClose={() => setAboutOpen(false)}
+                onLicensesClick={() => {
+                    setAboutOpen(false);
+                    setLicensesOpen(true);
+                }}
+            />
+            <LicensesDialog
+                open={licensesOpen}
+                onClose={() => setLicensesOpen(false)}
             />
             <Snackbar
                 open={open}

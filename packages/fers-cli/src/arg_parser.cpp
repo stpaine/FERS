@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <exception>
 #include <filesystem>
+#include <format>
 #include <iostream>
 #include <unordered_map>
 #include <utility>
@@ -199,12 +200,13 @@ namespace core
 {
 	void showHelp(const char* programName) noexcept
 	{
-		std::cout << R"(/------------------------------------------------\
-| FERS - The Flexible Extensible Radar Simulator |
-| Version 1.0.0                                  |
-\------------------------------------------------/
-Usage: )" << programName
-				  << R"( <scriptfile> [options]
+		const char* version = fers_get_version();
+
+		std::cout << "/------------------------------------------------\\\n"
+				  << "| FERS - The Flexible Extensible Radar Simulator |\n"
+				  << std::format("| Version {:<40}|\n", version)
+				  << "\\------------------------------------------------/\n"
+				  << "Usage: " << programName << R"( <scriptfile> [options]
 
 Options:
   --help, -h              Show this help message and exit
@@ -233,13 +235,15 @@ Make sure the script file follows the correct format to avoid errors.
 
 	void showVersion() noexcept
 	{
-		std::cout << R"(
-/------------------------------------------------\
-| FERS - The Flexible Extensible Radar Simulator |
-| Version 1.0.0                                  |
-| Author: Marc Brooker                           |
-\------------------------------------------------/
-)" << '\n';
+		const char* version = fers_get_version();
+
+		std::cout << '\n'
+				  << "/------------------------------------------------\\\n"
+				  << "| FERS - The Flexible Extensible Radar Simulator |\n"
+				  << std::format("| Version {:<40}|\n", version)
+				  << "| Authors: Marc Brooker, Michael Inggs,         |\n"
+				  << "|          and FERS Contributors                |\n"
+				  << "\\------------------------------------------------/\n\n";
 	}
 
 	std::expected<Config, std::string> parseArguments(const int argc, char* argv[]) noexcept

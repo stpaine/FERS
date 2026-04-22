@@ -1,0 +1,8 @@
+{
+    "inputs": ["packages/fers-ui/package.json"],
+    "output": "THIRD_PARTY_LICENSES/js-licenses.txt",
+    "overwrite": true,
+    "replace": {
+        "@tauri-apps/api@2.10.1": "packages/fers-ui/node_modules/@tauri-apps/api/LICENSE_MIT"
+    }
+}

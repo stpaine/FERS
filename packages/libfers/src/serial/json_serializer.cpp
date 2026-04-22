@@ -597,6 +597,7 @@ namespace params
 		p.sim_sampling_rate = j.value("simSamplingRate", 1000.0);
 		p.adc_bits = j.value("adc_bits", 0u);
 		p.oversample_ratio = j.value("oversample", 1u);
+		params::validateOversampleRatio(p.oversample_ratio);
 		p.rotation_angle_unit = j.value("rotationangleunit", RotationAngleUnit::Degrees);
 		p.random_seed = j.value<std::optional<unsigned>>("randomseed", std::nullopt);
 

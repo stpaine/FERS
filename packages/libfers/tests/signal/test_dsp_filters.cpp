@@ -1,12 +1,14 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
 #include <vector>
 
 #include "core/parameters.h"
 #include "signal/dsp_filters.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace
@@ -141,6 +143,70 @@ TEST_CASE("Upsample and downsample preserve low-frequency content", "[signal][ds
 		const RealType error = std::abs(downsampled[i] - input[i]);
 		REQUIRE(error < tolerance);
 	}
+}
+
+TEST_CASE("Upsample and downsample preserve boundary-ratio low-frequency content", "[signal][dsp][resample]")
+{
+	ParamGuard guard;
+	params::params.filter_length = 33;
+	params::setOversampleRatio(8);
+
+	constexpr size_t sample_count = 128;
+	constexpr RealType frequency = 0.01;
+	std::vector<ComplexType> input(sample_count);
+	for (size_t i = 0; i < input.size(); ++i)
+	{
+		const RealType phase = 2.0 * PI * frequency * static_cast<RealType>(i);
+		input[i] = ComplexType{std::cos(phase), std::sin(phase)};
+	}
+
+	std::vector<ComplexType> upsampled(sample_count * params::oversampleRatio());
+	fers_signal::upsample(input, static_cast<unsigned>(input.size()), upsampled);
+
+	auto downsampled = fers_signal::downsample(upsampled);
+	REQUIRE(downsampled.size() == input.size());
+
+	ComplexType correlation{0.0, 0.0};
+	RealType output_energy = 0.0;
+	RealType reference_energy = 0.0;
+	for (size_t i = 20; i < input.size() - 20; ++i)
+	{
+		correlation += downsampled[i] * std::conj(input[i]);
+		output_energy += std::norm(downsampled[i]);
+		reference_energy += std::norm(input[i]);
+	}
+
+	const RealType normalized_correlation = std::abs(correlation) / std::sqrt(output_energy * reference_energy);
+	const RealType gain = std::sqrt(output_energy / reference_energy);
+
+	REQUIRE(normalized_correlation > 0.995);
+	REQUIRE(gain > 0.99);
+	REQUIRE(gain < 1.01);
+}
+
+TEST_CASE("Downsample truncates non-divisible oversampled buffers", "[signal][dsp][downsample]")
+{
+	ParamGuard guard;
+	params::setOversampleRatio(8);
+
+	const std::vector<ComplexType> oversampled(17, ComplexType{0.0, 0.0});
+	const auto downsampled = fers_signal::downsample(oversampled);
+
+	REQUIRE(downsampled.size() == oversampled.size() / params::oversampleRatio());
+}
+
+TEST_CASE("Resampler fails fast when oversample ratio exceeds fixed-filter limit", "[signal][dsp][resample]")
+{
+	ParamGuard guard;
+	params::params.oversample_ratio = 9;
+
+	const std::vector<ComplexType> input = {ComplexType{1.0, 0.0}, ComplexType{0.0, 1.0}};
+	std::vector<ComplexType> upsampled(input.size() * params::params.oversample_ratio);
+
+	REQUIRE_THROWS_WITH(fers_signal::upsample(input, static_cast<unsigned>(input.size()), upsampled),
+						ContainsSubstring("Oversampling ratios > 8 are not supported"));
+	REQUIRE_THROWS_WITH(fers_signal::downsample(upsampled),
+						ContainsSubstring("Oversampling ratios > 8 are not supported"));
 }
 
 TEST_CASE("Downsample rejects empty input", "[signal][dsp][downsample]")

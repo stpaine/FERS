@@ -18,9 +18,9 @@ env:
 
 jobs:
     lint-ui:
-        name: Lint UI (biome)
+        name: Lint UI (biome + licenses)
         runs-on: ubuntu-24.04
-        timeout-minutes: 10
+        timeout-minutes: 15
         steps:
             - name: Checkout repository
               uses: actions/checkout@v6
@@ -44,6 +44,20 @@ jobs:
 
             - name: Run biome lint
               run: bun run --filter fers-ui lint
+
+            - name: Install Rust toolchain
+              run: rustup show
+
+            - name: Install cargo-about
+              uses: taiki-e/install-action@v2
+              with:
+                  tool: cargo-about
+
+            - name: Check licenses are up to date
+              run: |
+                  bun run licenses:js
+                  bun run licenses:rust
+                  git diff --exit-code THIRD_PARTY_LICENSES/ || (echo "License files are out of date. Run 'bun run licenses:js' and 'bun run licenses:rust' and commit the result." && exit 1)
 
     build-ui:
         name: Build UI (${{ matrix.os }})
