@@ -109,6 +109,8 @@ namespace
 		const RealType n = filt_length / 2.0;
 		const RealType pi_n = PI / n;
 
+		// We use the Blackman window, for a suitable tradeoff between rolloff and stopband attenuation
+		// Equivalent Kaiser beta = 7.04 (Oppenhiem and Schaffer, Hamming)
 		std::ranges::for_each(coeffs,
 							  [cutoff, n, pi_n, i = 0u](RealType& coeff) mutable
 							  {
