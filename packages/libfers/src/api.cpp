@@ -30,6 +30,7 @@
 #include "core/fers_context.h"
 #include "core/sim_threading.h"
 #include "core/thread_pool.h"
+#include "fers_version.h"
 #include "serial/json_serializer.h"
 #include "serial/kml_generator.h"
 #include "serial/rotation_angle_utils.h"
@@ -208,6 +209,8 @@ int fers_configure_logging(fers_log_level_t level, const char* log_file_path)
 		return 1;
 	}
 }
+
+const char* fers_get_version(void) { return FERS_VERSION_STRING; }
 
 fers_log_level_t fers_get_log_level() { return map_internal_log_level(logging::logger.getLevel()); }
 

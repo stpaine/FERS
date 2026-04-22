@@ -1,7 +1,7 @@
 {
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
     "name": "fers",
-    "version": "1.0.0",
+    "version-semver": "0.1.0",
     "builtin-baseline": "f6735d5aa1537081e8d425372ea7e585b0ad65e8",
     "dependencies": [
         "catch2",

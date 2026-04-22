@@ -203,6 +203,14 @@ We welcome contributions to the FERS project! Please read our [CONTRIBUTING.md](
 
 Note that this repository uses **Husky** to enforce code quality with pre-commit hooks. When you commit, your staged files will be automatically formatted and linted.
 
+## Versioning
+
+FERS uses a single repo-wide semantic version across the C++ core, CLI, UI, and release metadata.
+
+- `version.txt` is the single source of truth for the managed release version.
+- `CMakeLists.txt`, `vcpkg.json`, `packages/fers-ui/package.json`, and `packages/fers-ui/src-tauri/Cargo.toml` are kept aligned with that shared version.
+- `packages/fers-ui/src-tauri/tauri.conf.json` reads the UI package version indirectly via `../package.json`.
+
 ## License
 
 - Copyright (C) 2006-2008 Marc Brooker and Michael Inggs.

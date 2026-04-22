@@ -93,6 +93,9 @@ if (COMMAND apply_fers_warnings)
 	apply_fers_warnings(libfers_tests)
 endif ()
 
+target_compile_definitions(libfers_tests PRIVATE
+						   FERS_TEST_EXPECTED_VERSION="${CMAKE_PROJECT_VERSION}")
+
 catch_discover_tests(libfers_tests
 					 DISCOVERY_MODE PRE_TEST
 )

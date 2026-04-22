@@ -2,7 +2,7 @@
 name: Deploy Documentation to GitHub Pages
 
 on:
-    # Runs on pushes targeting the main branch
+    # Runs on pushes targeting the default branch
     push:
         branches:
             - master

@@ -107,7 +107,7 @@ TEST_CASE("parseArguments reports version and prints version text", "[fers-cli][
 
 	REQUIRE_FALSE(result);
 	CHECK(result.error() == "Version requested.");
-	CHECK(output.contains("Version 1.0.0"));
+	CHECK(output.contains(std::string{"Version "} + fers_get_version()));
 	CHECK(output.contains("FERS - The Flexible Extensible Radar Simulator"));
 }
 

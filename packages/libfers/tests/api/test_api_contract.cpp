@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <libfers/api.h>
+#include <string_view>
 
 #include "api_test_helpers.h"
 
@@ -23,6 +24,14 @@ TEST_CASE("API context creation returns a valid handle", "[api][core]")
 
 	api_test::ApiString error = api_test::lastError();
 	REQUIRE(error.get() == nullptr);
+}
+
+TEST_CASE("API exposes the shared repo version", "[api][core]")
+{
+	const char* version = fers_get_version();
+
+	REQUIRE(version != nullptr);
+	REQUIRE(std::string_view(version) == FERS_TEST_EXPECTED_VERSION);
 }
 
 TEST_CASE("API last error is null when no failure has occurred", "[api][core]")

@@ -31,3 +31,5 @@ CMakeUserPresets.json
 .python-version
 pyproject.toml
 uv.lock
+
+__pycache__

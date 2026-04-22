@@ -111,6 +111,14 @@ typedef void (*fers_log_callback_t)(fers_log_level_t level, const char* line, vo
 int fers_configure_logging(fers_log_level_t level, const char* log_file_path);
 
 /**
+ * @brief Returns the library version string.
+ *
+ * The returned pointer remains valid for the lifetime of the process and must
+ * not be freed by the caller.
+ */
+const char* fers_get_version(void);
+
+/**
  * @brief Returns the current internal logger level.
  */
 fers_log_level_t fers_get_log_level();

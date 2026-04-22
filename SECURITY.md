@@ -5,12 +5,12 @@ document outlines how to report security vulnerabilities.
 
 ## Supported Versions
 
-As this project is in active development, there are no official versioned releases yet. We provide security support for
-the most recent commit on the `main` branch only.
+Security fixes are applied on `master`. The latest GitHub release and the current `master` branch are the supported lines.
 
 | Branch | Supported          |
 | ------ | ------------------ |
-| `main` | :white_check_mark: |
+| Latest release | :white_check_mark: |
+| `master` | :white_check_mark: |
 | Other  | :x:                |
 
 ## Reporting a Vulnerability
