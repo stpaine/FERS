@@ -14,7 +14,8 @@
             "binaryDir": "${sourceDir}/build/debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "FERS_BUILD_TESTS": "ON"
             }
         },
         {
@@ -71,13 +72,6 @@
                 "FERS_BUILD_TESTS": "ON",
                 "FERS_ENABLE_COVERAGE": "ON"
             }
-        },
-        {
-            "name": "coverage-ci",
-            "displayName": "Code Coverage (CI)",
-            "description": "Debug build with coverage generation enabled for CI",
-            "inherits": "coverage",
-            "binaryDir": "${sourceDir}/build/coverage-ci"
         }
     ],
     "buildPresets": [
@@ -86,8 +80,7 @@
         { "name": "relwithdebinfo", "configurePreset": "relwithdebinfo" },
         { "name": "asan", "configurePreset": "asan" },
         { "name": "tsan", "configurePreset": "tsan" },
-        { "name": "coverage", "configurePreset": "coverage" },
-        { "name": "coverage-ci", "configurePreset": "coverage-ci" }
+        { "name": "coverage", "configurePreset": "coverage" }
     ],
     "testPresets": [
         {
@@ -118,11 +111,6 @@
         {
             "name": "coverage",
             "configurePreset": "coverage",
-            "output": { "outputOnFailure": true }
-        },
-        {
-            "name": "coverage-ci",
-            "configurePreset": "coverage-ci",
             "output": { "outputOnFailure": true }
         }
     ]
