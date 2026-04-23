@@ -314,6 +314,7 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 	auto rx = world.getReceivers()[0].get();
 	REQUIRE(tx->getAttached() == rx);
 	REQUIRE(rx->getAttached() == tx);
+	REQUIRE(tx->getTiming().get() == rx->getTiming().get());
 	REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 	REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 	REQUIRE(tx->getSchedule().size() == 1);
@@ -781,4 +782,5 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
 	REQUIRE(rx_ptr->getTiming()->getSeed() == 12345);
+	REQUIRE(tx_ptr->getTiming().get() == rx_ptr->getTiming().get());
 }

@@ -16,7 +16,9 @@
 
 #include "channel_model.h"
 
+#include <algorithm>
 #include <cmath>
+#include <unordered_map>
 
 #include "core/logging.h"
 #include "core/parameters.h"
@@ -156,6 +158,16 @@ namespace
 		return 2 * PI * delta_f * time + delta_phi;
 	}
 
+	RealType computeTimingPhase(const Transmitter* tx, const Receiver* rx, const RealType rx_time,
+								const RealType tx_time, const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
+	{
+		if (phase_noise_lookup == nullptr)
+		{
+			return computeTimingPhase(tx, rx, rx_time);
+		}
+		return phase_noise_lookup->phaseDifference(rx->getTiming().get(), rx_time, tx->getTiming().get(), tx_time);
+	}
+
 	// Helper to check noise floor threshold (Signal > kTB)
 	bool isSignalStrong(RealType power_watts, RealType temp_kelvin)
 	{
@@ -222,6 +234,101 @@ namespace
 
 namespace simulation
 {
+	RealType CwPhaseNoiseBuffer::sampleAt(const RealType time) const noexcept
+	{
+		if (samples.empty())
+		{
+			return 0.0;
+		}
+		if ((time <= start_time) || (samples.size() == 1) || (dt <= 0.0))
+		{
+			return samples.front();
+		}
+
+		const RealType position = (time - start_time) / dt;
+		const auto last_index = static_cast<RealType>(samples.size() - 1);
+		if (position >= last_index)
+		{
+			return samples.back();
+		}
+
+		const auto lower_index = static_cast<std::size_t>(position);
+		const RealType fraction = position - static_cast<RealType>(lower_index);
+		return samples[lower_index] + fraction * (samples[lower_index + 1] - samples[lower_index]);
+	}
+
+	CwPhaseNoiseLookup CwPhaseNoiseLookup::build(const std::span<const std::shared_ptr<timing::Timing>> timings,
+												 const RealType start_time, const RealType end_time)
+	{
+		CwPhaseNoiseLookup lookup{};
+		lookup.start_time = start_time;
+		lookup.end_time = std::max(start_time, end_time);
+
+		const RealType sample_rate = params::rate() * params::oversampleRatio();
+		lookup.dt = sample_rate > 0.0 ? (1.0 / sample_rate) : 1.0;
+
+		const auto sample_count =
+			static_cast<std::size_t>(std::ceil((lookup.end_time - lookup.start_time) / lookup.dt) + 1.0);
+		constexpr std::size_t phase_noise_warning_threshold_bytes = 500ULL * 1024ULL * 1024ULL;
+		const auto bytes_per_buffer = sample_count * sizeof(RealType);
+
+		for (const auto& timing : timings)
+		{
+			if (!timing || lookup.buffers.contains(timing->getId()))
+			{
+				continue;
+			}
+
+			CwPhaseNoiseBuffer buffer{};
+			buffer.start_time = lookup.start_time;
+			buffer.dt = lookup.dt;
+			if (timing->isEnabled())
+			{
+				auto timing_clone = timing->clone();
+				if (lookup.start_time > 0.0)
+				{
+					const auto skip_count = static_cast<std::size_t>(std::llround(lookup.start_time / lookup.dt));
+					timing_clone->skipSamples(skip_count);
+				}
+				// TODO: Replace whole-simulation CW lookup generation with chunked/streaming generation.
+				if (bytes_per_buffer > phase_noise_warning_threshold_bytes)
+				{
+					LOG(Level::WARNING,
+						"CW phase-noise lookup for timing '{}' allocates {} bytes; large scenarios need chunked "
+						"streaming.",
+						timing->getName(), bytes_per_buffer);
+				}
+				buffer.samples.resize(sample_count);
+				std::ranges::generate(buffer.samples, [&] { return timing_clone->getNextSample(); });
+			}
+
+			lookup.buffers.emplace(timing->getId(), std::move(buffer));
+		}
+
+		return lookup;
+	}
+
+	RealType CwPhaseNoiseLookup::sample(const timing::Timing* const timing, const RealType time) const noexcept
+	{
+		if (timing == nullptr)
+		{
+			return 0.0;
+		}
+		const auto it = buffers.find(timing->getId());
+		if (it == buffers.end())
+		{
+			return 0.0;
+		}
+		return it->second.sampleAt(time);
+	}
+
+	RealType CwPhaseNoiseLookup::phaseDifference(const timing::Timing* const rx_timing, const RealType rx_time,
+												 const timing::Timing* const tx_timing,
+												 const RealType tx_time) const noexcept
+	{
+		return sample(tx_timing, tx_time) - sample(rx_timing, rx_time);
+	}
+
 	void solveRe(const Transmitter* trans, const Receiver* recv, const Target* targ,
 				 const std::chrono::duration<RealType>& time, const RadarSignal* wave, ReResults& results)
 	{
@@ -312,7 +419,8 @@ namespace simulation
 		results.phase = -results.delay * 2 * PI * wave->getCarrier();
 	}
 
-	ComplexType calculateDirectPathContribution(const Transmitter* trans, const Receiver* recv, const RealType timeK)
+	ComplexType calculateDirectPathContribution(const Transmitter* trans, const Receiver* recv, const RealType timeK,
+												const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
 		// Check for co-location to prevent singularities.
 		// If they share the same platform, we assume they are isolated (no leakage) or explicit
@@ -356,14 +464,15 @@ namespace simulation
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
-		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK);
+		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup);
 		contribution *= std::polar(1.0, non_coherent_phase);
 
 		return contribution;
 	}
 
 	ComplexType calculateReflectedPathContribution(const Transmitter* trans, const Receiver* recv, const Target* targ,
-												   const RealType timeK)
+												   const RealType timeK,
+												   const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
 		// Check for co-location involving the target.
 		// We do not model a platform tracking itself (R=0) or illuminating itself (R=0).
@@ -415,7 +524,7 @@ namespace simulation
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
-		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK);
+		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup);
 		contribution *= std::polar(1.0, non_coherent_phase);
 
 		return contribution;

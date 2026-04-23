@@ -18,6 +18,7 @@
 #include "radar/transmitter.h"
 #include "signal/radar_signal.h"
 #include "simulation/channel_model.h"
+#include "timing/prototype_timing.h"
 #include "timing/timing.h"
 
 using Catch::Matchers::WithinAbs;
@@ -38,6 +39,12 @@ namespace
 		plat.getMotionPath()->finalize();
 		plat.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
 		plat.getRotationPath()->finalize();
+	}
+
+	simulation::CwPhaseNoiseLookup makeLookup(const std::shared_ptr<timing::Timing>& timing)
+	{
+		const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
+		return simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime());
 	}
 }
 
@@ -403,6 +410,56 @@ TEST_CASE("calculateDirectPathContribution with noproploss gives distance-indepe
 
 		REQUIRE_THAT(std::abs(result), WithinRel(expected_amplitude, 1e-6));
 	}
+}
+
+TEST_CASE("calculateDirectPathContribution applies buffered delayed timing phase with interpolation",
+		  "[simulation][channel_model][direct]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setTime(0.0, 1.0);
+	params::setRate(10.0);
+	params::setOversampleRatio(1);
+	params::setC(10.0);
+
+	const RealType carrier = 1.0;
+	const RealType dist = 1.5; // tau = 0.15 s
+	const RealType time = 0.5;
+	const RealType tau = dist / params::c();
+	const RealType expected_extra_phase = -2.0 * PI * tau;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{dist, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	timing::PrototypeTiming prototype("clk");
+	prototype.setFrequency(carrier);
+	prototype.setFreqOffset(1.0);
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+	timing->initializeModel(&prototype);
+	const auto lookup = makeLookup(timing);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1.0, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	const ComplexType ideal = simulation::calculateDirectPathContribution(&tx, &rx, time);
+	const ComplexType delayed = simulation::calculateDirectPathContribution(&tx, &rx, time, &lookup);
+	const RealType extra_phase = std::arg(delayed * std::conj(ideal));
+
+	REQUIRE_THAT(std::cos(extra_phase), WithinAbs(std::cos(expected_extra_phase), 1e-6));
+	REQUIRE_THAT(std::sin(extra_phase), WithinAbs(std::sin(expected_extra_phase), 1e-6));
 }
 
 TEST_CASE("solveReDirect at 3D separation produces correct distance and delay", "[simulation][channel_model][direct]")

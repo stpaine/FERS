@@ -39,6 +39,10 @@ namespace fers_signal
 {
 	class RadarSignal;
 }
+namespace timing
+{
+	class Timing;
+}
 namespace radar
 {
 	class Receiver;
@@ -114,6 +118,8 @@ namespace serial::xml_parser_utils
 		std::filesystem::path base_dir; ///< The directory of the main XML file (used to resolve relative asset paths).
 		std::mt19937* master_seeder = nullptr; ///< RNG used to generate independent seeds for simulated objects.
 		AssetLoaders loaders; ///< The injected asset loaders for external files.
+		std::unordered_map<SimId, std::shared_ptr<timing::Timing>>
+			timing_instances; ///< Shared timing instances keyed by prototype ID.
 	};
 
 	/**

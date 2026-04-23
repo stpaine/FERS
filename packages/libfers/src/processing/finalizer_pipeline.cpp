@@ -9,7 +9,9 @@
 #include <algorithm>
 #include <cmath>
 #include <highfive/highfive.hpp>
+#include <optional>
 #include <ranges>
+#include <unordered_map>
 
 #include "core/logging.h"
 #include "core/output_metadata.h"
@@ -75,8 +77,33 @@ namespace processing::pipeline
 
 	void applyCwInterference(std::span<ComplexType> window, const RealType actual_start, const RealType dt,
 							 const radar::Receiver* receiver, const std::vector<radar::Transmitter*>& cw_sources,
-							 const std::vector<std::unique_ptr<radar::Target>>* targets)
+							 const std::vector<std::unique_ptr<radar::Target>>* targets,
+							 const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
 	{
+		const simulation::CwPhaseNoiseLookup* lookup = phase_noise_lookup;
+		std::optional<simulation::CwPhaseNoiseLookup> owned_lookup;
+		if (lookup == nullptr)
+		{
+			std::unordered_map<SimId, std::shared_ptr<timing::Timing>> unique_timings;
+			unique_timings.try_emplace(receiver->getTiming()->getId(), receiver->getTiming());
+			for (const auto* cw_source : cw_sources)
+			{
+				unique_timings.try_emplace(cw_source->getTiming()->getId(), cw_source->getTiming());
+			}
+
+			std::vector<std::shared_ptr<timing::Timing>> timings;
+			timings.reserve(unique_timings.size());
+			for (const auto& entry : unique_timings)
+			{
+				timings.push_back(entry.second);
+			}
+
+			const RealType end_time =
+				actual_start + dt * static_cast<RealType>(window.empty() ? 0 : (window.size() - 1));
+			owned_lookup = simulation::CwPhaseNoiseLookup::build(timings, actual_start, end_time);
+			lookup = &*owned_lookup;
+		}
+
 		RealType t_sample = actual_start;
 		for (auto& window_sample : window)
 		{
@@ -86,12 +113,12 @@ namespace processing::pipeline
 				if (!receiver->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT))
 				{
 					cw_interference_sample +=
-						simulation::calculateDirectPathContribution(cw_source, receiver, t_sample);
+						simulation::calculateDirectPathContribution(cw_source, receiver, t_sample, lookup);
 				}
 				for (const auto& target_ptr : *targets)
 				{
-					cw_interference_sample +=
-						simulation::calculateReflectedPathContribution(cw_source, receiver, target_ptr.get(), t_sample);
+					cw_interference_sample += simulation::calculateReflectedPathContribution(
+						cw_source, receiver, target_ptr.get(), t_sample, lookup);
 				}
 			}
 			window_sample += cw_interference_sample;

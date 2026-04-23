@@ -298,6 +298,7 @@ TEST_CASE("World replaces timing and refreshes dependent radar timing models", "
 
 	REQUIRE(tx_ptr->getTiming().get() != tx_timing.get());
 	REQUIRE(rx_ptr->getTiming().get() != rx_timing.get());
+	REQUIRE(tx_ptr->getTiming().get() != rx_ptr->getTiming().get());
 	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
 	REQUIRE(rx_ptr->getTiming()->getSeed() == 54321);
 	REQUIRE(tx_ptr->getTiming()->getName() == "NewTiming");
@@ -310,6 +311,40 @@ TEST_CASE("World replaces timing and refreshes dependent radar timing models", "
 	REQUIRE_THAT(rx_ptr->getTiming()->getFreqOffset(), WithinAbs(7.5, 1e-9));
 	REQUIRE_THAT(tx_ptr->getTiming()->getPhaseOffset(), WithinAbs(0.75, 1e-9));
 	REQUIRE_THAT(rx_ptr->getTiming()->getPhaseOffset(), WithinAbs(0.75, 1e-9));
+}
+
+TEST_CASE("World replacement preserves shared timing instances", "[core][world]")
+{
+	core::World world;
+
+	auto old_timing = std::make_unique<timing::PrototypeTiming>("OldTiming", 301);
+	old_timing->setFrequency(1.0e6);
+	world.add(std::move(old_timing));
+
+	auto plat = std::make_unique<radar::Platform>("Plat", 11);
+	auto tx = std::make_unique<radar::Transmitter>(plat.get(), "Tx", radar::OperationMode::CW_MODE, 12);
+	auto rx = std::make_unique<radar::Receiver>(plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 13);
+
+	auto shared_timing = std::make_shared<timing::Timing>("OldTiming", 777, 301);
+	shared_timing->initializeModel(world.findTiming(301));
+	tx->setTiming(shared_timing);
+	rx->setTiming(shared_timing);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	world.add(std::move(plat));
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+
+	auto new_timing = std::make_unique<timing::PrototypeTiming>("NewTiming", 301);
+	new_timing->setFrequency(2.0e6);
+	world.replace(std::move(new_timing));
+
+	REQUIRE(tx_ptr->getTiming().get() == rx_ptr->getTiming().get());
+	REQUIRE(tx_ptr->getTiming().get() != shared_timing.get());
+	REQUIRE(tx_ptr->getTiming()->getSeed() == 777);
+	REQUIRE_THAT(tx_ptr->getTiming()->getFrequency(), WithinAbs(2.0e6, 1e-9));
 }
 
 TEST_CASE("World enforces unique ids for assets", "[core][world]")

@@ -652,6 +652,44 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 	}
 }
 
+TEST_CASE("parseMonostatic reuses one shared timing instance for a common timing id", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+	params::setRate(10000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	world.add(
+		std::make_unique<fers_signal::RadarSignal>("w1", 1.0, 1e9, 1.0, std::make_unique<fers_signal::CwSignal>(), 10));
+	world.add(std::make_unique<antenna::Isotropic>("a1", 20));
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	timing_proto->setFrequency(1e6);
+	world.add(std::move(timing_proto));
+
+	std::unordered_map<std::string, SimId> w_refs = {{"w1", 10}};
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	auto doc = loadXml("<monostatic name=\"mono\" waveform=\"w1\" antenna=\"a1\" timing=\"t1\">"
+					   "  <cw_mode/>"
+					   "</monostatic>");
+
+	serial::xml_parser_utils::parseMonostatic(doc.getRootElement(), &platform, ctx, refs);
+
+	REQUIRE(world.getTransmitters().size() == 1);
+	REQUIRE(world.getReceivers().size() == 1);
+	REQUIRE(world.getTransmitters().front()->getTiming().get() == world.getReceivers().front()->getTiming().get());
+}
+
 TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 {
 	core::World world;

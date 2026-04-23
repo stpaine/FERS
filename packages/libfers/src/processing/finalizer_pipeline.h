@@ -43,6 +43,10 @@ namespace core
 {
 	struct OutputFileMetadata;
 }
+namespace simulation
+{
+	struct CwPhaseNoiseLookup;
+}
 
 namespace processing::pipeline
 {
@@ -95,7 +99,8 @@ namespace processing::pipeline
 	 */
 	void applyCwInterference(std::span<ComplexType> window, RealType actual_start, RealType dt,
 							 const radar::Receiver* receiver, const std::vector<radar::Transmitter*>& cw_sources,
-							 const std::vector<std::unique_ptr<radar::Target>>* targets);
+							 const std::vector<std::unique_ptr<radar::Target>>* targets,
+							 const simulation::CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
 	/**
 	 * @brief Renders and applies pulsed interference to a continuous-wave IQ buffer.

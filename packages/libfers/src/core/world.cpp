@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <limits>
 #include <sstream>
+#include <unordered_map>
 
 #include "antenna/antenna_factory.h"
 #include "core/sim_events.h"
@@ -216,7 +217,8 @@ namespace core
 			_timings[id] = std::move(timing);
 		}
 
-		auto refresh_timing = [id, new_ptr](auto& radar_obj)
+		std::unordered_map<const timing::Timing*, std::shared_ptr<timing::Timing>> refreshed_instances;
+		auto refresh_timing = [id, new_ptr, &refreshed_instances](auto& radar_obj)
 		{
 			const auto current_timing = radar_obj->getTiming();
 			if (!current_timing || (current_timing->getId() != id))
@@ -224,10 +226,16 @@ namespace core
 				return;
 			}
 
-			auto refreshed =
-				std::make_shared<timing::Timing>(new_ptr->getName(), current_timing->getSeed(), new_ptr->getId());
-			refreshed->initializeModel(new_ptr);
-			radar_obj->setTiming(refreshed);
+			const timing::Timing* const timing_key = current_timing.get();
+			const auto [it, inserted] = refreshed_instances.try_emplace(timing_key);
+			if (inserted)
+			{
+				auto refreshed =
+					std::make_shared<timing::Timing>(new_ptr->getName(), current_timing->getSeed(), new_ptr->getId());
+				refreshed->initializeModel(new_ptr);
+				it->second = std::move(refreshed);
+			}
+			radar_obj->setTiming(it->second);
 		};
 
 		if ((old_ptr != nullptr) && old_ptr != new_ptr)
