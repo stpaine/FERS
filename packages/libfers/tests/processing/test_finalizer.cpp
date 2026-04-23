@@ -173,7 +173,7 @@ TEST_CASE("finalizeCwReceiver exits cleanly when no CW samples were collected", 
 	std::filesystem::remove_all(out_dir);
 }
 
-TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies deterministic phase noise, and exports HDF5",
+TEST_CASE("finalizeCwReceiver adds logged pulsed interference without rotating the summed CW buffer and exports HDF5",
 		  "[processing][finalizer]")
 {
 	ParamGuard guard;
@@ -222,12 +222,12 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference, applies determini
 		REQUIRE(i_data.size() == 4u);
 		REQUIRE(q_data.size() == 4u);
 		REQUIRE_THAT(i_data[0], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(i_data[1], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(i_data[2], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(i_data[1], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(i_data[2], WithinAbs(1.0, 1e-12));
 		REQUIRE_THAT(i_data[3], WithinAbs(0.0, 1e-12));
 		REQUIRE_THAT(q_data[0], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(q_data[1], WithinAbs(1.0, 1e-12));
-		REQUIRE_THAT(q_data[2], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_data[1], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_data[2], WithinAbs(0.0, 1e-12));
 		REQUIRE_THAT(q_data[3], WithinAbs(0.0, 1e-12));
 		REQUIRE_THAT(fullscale, WithinAbs(1.0, 1e-12));
 		REQUIRE_THAT(reference_frequency, WithinAbs(77.0, 1e-12));

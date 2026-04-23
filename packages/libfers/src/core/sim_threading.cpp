@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cmath>
 #include <format>
+#include <unordered_map>
 #include <utility>
 
 #include "logging.h"
@@ -32,6 +33,7 @@
 #include "sim_events.h"
 #include "simulation/channel_model.h"
 #include "thread_pool.h"
+#include "timing/timing.h"
 #include "world.h"
 
 using logging::Level;
@@ -92,6 +94,44 @@ namespace core
 		}
 	}
 
+	void SimulationEngine::ensureCwPhaseNoiseLookup()
+	{
+		if (_cw_phase_noise_lookup)
+		{
+			return;
+		}
+
+		std::vector<std::shared_ptr<timing::Timing>> timings;
+		std::unordered_map<SimId, std::shared_ptr<timing::Timing>> unique_timings;
+
+		for (const auto& transmitter_ptr : _world->getTransmitters())
+		{
+			if (transmitter_ptr->getMode() != OperationMode::CW_MODE)
+			{
+				continue;
+			}
+			unique_timings.try_emplace(transmitter_ptr->getTiming()->getId(), transmitter_ptr->getTiming());
+		}
+
+		for (const auto& receiver_ptr : _world->getReceivers())
+		{
+			if (receiver_ptr->getMode() != OperationMode::CW_MODE)
+			{
+				continue;
+			}
+			unique_timings.try_emplace(receiver_ptr->getTiming()->getId(), receiver_ptr->getTiming());
+		}
+
+		timings.reserve(unique_timings.size());
+		for (const auto& entry : unique_timings)
+		{
+			timings.push_back(entry.second);
+		}
+
+		_cw_phase_noise_lookup = std::make_unique<simulation::CwPhaseNoiseLookup>(
+			simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime()));
+	}
+
 	void SimulationEngine::processCwPhysics(const RealType t_event)
 	{
 		auto& [t_current, active_cw_transmitters] = _world->getSimulationState();
@@ -104,6 +144,8 @@ namespace core
 		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
 		const auto start_index = static_cast<size_t>(std::ceil((t_current - params::startTime()) / dt_sim));
 		const auto end_index = static_cast<size_t>(std::ceil((t_event - params::startTime()) / dt_sim));
+
+		ensureCwPhaseNoiseLookup();
 
 		for (size_t sample_index = start_index; sample_index < end_index; ++sample_index)
 		{
@@ -128,11 +170,13 @@ namespace core
 		{
 			if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
 			{
-				total_sample += simulation::calculateDirectPathContribution(cw_source, rx, t_step);
+				total_sample +=
+					simulation::calculateDirectPathContribution(cw_source, rx, t_step, _cw_phase_noise_lookup.get());
 			}
 			for (const auto& target_ptr : _world->getTargets())
 			{
-				total_sample += simulation::calculateReflectedPathContribution(cw_source, rx, target_ptr.get(), t_step);
+				total_sample += simulation::calculateReflectedPathContribution(cw_source, rx, target_ptr.get(), t_step,
+																			   _cw_phase_noise_lookup.get());
 			}
 		}
 		return total_sample;

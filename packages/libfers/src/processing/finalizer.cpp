@@ -259,25 +259,11 @@ namespace processing
 		}
 		pipeline::applyPulsedInterference(iq_buffer, receiver->getPulsedInterferenceLog());
 
-		const auto timing_model = receiver->getTiming()->clone();
-		if (!timing_model)
-		{
-			LOG(logging::Level::FATAL, "Failed to clone timing model for CW receiver '{}'", receiver->getName());
-			return;
-		}
-
 		if (reporter)
 		{
 			reporter->report(std::format("Applying Noise for {}", receiver->getName()), 50, 100);
 		}
 		applyThermalNoise(iq_buffer, receiver->getNoiseTemperature(), receiver->getRngEngine());
-
-		if (timing_model->isEnabled())
-		{
-			std::vector pnoise(iq_buffer.size(), 0.0);
-			std::ranges::generate(pnoise, [&] { return timing_model->getNextSample(); });
-			pipeline::addPhaseNoiseToWindow(pnoise, iq_buffer);
-		}
 
 		const RealType fullscale = pipeline::applyDownsamplingAndQuantization(iq_buffer);
 
@@ -293,7 +279,8 @@ namespace processing
 		}
 		const auto hdf5_filename = (out_path / std::format("{}_results.h5", receiver->getName())).string();
 		auto file_metadata = buildCwMetadata(receiver, hdf5_filename, iq_buffer.size());
-		pipeline::exportCwToHdf5(hdf5_filename, iq_buffer, fullscale, timing_model->getFrequency(), &file_metadata);
+		pipeline::exportCwToHdf5(hdf5_filename, iq_buffer, fullscale, receiver->getTiming()->getFrequency(),
+								 &file_metadata);
 		if (metadata_collector)
 		{
 			metadata_collector->addFile(std::move(file_metadata));

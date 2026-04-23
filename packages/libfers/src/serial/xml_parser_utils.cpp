@@ -47,6 +47,27 @@ namespace serial::xml_parser_utils
 						  "std::mt19937 output must fit into unsigned seeds.");
 			return static_cast<unsigned>(master_seeder());
 		}
+
+		std::shared_ptr<timing::Timing> resolve_timing_instance(const SimId timing_id, ParserContext& ctx,
+																const std::string& owner)
+		{
+			if (const auto it = ctx.timing_instances.find(timing_id); it != ctx.timing_instances.end())
+			{
+				return it->second;
+			}
+
+			const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
+			if (proto == nullptr)
+			{
+				throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for " + owner + "'");
+			}
+
+			auto timing_obj =
+				std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
+			timing_obj->initializeModel(proto);
+			ctx.timing_instances.emplace(timing_id, timing_obj);
+			return timing_obj;
+		}
 	}
 
 	RealType get_child_real_type(const XmlElement& element, const std::string& elementName)
@@ -687,16 +708,7 @@ namespace serial::xml_parser_utils
 
 		const SimId timing_id =
 			resolve_reference_id(transmitter, "timing", "transmitter '" + name + "'", *refs.timings);
-		const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
-		if (proto == nullptr)
-		{
-			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for transmitter '" + name +
-							   "'");
-		}
-		const auto timing_obj =
-			std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
-		timing_obj->initializeModel(proto);
-		transmitter_obj->setTiming(timing_obj);
+		transmitter_obj->setTiming(resolve_timing_instance(timing_id, ctx, "transmitter '" + name + "'"));
 
 		RealType pri = is_pulsed ? (1.0 / transmitter_obj->getPrf()) : 0.0;
 		auto schedule = parseSchedule(transmitter, name, is_pulsed, pri);
@@ -765,15 +777,7 @@ namespace serial::xml_parser_utils
 		}
 
 		const SimId timing_id = resolve_reference_id(receiver, "timing", "receiver '" + name + "'", *refs.timings);
-		const timing::PrototypeTiming* proto = ctx.world->findTiming(timing_id);
-		if (proto == nullptr)
-		{
-			throw XmlException("Timing ID '" + std::to_string(timing_id) + "' not found for receiver '" + name + "'");
-		}
-		const auto timing_obj =
-			std::make_shared<timing::Timing>(proto->getName(), next_seed(*ctx.master_seeder), proto->getId());
-		timing_obj->initializeModel(proto);
-		receiver_obj->setTiming(timing_obj);
+		receiver_obj->setTiming(resolve_timing_instance(timing_id, ctx, "receiver '" + name + "'"));
 
 		if (get_attribute_bool(receiver, "nodirect", false))
 		{

@@ -26,6 +26,7 @@
 #include "core/config.h"
 #include "core/output_metadata.h"
 #include "core/sim_events.h"
+#include "simulation/channel_model.h"
 
 namespace pool
 {
@@ -181,6 +182,8 @@ namespace core
 													const std::vector<radar::Transmitter*>& cw_sources) const;
 
 	private:
+		void ensureCwPhaseNoiseLookup();
+
 		/**
 		 * @brief Starts dedicated finalizer threads for all pulsed receivers.
 		 */
@@ -213,6 +216,7 @@ namespace core
 		int _last_reported_percent = -1; ///< The last reported percentage to prevent redundant updates.
 
 		std::string _output_dir; ///< Output directory for the simulation files.
+		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup;
 	};
 
 	/**

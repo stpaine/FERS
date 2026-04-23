@@ -21,6 +21,8 @@
 #include <chrono>
 #include <exception>
 #include <memory>
+#include <span>
+#include <unordered_map>
 #include <vector>
 
 #include "core/config.h"
@@ -30,6 +32,10 @@
 namespace core
 {
 	class World;
+}
+namespace timing
+{
+	class Timing;
 }
 namespace radar
 {
@@ -52,6 +58,29 @@ namespace fers_signal
 
 namespace simulation
 {
+	struct CwPhaseNoiseBuffer
+	{
+		RealType start_time{};
+		RealType dt{};
+		std::vector<RealType> samples;
+
+		[[nodiscard]] RealType sampleAt(RealType time) const noexcept;
+	};
+
+	struct CwPhaseNoiseLookup
+	{
+		RealType start_time{};
+		RealType end_time{};
+		RealType dt{};
+		std::unordered_map<SimId, CwPhaseNoiseBuffer> buffers;
+
+		[[nodiscard]] static CwPhaseNoiseLookup build(std::span<const std::shared_ptr<timing::Timing>> timings,
+													  RealType start_time, RealType end_time);
+		[[nodiscard]] RealType sample(const timing::Timing* timing, RealType time) const noexcept;
+		[[nodiscard]] RealType phaseDifference(const timing::Timing* rx_timing, RealType rx_time,
+											   const timing::Timing* tx_timing, RealType tx_time) const noexcept;
+	};
+
 	/**
 	 * @struct ReResults
 	 * @brief Stores the intermediate results of a radar equation calculation for a single time point.
@@ -125,7 +154,7 @@ namespace simulation
 	 * @return The complex I/Q sample contribution for this path.
 	 */
 	ComplexType calculateDirectPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
-												RealType timeK);
+												RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
 	/**
 	 * @brief Calculates the complex envelope contribution for a reflected path (Tx -> Tgt -> Rx) at a specific time.
@@ -138,7 +167,8 @@ namespace simulation
 	 * @return The complex I/Q sample contribution for this path.
 	 */
 	ComplexType calculateReflectedPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
-												   const radar::Target* targ, RealType timeK);
+												   const radar::Target* targ, RealType timeK,
+												   const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
 	/**
 	 * @brief Creates a Response object by simulating a signal's interaction over its duration.

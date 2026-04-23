@@ -19,6 +19,7 @@
 #include "radar/transmitter.h"
 #include "signal/radar_signal.h"
 #include "simulation/channel_model.h"
+#include "timing/prototype_timing.h"
 #include "timing/timing.h"
 
 using Catch::Matchers::WithinAbs;
@@ -39,6 +40,12 @@ namespace
 		plat.getMotionPath()->finalize();
 		plat.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
 		plat.getRotationPath()->finalize();
+	}
+
+	simulation::CwPhaseNoiseLookup makeLookup(const std::shared_ptr<timing::Timing>& timing)
+	{
+		const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
+		return simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime());
 	}
 }
 
@@ -447,6 +454,69 @@ TEST_CASE("calculateReflectedPathContribution phase matches bistatic propagation
 		wrapped += 2.0 * PI;
 
 	REQUIRE_THAT(result_phase, WithinAbs(wrapped, 1e-6));
+}
+
+TEST_CASE("calculateReflectedPathContribution preserves stronger phase-noise cancellation for shorter delays",
+		  "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setTime(0.0, 1.0);
+	params::setRate(10.0);
+	params::setOversampleRatio(1);
+	params::setC(10.0);
+
+	const RealType carrier = 1.0;
+	const RealType sample_time = 0.5;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{-0.5, 0.0, 0.0});
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{0.5, 0.0, 0.0});
+
+	radar::Platform near_tgt_plat("near_tgt");
+	setupPlatform(near_tgt_plat, math::Vec3{0.0, 0.0, 0.0}); // tau = 0.1
+
+	radar::Platform far_tgt_plat("far_tgt");
+	setupPlatform(far_tgt_plat, math::Vec3{1.0, 0.0, 0.0}); // tau = 0.2
+
+	antenna::Isotropic iso_ant("iso");
+	timing::PrototypeTiming prototype("clk");
+	prototype.setFrequency(carrier);
+	prototype.setFreqOffset(1.0);
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+	timing->initializeModel(&prototype);
+	const auto lookup = makeLookup(timing);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("sig", 1.0, carrier, 1.0, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget near_tgt(&near_tgt_plat, "near", 1.0, 42);
+	radar::IsoTarget far_tgt(&far_tgt_plat, "far", 1.0, 43);
+
+	const ComplexType near_ideal = simulation::calculateReflectedPathContribution(&tx, &rx, &near_tgt, sample_time);
+	const ComplexType near_delayed =
+		simulation::calculateReflectedPathContribution(&tx, &rx, &near_tgt, sample_time, &lookup);
+	const ComplexType far_ideal = simulation::calculateReflectedPathContribution(&tx, &rx, &far_tgt, sample_time);
+	const ComplexType far_delayed =
+		simulation::calculateReflectedPathContribution(&tx, &rx, &far_tgt, sample_time, &lookup);
+
+	const RealType near_extra_phase = std::abs(std::arg(near_delayed * std::conj(near_ideal)));
+	const RealType far_extra_phase = std::abs(std::arg(far_delayed * std::conj(far_ideal)));
+
+	REQUIRE_THAT(near_extra_phase, WithinAbs(0.2 * PI, 1e-6));
+	REQUIRE_THAT(far_extra_phase, WithinAbs(0.4 * PI, 1e-6));
+	REQUIRE(near_extra_phase < far_extra_phase);
 }
 
 TEST_CASE("solveRe with 3D geometry computes correct bistatic range", "[simulation][channel_model][reflected]")

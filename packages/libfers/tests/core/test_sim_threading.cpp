@@ -21,6 +21,7 @@
 #include "radar/target.h"
 #include "radar/transmitter.h"
 #include "signal/radar_signal.h"
+#include "simulation/channel_model.h"
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
 
@@ -113,6 +114,12 @@ namespace
 		world->add(std::move(target));
 
 		return world;
+	}
+
+	simulation::CwPhaseNoiseLookup makeLookup(const std::shared_ptr<timing::Timing>& timing)
+	{
+		const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
+		return simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime());
 	}
 }
 
@@ -390,6 +397,75 @@ TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buff
 		// Sample 3 should be untouched (0.0)
 		REQUIRE(std::abs(buffer[3]) == 0.0);
 	}
+}
+
+TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW samples", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(10.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+	params::setC(10.0);
+
+	auto world = std::make_unique<core::World>();
+
+	auto tx_plat = std::make_unique<radar::Platform>("TxPlat", 10);
+	tx_plat->getMotionPath()->addCoord(math::Coord{math::Vec3{0.0, 0.0, 0.0}, 0.0});
+	tx_plat->getMotionPath()->finalize();
+	tx_plat->getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+	tx_plat->getRotationPath()->finalize();
+
+	auto rx_plat = std::make_unique<radar::Platform>("RxPlat", 11);
+	rx_plat->getMotionPath()->addCoord(math::Coord{math::Vec3{1.5, 0.0, 0.0}, 0.0});
+	rx_plat->getMotionPath()->finalize();
+	rx_plat->getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+	rx_plat->getRotationPath()->finalize();
+
+	auto proto_timing = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+	proto_timing->setFrequency(1.0);
+	proto_timing->setFreqOffset(1.0);
+	auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+	timing->initializeModel(proto_timing.get());
+	const auto lookup = makeLookup(timing);
+
+	auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+	auto signal = std::make_unique<fers_signal::RadarSignal>("CWWave", 1.0, 1.0, 1.0,
+															 std::make_unique<fers_signal::CwSignal>(), 3);
+
+	auto tx = std::make_unique<radar::Transmitter>(tx_plat.get(), "Tx", radar::OperationMode::CW_MODE, 4);
+	tx->setTiming(timing);
+	tx->setAntenna(antenna.get());
+	tx->setSignal(signal.get());
+
+	auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 5);
+	rx->setTiming(timing);
+	rx->setAntenna(antenna.get());
+	rx->prepareCwData(10);
+	rx->setActive(true);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+
+	world->add(std::move(tx_plat));
+	world->add(std::move(rx_plat));
+	world->add(std::move(proto_timing));
+	world->add(std::move(antenna));
+	world->add(std::move(signal));
+	world->add(std::move(tx));
+	world->add(std::move(rx));
+
+	world->getSimulationState().t_current = 0.0;
+	world->getSimulationState().active_cw_transmitters.push_back(tx_ptr);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+	engine.processCwPhysics(0.6);
+
+	const ComplexType expected = simulation::calculateDirectPathContribution(tx_ptr, rx_ptr, 0.5, &lookup);
+	const ComplexType actual = rx_ptr->getCwData()[5];
+
+	REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1e-6));
+	REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1e-6));
 }
 
 TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threading]")

@@ -19,6 +19,7 @@
 #include <format>
 #include <nlohmann/json.hpp>
 #include <random>
+#include <unordered_map>
 
 #include "antenna/antenna_factory.h"
 #include "core/parameters.h"
@@ -42,6 +43,8 @@
 
 namespace
 {
+	using TimingInstanceMap = std::unordered_map<SimId, std::shared_ptr<timing::Timing>>;
+
 	nlohmann::json sim_id_to_json(const SimId id) { return std::to_string(id); }
 
 	SimId parse_json_id(const nlohmann::json& j, const std::string& key, const std::string& owner)
@@ -82,6 +85,27 @@ namespace
 			throw std::runtime_error("Invalid '" + key + "' for " + owner + ": " + e.what());
 		}
 		throw std::runtime_error("Invalid '" + key + "' type for " + owner + ".");
+	}
+
+	std::shared_ptr<timing::Timing> resolve_timing_instance(core::World& world, std::mt19937& masterSeeder,
+															TimingInstanceMap& timing_instances, const SimId timing_id)
+	{
+		if (const auto it = timing_instances.find(timing_id); it != timing_instances.end())
+		{
+			return it->second;
+		}
+
+		auto* const timing_proto = world.findTiming(timing_id);
+		if (timing_proto == nullptr)
+		{
+			return nullptr;
+		}
+
+		auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), static_cast<unsigned>(masterSeeder()),
+													   timing_proto->getId());
+		timing->initializeModel(timing_proto);
+		timing_instances.emplace(timing_id, timing);
+		return timing;
 	}
 }
 
@@ -776,7 +800,7 @@ namespace
 	}
 
 	void parse_transmitter(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
-						   std::mt19937& masterSeeder)
+						   std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
 		// --- Dependency Check ---
 		// Validate Waveform and Timing existence before creation to prevent core crashes.
@@ -816,11 +840,8 @@ namespace
 		trans->setWave(world.findWaveform(wave_id));
 		trans->setAntenna(world.findAntenna(antenna_id));
 
-		if (auto* const timing_proto = world.findTiming(timing_id))
+		if (const auto timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
 		{
-			const auto timing =
-				std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
-			timing->initializeModel(timing_proto);
 			trans->setTiming(timing);
 		}
 
@@ -840,7 +861,7 @@ namespace
 	}
 
 	void parse_receiver(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
-						std::mt19937& masterSeeder)
+						std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
 		// --- Dependency Check ---
 		// Receiver strictly requires a Timing source.
@@ -878,11 +899,8 @@ namespace
 
 		recv->setAntenna(world.findAntenna(antenna_id));
 
-		if (auto* const timing_proto = world.findTiming(timing_id))
+		if (const auto timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
 		{
-			const auto timing =
-				std::make_shared<timing::Timing>(timing_proto->getName(), masterSeeder(), timing_proto->getId());
-			timing->initializeModel(timing_proto);
 			recv->setTiming(timing);
 		}
 
@@ -967,7 +985,7 @@ namespace
 	}
 
 	void parse_monostatic(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
-						  std::mt19937& masterSeeder)
+						  std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
 		// This block reconstructs the internal C++ representation of a
 		// monostatic radar (a linked Transmitter and Receiver) from the
@@ -1009,13 +1027,9 @@ namespace
 
 		trans->setWave(world.findWaveform(wave_id));
 		trans->setAntenna(world.findAntenna(antenna_id));
-		auto* const tx_timing_proto = world.findTiming(timing_id);
-		if (tx_timing_proto != nullptr)
+		if (const auto shared_timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
 		{
-			const auto tx_timing =
-				std::make_shared<timing::Timing>(tx_timing_proto->getName(), masterSeeder(), tx_timing_proto->getId());
-			tx_timing->initializeModel(tx_timing_proto);
-			trans->setTiming(tx_timing);
+			trans->setTiming(shared_timing);
 		}
 
 		// Receiver part
@@ -1032,13 +1046,9 @@ namespace
 		recv->setNoiseTemperature(comp_json.value("noise_temp", 0.0));
 
 		recv->setAntenna(world.findAntenna(antenna_id));
-		auto* const rx_timing_proto = world.findTiming(timing_id);
-		if (rx_timing_proto != nullptr)
+		if (const auto shared_timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
 		{
-			const auto rx_timing =
-				std::make_shared<timing::Timing>(rx_timing_proto->getName(), masterSeeder(), rx_timing_proto->getId());
-			rx_timing->initializeModel(rx_timing_proto);
-			recv->setTiming(rx_timing);
+			recv->setTiming(shared_timing);
 		}
 
 		if (comp_json.value("nodirect", false))
@@ -1073,7 +1083,8 @@ namespace
 		world.add(std::move(recv));
 	}
 
-	void parse_platform(const nlohmann::json& plat_json, core::World& world, std::mt19937& masterSeeder)
+	void parse_platform(const nlohmann::json& plat_json, core::World& world, std::mt19937& masterSeeder,
+						TimingInstanceMap& timing_instances)
 	{
 		auto name = plat_json.at("name").get<std::string>();
 		const auto platform_id = parse_json_id(plat_json, "id", "Platform");
@@ -1088,11 +1099,12 @@ namespace
 			{
 				if (comp_json_outer.contains("transmitter"))
 				{
-					parse_transmitter(comp_json_outer.at("transmitter"), plat.get(), world, masterSeeder);
+					parse_transmitter(comp_json_outer.at("transmitter"), plat.get(), world, masterSeeder,
+									  timing_instances);
 				}
 				else if (comp_json_outer.contains("receiver"))
 				{
-					parse_receiver(comp_json_outer.at("receiver"), plat.get(), world, masterSeeder);
+					parse_receiver(comp_json_outer.at("receiver"), plat.get(), world, masterSeeder, timing_instances);
 				}
 				else if (comp_json_outer.contains("target"))
 				{
@@ -1100,7 +1112,8 @@ namespace
 				}
 				else if (comp_json_outer.contains("monostatic"))
 				{
-					parse_monostatic(comp_json_outer.at("monostatic"), plat.get(), world, masterSeeder);
+					parse_monostatic(comp_json_outer.at("monostatic"), plat.get(), world, masterSeeder,
+									 timing_instances);
 				}
 			}
 		}
@@ -1454,13 +1467,15 @@ namespace serial
 			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
 				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
-				auto rx_timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
-				rx_timing->initializeModel(timing_proto);
-				rx->setTiming(rx_timing);
+				auto shared_timing =
+					std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
+				shared_timing->initializeModel(timing_proto);
+				tx->setTiming(shared_timing);
+				rx->setTiming(shared_timing);
 			}
 			else
 			{
-				rx->setTiming(nullptr);
+				throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
 			}
 		}
 		if (j.contains("schedule"))
@@ -1586,9 +1601,10 @@ namespace serial
 		// 3. Restore platforms and their components.
 		if (sim.contains("platforms"))
 		{
+			TimingInstanceMap timing_instances;
 			for (const auto& plat_json : sim.at("platforms"))
 			{
-				parse_platform(plat_json, world, masterSeeder);
+				parse_platform(plat_json, world, masterSeeder, timing_instances);
 			}
 		}
 
