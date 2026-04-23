@@ -27,7 +27,7 @@
     "devDependencies": {
         "@biomejs/biome": "2.4.10",
         "husky": "^9.1.7",
-        "lint-staged": "^16.3.3"
+        "lint-staged": "^16.4.0"
     },
     "lint-staged": {
         "packages/**/*.{cpp,h}": "clang-format -i",
