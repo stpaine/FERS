@@ -46,6 +46,7 @@ export default function SettingsDialog({ open, onClose }: SettingsDialogProps) {
                     <NumberField
                         label="Target Preview Playback Duration (s)"
                         value={targetPlaybackDuration}
+                        emptyBehavior="null"
                         onChange={(val) => setTargetPlaybackDuration(val)}
                     />
                     <Typography variant="caption">

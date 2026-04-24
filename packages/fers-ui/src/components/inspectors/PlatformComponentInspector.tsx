@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+import DeleteIcon from '@mui/icons-material/Delete';
 import {
     Box,
     Button,
@@ -11,20 +12,23 @@ import {
     InputLabel,
     MenuItem,
     Select,
-    TextField,
     Typography,
 } from '@mui/material';
-import DeleteIcon from '@mui/icons-material/Delete';
 import {
-    useScenarioStore,
-    PlatformComponent,
-    TargetComponent,
     MonostaticComponent,
-    TransmitterComponent,
+    PlatformComponent,
     ReceiverComponent,
     SchedulePeriod,
+    TargetComponent,
+    TransmitterComponent,
+    useScenarioStore,
 } from '@/stores/scenarioStore';
-import { NumberField, FileInput, Section } from './InspectorControls';
+import {
+    BufferedTextField,
+    FileInput,
+    NumberField,
+    Section,
+} from './InspectorControls';
 
 interface PlatformComponentInspectorProps {
     component: PlatformComponent;
@@ -92,11 +96,13 @@ export function PlatformComponentInspector({
                         <NumberField
                             label="Start (s)"
                             value={period.start}
+                            emptyBehavior="revert"
                             onChange={(v) => handlePeriodChange(i, 'start', v)}
                         />
                         <NumberField
                             label="End (s)"
                             value={period.end}
+                            emptyBehavior="revert"
                             onChange={(v) => handlePeriodChange(i, 'end', v)}
                         />
                         <IconButton
@@ -124,12 +130,13 @@ export function PlatformComponentInspector({
         c: MonostaticComponent | TransmitterComponent | ReceiverComponent
     ) => (
         <>
-            <TextField
+            <BufferedTextField
                 label="Component Name"
                 size="small"
                 fullWidth
                 value={c.name}
-                onChange={(e) => handleChange('name', e.target.value)}
+                allowEmpty={false}
+                onChange={(v) => handleChange('name', v)}
                 sx={{ mb: 2 }}
             />
             <FormControl fullWidth size="small" sx={{ mb: 2 }}>
@@ -212,11 +219,13 @@ export function PlatformComponentInspector({
                     <NumberField
                         label="Window Skip (s)"
                         value={c.window_skip}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('window_skip', v)}
                     />
                     <NumberField
                         label="Window Length (s)"
                         value={c.window_length}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('window_length', v)}
                     />
                 </>
@@ -224,6 +233,7 @@ export function PlatformComponentInspector({
             <NumberField
                 label="Noise Temperature (K)"
                 value={c.noiseTemperature}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('noiseTemperature', v)}
             />
             <FormControlLabel
@@ -260,6 +270,7 @@ export function PlatformComponentInspector({
                         <NumberField
                             label="PRF (Hz)"
                             value={component.prf}
+                            emptyBehavior="revert"
                             onChange={(v) => handleChange('prf', v)}
                         />
                     )}
@@ -275,6 +286,7 @@ export function PlatformComponentInspector({
                         <NumberField
                             label="PRF (Hz)"
                             value={component.prf}
+                            emptyBehavior="revert"
                             onChange={(v) => handleChange('prf', v)}
                         />
                     )}
@@ -289,6 +301,7 @@ export function PlatformComponentInspector({
                         <NumberField
                             label="PRF (Hz)"
                             value={component.prf}
+                            emptyBehavior="revert"
                             onChange={(v) => handleChange('prf', v)}
                         />
                     )}
@@ -299,12 +312,13 @@ export function PlatformComponentInspector({
         case 'target':
             return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <TextField
+                    <BufferedTextField
                         label="Component Name"
                         size="small"
                         fullWidth
                         value={component.name}
-                        onChange={(e) => handleChange('name', e.target.value)}
+                        allowEmpty={false}
+                        onChange={(v) => handleChange('name', v)}
                     />
                     <FormControl fullWidth size="small">
                         <InputLabel>RCS Type</InputLabel>
@@ -323,6 +337,7 @@ export function PlatformComponentInspector({
                         <NumberField
                             label="RCS Value (m^2)"
                             value={component.rcs_value ?? 0}
+                            emptyBehavior="revert"
                             onChange={(v) => handleChange('rcs_value', v)}
                         />
                     )}
@@ -359,6 +374,7 @@ export function PlatformComponentInspector({
                         <NumberField
                             label="K Value"
                             value={component.rcs_k ?? 0}
+                            emptyBehavior="revert"
                             onChange={(v) => handleChange('rcs_k', v)}
                         />
                     )}

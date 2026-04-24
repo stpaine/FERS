@@ -8,10 +8,9 @@ import {
     InputLabel,
     MenuItem,
     Select,
-    TextField,
 } from '@mui/material';
 import { Antenna, useScenarioStore } from '@/stores/scenarioStore';
-import { FileInput, NumberField } from './InspectorControls';
+import { BufferedTextField, FileInput, NumberField } from './InspectorControls';
 
 interface AntennaInspectorProps {
     item: Antenna;
@@ -27,13 +26,14 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
+            <BufferedTextField
                 label="Name"
                 variant="outlined"
                 size="small"
                 fullWidth
                 value={item.name}
-                onChange={(e) => handleChange('name', e.target.value)}
+                allowEmpty={false}
+                onChange={(v) => handleChange('name', v)}
             />
             <FormControl fullWidth size="small">
                 <InputLabel>Pattern</InputLabel>
@@ -59,11 +59,13 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
             <NumberField
                 label="Efficiency"
                 value={item.efficiency}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('efficiency', v)}
             />
             <NumberField
                 label="Mesh Scale Multiplier"
                 value={item.meshScale ?? null}
+                emptyBehavior="null"
                 onChange={(v) => handleChange('meshScale', v)}
             />
             {previewError && <Alert severity="error">{previewError}</Alert>}
@@ -73,16 +75,19 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
                     <NumberField
                         label="Alpha"
                         value={item.alpha ?? null}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('alpha', v)}
                     />
                     <NumberField
                         label="Beta"
                         value={item.beta ?? null}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('beta', v)}
                     />
                     <NumberField
                         label="Gamma"
                         value={item.gamma ?? null}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('gamma', v)}
                     />
                 </>
@@ -92,11 +97,13 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
                     <NumberField
                         label="Azimuth Scale"
                         value={item.azscale ?? null}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('azscale', v)}
                     />
                     <NumberField
                         label="Elevation Scale"
                         value={item.elscale ?? null}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('elscale', v)}
                     />
                 </>
@@ -107,11 +114,13 @@ export function AntennaInspector({ item }: AntennaInspectorProps) {
                     <NumberField
                         label="Diameter (m)"
                         value={item.diameter ?? null}
+                        emptyBehavior="revert"
                         onChange={(v) => handleChange('diameter', v)}
                     />
                     <NumberField
                         label="Design Frequency (Hz)"
                         value={item.design_frequency ?? null}
+                        emptyBehavior="null"
                         onChange={(v) => handleChange('design_frequency', v)}
                     />
                 </>

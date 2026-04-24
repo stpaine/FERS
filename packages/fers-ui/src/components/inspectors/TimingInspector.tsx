@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { Box, TextField, Button, IconButton } from '@mui/material';
-import { useScenarioStore, Timing } from '@/stores/scenarioStore';
-import { NumberField, Section } from './InspectorControls';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { Box, Button, IconButton } from '@mui/material';
+import { Timing, useScenarioStore } from '@/stores/scenarioStore';
+import { BufferedTextField, NumberField, Section } from './InspectorControls';
 
 interface TimingInspectorProps {
     item: Timing;
@@ -18,37 +18,43 @@ export function TimingInspector({ item }: TimingInspectorProps) {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
+            <BufferedTextField
                 label="Name"
                 variant="outlined"
                 size="small"
                 fullWidth
                 value={item.name}
-                onChange={(e) => handleChange('name', e.target.value)}
+                allowEmpty={false}
+                onChange={(v) => handleChange('name', v)}
             />
             <NumberField
                 label="Frequency (Hz)"
                 value={item.frequency}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('frequency', v)}
             />
             <NumberField
                 label="Frequency Offset (Hz)"
                 value={item.freqOffset}
+                emptyBehavior="null"
                 onChange={(v) => handleChange('freqOffset', v)}
             />
             <NumberField
                 label="Random Freq. Offset Stdev (Hz)"
                 value={item.randomFreqOffsetStdev}
+                emptyBehavior="null"
                 onChange={(v) => handleChange('randomFreqOffsetStdev', v)}
             />
             <NumberField
                 label="Phase Offset (rad)"
                 value={item.phaseOffset}
+                emptyBehavior="null"
                 onChange={(v) => handleChange('phaseOffset', v)}
             />
             <NumberField
                 label="Random Phase Offset Stdev (rad)"
                 value={item.randomPhaseOffsetStdev}
+                emptyBehavior="null"
                 onChange={(v) => handleChange('randomPhaseOffsetStdev', v)}
             />
             <Section title="Noise Entries">
@@ -69,6 +75,7 @@ export function TimingInspector({ item }: TimingInspectorProps) {
                             <NumberField
                                 label="Alpha"
                                 value={entry.alpha}
+                                emptyBehavior="revert"
                                 onChange={(v) =>
                                     handleChange(
                                         `noiseEntries.${index}.alpha`,
@@ -79,6 +86,7 @@ export function TimingInspector({ item }: TimingInspectorProps) {
                             <NumberField
                                 label="Weight"
                                 value={entry.weight}
+                                emptyBehavior="revert"
                                 onChange={(v) =>
                                     handleChange(
                                         `noiseEntries.${index}.weight`,

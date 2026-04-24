@@ -16,7 +16,6 @@ import {
     InputLabel,
     MenuItem,
     Select,
-    TextField,
     Typography,
 } from '@mui/material';
 import { useState } from 'react';
@@ -28,7 +27,7 @@ import {
     useScenarioStore,
 } from '@/stores/scenarioStore';
 import { generateSimId } from '@/stores/scenarioStore/idUtils';
-import { NumberField, Section } from './InspectorControls';
+import { BufferedTextField, NumberField, Section } from './InspectorControls';
 import { PlatformComponentInspector } from './PlatformComponentInspector';
 
 interface PlatformInspectorProps {
@@ -105,16 +104,19 @@ function WaypointEditDialog({
                             <NumberField
                                 label="X"
                                 value={editedWaypoint.x}
+                                emptyBehavior="revert"
                                 onChange={(v) => handleFieldChange('x', v)}
                             />
                             <NumberField
                                 label="Y"
                                 value={editedWaypoint.y}
+                                emptyBehavior="revert"
                                 onChange={(v) => handleFieldChange('y', v)}
                             />
                             <NumberField
                                 label="Altitude"
                                 value={editedWaypoint.altitude}
+                                emptyBehavior="revert"
                                 onChange={(v) =>
                                     handleFieldChange('altitude', v)
                                 }
@@ -127,6 +129,7 @@ function WaypointEditDialog({
                                 <NumberField
                                     label={`Azimuth (${angleUnitLabel})`}
                                     value={editedWaypoint.azimuth}
+                                    emptyBehavior="revert"
                                     onChange={(v) =>
                                         handleFieldChange('azimuth', v)
                                     }
@@ -134,6 +137,7 @@ function WaypointEditDialog({
                                 <NumberField
                                     label={`Elevation (${angleUnitLabel})`}
                                     value={editedWaypoint.elevation}
+                                    emptyBehavior="revert"
                                     onChange={(v) =>
                                         handleFieldChange('elevation', v)
                                     }
@@ -143,6 +147,7 @@ function WaypointEditDialog({
                     <NumberField
                         label="Time (s)"
                         value={editedWaypoint.time}
+                        emptyBehavior="revert"
                         onChange={(v) => handleFieldChange('time', v)}
                     />
                 </Box>
@@ -231,13 +236,14 @@ export function PlatformInspector({
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
+            <BufferedTextField
                 label="Name"
                 variant="outlined"
                 size="small"
                 fullWidth
                 value={item.name}
-                onChange={(e) => handleChange('name', e.target.value)}
+                allowEmpty={false}
+                onChange={(v) => handleChange('name', v)}
             />
 
             <Section title="Motion Path">
@@ -353,6 +359,7 @@ export function PlatformInspector({
                         <NumberField
                             label={`Start Azimuth (${angleUnitLabel})`}
                             value={item.rotation.startAzimuth}
+                            emptyBehavior="revert"
                             onChange={(v) =>
                                 handleChange('rotation.startAzimuth', v)
                             }
@@ -360,6 +367,7 @@ export function PlatformInspector({
                         <NumberField
                             label={`Start Elevation (${angleUnitLabel})`}
                             value={item.rotation.startElevation}
+                            emptyBehavior="revert"
                             onChange={(v) =>
                                 handleChange('rotation.startElevation', v)
                             }
@@ -367,6 +375,7 @@ export function PlatformInspector({
                         <NumberField
                             label={`Azimuth Rate (${angleUnitLabel}/s)`}
                             value={item.rotation.azimuthRate}
+                            emptyBehavior="revert"
                             onChange={(v) =>
                                 handleChange('rotation.azimuthRate', v)
                             }
@@ -374,6 +383,7 @@ export function PlatformInspector({
                         <NumberField
                             label={`Elevation Rate (${angleUnitLabel}/s)`}
                             value={item.rotation.elevationRate}
+                            emptyBehavior="revert"
                             onChange={(v) =>
                                 handleChange('rotation.elevationRate', v)
                             }

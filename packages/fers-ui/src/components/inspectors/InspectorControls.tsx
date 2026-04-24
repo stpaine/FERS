@@ -1,17 +1,106 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import React from 'react';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
     Accordion,
-    AccordionSummary,
     AccordionDetails,
-    Typography,
-    TextField,
+    AccordionSummary,
     Box,
+    TextField,
+    Typography,
 } from '@mui/material';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { open } from '@tauri-apps/plugin-dialog';
+import React from 'react';
+
+export type EmptyFieldBehavior = 'revert' | 'null';
+
+type NumberBlurResolution =
+    | {
+          action: 'commit';
+          nextDraft: string;
+          value: number | null;
+      }
+    | {
+          action: 'revert';
+          error: string;
+          nextDraft: string;
+      };
+
+type TextBlurResolution =
+    | {
+          action: 'commit';
+          nextDraft: string;
+          value: string;
+      }
+    | {
+          action: 'revert';
+          error: string;
+          nextDraft: string;
+      };
+
+export function formatNumberFieldValue(value: number | null): string {
+    return value === null ? '' : String(value);
+}
+
+export function resolveNumberFieldBlur(
+    draft: string,
+    committedValue: number | null,
+    emptyBehavior: EmptyFieldBehavior
+): NumberBlurResolution {
+    const trimmedDraft = draft.trim();
+
+    if (trimmedDraft === '') {
+        if (emptyBehavior === 'null') {
+            return {
+                action: 'commit',
+                nextDraft: '',
+                value: null,
+            };
+        }
+
+        return {
+            action: 'revert',
+            error: 'Value required.',
+            nextDraft: formatNumberFieldValue(committedValue),
+        };
+    }
+
+    const parsedValue = Number(trimmedDraft);
+    if (!Number.isFinite(parsedValue)) {
+        return {
+            action: 'revert',
+            error: 'Invalid number.',
+            nextDraft: formatNumberFieldValue(committedValue),
+        };
+    }
+
+    return {
+        action: 'commit',
+        nextDraft: String(parsedValue),
+        value: parsedValue,
+    };
+}
+
+export function resolveTextFieldBlur(
+    draft: string,
+    committedValue: string,
+    allowEmpty: boolean
+): TextBlurResolution {
+    if (!allowEmpty && draft.trim() === '') {
+        return {
+            action: 'revert',
+            error: 'Value required.',
+            nextDraft: committedValue,
+        };
+    }
+
+    return {
+        action: 'commit',
+        nextDraft: draft,
+        value: draft,
+    };
+}
 
 export const Section = ({
     title,
@@ -71,42 +160,153 @@ export const NumberField = ({
     label,
     value,
     onChange,
+    emptyBehavior = 'revert',
 }: {
     label: string;
     value: number | null;
     onChange: (val: number | null) => void;
+    emptyBehavior?: EmptyFieldBehavior;
 }) => {
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const strValue = e.target.value;
+    const [draft, setDraft] = React.useState(() =>
+        formatNumberFieldValue(value)
+    );
+    const [isFocused, setIsFocused] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
 
-        // If the field is cleared, represent it as null.
-        if (strValue === '') {
-            onChange(null);
+    React.useEffect(() => {
+        if (!isFocused) {
+            setDraft(formatNumberFieldValue(value));
+        }
+    }, [isFocused, value]);
+
+    const handleBlur = () => {
+        setIsFocused(false);
+
+        const resolution = resolveNumberFieldBlur(draft, value, emptyBehavior);
+        setDraft(resolution.nextDraft);
+
+        if (resolution.action === 'commit') {
+            setError(null);
+            if (resolution.value !== value) {
+                onChange(resolution.value);
+            }
             return;
         }
 
-        const numValue = parseFloat(strValue);
-
-        // Only update the parent state if the parsed value is a valid number.
-        // This prevents NaN from being stored and allows the user to type
-        // intermediate invalid states (e.g., "1.2.3", "-") without
-        // corrupting the application state.
-        if (!isNaN(numValue)) {
-            onChange(numValue);
-        }
+        setError(resolution.error);
     };
 
     return (
         <TextField
             label={label}
-            type="number"
+            type="text"
             variant="outlined"
             size="small"
             fullWidth
-            value={value ?? ''}
-            onChange={handleChange}
-            // Allow floating point numbers in the number input's spinners.
-            inputProps={{ step: 'any' }}
+            value={draft}
+            error={error !== null}
+            helperText={error ?? undefined}
+            onFocus={() => {
+                setIsFocused(true);
+                setError(null);
+            }}
+            onBlur={handleBlur}
+            onChange={(e) => {
+                setDraft(e.target.value);
+                if (error) {
+                    setError(null);
+                }
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                } else if (e.key === 'Escape') {
+                    setDraft(formatNumberFieldValue(value));
+                    setError(null);
+                    e.currentTarget.blur();
+                }
+            }}
+            inputProps={{
+                inputMode: 'decimal',
+            }}
+        />
+    );
+};
+
+export const BufferedTextField = ({
+    label,
+    value,
+    onChange,
+    allowEmpty = true,
+    ...textFieldProps
+}: Omit<
+    React.ComponentProps<typeof TextField>,
+    'label' | 'value' | 'onChange'
+> & {
+    label: string;
+    value: string;
+    onChange: (val: string) => void;
+    allowEmpty?: boolean;
+}) => {
+    const [draft, setDraft] = React.useState(value);
+    const [isFocused, setIsFocused] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        if (!isFocused) {
+            setDraft(value);
+        }
+    }, [isFocused, value]);
+
+    const handleBlur = () => {
+        setIsFocused(false);
+
+        const resolution = resolveTextFieldBlur(draft, value, allowEmpty);
+        setDraft(resolution.nextDraft);
+
+        if (resolution.action === 'commit') {
+            setError(null);
+            if (resolution.value !== value) {
+                onChange(resolution.value);
+            }
+            return;
+        }
+
+        setError(resolution.error);
+    };
+
+    return (
+        <TextField
+            {...textFieldProps}
+            label={label}
+            value={draft}
+            error={error !== null || textFieldProps.error === true}
+            helperText={error ?? textFieldProps.helperText}
+            onFocus={(e) => {
+                setIsFocused(true);
+                setError(null);
+                textFieldProps.onFocus?.(e);
+            }}
+            onBlur={(e) => {
+                handleBlur();
+                textFieldProps.onBlur?.(e);
+            }}
+            onChange={(e) => {
+                setDraft(e.target.value);
+                if (error) {
+                    setError(null);
+                }
+            }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                    e.currentTarget.blur();
+                } else if (e.key === 'Escape') {
+                    setDraft(value);
+                    setError(null);
+                    e.currentTarget.blur();
+                }
+                textFieldProps.onKeyDown?.(e);
+            }}
         />
     );
 };
