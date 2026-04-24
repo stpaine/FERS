@@ -13,11 +13,10 @@ import {
     InputLabel,
     MenuItem,
     Select,
-    TextField,
 } from '@mui/material';
 import { useState } from 'react';
 import { GlobalParameters, useScenarioStore } from '@/stores/scenarioStore';
-import { NumberField, Section } from './InspectorControls';
+import { BufferedTextField, NumberField, Section } from './InspectorControls';
 
 interface GlobalParametersInspectorProps {
     item: GlobalParameters;
@@ -82,54 +81,61 @@ export function GlobalParametersInspector({
                     <MenuItem value="rad">Radians</MenuItem>
                 </Select>
             </FormControl>
-            <TextField
+            <BufferedTextField
                 label="Simulation Name"
                 variant="outlined"
                 size="small"
                 fullWidth
                 value={item.simulation_name}
-                onChange={(e) =>
-                    handleChange('simulation_name', e.target.value)
-                }
+                allowEmpty={false}
+                onChange={(v) => handleChange('simulation_name', v)}
             />
             <NumberField
                 label="Start Time (s)"
                 value={item.start}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('start', v)}
             />
             <NumberField
                 label="End Time (s)"
                 value={item.end}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('end', v)}
             />
             <NumberField
                 label="Output Sampling Rate (Hz)"
                 value={item.rate}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('rate', v)}
             />
             <NumberField
                 label="Internal Sim Sampling Rate (Hz)"
                 value={item.simSamplingRate}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('simSamplingRate', v)}
             />
             <NumberField
                 label="Speed of Light (m/s)"
                 value={item.c}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('c', v)}
             />
             <NumberField
                 label="Random Seed"
                 value={item.random_seed}
+                emptyBehavior="null"
                 onChange={(v) => handleChange('random_seed', v)}
             />
             <NumberField
                 label="ADC Bits"
                 value={item.adc_bits}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('adc_bits', v)}
             />
             <NumberField
                 label="Oversample Ratio"
                 value={item.oversample_ratio}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('oversample_ratio', v)}
             />
 
@@ -137,16 +143,19 @@ export function GlobalParametersInspector({
                 <NumberField
                     label="Origin Latitude (deg)"
                     value={item.origin.latitude}
+                    emptyBehavior="revert"
                     onChange={(v) => handleChange('origin.latitude', v)}
                 />
                 <NumberField
                     label="Origin Longitude (deg)"
                     value={item.origin.longitude}
+                    emptyBehavior="revert"
                     onChange={(v) => handleChange('origin.longitude', v)}
                 />
                 <NumberField
                     label="Origin Altitude (m)"
                     value={item.origin.altitude}
+                    emptyBehavior="revert"
                     onChange={(v) => handleChange('origin.altitude', v)}
                 />
                 <FormControl fullWidth size="small">
@@ -171,6 +180,7 @@ export function GlobalParametersInspector({
                         <NumberField
                             label="UTM Zone"
                             value={item.coordinateSystem.zone ?? null}
+                            emptyBehavior="revert"
                             onChange={(v) =>
                                 handleChange('coordinateSystem.zone', v)
                             }

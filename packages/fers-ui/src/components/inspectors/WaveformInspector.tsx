@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import {
-    Box,
-    FormControl,
-    InputLabel,
-    MenuItem,
-    Select,
-    TextField,
-} from '@mui/material';
+import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
 import { useScenarioStore, Waveform } from '@/stores/scenarioStore';
-import { NumberField, FileInput } from './InspectorControls';
+import { BufferedTextField, FileInput, NumberField } from './InspectorControls';
 
 interface WaveformInspectorProps {
     item: Waveform;
@@ -23,13 +16,14 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
+            <BufferedTextField
                 label="Name"
                 variant="outlined"
                 size="small"
                 fullWidth
                 value={item.name}
-                onChange={(e) => handleChange('name', e.target.value)}
+                allowEmpty={false}
+                onChange={(v) => handleChange('name', v)}
             />
             <FormControl fullWidth size="small">
                 <InputLabel>Type</InputLabel>
@@ -47,11 +41,13 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
             <NumberField
                 label="Power (W)"
                 value={item.power}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('power', v)}
             />
             <NumberField
                 label="Carrier Frequency (Hz)"
                 value={item.carrier_frequency}
+                emptyBehavior="revert"
                 onChange={(v) => handleChange('carrier_frequency', v)}
             />
             {item.waveformType === 'pulsed_from_file' && (
