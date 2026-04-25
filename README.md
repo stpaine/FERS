@@ -22,8 +22,8 @@ semi-independent packages.
 - **Unified Event-Driven Core:** A modernized C++23 engine featuring a unified event-driven architecture for efficient
   simulation of both pulsed and continuous-wave scenarios, with optimized multithreading.
 - **Visual Scenario Builder:** An intuitive 3D interface to construct, configure, and visualize radar scenarios.
-- **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed, and
-  continuous wave (CW).
+- **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed,
+  continuous wave (CW), and native FMCW streaming modes.
 - **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and

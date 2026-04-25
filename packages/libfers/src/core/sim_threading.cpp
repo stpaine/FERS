@@ -20,7 +20,10 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <format>
+#include <limits>
+#include <optional>
 #include <unordered_map>
 #include <utility>
 
@@ -43,12 +46,63 @@ using radar::Transmitter;
 
 namespace core
 {
+	namespace
+	{
+		RealType clippedStreamingSegmentEnd(const Transmitter& transmitter, const RealType segment_start,
+											const RealType segment_end)
+		{
+			RealType clipped_end = std::min(params::endTime(), segment_end);
+			if (const auto* fmcw = transmitter.getFmcwSignal(); (fmcw != nullptr) && fmcw->getChirpCount().has_value())
+			{
+				clipped_end =
+					std::min(clipped_end,
+							 segment_start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
+			}
+			return clipped_end;
+		}
+
+		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
+																	const RealType timestamp)
+		{
+			if (transmitter == nullptr || !transmitter->isStreamingMode())
+			{
+				return std::nullopt;
+			}
+
+			const auto& schedule = transmitter->getSchedule();
+			if (schedule.empty())
+			{
+				const RealType segment_start = params::startTime();
+				const RealType segment_end = clippedStreamingSegmentEnd(*transmitter, segment_start, params::endTime());
+				if (timestamp >= segment_start && timestamp < segment_end)
+				{
+					return ActiveStreamingSource{
+						.transmitter = transmitter, .segment_start = segment_start, .segment_end = segment_end};
+				}
+				return std::nullopt;
+			}
+
+			for (const auto& period : schedule)
+			{
+				const RealType active_start = std::max(params::startTime(), period.start);
+				const RealType active_end = clippedStreamingSegmentEnd(*transmitter, period.start, period.end);
+				if (timestamp >= active_start && timestamp < active_end)
+				{
+					return ActiveStreamingSource{
+						.transmitter = transmitter, .segment_start = period.start, .segment_end = active_end};
+				}
+			}
+			return std::nullopt;
+		}
+	}
+
 	SimulationEngine::SimulationEngine(World* world, pool::ThreadPool& pool, std::shared_ptr<ProgressReporter> reporter,
 									   std::string output_dir,
 									   std::shared_ptr<OutputMetadataCollector> metadata_collector) :
 		_world(world), _pool(pool), _reporter(std::move(reporter)), _metadata_collector(std::move(metadata_collector)),
 		_last_report_time(std::chrono::steady_clock::now()), _output_dir(std::move(output_dir))
 	{
+		_streaming_tracker_caches.resize(_world->getReceivers().size());
 	}
 
 	void SimulationEngine::run()
@@ -61,6 +115,7 @@ namespace core
 		initializeFinalizers();
 
 		LOG(Level::INFO, "Starting unified event-driven simulation loop.");
+		logStreamingSummaries();
 
 		auto& event_queue = _world->getEventQueue();
 		auto& state = _world->getSimulationState();
@@ -71,7 +126,7 @@ namespace core
 			const Event event = event_queue.top();
 			event_queue.pop();
 
-			processCwPhysics(event.timestamp);
+			processStreamingPhysics(event.timestamp);
 
 			state.t_current = event.timestamp;
 
@@ -80,6 +135,48 @@ namespace core
 		}
 
 		shutdown();
+	}
+
+	void SimulationEngine::logStreamingSummaries() const
+	{
+		for (const auto& transmitter_ptr : _world->getTransmitters())
+		{
+			if (const auto* fmcw = transmitter_ptr->getFmcwSignal(); fmcw != nullptr)
+			{
+				const RealType duty_cycle = fmcw->getChirpDuration() / fmcw->getChirpPeriod();
+				const RealType average_power = transmitter_ptr->getSignal()->getPower() * duty_cycle;
+				const auto configured_count = fmcw->getChirpCount().has_value()
+					? std::format("{}", *fmcw->getChirpCount())
+					: std::string("unbounded");
+				if (transmitter_ptr->getSchedule().empty())
+				{
+					LOG(Level::INFO,
+						"FMCW transmitter '{}' B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s duty_cycle={} "
+						"chirp_count={} average_power={} W",
+						transmitter_ptr->getName(), fmcw->getChirpBandwidth(), fmcw->getChirpDuration(),
+						fmcw->getChirpPeriod(), fmcw->getStartFrequencyOffset(), fmcw->getChirpRate(), duty_cycle,
+						configured_count, average_power);
+				}
+				else
+				{
+					for (const auto& period : transmitter_ptr->getSchedule())
+					{
+						const RealType active_end =
+							std::min(period.end,
+									 fmcw->getChirpCount().has_value()
+										 ? (period.start +
+											static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod())
+										 : period.end);
+						LOG(Level::INFO,
+							"FMCW transmitter '{}' segment [{}, {}] B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} "
+							"Hz/s duty_cycle={} chirp_count={} average_power={} W",
+							transmitter_ptr->getName(), period.start, active_end, fmcw->getChirpBandwidth(),
+							fmcw->getChirpDuration(), fmcw->getChirpPeriod(), fmcw->getStartFrequencyOffset(),
+							fmcw->getChirpRate(), duty_cycle, configured_count, average_power);
+					}
+				}
+			}
+		}
 	}
 
 	void SimulationEngine::initializeFinalizers()
@@ -106,7 +203,7 @@ namespace core
 
 		for (const auto& transmitter_ptr : _world->getTransmitters())
 		{
-			if (transmitter_ptr->getMode() != OperationMode::CW_MODE)
+			if (!transmitter_ptr->isStreamingMode())
 			{
 				continue;
 			}
@@ -115,7 +212,8 @@ namespace core
 
 		for (const auto& receiver_ptr : _world->getReceivers())
 		{
-			if (receiver_ptr->getMode() != OperationMode::CW_MODE)
+			if ((receiver_ptr->getMode() != OperationMode::CW_MODE) &&
+				(receiver_ptr->getMode() != OperationMode::FMCW_MODE))
 			{
 				continue;
 			}
@@ -132,9 +230,11 @@ namespace core
 			simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime()));
 	}
 
-	void SimulationEngine::processCwPhysics(const RealType t_event)
+	void SimulationEngine::processStreamingPhysics(const RealType t_event)
 	{
-		auto& [t_current, active_cw_transmitters] = _world->getSimulationState();
+		auto& state = _world->getSimulationState();
+		auto& t_current = state.t_current;
+		auto& active_streaming_transmitters = state.active_streaming_transmitters;
 
 		if (t_event <= t_current)
 		{
@@ -151,35 +251,70 @@ namespace core
 		{
 			const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
 
-			for (const auto& receiver_ptr : _world->getReceivers())
+			for (std::size_t receiver_index = 0; receiver_index < _world->getReceivers().size(); ++receiver_index)
 			{
-				if (receiver_ptr->getMode() == OperationMode::CW_MODE && receiver_ptr->isActive())
+				const auto& receiver_ptr = _world->getReceivers()[receiver_index];
+				if ((receiver_ptr->getMode() == OperationMode::CW_MODE ||
+					 receiver_ptr->getMode() == OperationMode::FMCW_MODE) &&
+					receiver_ptr->isActive())
 				{
-					ComplexType sample = calculateCwSample(receiver_ptr.get(), t_step, active_cw_transmitters);
-					receiver_ptr->setCwSample(sample_index, sample);
+					ComplexType sample =
+						calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
+												 _streaming_tracker_caches[receiver_index]);
+					receiver_ptr->setStreamingSample(sample_index, sample);
 				}
 			}
 		}
 	}
 
-	ComplexType SimulationEngine::calculateCwSample(Receiver* rx, const RealType t_step,
-													const std::vector<Transmitter*>& cw_sources) const
+	ComplexType SimulationEngine::calculateStreamingSample(Receiver* rx, const RealType t_step,
+														   const std::vector<ActiveStreamingSource>& streaming_sources,
+														   ReceiverTrackerCache& tracker_cache) const
 	{
 		ComplexType total_sample{0.0, 0.0};
-		for (const auto& cw_source : cw_sources)
+		for (std::size_t source_index = 0; source_index < streaming_sources.size(); ++source_index)
 		{
+			const auto& streaming_source = streaming_sources[source_index];
 			if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
 			{
-				total_sample +=
-					simulation::calculateDirectPathContribution(cw_source, rx, t_step, _cw_phase_noise_lookup.get());
+				total_sample += simulation::calculateStreamingDirectPathContribution(
+					streaming_source, rx, t_step, _cw_phase_noise_lookup.get(), &tracker_cache.direct[source_index]);
 			}
-			for (const auto& target_ptr : _world->getTargets())
+			for (std::size_t target_index = 0; target_index < _world->getTargets().size(); ++target_index)
 			{
-				total_sample += simulation::calculateReflectedPathContribution(cw_source, rx, target_ptr.get(), t_step,
-																			   _cw_phase_noise_lookup.get());
+				const auto& target_ptr = _world->getTargets()[target_index];
+				total_sample += simulation::calculateStreamingReflectedPathContribution(
+					streaming_source, rx, target_ptr.get(), t_step, _cw_phase_noise_lookup.get(),
+					&tracker_cache.reflected[source_index][target_index]);
 			}
 		}
 		return total_sample;
+	}
+
+	void SimulationEngine::appendStreamingTrackerSource()
+	{
+		const std::size_t target_count = _world->getTargets().size();
+
+		for (auto& cache : _streaming_tracker_caches)
+		{
+			cache.direct.emplace_back();
+			cache.reflected.emplace_back(target_count);
+		}
+	}
+
+	void SimulationEngine::eraseStreamingTrackerSource(const std::size_t source_index)
+	{
+		for (auto& cache : _streaming_tracker_caches)
+		{
+			if (source_index < cache.direct.size())
+			{
+				cache.direct.erase(cache.direct.begin() + static_cast<std::ptrdiff_t>(source_index));
+			}
+			if (source_index < cache.reflected.size())
+			{
+				cache.reflected.erase(cache.reflected.begin() + static_cast<std::ptrdiff_t>(source_index));
+			}
+		}
 	}
 
 	void SimulationEngine::processEvent(const Event& event)
@@ -196,17 +331,22 @@ namespace core
 		case EventType::RX_PULSED_WINDOW_END:
 			handleRxPulsedWindowEnd(static_cast<Receiver*>(event.source_object), event.timestamp);
 			break;
-		case EventType::TX_CW_START:
-			handleTxCwStart(static_cast<Transmitter*>(event.source_object));
+		case EventType::TX_STREAMING_START:
+			if (const auto source =
+					streamingSourceAtEvent(static_cast<Transmitter*>(event.source_object), event.timestamp);
+				source.has_value())
+			{
+				handleTxStreamingStart(*source);
+			}
 			break;
-		case EventType::TX_CW_END:
-			handleTxCwEnd(static_cast<Transmitter*>(event.source_object));
+		case EventType::TX_STREAMING_END:
+			handleTxStreamingEnd(static_cast<Transmitter*>(event.source_object));
 			break;
-		case EventType::RX_CW_START:
-			handleRxCwStart(static_cast<Receiver*>(event.source_object));
+		case EventType::RX_STREAMING_START:
+			handleRxStreamingStart(static_cast<Receiver*>(event.source_object));
 			break;
-		case EventType::RX_CW_END:
-			handleRxCwEnd(static_cast<Receiver*>(event.source_object));
+		case EventType::RX_STREAMING_END:
+			handleRxStreamingEnd(static_cast<Receiver*>(event.source_object));
 			break;
 		}
 		// NOLINTEND(cppcoreguidelines-pro-type-static-cast-downcast)
@@ -261,12 +401,13 @@ namespace core
 	void SimulationEngine::handleRxPulsedWindowEnd(Receiver* rx, const RealType t_event)
 	{
 		rx->setActive(false);
-		const auto& active_cw_transmitters = _world->getSimulationState().active_cw_transmitters;
+		const auto active_streaming_sources =
+			collectStreamingSourcesForWindow(t_event - rx->getWindowLength(), t_event);
 
 		RenderingJob job{.ideal_start_time = t_event - rx->getWindowLength(),
 						 .duration = rx->getWindowLength(),
 						 .responses = rx->drainInbox(),
-						 .active_cw_sources = active_cw_transmitters};
+						 .active_streaming_sources = active_streaming_sources};
 
 		rx->enqueueFinalizerJob(std::move(job));
 
@@ -278,20 +419,31 @@ namespace core
 		}
 	}
 
-	void SimulationEngine::handleTxCwStart(Transmitter* tx)
+	void SimulationEngine::handleTxStreamingStart(const ActiveStreamingSource& source)
 	{
-		_world->getSimulationState().active_cw_transmitters.push_back(tx);
+		_world->getSimulationState().active_streaming_transmitters.push_back(source);
+		appendStreamingTrackerSource();
 	}
 
-	void SimulationEngine::handleTxCwEnd(Transmitter* tx)
+	void SimulationEngine::handleTxStreamingEnd(Transmitter* tx)
 	{
-		auto& cw_txs = _world->getSimulationState().active_cw_transmitters;
-		std::erase(cw_txs, tx);
+		auto& state = _world->getSimulationState();
+		auto& streaming_txs = state.active_streaming_transmitters;
+		for (std::size_t index = streaming_txs.size(); index > 0; --index)
+		{
+			const std::size_t source_index = index - 1;
+			if (streaming_txs[source_index].transmitter == tx)
+			{
+				// Source and tracker vectors are source-index aligned; erase the same slot from both.
+				streaming_txs.erase(streaming_txs.begin() + static_cast<std::ptrdiff_t>(source_index));
+				eraseStreamingTrackerSource(source_index);
+			}
+		}
 	}
 
-	void SimulationEngine::handleRxCwStart(Receiver* rx) { rx->setActive(true); }
+	void SimulationEngine::handleRxStreamingStart(Receiver* rx) { rx->setActive(true); }
 
-	void SimulationEngine::handleRxCwEnd(Receiver* rx) { rx->setActive(false); }
+	void SimulationEngine::handleRxStreamingEnd(Receiver* rx) { rx->setActive(false); }
 
 	void SimulationEngine::updateProgress()
 	{
@@ -313,6 +465,59 @@ namespace core
 		}
 	}
 
+	std::vector<ActiveStreamingSource> SimulationEngine::collectStreamingSourcesForWindow(const RealType start_time,
+																						  const RealType end_time) const
+	{
+		std::vector<ActiveStreamingSource> sources;
+		for (const auto& transmitter_ptr : _world->getTransmitters())
+		{
+			if (!transmitter_ptr->isStreamingMode())
+			{
+				continue;
+			}
+
+			const auto append_overlap = [&](const RealType segment_start, const RealType segment_end)
+			{
+				const RealType overlap_start = std::max(start_time, segment_start);
+				const RealType overlap_end = std::min(end_time, segment_end);
+				if (overlap_start < overlap_end)
+				{
+					sources.push_back({.transmitter = transmitter_ptr.get(),
+									   .segment_start = segment_start,
+									   .segment_end = segment_end});
+				}
+			};
+
+			if (transmitter_ptr->getSchedule().empty())
+			{
+				RealType segment_end = params::endTime();
+				if (const auto* fmcw = transmitter_ptr->getFmcwSignal();
+					(fmcw != nullptr) && fmcw->getChirpCount().has_value())
+				{
+					segment_end = std::min(segment_end,
+										   params::startTime() +
+											   static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
+				}
+				append_overlap(params::startTime(), segment_end);
+				continue;
+			}
+
+			for (const auto& period : transmitter_ptr->getSchedule())
+			{
+				RealType segment_end = std::min(params::endTime(), period.end);
+				if (const auto* fmcw = transmitter_ptr->getFmcwSignal();
+					(fmcw != nullptr) && fmcw->getChirpCount().has_value())
+				{
+					segment_end =
+						std::min(segment_end,
+								 period.start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
+				}
+				append_overlap(period.start, segment_end);
+			}
+		}
+		return sources;
+	}
+
 	void SimulationEngine::shutdown()
 	{
 		LOG(Level::INFO, "Main simulation loop finished. Waiting for finalization tasks...");
@@ -323,9 +528,10 @@ namespace core
 
 		for (const auto& receiver_ptr : _world->getReceivers())
 		{
-			if (receiver_ptr->getMode() == OperationMode::CW_MODE)
+			if (receiver_ptr->getMode() == OperationMode::CW_MODE ||
+				receiver_ptr->getMode() == OperationMode::FMCW_MODE)
 			{
-				_pool.enqueue(processing::finalizeCwReceiver, receiver_ptr.get(), &_pool, _reporter, _output_dir,
+				_pool.enqueue(processing::finalizeStreamingReceiver, receiver_ptr.get(), &_pool, _reporter, _output_dir,
 							  _metadata_collector);
 			}
 			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)

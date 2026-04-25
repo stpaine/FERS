@@ -26,13 +26,36 @@ namespace core
 					{"sample_end_exclusive", chunk.sample_end_exclusive}};
 		}
 
-		nlohmann::json cwSegmentToJson(const CwSegmentMetadata& segment)
+		nlohmann::json streamingSegmentToJson(const StreamingSegmentMetadata& segment)
 		{
-			return {{"start_time", segment.start_time},
-					{"end_time", segment.end_time},
-					{"sample_count", segment.sample_count},
-					{"sample_start", segment.sample_start},
-					{"sample_end_exclusive", segment.sample_end_exclusive}};
+			nlohmann::json result = {{"start_time", segment.start_time},
+									 {"end_time", segment.end_time},
+									 {"sample_count", segment.sample_count},
+									 {"sample_start", segment.sample_start},
+									 {"sample_end_exclusive", segment.sample_end_exclusive}};
+			if (segment.first_chirp_start_time.has_value())
+			{
+				result["first_chirp_start_time"] = *segment.first_chirp_start_time;
+			}
+			if (segment.emitted_chirp_count.has_value())
+			{
+				result["emitted_chirp_count"] = *segment.emitted_chirp_count;
+			}
+			return result;
+		}
+
+		nlohmann::json fmcwToJson(const FmcwMetadata& fmcw)
+		{
+			nlohmann::json result = {{"chirp_bandwidth", fmcw.chirp_bandwidth},
+									 {"chirp_duration", fmcw.chirp_duration},
+									 {"chirp_period", fmcw.chirp_period},
+									 {"chirp_rate", fmcw.chirp_rate},
+									 {"start_frequency_offset", fmcw.start_frequency_offset}};
+			if (fmcw.chirp_count.has_value())
+			{
+				result["chirp_count"] = *fmcw.chirp_count;
+			}
+			return result;
 		}
 
 		nlohmann::json fileToJson(const OutputFileMetadata& file)
@@ -43,25 +66,30 @@ namespace core
 				chunks.push_back(chunkToJson(chunk));
 			}
 
-			nlohmann::json cw_segments = nlohmann::json::array();
-			for (const auto& segment : file.cw_segments)
+			nlohmann::json streaming_segments = nlohmann::json::array();
+			for (const auto& segment : file.streaming_segments)
 			{
-				cw_segments.push_back(cwSegmentToJson(segment));
+				streaming_segments.push_back(streamingSegmentToJson(segment));
 			}
 
-			return {{"receiver_id", file.receiver_id},
-					{"receiver_name", file.receiver_name},
-					{"mode", file.mode},
-					{"path", file.path},
-					{"total_samples", file.total_samples},
-					{"sample_start", file.sample_start},
-					{"sample_end_exclusive", file.sample_end_exclusive},
-					{"pulse_count", file.pulse_count},
-					{"min_pulse_length_samples", file.min_pulse_length_samples},
-					{"max_pulse_length_samples", file.max_pulse_length_samples},
-					{"uniform_pulse_length", file.uniform_pulse_length},
-					{"chunks", chunks},
-					{"cw_segments", cw_segments}};
+			nlohmann::json result = {{"receiver_id", file.receiver_id},
+									 {"receiver_name", file.receiver_name},
+									 {"mode", file.mode},
+									 {"path", file.path},
+									 {"total_samples", file.total_samples},
+									 {"sample_start", file.sample_start},
+									 {"sample_end_exclusive", file.sample_end_exclusive},
+									 {"pulse_count", file.pulse_count},
+									 {"min_pulse_length_samples", file.min_pulse_length_samples},
+									 {"max_pulse_length_samples", file.max_pulse_length_samples},
+									 {"uniform_pulse_length", file.uniform_pulse_length},
+									 {"chunks", chunks},
+									 {"streaming_segments", streaming_segments}};
+			if (file.fmcw.has_value())
+			{
+				result["fmcw"] = fmcwToJson(*file.fmcw);
+			}
+			return result;
 		}
 
 		nlohmann::json metadataToJson(const OutputMetadata& metadata)

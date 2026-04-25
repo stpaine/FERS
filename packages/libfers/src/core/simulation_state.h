@@ -18,6 +18,20 @@
 
 namespace core
 {
+	struct ActiveStreamingSource
+	{
+		const radar::Transmitter* transmitter = nullptr;
+		RealType segment_start = 0.0;
+		RealType segment_end = 0.0;
+	};
+
+	struct FmcwChirpBoundaryTracker
+	{
+		bool initialized = false;
+		RealType t_n = 0.0;
+		std::size_t n_current = 0;
+	};
+
 	/**
 	 * @struct SimulationState
 	 * @brief Holds the dynamic global state of the simulation.
@@ -30,7 +44,7 @@ namespace core
 		/// The master simulation clock, advanced by the event loop.
 		RealType t_current = 0.0;
 
-		/// A global list of all currently active continuous-wave transmitters.
-		std::vector<radar::Transmitter*> active_cw_transmitters;
+		/// A global list of all currently active streaming transmitters.
+		std::vector<ActiveStreamingSource> active_streaming_transmitters;
 	};
 }

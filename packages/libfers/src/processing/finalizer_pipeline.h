@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "core/config.h"
+#include "core/simulation_state.h"
 
 namespace timing
 {
@@ -84,32 +85,33 @@ namespace processing::pipeline
 														  RealType carrier_freq, RealType rate);
 
 	/**
-	 * @brief Applies continuous-wave interference to a time window.
+	 * @brief Applies streaming interference to a time window.
 	 *
 	 * Iterates through each sample of a processing window, calculating the combined
-	 * direct and reflected path contributions from all active CW sources at that
+	 * direct and reflected path contributions from all active streaming sources at that
 	 * precise moment in time. The resulting complex sample is added to the window.
 	 *
 	 * @param window The I/Q buffer for the receive window to which interference will be added.
 	 * @param actual_start The jittered, sample-aligned start time of the window.
 	 * @param dt The time step between samples (1.0 / rate).
 	 * @param receiver The receiver being interfered with.
-	 * @param cw_sources A list of currently active CW transmitters.
+	 * @param streaming_sources A list of currently active streaming transmitters.
 	 * @param targets The list of all targets for calculating reflected paths.
 	 */
-	void applyCwInterference(std::span<ComplexType> window, RealType actual_start, RealType dt,
-							 const radar::Receiver* receiver, const std::vector<radar::Transmitter*>& cw_sources,
-							 const std::vector<std::unique_ptr<radar::Target>>* targets,
-							 const simulation::CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
+	void applyStreamingInterference(std::span<ComplexType> window, RealType actual_start, RealType dt,
+									const radar::Receiver* receiver,
+									const std::vector<core::ActiveStreamingSource>& streaming_sources,
+									const std::vector<std::unique_ptr<radar::Target>>* targets,
+									const simulation::CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
 	/**
-	 * @brief Renders and applies pulsed interference to a continuous-wave IQ buffer.
+	 * @brief Renders and applies pulsed interference to a streaming IQ buffer.
 	 *
 	 * Processes a log of `Response` objects that represent pulsed signals received
-	 * during a CW receiver's operation. Each response is rendered into a temporary
-	 * buffer and then added to the main CW IQ buffer at the correct time offset.
+	 * during a streaming receiver's operation. Each response is rendered into a temporary
+	 * buffer and then added to the main streaming IQ buffer at the correct time offset.
 	 *
-	 * @param iq_buffer The main, simulation-long IQ buffer for the CW receiver.
+	 * @param iq_buffer The main, simulation-long IQ buffer for the streaming receiver.
 	 * @param interference_log A list of `Response` objects representing the pulsed interference.
 	 */
 	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
@@ -141,7 +143,7 @@ namespace processing::pipeline
 	RealType applyDownsamplingAndQuantization(std::vector<ComplexType>& buffer);
 
 	/**
-	 * @brief Exports a finalized continuous-wave IQ buffer to an HDF5 file.
+	 * @brief Exports a finalized streaming IQ buffer to an HDF5 file.
 	 *
 	 * Creates an HDF5 file, splits the complex buffer into real (I) and imaginary (Q)
 	 * components, writes them as separate datasets, and adds relevant simulation
@@ -152,6 +154,8 @@ namespace processing::pipeline
 	 * @param fullscale The full-scale value from quantization, saved as metadata.
 	 * @param ref_freq The reference carrier frequency, saved as metadata.
 	 */
-	void exportCwToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer, RealType fullscale,
-						RealType ref_freq, const core::OutputFileMetadata* metadata = nullptr);
+	void exportStreamingToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
+							   RealType fullscale, RealType ref_freq,
+							   const core::OutputFileMetadata* metadata = nullptr);
+
 }

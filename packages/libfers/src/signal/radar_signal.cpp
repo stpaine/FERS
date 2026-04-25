@@ -33,6 +33,64 @@ namespace fers_signal
 		return {};
 	}
 
+	FmcwChirpSignal::FmcwChirpSignal(const RealType chirp_bandwidth, const RealType chirp_duration,
+									 const RealType chirp_period, const RealType start_frequency_offset,
+									 std::optional<std::size_t> chirp_count) :
+		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration), _chirp_period(chirp_period),
+		_start_frequency_offset(start_frequency_offset), _chirp_count(std::move(chirp_count)),
+		_chirp_rate(chirp_bandwidth / chirp_duration)
+	{
+	}
+
+	std::optional<std::size_t>
+	FmcwChirpSignal::activeChirpIndexAt(const RealType time_since_segment_start) const noexcept
+	{
+		if (time_since_segment_start < 0.0)
+		{
+			return std::nullopt;
+		}
+
+		const auto chirp_index = static_cast<std::size_t>(std::floor(time_since_segment_start / _chirp_period));
+		if (_chirp_count.has_value() && chirp_index >= *_chirp_count)
+		{
+			return std::nullopt;
+		}
+
+		const RealType chirp_time = time_since_segment_start - static_cast<RealType>(chirp_index) * _chirp_period;
+		// Exact arithmetic cannot make this negative, but floating-point boundary rounding can.
+		if (chirp_time < 0.0 || chirp_time >= _chirp_duration)
+		{
+			return std::nullopt;
+		}
+
+		return chirp_index;
+	}
+
+	std::optional<RealType>
+	FmcwChirpSignal::instantaneousBasebandPhase(const RealType time_since_segment_start) const noexcept
+	{
+		const auto chirp_index = activeChirpIndexAt(time_since_segment_start);
+		if (!chirp_index.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const RealType chirp_time = time_since_segment_start - static_cast<RealType>(*chirp_index) * _chirp_period;
+		return basebandPhaseForChirpTime(chirp_time);
+	}
+
+	RealType FmcwChirpSignal::basebandPhaseForChirpTime(const RealType chirp_time) const noexcept
+	{
+		return 2.0 * PI * _start_frequency_offset * chirp_time + PI * _chirp_rate * chirp_time * chirp_time;
+	}
+
+	std::vector<ComplexType> FmcwChirpSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
+													 const RealType /*fracWinDelay*/) const
+	{
+		size = 0;
+		return {};
+	}
+
 	RadarSignal::RadarSignal(std::string name, const RealType power, const RealType carrierfreq, const RealType length,
 							 std::unique_ptr<Signal> signal, const SimId id) :
 		_name(std::move(name)), _id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Waveform) : id),
@@ -53,6 +111,18 @@ namespace fers_signal
 		std::ranges::for_each(data, [scale](auto& value) { value *= scale; });
 
 		return data;
+	}
+
+	bool RadarSignal::isCw() const noexcept { return dynamic_cast<const CwSignal*>(_signal.get()) != nullptr; }
+
+	bool RadarSignal::isFmcwUpChirp() const noexcept
+	{
+		return dynamic_cast<const FmcwChirpSignal*>(_signal.get()) != nullptr;
+	}
+
+	const FmcwChirpSignal* RadarSignal::getFmcwChirpSignal() const noexcept
+	{
+		return dynamic_cast<const FmcwChirpSignal*>(_signal.get());
 	}
 
 	void Signal::clear() noexcept

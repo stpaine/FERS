@@ -74,7 +74,7 @@ namespace radar
 		void addResponseToInbox(std::unique_ptr<serial::Response> response) noexcept;
 
 		/**
-		 * @brief Adds a pulsed interference response to the receiver's CW-mode log.
+		 * @brief Adds a pulsed interference response to the receiver's streaming-mode log.
 		 * @param response A unique pointer to the response object.
 		 */
 		void addInterferenceToLog(std::unique_ptr<serial::Response> response) noexcept;
@@ -231,32 +231,32 @@ namespace radar
 		void setNoiseTemperature(RealType temp);
 
 		/**
-		 * @brief Prepares the internal storage for CW IQ data.
+		 * @brief Prepares the internal storage for streaming IQ data.
 		 * @param numSamples The total number of samples to allocate memory for.
 		 */
-		void prepareCwData(size_t numSamples);
+		void prepareStreamingData(size_t numSamples);
 
 		/**
-		 * @brief Sets a single IQ sample at a specific index for CW simulation.
+		 * @brief Sets a single IQ sample at a specific index for streaming simulation.
 		 * @param index The index at which to store the sample.
 		 * @param sample The complex IQ sample.
 		 */
-		void setCwSample(size_t index, ComplexType sample);
+		void setStreamingSample(size_t index, ComplexType sample);
 
 		/**
-		 * @brief Retrieves the collected CW IQ data.
+		 * @brief Retrieves the collected streaming IQ data.
 		 * @return A constant reference to the vector of complex IQ samples.
 		 */
-		[[nodiscard]] const std::vector<ComplexType>& getCwData() const { return _cw_iq_data; }
+		[[nodiscard]] const std::vector<ComplexType>& getStreamingData() const { return _streaming_iq_data; }
 
 		/**
-		 * @brief Retrieves the collected CW IQ data for modification.
+		 * @brief Retrieves the collected streaming IQ data for modification.
 		 * @return A mutable reference to the vector of complex IQ samples.
 		 */
-		[[nodiscard]] std::vector<ComplexType>& getMutableCwData() { return _cw_iq_data; }
+		[[nodiscard]] std::vector<ComplexType>& getMutableStreamingData() { return _streaming_iq_data; }
 
 		/**
-		 * @brief Retrieves the log of pulsed interferences for CW mode.
+		 * @brief Retrieves the log of pulsed interferences for streaming modes.
 		 * @return A const reference to the vector of interference responses.
 		 */
 		[[nodiscard]] const std::vector<std::unique_ptr<serial::Response>>& getPulsedInterferenceLog() const
@@ -308,7 +308,7 @@ namespace radar
 		std::vector<std::unique_ptr<serial::Response>>
 			_pulsed_interference_log; /// Log of pulsed signals that interfere with CW reception.
 		std::mutex _interference_log_mutex;
-		std::vector<ComplexType> _cw_iq_data; /// Buffer for raw, simulation-long I/Q data.
+		std::vector<ComplexType> _streaming_iq_data; /// Buffer for raw, simulation-long I/Q data.
 		std::mutex _cw_mutex; ///< Mutex for handling CW data.
 	};
 }

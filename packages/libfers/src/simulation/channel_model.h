@@ -27,6 +27,7 @@
 
 #include "core/config.h"
 #include "core/sim_id.h"
+#include "core/simulation_state.h"
 #include "math/geometry_ops.h"
 
 namespace core
@@ -156,6 +157,11 @@ namespace simulation
 	ComplexType calculateDirectPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
 												RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
+	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
+														 const radar::Receiver* recv, RealType timeK,
+														 const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
+														 core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr);
+
 	/**
 	 * @brief Calculates the complex envelope contribution for a reflected path (Tx -> Tgt -> Rx) at a specific time.
 	 * This function is used for Continuous Wave (CW) simulations.
@@ -169,6 +175,12 @@ namespace simulation
 	ComplexType calculateReflectedPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
 												   const radar::Target* targ, RealType timeK,
 												   const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
+
+	ComplexType calculateStreamingReflectedPathContribution(const core::ActiveStreamingSource& source,
+															const radar::Receiver* recv, const radar::Target* targ,
+															RealType timeK,
+															const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
+															core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr);
 
 	/**
 	 * @brief Creates a Response object by simulating a signal's interaction over its duration.

@@ -25,6 +25,7 @@
 #include "processing/signal_processor.h"
 #include "radar/receiver.h"
 #include "serial/hdf5_handler.h"
+#include "signal/radar_signal.h"
 #include "timing/timing.h"
 
 namespace processing
@@ -57,16 +58,32 @@ namespace processing
 			metadata.sample_end_exclusive = metadata.total_samples;
 		}
 
-		core::OutputFileMetadata buildCwMetadata(const radar::Receiver* receiver, const std::string& hdf5_filename,
-												 const std::size_t total_samples)
+		core::OutputFileMetadata buildStreamingMetadata(const radar::Receiver* receiver,
+														const std::string& hdf5_filename,
+														const std::size_t total_samples)
 		{
+			const auto* attached_tx = dynamic_cast<const radar::Transmitter*>(receiver->getAttached());
+			const auto* fmcw = (attached_tx != nullptr) ? attached_tx->getFmcwSignal() : nullptr;
 			core::OutputFileMetadata metadata{.receiver_id = receiver->getId(),
 											  .receiver_name = receiver->getName(),
-											  .mode = "cw",
+											  .mode = receiver->getMode() == radar::OperationMode::FMCW_MODE ? "fmcw"
+																											 : "cw",
 											  .path = hdf5_filename,
 											  .total_samples = static_cast<std::uint64_t>(total_samples),
 											  .sample_start = 0,
 											  .sample_end_exclusive = static_cast<std::uint64_t>(total_samples)};
+			if (fmcw != nullptr)
+			{
+				metadata.fmcw = core::FmcwMetadata{
+					.chirp_bandwidth = fmcw->getChirpBandwidth(),
+					.chirp_duration = fmcw->getChirpDuration(),
+					.chirp_period = fmcw->getChirpPeriod(),
+					.chirp_rate = fmcw->getChirpRate(),
+					.start_frequency_offset = fmcw->getStartFrequencyOffset(),
+					.chirp_count = fmcw->getChirpCount().has_value()
+						? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*fmcw->getChirpCount()))
+						: std::nullopt};
+			}
 
 			const auto append_segment = [&](const RealType start_time, const RealType end_time)
 			{
@@ -78,11 +95,22 @@ namespace processing
 					std::max<RealType>(0.0, std::ceil((end_time - params::startTime()) * params::rate()))));
 				if (start_sample < end_sample)
 				{
-					metadata.cw_segments.push_back({.start_time = start_time,
-													.end_time = end_time,
-													.sample_count = end_sample - start_sample,
-													.sample_start = start_sample,
-													.sample_end_exclusive = end_sample});
+					core::StreamingSegmentMetadata segment{.start_time = start_time,
+														   .end_time = end_time,
+														   .sample_count = end_sample - start_sample,
+														   .sample_start = start_sample,
+														   .sample_end_exclusive = end_sample};
+					if (fmcw != nullptr)
+					{
+						segment.first_chirp_start_time = start_time;
+						const auto chirps = static_cast<std::uint64_t>(
+							std::ceil(std::max<RealType>(0.0, end_time - start_time) / fmcw->getChirpPeriod()));
+						const auto available = fmcw->getChirpCount().has_value()
+							? static_cast<std::uint64_t>(*fmcw->getChirpCount())
+							: chirps;
+						segment.emitted_chirp_count = std::min(chirps, available);
+					}
+					metadata.streaming_segments.push_back(std::move(segment));
 				}
 			};
 
@@ -173,7 +201,8 @@ namespace processing
 			applyThermalNoise(window_buffer, receiver->getNoiseTemperature(receiver->getRotation(actual_start)),
 							  receiver->getRngEngine());
 
-			pipeline::applyCwInterference(window_buffer, actual_start, dt, receiver, job.active_cw_sources, targets);
+			pipeline::applyStreamingInterference(window_buffer, actual_start, dt, receiver,
+												 job.active_streaming_sources, targets);
 
 			renderWindow(window_buffer, job.duration, actual_start, frac_delay, job.responses);
 
@@ -236,20 +265,20 @@ namespace processing
 		LOG(logging::Level::INFO, "Finalizer thread for receiver '{}' finished.", receiver->getName());
 	}
 
-	void finalizeCwReceiver(radar::Receiver* receiver, pool::ThreadPool* /*pool*/,
-							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
-							std::shared_ptr<core::OutputMetadataCollector> metadata_collector)
+	void finalizeStreamingReceiver(radar::Receiver* receiver, pool::ThreadPool* /*pool*/,
+								   std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
+								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector)
 	{
-		LOG(logging::Level::INFO, "Finalization task started for CW receiver '{}'.", receiver->getName());
+		LOG(logging::Level::INFO, "Finalization task started for streaming receiver '{}'.", receiver->getName());
 		if (reporter)
 		{
-			reporter->report(std::format("Finalizing CW Receiver {}", receiver->getName()), 0, 100);
+			reporter->report(std::format("Finalizing Streaming Receiver {}", receiver->getName()), 0, 100);
 		}
 
-		auto& iq_buffer = receiver->getMutableCwData();
+		auto& iq_buffer = receiver->getMutableStreamingData();
 		if (iq_buffer.empty())
 		{
-			LOG(logging::Level::INFO, "No CW data to finalize for receiver '{}'.", receiver->getName());
+			LOG(logging::Level::INFO, "No streaming data to finalize for receiver '{}'.", receiver->getName());
 			return;
 		}
 
@@ -278,9 +307,9 @@ namespace processing
 			std::filesystem::create_directories(out_path);
 		}
 		const auto hdf5_filename = (out_path / std::format("{}_results.h5", receiver->getName())).string();
-		auto file_metadata = buildCwMetadata(receiver, hdf5_filename, iq_buffer.size());
-		pipeline::exportCwToHdf5(hdf5_filename, iq_buffer, fullscale, receiver->getTiming()->getFrequency(),
-								 &file_metadata);
+		auto file_metadata = buildStreamingMetadata(receiver, hdf5_filename, iq_buffer.size());
+		pipeline::exportStreamingToHdf5(hdf5_filename, iq_buffer, fullscale, receiver->getTiming()->getFrequency(),
+										&file_metadata);
 		if (metadata_collector)
 		{
 			metadata_collector->addFile(std::move(file_metadata));
@@ -291,4 +320,5 @@ namespace processing
 			reporter->report(std::format("Finalized {}", receiver->getName()), 100, 100);
 		}
 	}
+
 }

@@ -20,6 +20,7 @@
 
 namespace fers_signal
 {
+	class FmcwChirpSignal;
 	class RadarSignal;
 }
 
@@ -69,6 +70,13 @@ namespace radar
 		 * @return Pointer to the RadarSignal object being transmitted.
 		 */
 		[[nodiscard]] fers_signal::RadarSignal* getSignal() const noexcept { return _signal; }
+
+		[[nodiscard]] const fers_signal::FmcwChirpSignal* getFmcwSignal() const noexcept;
+
+		[[nodiscard]] bool isStreamingMode() const noexcept
+		{
+			return _mode == OperationMode::CW_MODE || _mode == OperationMode::FMCW_MODE;
+		}
 
 		/**
 		 * @brief Retrieves the unique ID of the transmitter.
@@ -147,4 +155,5 @@ namespace radar
 		OperationMode _mode; ///< The operational mode of the transmitter.
 		std::vector<SchedulePeriod> _schedule; ///< The schedule of active periods.
 	};
+
 }

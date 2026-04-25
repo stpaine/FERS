@@ -364,14 +364,15 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 		auto tx = scenario["simulation"]["platforms"][0]["components"][0]["transmitter"];
 		uint64_t tx_id = api_test::parseId(tx["id"]);
 		tx["name"] = "UpdatedTx";
-		tx["pulsed_mode"] = {{"prf", 1250.0}};
+		tx["cw_mode"] = json::object();
+		tx.erase("pulsed_mode");
 
 		REQUIRE(fers_update_transmitter_from_json(context.get(), tx_id, tx.dump().c_str()) == 0);
 
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_tx = updated["simulation"]["platforms"][0]["components"][0]["transmitter"];
 		REQUIRE(updated_tx["name"] == "UpdatedTx");
-		REQUIRE_THAT(updated_tx["pulsed_mode"]["prf"].get<double>(), WithinAbs(1250.0, 1e-9));
+		REQUIRE(updated_tx["cw_mode"].is_object());
 	}
 
 	SECTION("Receiver update")

@@ -40,6 +40,7 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/noise/falpha_branch.h
 	${CMAKE_CURRENT_LIST_DIR}/noise/noise_generators.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/json_serializer.h
+	${CMAKE_CURRENT_LIST_DIR}/serial/fmcw_validation.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/hdf5_handler.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/kml_generator.h
@@ -83,6 +84,7 @@ set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/radar/target.cpp
 	${CMAKE_CURRENT_LIST_DIR}/radar/transmitter.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/json_serializer.cpp
+	${CMAKE_CURRENT_LIST_DIR}/serial/fmcw_validation.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/hdf5_handler.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/kml_generator.cpp

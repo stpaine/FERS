@@ -388,9 +388,10 @@ TEST_CASE("World clear resets storage and state", "[core][world]")
 	world.add(std::make_unique<antenna::Isotropic>("Ant-A", 505));
 	world.add(std::make_unique<timing::PrototypeTiming>("Timing-A", 606));
 
-	world.getEventQueue().push({1.0, core::EventType::TX_CW_START, world.getTransmitters().front().get()});
+	world.getEventQueue().push({1.0, core::EventType::TX_STREAMING_START, world.getTransmitters().front().get()});
 	world.getSimulationState().t_current = 42.0;
-	world.getSimulationState().active_cw_transmitters.push_back(world.getTransmitters().front().get());
+	world.getSimulationState().active_streaming_transmitters.push_back(
+		{.transmitter = world.getTransmitters().front().get(), .segment_start = 0.0, .segment_end = 0.0});
 
 	world.clear();
 
@@ -403,7 +404,7 @@ TEST_CASE("World clear resets storage and state", "[core][world]")
 	REQUIRE(world.getTimings().empty());
 	REQUIRE(world.getEventQueue().empty());
 	REQUIRE(world.getSimulationState().t_current == 0.0);
-	REQUIRE(world.getSimulationState().active_cw_transmitters.empty());
+	REQUIRE(world.getSimulationState().active_streaming_transmitters.empty());
 }
 
 TEST_CASE("World schedules pulsed transmitter events", "[core][world]")
@@ -448,12 +449,12 @@ TEST_CASE("World schedules CW transmitter events with bounds", "[core][world]")
 
 	const auto tx_events = eventsFor(events, "Tx-CW");
 	REQUIRE(tx_events.size() == 6);
-	REQUIRE(tx_events[0].type == core::EventType::TX_CW_START);
-	REQUIRE(tx_events[1].type == core::EventType::TX_CW_END);
-	REQUIRE(tx_events[2].type == core::EventType::TX_CW_START);
-	REQUIRE(tx_events[3].type == core::EventType::TX_CW_END);
-	REQUIRE(tx_events[4].type == core::EventType::TX_CW_START);
-	REQUIRE(tx_events[5].type == core::EventType::TX_CW_END);
+	REQUIRE(tx_events[0].type == core::EventType::TX_STREAMING_START);
+	REQUIRE(tx_events[1].type == core::EventType::TX_STREAMING_END);
+	REQUIRE(tx_events[2].type == core::EventType::TX_STREAMING_START);
+	REQUIRE(tx_events[3].type == core::EventType::TX_STREAMING_END);
+	REQUIRE(tx_events[4].type == core::EventType::TX_STREAMING_START);
+	REQUIRE(tx_events[5].type == core::EventType::TX_STREAMING_END);
 
 	REQUIRE_THAT(tx_events[0].timestamp, WithinAbs(0.0, 1e-12));
 	REQUIRE_THAT(tx_events[1].timestamp, WithinAbs(1.0, 1e-12));
@@ -478,8 +479,8 @@ TEST_CASE("World schedules CW transmitter always-on when schedule empty", "[core
 
 	const auto events = drainQueue(world);
 	REQUIRE(events.size() == 2);
-	REQUIRE(events[0].type == core::EventType::TX_CW_START);
-	REQUIRE(events[1].type == core::EventType::TX_CW_END);
+	REQUIRE(events[0].type == core::EventType::TX_STREAMING_START);
+	REQUIRE(events[1].type == core::EventType::TX_STREAMING_END);
 	REQUIRE_THAT(events[0].timestamp, WithinAbs(1.5, 1e-12));
 	REQUIRE_THAT(events[1].timestamp, WithinAbs(4.5, 1e-12));
 }
@@ -530,12 +531,12 @@ TEST_CASE("World schedules CW receiver events with bounds", "[core][world]")
 
 	const auto rx_events = eventsFor(events, "Rx-CW");
 	REQUIRE(rx_events.size() == 6);
-	REQUIRE(rx_events[0].type == core::EventType::RX_CW_START);
-	REQUIRE(rx_events[1].type == core::EventType::RX_CW_END);
-	REQUIRE(rx_events[2].type == core::EventType::RX_CW_START);
-	REQUIRE(rx_events[3].type == core::EventType::RX_CW_END);
-	REQUIRE(rx_events[4].type == core::EventType::RX_CW_START);
-	REQUIRE(rx_events[5].type == core::EventType::RX_CW_END);
+	REQUIRE(rx_events[0].type == core::EventType::RX_STREAMING_START);
+	REQUIRE(rx_events[1].type == core::EventType::RX_STREAMING_END);
+	REQUIRE(rx_events[2].type == core::EventType::RX_STREAMING_START);
+	REQUIRE(rx_events[3].type == core::EventType::RX_STREAMING_END);
+	REQUIRE(rx_events[4].type == core::EventType::RX_STREAMING_START);
+	REQUIRE(rx_events[5].type == core::EventType::RX_STREAMING_END);
 
 	REQUIRE_THAT(rx_events[0].timestamp, WithinAbs(0.0, 1e-12));
 	REQUIRE_THAT(rx_events[1].timestamp, WithinAbs(2.0, 1e-12));
@@ -560,8 +561,8 @@ TEST_CASE("World schedules CW receiver always-on when schedule empty", "[core][w
 
 	const auto events = drainQueue(world);
 	REQUIRE(events.size() == 2);
-	REQUIRE(events[0].type == core::EventType::RX_CW_START);
-	REQUIRE(events[1].type == core::EventType::RX_CW_END);
+	REQUIRE(events[0].type == core::EventType::RX_STREAMING_START);
+	REQUIRE(events[1].type == core::EventType::RX_STREAMING_END);
 	REQUIRE_THAT(events[0].timestamp, WithinAbs(2.0, 1e-12));
 	REQUIRE_THAT(events[1].timestamp, WithinAbs(5.0, 1e-12));
 }
@@ -576,11 +577,11 @@ TEST_CASE("World dumpEventQueue formats content", "[core][world]")
 	world.add(std::move(platform));
 	world.add(std::move(tx));
 
-	world.getEventQueue().push({1.25, core::EventType::TX_CW_START, world.getTransmitters().front().get()});
+	world.getEventQueue().push({1.25, core::EventType::TX_STREAMING_START, world.getTransmitters().front().get()});
 
 	const auto output = world.dumpEventQueue();
 	REQUIRE(output.find("Event Queue Contents") != std::string::npos);
-	REQUIRE(output.find("TxCwStart") != std::string::npos);
+	REQUIRE(output.find("TxStreamingStart") != std::string::npos);
 	REQUIRE(output.find("Tx-Format") != std::string::npos);
 	REQUIRE(output.find("1.250000") != std::string::npos);
 }

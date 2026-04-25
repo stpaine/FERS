@@ -95,6 +95,28 @@ TEST_CASE("JSON: Granular parsing of Antenna and Waveform", "[serial][json]")
 	}
 }
 
+TEST_CASE("JSON: FMCW waveform emits large-buffer warning", "[serial][json]")
+{
+	ParamGuard guard;
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
+
+	params::setRate(1.0e9);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 5.0);
+
+	json wf_json = {
+		{"id", 456},
+		{"name", "HugeFmcw"},
+		{"power", 500.0},
+		{"carrier_frequency", 2.4e9},
+		{"fmcw_up_chirp", {{"chirp_bandwidth", 1.0e6}, {"chirp_duration", 1.0e-3}, {"chirp_period", 1.0e-3}}}};
+
+	auto wf = serial::parse_waveform_from_json(wf_json);
+	REQUIRE(wf != nullptr);
+	REQUIRE_THAT(capture.str(), ContainsSubstring("GiB of FMCW streaming IQ data"));
+}
+
 TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 {
 	ParamGuard guard;
@@ -279,27 +301,26 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 		  {"antennas", json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}})},
 		  {"timings", json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1e6}}})},
 		  {"platforms",
-		   json::array(
-			   {{{"id", 100},
-				 {"name", "p1"},
-				 {"components",
-				  json::array({{{"monostatic",
-								 {{"name", "mono1"},
-								  {"tx_id", 101},
-								  {"rx_id", 102},
-								  {"waveform", 10},
-								  {"antenna", 20},
-								  {"timing", 30},
-								  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1e-4}, {"window_skip", 0.0}}},
-								  {"noise_temp", 290.0},
-								  {"nodirect", true},
-								  {"nopropagationloss", true},
-								  {"schedule", json::array({{{"start", 0.1}, {"end", 0.5}}})}}}},
-							   {{"target",
-								 {{"id", 103},
-								  {"name", "tgt1"},
-								  {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
-								  {"model", {{"type", "chisquare"}, {"k", 2.0}}}}}}})}}})}}}};
+		   json::array({{{"id", 100},
+						 {"name", "p1"},
+						 {"components",
+						  json::array({{{"monostatic",
+										 {{"name", "mono1"},
+										  {"tx_id", 101},
+										  {"rx_id", 102},
+										  {"waveform", 10},
+										  {"antenna", 20},
+										  {"timing", 30},
+										  {"cw_mode", json::object()},
+										  {"noise_temp", 290.0},
+										  {"nodirect", true},
+										  {"nopropagationloss", true},
+										  {"schedule", json::array({{{"start", 0.1}, {"end", 0.5}}})}}}},
+									   {{"target",
+										 {{"id", 103},
+										  {"name", "tgt1"},
+										  {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
+										  {"model", {{"type", "chisquare"}, {"k", 2.0}}}}}}})}}})}}}};
 
 	REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
 
@@ -382,7 +403,7 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 		json test_comps = json::array(
 			{{{"transmitter", {{"id", 1}, {"name", "tx1"}, {"waveform", 10}, {"antenna", 20}, {"timing", 30}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps),
-							ContainsSubstring("must have a 'pulsed_mode' or 'cw_mode' block"));
+							ContainsSubstring("must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block"));
 	}
 
 	SECTION("Unsupported RCS type throws")
@@ -620,19 +641,27 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Transmitter")
 	{
-		json j = {{"name", "tx_updated"}, {"pulsed_mode", {{"prf", 2000.0}}},
+		json j = {{"name", "tx_updated"}, {"cw_mode", json::object()},
 				  {"waveform", 10},		  {"antenna", 20},
 				  {"timing", 30},		  {"schedule", json::array({{{"start", 0.1}, {"end", 0.5}}})}};
 		serial::update_transmitter_from_json(j, tx_ptr, w, seeder);
 
 		REQUIRE(tx_ptr->getName() == "tx_updated");
-		REQUIRE(tx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
-		REQUIRE_THAT(tx_ptr->getPrf(), WithinAbs(2000.0, 1e-9));
+		REQUIRE(tx_ptr->getMode() == radar::OperationMode::CW_MODE);
 		REQUIRE(tx_ptr->getSignal() != nullptr);
 		REQUIRE(tx_ptr->getAntenna() != nullptr);
 		REQUIRE(tx_ptr->getTiming() != nullptr);
 		REQUIRE(tx_ptr->getTiming()->getSeed() == 12345); // Seed preserved
 		REQUIRE(tx_ptr->getSchedule().size() == 1);
+	}
+
+	SECTION("Update Transmitter PRF")
+	{
+		json j = {{"pulsed_mode", {{"prf", 1250.0}}}};
+		serial::update_transmitter_from_json(j, tx_ptr, w, seeder);
+
+		REQUIRE(tx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
+		REQUIRE_THAT(tx_ptr->getPrf(), WithinAbs(1250.0, 1e-9));
 	}
 
 	SECTION("Update Receiver")
@@ -759,25 +788,16 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	w.add(std::move(rx));
 	w.add(std::move(p));
 
-	json j = {{"name", "mono_updated"},
-			  {"tx_id", 101},
-			  {"rx_id", 102},
-			  {"waveform", 10},
-			  {"antenna", 20},
-			  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1e-4}, {"window_skip", 0.0}}},
-			  {"noise_temp", 300.0},
-			  {"nodirect", true},
-			  {"timing", 30}};
+	json j = {{"name", "mono_updated"},	   {"tx_id", 101},		  {"rx_id", 102},	  {"waveform", 10}, {"antenna", 20},
+			  {"cw_mode", json::object()}, {"noise_temp", 300.0}, {"nodirect", true}, {"timing", 30}};
 
 	serial::update_monostatic_from_json(j, tx_ptr, rx_ptr, w, seeder);
 
 	REQUIRE(tx_ptr->getName() == "mono_updated");
 	REQUIRE(rx_ptr->getName() == "mono_updated");
 
-	REQUIRE(tx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
-	REQUIRE(rx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
-	REQUIRE_THAT(tx_ptr->getPrf(), WithinAbs(1000.0, 1e-9));
-	REQUIRE_THAT(rx_ptr->getWindowLength(), WithinAbs(1e-4, 1e-9));
+	REQUIRE(tx_ptr->getMode() == radar::OperationMode::CW_MODE);
+	REQUIRE(rx_ptr->getMode() == radar::OperationMode::CW_MODE);
 	REQUIRE_THAT(rx_ptr->getNoiseTemperature(), WithinAbs(300.0, 1e-9));
 	REQUIRE(rx_ptr->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);

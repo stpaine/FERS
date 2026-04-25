@@ -18,6 +18,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string_view>
 #include <unordered_map>
 
 #include "core/logging.h"
@@ -44,6 +46,22 @@ using radar::Transmitter;
 
 namespace
 {
+	void initializeFmcwTracker(const fers_signal::FmcwChirpSignal& fmcw, const RealType segment_start,
+							   const RealType t_ret, core::FmcwChirpBoundaryTracker& tracker)
+	{
+		tracker.initialized = true;
+		if (t_ret >= segment_start)
+		{
+			const RealType time_since_segment_start = t_ret - segment_start;
+			tracker.n_current = static_cast<std::size_t>(std::floor(time_since_segment_start / fmcw.getChirpPeriod()));
+			tracker.t_n = segment_start + static_cast<RealType>(tracker.n_current) * fmcw.getChirpPeriod();
+			return;
+		}
+
+		tracker.n_current = 0;
+		tracker.t_n = segment_start;
+	}
+
 	/**
 	 * @struct LinkGeometry
 	 * @brief Holds geometric properties of a path segment between two points.
@@ -229,6 +247,129 @@ namespace
 			}
 		}
 		return false;
+	}
+
+	bool computeStreamingPhase(const radar::Transmitter* trans, const RealType segment_start,
+							   const RealType segment_end, const RealType rx_time, const RealType tau,
+							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
+	{
+		// TODO: By returning false the exact moment rx_time >= segment_end, we are
+		// violating the speed of light and instantly cutting off the signal at the receiver.
+		if (rx_time < segment_start || rx_time >= segment_end)
+		{
+			return false;
+		}
+
+		const auto* const signal = trans->getSignal();
+		if (signal == nullptr)
+		{
+			return false;
+		}
+
+		if (signal->isFmcwUpChirp())
+		{
+			const auto* fmcw = signal->getFmcwChirpSignal();
+			const RealType t_ret = rx_time - tau;
+			if (t_ret < segment_start || t_ret >= segment_end)
+			{
+				return false;
+			}
+
+			if (chirp_tracker == nullptr)
+			{
+				const RealType time_since_segment_start = t_ret - segment_start;
+				const auto chirp_index =
+					static_cast<std::size_t>(std::floor(time_since_segment_start / fmcw->getChirpPeriod()));
+				if (fmcw->getChirpCount().has_value() && chirp_index >= *fmcw->getChirpCount())
+				{
+					return false;
+				}
+				const RealType chirp_time =
+					time_since_segment_start - static_cast<RealType>(chirp_index) * fmcw->getChirpPeriod();
+				if (chirp_time < 0.0 || chirp_time >= fmcw->getChirpDuration())
+				{
+					return false;
+				}
+				phase_out = -2.0 * PI * signal->getCarrier() * tau + fmcw->basebandPhaseForChirpTime(chirp_time);
+				return true;
+			}
+
+			if (!chirp_tracker->initialized)
+			{
+				initializeFmcwTracker(*fmcw, segment_start, t_ret, *chirp_tracker);
+			}
+
+			const RealType chirp_period = fmcw->getChirpPeriod();
+			while (t_ret >= chirp_tracker->t_n + chirp_period)
+			{
+				chirp_tracker->t_n += chirp_period;
+				++chirp_tracker->n_current;
+			}
+
+			if (fmcw->getChirpCount().has_value() && chirp_tracker->n_current >= *fmcw->getChirpCount())
+			{
+				return false;
+			}
+
+			const RealType u_ret = t_ret - chirp_tracker->t_n;
+			// This lower-bound guard is required for causality: cold-path initialization pins the
+			// tracker to the segment start when the retarded time precedes the first chirp, and the
+			// advance loop can only move forward. Without the u_ret < 0 check, we'd evaluate the chirp
+			// polynomial at negative local time and extrapolate a non-causal signal before turn-on.
+			if (u_ret < 0.0 || u_ret >= fmcw->getChirpDuration())
+			{
+				return false;
+			}
+
+			phase_out = -2.0 * PI * signal->getCarrier() * tau + fmcw->basebandPhaseForChirpTime(u_ret);
+			return true;
+		}
+
+		phase_out = -2.0 * PI * signal->getCarrier() * tau;
+		return true;
+	}
+
+	RealType previewRadiatedPower(const RadarSignal* waveform)
+	{
+		if (waveform == nullptr)
+		{
+			return 0.0;
+		}
+		if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			return waveform->getPower() * (fmcw->getChirpDuration() / fmcw->getChirpPeriod());
+		}
+		return waveform->getPower();
+	}
+
+	RealType previewDutyCycle(const RadarSignal* waveform)
+	{
+		if (const auto* fmcw = (waveform != nullptr) ? waveform->getFmcwChirpSignal() : nullptr; fmcw != nullptr)
+		{
+			return fmcw->getChirpDuration() / fmcw->getChirpPeriod();
+		}
+		return 1.0;
+	}
+
+	std::string formatPreviewDbmLabel(const RadarSignal* waveform, const RealType average_watts,
+									  const std::string_view prefix = {})
+	{
+		if (const RealType duty_cycle = previewDutyCycle(waveform); duty_cycle < 1.0)
+		{
+			return std::format("{}avg {:.1f} dBm (peak {:.1f} dBm)", prefix, wattsToDbm(average_watts),
+							   wattsToDbm(average_watts / duty_cycle));
+		}
+		return std::format("{}{:.1f} dBm", prefix, wattsToDbm(average_watts));
+	}
+
+	std::string formatPreviewDbwPerSquareMeterLabel(const RadarSignal* waveform, const RealType average_watts)
+	{
+		if (const RealType duty_cycle = previewDutyCycle(waveform); duty_cycle < 1.0)
+		{
+			return std::format("avg {:.1f} dBW/m\u00B2 (peak {:.1f} dBW/m\u00B2)", wattsToDb(average_watts),
+							   wattsToDb(average_watts / duty_cycle));
+		}
+		return std::format("{:.1f} dBW/m\u00B2", wattsToDb(average_watts));
 	}
 }
 
@@ -422,6 +563,23 @@ namespace simulation
 	ComplexType calculateDirectPathContribution(const Transmitter* trans, const Receiver* recv, const RealType timeK,
 												const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
+		return calculateStreamingDirectPathContribution(
+			core::ActiveStreamingSource{.transmitter = trans,
+										.segment_start = params::startTime(),
+										.segment_end = std::numeric_limits<RealType>::max()},
+			recv, timeK, phase_noise_lookup);
+	}
+
+	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
+														 const Receiver* recv, const RealType timeK,
+														 const CwPhaseNoiseLookup* const phase_noise_lookup,
+														 core::FmcwChirpBoundaryTracker* const chirp_tracker)
+	{
+		const auto* const trans = source.transmitter;
+		if (trans == nullptr)
+		{
+			return {0.0, 0.0};
+		}
 		// Check for co-location to prevent singularities.
 		// If they share the same platform, we assume they are isolated (no leakage) or explicit
 		// monostatic handling is required (which is not modeled via the far-field path).
@@ -460,7 +618,11 @@ namespace simulation
 		const RealType amplitude = std::sqrt(signal->getPower() * scaling_factor);
 
 		// Carrier Phase
-		const RealType phase = -2 * PI * carrier_freq * tau;
+		RealType phase = 0.0;
+		if (!computeStreamingPhase(trans, source.segment_start, source.segment_end, timeK, tau, chirp_tracker, phase))
+		{
+			return {0.0, 0.0};
+		}
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
@@ -474,6 +636,24 @@ namespace simulation
 												   const RealType timeK,
 												   const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
+		return calculateStreamingReflectedPathContribution(
+			core::ActiveStreamingSource{.transmitter = trans,
+										.segment_start = params::startTime(),
+										.segment_end = std::numeric_limits<RealType>::max()},
+			recv, targ, timeK, phase_noise_lookup);
+	}
+
+	ComplexType calculateStreamingReflectedPathContribution(const core::ActiveStreamingSource& source,
+															const Receiver* recv, const Target* targ,
+															const RealType timeK,
+															const CwPhaseNoiseLookup* const phase_noise_lookup,
+															core::FmcwChirpBoundaryTracker* const chirp_tracker)
+	{
+		const auto* const trans = source.transmitter;
+		if (trans == nullptr)
+		{
+			return {0.0, 0.0};
+		}
 		// Check for co-location involving the target.
 		// We do not model a platform tracking itself (R=0) or illuminating itself (R=0).
 		if (trans->getPlatform() == targ->getPlatform() || recv->getPlatform() == targ->getPlatform())
@@ -520,7 +700,11 @@ namespace simulation
 		// Include Signal Power
 		const RealType amplitude = std::sqrt(signal->getPower() * scaling_factor);
 
-		const RealType phase = -2 * PI * carrier_freq * tau;
+		RealType phase = 0.0;
+		if (!computeStreamingPhase(trans, source.segment_start, source.segment_end, timeK, tau, chirp_tracker, phase))
+		{
+			return {0.0, 0.0};
+		}
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
@@ -619,7 +803,7 @@ namespace simulation
 
 			const auto p_tx = tx->getPosition(time);
 			const auto* waveform = tx->getSignal();
-			const RealType pt = (waveform != nullptr) ? waveform->getPower() : 0.0;
+			const RealType pt = previewRadiatedPower(waveform);
 			const RealType lambda = (waveform != nullptr) ? (params::c() / waveform->getCarrier()) : lambda_default;
 
 			// --- PRE-CALCULATE ILLUMINATOR PATHS (Tx -> Tgt) ---
@@ -647,7 +831,7 @@ namespace simulation
 
 				links.push_back({.type = LinkType::BistaticTxTgt,
 								 .quality = LinkQuality::Strong,
-								 .label = std::format("{:.1f} dBW/m\u00B2", wattsToDb(p_density)),
+								 .label = formatPreviewDbwPerSquareMeterLabel(waveform, p_density),
 								 .source_id = tx->getId(),
 								 .dest_id = tgt->getId(),
 								 .origin_id = tx->getId()});
@@ -710,7 +894,7 @@ namespace simulation
 										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_unit_watts)),
+										 .label = formatPreviewDbmLabel(waveform, pr_unit_watts),
 										 .source_id = tx->getId(),
 										 .dest_id = tgt->getId(),
 										 .origin_id = tx->getId(),
@@ -742,7 +926,7 @@ namespace simulation
 
 							links.push_back({.type = LinkType::DirectTxRx,
 											 .quality = LinkQuality::Strong,
-											 .label = std::format("Direct: {:.1f} dBm", wattsToDbm(pr_watts)),
+											 .label = formatPreviewDbmLabel(waveform, pr_watts, "Direct: "),
 											 .source_id = tx->getId(),
 											 .dest_id = rx->getId(),
 											 .origin_id = tx->getId()});
@@ -789,7 +973,7 @@ namespace simulation
 										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_unit_watts)),
+										 .label = formatPreviewDbmLabel(waveform, pr_unit_watts),
 										 .source_id = tgt->getId(),
 										 .dest_id = rx->getId(),
 										 .origin_id = tx->getId(),

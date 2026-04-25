@@ -7,10 +7,12 @@
 #include "xml_parser_utils.h"
 
 #include <GeographicLib/UTMUPS.hpp>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <optional>
 #include <string_view>
 
 #include "antenna/antenna_factory.h"
@@ -28,6 +30,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/fmcw_validation.h"
 #include "serial/rotation_angle_utils.h"
 #include "serial/rotation_warning_utils.h"
 #include "serial/waveform_factory.h"
@@ -41,6 +44,54 @@ namespace serial::xml_parser_utils
 {
 	namespace
 	{
+		radar::OperationMode parse_mode_elements(const XmlElement& parent, const std::string& owner)
+		{
+			std::optional<radar::OperationMode> selected_mode;
+			const auto select_mode = [&](const char* const element_name, const radar::OperationMode mode)
+			{
+				if (!parent.childElement(element_name, 0).isValid())
+				{
+					return;
+				}
+				if (selected_mode.has_value())
+				{
+					throw XmlException(owner +
+									   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, or "
+									   "<fmcw_mode>).");
+				}
+				selected_mode = mode;
+			};
+
+			select_mode("pulsed_mode", radar::OperationMode::PULSED_MODE);
+			select_mode("cw_mode", radar::OperationMode::CW_MODE);
+			select_mode("fmcw_mode", radar::OperationMode::FMCW_MODE);
+			if (!selected_mode.has_value())
+			{
+				throw XmlException(owner +
+								   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, or <fmcw_mode>).");
+			}
+			return *selected_mode;
+		}
+
+		void throw_xml_validation_error(const std::string& message) { throw XmlException(message); }
+
+		void validate_fmcw_waveform(const fers_signal::RadarSignal& wave, const std::string& owner)
+		{
+			serial::fmcw_validation::validateWaveform(wave, owner, throw_xml_validation_error);
+		}
+
+		void validate_waveform_mode_match(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
+										  const std::string& owner)
+		{
+			serial::fmcw_validation::validateWaveformModeMatch(wave, mode, owner, throw_xml_validation_error);
+		}
+
+		void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
+									const fers_signal::FmcwChirpSignal& fmcw, const std::string& owner)
+		{
+			serial::fmcw_validation::validateSchedule(schedule, fmcw, owner, throw_xml_validation_error);
+		}
+
 		[[nodiscard]] unsigned next_seed(std::mt19937& master_seeder)
 		{
 			static_assert(std::mt19937::max() <= std::numeric_limits<unsigned>::max(),
@@ -371,6 +422,39 @@ namespace serial::xml_parser_utils
 				name, power, carrier, ctx.parameters.end - ctx.parameters.start, std::move(cw_signal), id);
 			ctx.world->add(std::move(wave));
 		}
+		else if (const XmlElement fmcw_element = waveform.childElement("fmcw_up_chirp", 0); fmcw_element.isValid())
+		{
+			const RealType chirp_bandwidth = get_child_real_type(fmcw_element, "chirp_bandwidth");
+			const RealType chirp_duration = get_child_real_type(fmcw_element, "chirp_duration");
+			const RealType chirp_period = get_child_real_type(fmcw_element, "chirp_period");
+
+			RealType start_frequency_offset = 0.0;
+			if (const auto start_offset = fmcw_element.childElement("start_frequency_offset", 0);
+				start_offset.isValid())
+			{
+				start_frequency_offset = get_child_real_type(fmcw_element, "start_frequency_offset");
+			}
+
+			std::optional<std::size_t> chirp_count;
+			if (const auto chirp_count_element = fmcw_element.childElement("chirp_count", 0);
+				chirp_count_element.isValid())
+			{
+				const RealType raw_count = get_child_real_type(fmcw_element, "chirp_count");
+				if (raw_count <= 0.0 || std::floor(raw_count) != raw_count)
+				{
+					throw XmlException("Waveform '" + name + "' has an invalid chirp_count.");
+				}
+				chirp_count = static_cast<std::size_t>(raw_count);
+			}
+
+			auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(
+				chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset, chirp_count);
+			// RadarSignal length is the active chirp duration, not T_rep. The repeat period only spaces chirps.
+			auto wave = std::make_unique<fers_signal::RadarSignal>(name, power, carrier, chirp_duration,
+																   std::move(fmcw_signal), id);
+			validate_fmcw_waveform(*wave, "Waveform '" + name + "'");
+			ctx.world->add(std::move(wave));
+		}
 		else
 		{
 			LOG(logging::Level::FATAL, "Unsupported waveform type for '{}'", name);
@@ -665,19 +749,14 @@ namespace serial::xml_parser_utils
 		}
 	}
 
-	radar::Transmitter* parseTransmitter(const XmlElement& transmitter, radar::Platform* platform, ParserContext& ctx,
-										 const ReferenceLookup& refs)
+	radar::Transmitter* parseTransmitterWithMode(const XmlElement& transmitter, radar::Platform* platform,
+												 ParserContext& ctx, const ReferenceLookup& refs,
+												 const radar::OperationMode mode)
 	{
 		const std::string name = XmlElement::getSafeAttribute(transmitter, "name");
 		const SimId id = assign_id_from_attribute("transmitter '" + name + "'", ObjectType::Transmitter);
 		const XmlElement pulsed_mode_element = transmitter.childElement("pulsed_mode", 0);
-		const bool is_pulsed = pulsed_mode_element.isValid();
-		const radar::OperationMode mode = is_pulsed ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
-
-		if (!is_pulsed && !transmitter.childElement("cw_mode", 0).isValid())
-		{
-			throw XmlException("Transmitter '" + name + "' must specify a radar mode (<pulsed_mode> or <cw_mode>).");
-		}
+		const bool is_pulsed = mode == radar::OperationMode::PULSED_MODE;
 
 		auto transmitter_obj = std::make_unique<radar::Transmitter>(platform, name, mode, id);
 
@@ -689,6 +768,8 @@ namespace serial::xml_parser_utils
 			throw XmlException("Waveform ID '" + std::to_string(waveform_id) + "' not found for transmitter '" + name +
 							   "'");
 		}
+		validate_fmcw_waveform(*wave, "Waveform '" + wave->getName() + "'");
+		validate_waveform_mode_match(*wave, mode, "Transmitter '" + name + "'");
 		transmitter_obj->setWave(wave);
 
 		if (is_pulsed)
@@ -712,6 +793,10 @@ namespace serial::xml_parser_utils
 
 		RealType pri = is_pulsed ? (1.0 / transmitter_obj->getPrf()) : 0.0;
 		auto schedule = parseSchedule(transmitter, name, is_pulsed, pri);
+		if (const auto* fmcw = wave->getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			validate_fmcw_schedule(schedule, *fmcw, "Transmitter '" + name + "'");
+		}
 		if (!schedule.empty())
 		{
 			transmitter_obj->setSchedule(std::move(schedule));
@@ -721,14 +806,21 @@ namespace serial::xml_parser_utils
 		return ctx.world->getTransmitters().back().get();
 	}
 
-	radar::Receiver* parseReceiver(const XmlElement& receiver, radar::Platform* platform, ParserContext& ctx,
-								   const ReferenceLookup& refs)
+	radar::Transmitter* parseTransmitter(const XmlElement& transmitter, radar::Platform* platform, ParserContext& ctx,
+										 const ReferenceLookup& refs)
+	{
+		const std::string name = XmlElement::getSafeAttribute(transmitter, "name");
+		const radar::OperationMode mode = parse_mode_elements(transmitter, "Transmitter '" + name + "'");
+		return parseTransmitterWithMode(transmitter, platform, ctx, refs, mode);
+	}
+
+	radar::Receiver* parseReceiverWithMode(const XmlElement& receiver, radar::Platform* platform, ParserContext& ctx,
+										   const ReferenceLookup& refs, const radar::OperationMode mode)
 	{
 		const std::string name = XmlElement::getSafeAttribute(receiver, "name");
 		const SimId id = assign_id_from_attribute("receiver '" + name + "'", ObjectType::Receiver);
 		const XmlElement pulsed_mode_element = receiver.childElement("pulsed_mode", 0);
-		const bool is_pulsed = pulsed_mode_element.isValid();
-		const radar::OperationMode mode = is_pulsed ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
+		const bool is_pulsed = mode == radar::OperationMode::PULSED_MODE;
 
 		auto receiver_obj = std::make_unique<radar::Receiver>(platform, name, next_seed(*ctx.master_seeder), mode, id);
 
@@ -771,11 +863,6 @@ namespace serial::xml_parser_utils
 			}
 			receiver_obj->setWindowProperties(window_length, prf, window_skip);
 		}
-		else if (!receiver.childElement("cw_mode", 0).isValid())
-		{
-			throw XmlException("Receiver '" + name + "' must specify a radar mode (<pulsed_mode> or <cw_mode>).");
-		}
-
 		const SimId timing_id = resolve_reference_id(receiver, "timing", "receiver '" + name + "'", *refs.timings);
 		receiver_obj->setTiming(resolve_timing_instance(timing_id, ctx, "receiver '" + name + "'"));
 
@@ -803,11 +890,30 @@ namespace serial::xml_parser_utils
 		return ctx.world->getReceivers().back().get();
 	}
 
+	radar::Receiver* parseReceiver(const XmlElement& receiver, radar::Platform* platform, ParserContext& ctx,
+								   const ReferenceLookup& refs)
+	{
+		const std::string name = XmlElement::getSafeAttribute(receiver, "name");
+		const radar::OperationMode mode = parse_mode_elements(receiver, "Receiver '" + name + "'");
+		return parseReceiverWithMode(receiver, platform, ctx, refs, mode);
+	}
+
 	void parseMonostatic(const XmlElement& monostatic, radar::Platform* platform, ParserContext& ctx,
 						 const ReferenceLookup& refs)
 	{
-		radar::Transmitter* trans = parseTransmitter(monostatic, platform, ctx, refs);
-		radar::Receiver* recv = parseReceiver(monostatic, platform, ctx, refs);
+		const std::string name = XmlElement::getSafeAttribute(monostatic, "name");
+		const radar::OperationMode monostatic_mode = parse_mode_elements(monostatic, "Monostatic '" + name + "'");
+		radar::Transmitter* trans = parseTransmitterWithMode(monostatic, platform, ctx, refs, monostatic_mode);
+		radar::Receiver* recv = parseReceiverWithMode(monostatic, platform, ctx, refs, monostatic_mode);
+		if (trans->getMode() != monostatic_mode || recv->getMode() != monostatic_mode)
+		{
+			throw XmlException("Monostatic '" + name + "' parsed inconsistent transmitter/receiver modes.");
+		}
+		if (trans->getSignal() != nullptr)
+		{
+			validate_waveform_mode_match(*trans->getSignal(), trans->getMode(),
+										 "Monostatic '" + trans->getName() + "'");
+		}
 		trans->setAttached(recv);
 		recv->setAttached(trans);
 	}
@@ -1109,9 +1215,10 @@ namespace serial::xml_parser_utils
 
 		for (const auto& receiver : ctx.world->getReceivers())
 		{
-			if (receiver->getMode() == radar::OperationMode::CW_MODE)
+			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
+				receiver->getMode() == radar::OperationMode::FMCW_MODE)
 			{
-				receiver->prepareCwData(num_samples);
+				receiver->prepareStreamingData(num_samples);
 			}
 		}
 

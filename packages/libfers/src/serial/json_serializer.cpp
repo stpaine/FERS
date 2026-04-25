@@ -15,6 +15,7 @@
 
 #include "serial/json_serializer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <format>
 #include <nlohmann/json.hpp>
@@ -32,6 +33,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/fmcw_validation.h"
 #include "serial/rotation_angle_utils.h"
 #include "serial/rotation_warning_utils.h"
 #include "signal/radar_signal.h"
@@ -106,6 +108,25 @@ namespace
 		timing->initializeModel(timing_proto);
 		timing_instances.emplace(timing_id, timing);
 		return timing;
+	}
+
+	void throw_json_validation_error(const std::string& message) { throw std::runtime_error(message); }
+
+	void validate_fmcw_waveform(const fers_signal::RadarSignal& wave, const std::string& owner)
+	{
+		serial::fmcw_validation::validateWaveform(wave, owner, throw_json_validation_error);
+	}
+
+	void validate_waveform_mode_match(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
+									  const std::string& owner)
+	{
+		serial::fmcw_validation::validateWaveformModeMatch(wave, mode, owner, throw_json_validation_error);
+	}
+
+	void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
+								const fers_signal::FmcwChirpSignal& fmcw, const std::string& owner)
+	{
+		serial::fmcw_validation::validateSchedule(schedule, fmcw, owner, throw_json_validation_error);
 	}
 }
 
@@ -319,6 +340,20 @@ namespace fers_signal
 		{
 			j["cw"] = nlohmann::json::object();
 		}
+		else if (const auto* fmcw = rs.getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			j["fmcw_up_chirp"] = {{"chirp_bandwidth", fmcw->getChirpBandwidth()},
+								  {"chirp_duration", fmcw->getChirpDuration()},
+								  {"chirp_period", fmcw->getChirpPeriod()}};
+			if (std::abs(fmcw->getStartFrequencyOffset()) > EPSILON)
+			{
+				j["fmcw_up_chirp"]["start_frequency_offset"] = fmcw->getStartFrequencyOffset();
+			}
+			if (fmcw->getChirpCount().has_value())
+			{
+				j["fmcw_up_chirp"]["chirp_count"] = *fmcw->getChirpCount();
+			}
+		}
 		else
 		{
 			if (const auto& filename = rs.getFilename(); filename.has_value())
@@ -345,6 +380,28 @@ namespace fers_signal
 			auto cw_signal = std::make_unique<CwSignal>();
 			rs = std::make_unique<RadarSignal>(name, power, carrier, params::endTime() - params::startTime(),
 											   std::move(cw_signal), id);
+		}
+		else if (j.contains("fmcw_up_chirp"))
+		{
+			const auto& fmcw_json = j.at("fmcw_up_chirp");
+			std::optional<std::size_t> chirp_count;
+			if (fmcw_json.contains("chirp_count"))
+			{
+				const auto parsed_count = fmcw_json.at("chirp_count").get<long long>();
+				if (parsed_count <= 0)
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid chirp_count.");
+				}
+				chirp_count = static_cast<std::size_t>(parsed_count);
+			}
+
+			auto fmcw_signal = std::make_unique<FmcwChirpSignal>(
+				fmcw_json.at("chirp_bandwidth").get<RealType>(), fmcw_json.at("chirp_duration").get<RealType>(),
+				fmcw_json.at("chirp_period").get<RealType>(), fmcw_json.value("start_frequency_offset", 0.0),
+				chirp_count);
+			rs = std::make_unique<RadarSignal>(name, power, carrier, fmcw_signal->getChirpDuration(),
+											   std::move(fmcw_signal), id);
+			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");
 		}
 		else if (j.contains("pulsed_from_file"))
 		{
@@ -491,6 +548,10 @@ namespace radar
 		{
 			j["pulsed_mode"] = {{"prf", t.getPrf()}};
 		}
+		else if (t.getMode() == OperationMode::FMCW_MODE)
+		{
+			j["fmcw_mode"] = nlohmann::json::object();
+		}
 		else
 		{
 			j["cw_mode"] = nlohmann::json::object();
@@ -515,6 +576,10 @@ namespace radar
 		{
 			j["pulsed_mode"] = {
 				{"prf", r.getWindowPrf()}, {"window_skip", r.getWindowSkip()}, {"window_length", r.getWindowLength()}};
+		}
+		else if (r.getMode() == OperationMode::FMCW_MODE)
+		{
+			j["fmcw_mode"] = nlohmann::json::object();
 		}
 		else
 		{
@@ -686,7 +751,14 @@ namespace
 						}
 						else
 						{
-							monostatic_comp["cw_mode"] = nlohmann::json::object();
+							if (t->getMode() == radar::OperationMode::FMCW_MODE)
+							{
+								monostatic_comp["fmcw_mode"] = nlohmann::json::object();
+							}
+							else
+							{
+								monostatic_comp["cw_mode"] = nlohmann::json::object();
+							}
 						}
 					}
 					plat_json["components"].push_back(nlohmann::json{{"monostatic", monostatic_comp}});
@@ -792,11 +864,15 @@ namespace
 		{
 			return radar::OperationMode::PULSED_MODE;
 		}
+		if (comp_json.contains("fmcw_mode"))
+		{
+			return radar::OperationMode::FMCW_MODE;
+		}
 		if (comp_json.contains("cw_mode"))
 		{
 			return radar::OperationMode::CW_MODE;
 		}
-		throw std::runtime_error(error_context + " must have a 'pulsed_mode' or 'cw_mode' block.");
+		throw std::runtime_error(error_context + " must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block.");
 	}
 
 	void parse_transmitter(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
@@ -837,7 +913,11 @@ namespace
 			trans->setPrf(comp_json.at("pulsed_mode").value("prf", 0.0));
 		}
 
-		trans->setWave(world.findWaveform(wave_id));
+		auto* const waveform = world.findWaveform(wave_id);
+		validate_fmcw_waveform(*waveform, "Waveform '" + waveform->getName() + "'");
+		validate_waveform_mode_match(*waveform, mode,
+									 "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
+		trans->setWave(waveform);
 		trans->setAntenna(world.findAntenna(antenna_id));
 
 		if (const auto timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
@@ -853,8 +933,13 @@ namespace
 			{
 				pri = 1.0 / trans->getPrf();
 			}
-			trans->setSchedule(radar::processRawSchedule(std::move(raw), trans->getName(),
-														 mode == radar::OperationMode::PULSED_MODE, pri));
+			auto schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
+													  mode == radar::OperationMode::PULSED_MODE, pri);
+			if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
+			{
+				validate_fmcw_schedule(schedule, *fmcw, "Transmitter component '" + trans->getName() + "'");
+			}
+			trans->setSchedule(std::move(schedule));
 		}
 
 		world.add(std::move(trans));
@@ -1025,7 +1110,11 @@ namespace
 			trans->setPrf(comp_json.at("pulsed_mode").value("prf", 0.0));
 		}
 
-		trans->setWave(world.findWaveform(wave_id));
+		auto* const waveform = world.findWaveform(wave_id);
+		validate_fmcw_waveform(*waveform, "Waveform '" + waveform->getName() + "'");
+		validate_waveform_mode_match(*waveform, mode,
+									 "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
+		trans->setWave(waveform);
 		trans->setAntenna(world.findAntenna(antenna_id));
 		if (const auto shared_timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
 		{
@@ -1071,6 +1160,11 @@ namespace
 			// Process once, apply to both
 			auto processed_schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
 																mode == radar::OperationMode::PULSED_MODE, pri);
+			if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
+			{
+				validate_fmcw_schedule(processed_schedule, *fmcw,
+									   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
+			}
 
 			trans->setSchedule(processed_schedule);
 			recv->setSchedule(processed_schedule);
@@ -1309,6 +1403,10 @@ namespace serial
 			tx->setMode(radar::OperationMode::PULSED_MODE);
 			tx->setPrf(j.at("pulsed_mode").value("prf", 0.0));
 		}
+		else if (j.contains("fmcw_mode"))
+		{
+			tx->setMode(radar::OperationMode::FMCW_MODE);
+		}
 		else if (j.contains("cw_mode"))
 		{
 			tx->setMode(radar::OperationMode::CW_MODE);
@@ -1320,6 +1418,8 @@ namespace serial
 			auto* wf = world.findWaveform(id);
 			if (wf == nullptr)
 				throw std::runtime_error("Waveform ID " + std::to_string(id) + " not found.");
+			validate_fmcw_waveform(*wf, "Waveform '" + wf->getName() + "'");
+			validate_waveform_mode_match(*wf, tx->getMode(), "Transmitter '" + tx->getName() + "'");
 			tx->setWave(wf);
 		}
 
@@ -1353,8 +1453,18 @@ namespace serial
 			RealType pri = 0.0;
 			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
 				pri = 1.0 / tx->getPrf();
-			tx->setSchedule(radar::processRawSchedule(std::move(raw), tx->getName(),
-													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri));
+			auto schedule = radar::processRawSchedule(std::move(raw), tx->getName(),
+													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
+			if (const auto* fmcw = tx->getFmcwSignal(); fmcw != nullptr)
+			{
+				validate_fmcw_schedule(schedule, *fmcw, "Transmitter '" + tx->getName() + "'");
+			}
+			tx->setSchedule(std::move(schedule));
+		}
+		if (tx->getSignal() != nullptr)
+		{
+			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
+			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Transmitter '" + tx->getName() + "'");
 		}
 	}
 
@@ -1370,6 +1480,10 @@ namespace serial
 			const auto& mode_json = j.at("pulsed_mode");
 			rx->setWindowProperties(mode_json.value("window_length", 0.0), mode_json.value("prf", 0.0),
 									mode_json.value("window_skip", 0.0));
+		}
+		else if (j.contains("fmcw_mode"))
+		{
+			rx->setMode(radar::OperationMode::FMCW_MODE);
 		}
 		else if (j.contains("cw_mode"))
 		{
@@ -1486,8 +1600,17 @@ namespace serial
 				pri = 1.0 / tx->getPrf();
 			auto processed_schedule = radar::processRawSchedule(
 				std::move(raw), tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
+			if (const auto* fmcw = tx->getFmcwSignal(); fmcw != nullptr)
+			{
+				validate_fmcw_schedule(processed_schedule, *fmcw, "Monostatic '" + tx->getName() + "'");
+			}
 			tx->setSchedule(processed_schedule);
 			rx->setSchedule(processed_schedule);
+		}
+		if (tx->getSignal() != nullptr)
+		{
+			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
+			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Monostatic '" + tx->getName() + "'");
 		}
 	}
 
@@ -1618,9 +1741,10 @@ namespace serial
 
 		for (const auto& receiver : world.getReceivers())
 		{
-			if (receiver->getMode() == radar::OperationMode::CW_MODE)
+			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
+				receiver->getMode() == radar::OperationMode::FMCW_MODE)
 			{
-				receiver->prepareCwData(num_samples);
+				receiver->prepareStreamingData(num_samples);
 			}
 		}
 

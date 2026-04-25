@@ -25,6 +25,7 @@
 
 #include "core/config.h"
 #include "core/output_metadata.h"
+#include "core/parameters.h"
 #include "core/sim_events.h"
 #include "simulation/channel_model.h"
 
@@ -36,6 +37,7 @@ namespace pool
 namespace radar
 {
 	class Receiver;
+	class Target;
 	class Transmitter;
 }
 
@@ -115,10 +117,10 @@ namespace core
 		void run();
 
 		/**
-		 * @brief Advances the time-stepped inner loop for active continuous-wave (CW) systems.
+		 * @brief Advances the time-stepped inner loop for active streaming systems.
 		 * @param t_event The timestamp of the next discrete event to process up to.
 		 */
-		void processCwPhysics(RealType t_event);
+		void processStreamingPhysics(RealType t_event);
 
 		/**
 		 * @brief Dispatches a discrete simulation event to its specific handler.
@@ -148,41 +150,46 @@ namespace core
 		void handleRxPulsedWindowEnd(radar::Receiver* rx, RealType t_event);
 
 		/**
-		 * @brief Handles a continuous-wave transmitter turning on.
+		 * @brief Handles a streaming transmitter turning on.
 		 * @param tx Pointer to the transmitting radar object.
 		 */
-		void handleTxCwStart(radar::Transmitter* tx);
+		void handleTxStreamingStart(const ActiveStreamingSource& source);
 
 		/**
-		 * @brief Handles a continuous-wave transmitter turning off.
+		 * @brief Handles a streaming transmitter turning off.
 		 * @param tx Pointer to the transmitting radar object.
 		 */
-		void handleTxCwEnd(radar::Transmitter* tx);
+		void handleTxStreamingEnd(radar::Transmitter* tx);
 
 		/**
-		 * @brief Handles a continuous-wave receiver starting to record.
+		 * @brief Handles a streaming receiver starting to record.
 		 * @param rx Pointer to the receiving radar object.
 		 */
-		void handleRxCwStart(radar::Receiver* rx);
+		void handleRxStreamingStart(radar::Receiver* rx);
 
 		/**
-		 * @brief Handles a continuous-wave receiver stopping recording.
+		 * @brief Handles a streaming receiver stopping recording.
 		 * @param rx Pointer to the receiving radar object.
 		 */
-		void handleRxCwEnd(radar::Receiver* rx);
-
-		/**
-		 * @brief Calculates the total complex I/Q sample for a receiver at a specific time step.
-		 * @param rx Pointer to the receiving radar object.
-		 * @param t_step The exact simulation time for the sample.
-		 * @param cw_sources A list of currently active continuous-wave transmitters.
-		 * @return The calculated complex I/Q sample combining direct and reflected paths.
-		 */
-		[[nodiscard]] ComplexType calculateCwSample(radar::Receiver* rx, RealType t_step,
-													const std::vector<radar::Transmitter*>& cw_sources) const;
+		void handleRxStreamingEnd(radar::Receiver* rx);
 
 	private:
+		struct ReceiverTrackerCache
+		{
+			std::vector<FmcwChirpBoundaryTracker> direct;
+			std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected;
+		};
+
+		[[nodiscard]] ComplexType calculateStreamingSample(radar::Receiver* rx, RealType t_step,
+														   const std::vector<ActiveStreamingSource>& streaming_sources,
+														   ReceiverTrackerCache& tracker_cache) const;
+
+		void appendStreamingTrackerSource();
+		void eraseStreamingTrackerSource(std::size_t source_index);
+
 		void ensureCwPhaseNoiseLookup();
+
+		void logStreamingSummaries() const;
 
 		/**
 		 * @brief Starts dedicated finalizer threads for all pulsed receivers.
@@ -201,6 +208,9 @@ namespace core
 		 */
 		void updateProgress();
 
+		[[nodiscard]] std::vector<ActiveStreamingSource> collectStreamingSourcesForWindow(RealType start_time,
+																						  RealType end_time) const;
+
 		/**
 		 * @brief Initiates the shutdown phase, waiting for all asynchronous tasks to complete.
 		 */
@@ -217,6 +227,7 @@ namespace core
 
 		std::string _output_dir; ///< Output directory for the simulation files.
 		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup;
+		std::vector<ReceiverTrackerCache> _streaming_tracker_caches;
 	};
 
 	/**

@@ -104,7 +104,24 @@
                     <xs:element name="cw">
                         <xs:complexType/>
                     </xs:element>
-                    <!-- Additional waveform types (e.g., FMCW) can be added here -->
+                    <xs:element name="fmcw_up_chirp">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="chirp_bandwidth" type="xs:string"/>
+                                <xs:element name="chirp_duration" type="xs:string"/>
+                                <xs:element name="chirp_period" type="xs:string"/>
+                                <xs:element minOccurs="0" name="start_frequency_offset" type="xs:string"/>
+                                <xs:element minOccurs="0" name="chirp_count" type="xs:string">
+                                    <xs:annotation>
+                                        <xs:documentation>
+                                            Per-schedule-segment maximum chirp count. If a transmitter has multiple
+                                            schedule periods, each period emits up to this many chirps.
+                                        </xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
                 </xs:choice>
             </xs:sequence>
             <xs:attribute name="name" type="xs:string" use="required"/>
@@ -286,6 +303,9 @@
                     <xs:element name="cw_mode">
                         <xs:complexType/>
                     </xs:element>
+                    <xs:element name="fmcw_mode">
+                        <xs:complexType/>
+                    </xs:element>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>
@@ -314,6 +334,9 @@
                     <xs:element name="cw_mode">
                         <xs:complexType/>
                     </xs:element>
+                    <xs:element name="fmcw_mode">
+                        <xs:complexType/>
+                    </xs:element>
                 </xs:choice>
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
@@ -339,6 +362,9 @@
                         </xs:complexType>
                     </xs:element>
                     <xs:element name="cw_mode">
+                        <xs:complexType/>
+                    </xs:element>
+                    <xs:element name="fmcw_mode">
                         <xs:complexType/>
                     </xs:element>
                 </xs:choice>

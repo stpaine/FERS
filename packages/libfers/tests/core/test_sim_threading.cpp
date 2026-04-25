@@ -156,7 +156,7 @@ TEST_CASE("ProgressReporter safely wraps and calls callback", "[core][threading]
 	}
 }
 
-TEST_CASE("SimulationEngine handles CW state events", "[core][threading]")
+TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]")
 {
 	ParamGuard guard;
 	auto world = createPhysicsWorld();
@@ -166,31 +166,33 @@ TEST_CASE("SimulationEngine handles CW state events", "[core][threading]")
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
 
-	SECTION("Tx CW Start adds to active list")
+	SECTION("Tx streaming start adds to active list")
 	{
-		engine.handleTxCwStart(tx);
-		REQUIRE(world->getSimulationState().active_cw_transmitters.size() == 1);
-		REQUIRE(world->getSimulationState().active_cw_transmitters[0] == tx);
+		engine.handleTxStreamingStart(
+			{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
+		REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
+		REQUIRE(world->getSimulationState().active_streaming_transmitters[0].transmitter == tx);
 	}
 
-	SECTION("Tx CW End removes from active list")
+	SECTION("Tx streaming end removes from active list")
 	{
-		engine.handleTxCwStart(tx);
-		engine.handleTxCwEnd(tx);
-		REQUIRE(world->getSimulationState().active_cw_transmitters.empty());
+		engine.handleTxStreamingStart(
+			{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
+		engine.handleTxStreamingEnd(tx);
+		REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
 	}
 
-	SECTION("Rx CW Start sets active")
+	SECTION("Rx streaming start sets active")
 	{
 		REQUIRE_FALSE(rx->isActive());
-		engine.handleRxCwStart(rx);
+		engine.handleRxStreamingStart(rx);
 		REQUIRE(rx->isActive());
 	}
 
-	SECTION("Rx CW End clears active")
+	SECTION("Rx streaming end clears active")
 	{
-		engine.handleRxCwStart(rx);
-		engine.handleRxCwEnd(rx);
+		engine.handleRxStreamingStart(rx);
+		engine.handleRxStreamingEnd(rx);
 		REQUIRE_FALSE(rx->isActive());
 	}
 }
@@ -322,8 +324,6 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
-	std::vector<radar::Transmitter*> active_tx = {tx};
-
 	SECTION("Calculates exact Direct and Reflected Path complex envelope")
 	{
 		// Math Verification:
@@ -354,14 +354,15 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 		ComplexType expected_refl = std::polar(expected_refl_amp, expected_phase);
 		ComplexType expected_total = expected_direct + expected_refl;
 
-		ComplexType actual_total = engine.calculateCwSample(rx, 0.0, active_tx);
+		ComplexType actual_total = simulation::calculateDirectPathContribution(tx, rx, 0.0) +
+			simulation::calculateReflectedPathContribution(tx, rx, world->getTargets().front().get(), 0.0);
 
 		REQUIRE_THAT(actual_total.real(), WithinAbs(expected_total.real(), 1e-12));
 		REQUIRE_THAT(actual_total.imag(), WithinAbs(expected_total.imag(), 1e-12));
 	}
 }
 
-TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buffers", "[core][threading]")
+TEST_CASE("SimulationEngine processStreamingPhysics steps through time and updates buffers", "[core][threading]")
 {
 	ParamGuard guard;
 	params::setRate(1000.0);
@@ -376,19 +377,20 @@ TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buff
 	auto* rx = world->getReceivers().front().get();
 
 	// Prepare receiver buffer
-	rx->prepareCwData(10);
+	rx->prepareStreamingData(10);
 	rx->setActive(true);
 
 	// Set state
 	world->getSimulationState().t_current = 0.0;
-	world->getSimulationState().active_cw_transmitters.push_back(tx);
+	engine.handleTxStreamingStart(
+		{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
 
 	SECTION("Processes correct number of samples based on dt")
 	{
 		// dt = 1/1000 = 0.001s. Processing up to t=0.0025 should hit indices 0, 1, 2.
-		engine.processCwPhysics(0.0025);
+		engine.processStreamingPhysics(0.0025);
 
-		const auto& buffer = rx->getCwData();
+		const auto& buffer = rx->getStreamingData();
 		// Samples 0, 1, 2 should be non-zero (populated with physics)
 		REQUIRE(std::abs(buffer[0]) > 0.0);
 		REQUIRE(std::abs(buffer[1]) > 0.0);
@@ -399,7 +401,36 @@ TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buff
 	}
 }
 
-TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW samples", "[core][threading]")
+TEST_CASE("SimulationEngine processStreamingPhysics handles active streaming receiver without streaming transmitters",
+		  "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+
+	auto* rx = world->getReceivers().front().get();
+	rx->prepareStreamingData(10);
+	rx->setActive(true);
+	world->getSimulationState().t_current = 0.0;
+
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
+	REQUIRE_NOTHROW(engine.processStreamingPhysics(0.0025));
+
+	const auto& buffer = rx->getStreamingData();
+	for (const auto& sample : buffer)
+	{
+		REQUIRE(sample.real() == 0.0);
+		REQUIRE(sample.imag() == 0.0);
+	}
+}
+
+TEST_CASE("SimulationEngine processStreamingPhysics uses buffered shared timing for streaming samples",
+		  "[core][threading]")
 {
 	ParamGuard guard;
 	params::setRate(10.0);
@@ -440,7 +471,7 @@ TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW 
 	auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 5);
 	rx->setTiming(timing);
 	rx->setAntenna(antenna.get());
-	rx->prepareCwData(10);
+	rx->prepareStreamingData(10);
 	rx->setActive(true);
 
 	auto* tx_ptr = tx.get();
@@ -455,14 +486,15 @@ TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW 
 	world->add(std::move(rx));
 
 	world->getSimulationState().t_current = 0.0;
-	world->getSimulationState().active_cw_transmitters.push_back(tx_ptr);
 
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
-	engine.processCwPhysics(0.6);
+	engine.handleTxStreamingStart(
+		{.transmitter = tx_ptr, .segment_start = params::startTime(), .segment_end = params::endTime()});
+	engine.processStreamingPhysics(0.6);
 
 	const ComplexType expected = simulation::calculateDirectPathContribution(tx_ptr, rx_ptr, 0.5, &lookup);
-	const ComplexType actual = rx_ptr->getCwData()[5];
+	const ComplexType actual = rx_ptr->getStreamingData()[5];
 
 	REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1e-6));
 	REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1e-6));
@@ -480,8 +512,8 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 
 	// Add an event to ensure the loop runs
 	auto* tx = world->getTransmitters().front().get();
-	world->getEventQueue().push({0.001, core::EventType::TX_CW_START, tx});
-	world->getEventQueue().push({0.004, core::EventType::TX_CW_END, tx});
+	world->getEventQueue().push({0.001, core::EventType::TX_STREAMING_START, tx});
+	world->getEventQueue().push({0.004, core::EventType::TX_STREAMING_END, tx});
 
 	int progress_updates = 0;
 	auto progress_cb = [&](const std::string&, int, int) { progress_updates++; };
@@ -535,30 +567,30 @@ TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle",
 	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));
 }
 
-TEST_CASE("SimulationEngine processCwPhysics exits early if t_event <= t_current", "[core][threading]")
+TEST_CASE("SimulationEngine processStreamingPhysics exits early if t_event <= t_current", "[core][threading]")
 {
 	// This test covers:
-	// 2. processCwPhysics(t_event) -> if (t_event <= t_current) { return; }
+	// 2. processStreamingPhysics(t_event) -> if (t_event <= t_current) { return; }
 	ParamGuard guard;
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* rx = world->getReceivers().front().get();
-	rx->prepareCwData(10);
+	rx->prepareStreamingData(10);
 	rx->setActive(true);
 
 	// Advance the simulation state time
 	world->getSimulationState().t_current = 1.0;
 
 	// Call with t_event < t_current
-	REQUIRE_NOTHROW(engine.processCwPhysics(0.5));
+	REQUIRE_NOTHROW(engine.processStreamingPhysics(0.5));
 
 	// Call with t_event == t_current
-	REQUIRE_NOTHROW(engine.processCwPhysics(1.0));
+	REQUIRE_NOTHROW(engine.processStreamingPhysics(1.0));
 
 	// The buffer should be completely untouched (all zeros) because the method returned early
-	for (const auto& sample : rx->getCwData())
+	for (const auto& sample : rx->getStreamingData())
 	{
 		REQUIRE(sample.real() == 0.0);
 		REQUIRE(sample.imag() == 0.0);
@@ -579,20 +611,20 @@ TEST_CASE("SimulationEngine processEvent dispatches all event types correctly", 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
 
-	// Test TX_CW_START
-	engine.processEvent({1.0, core::EventType::TX_CW_START, tx});
-	REQUIRE(world->getSimulationState().active_cw_transmitters.size() == 1);
+	// Test TX_STREAMING_START
+	engine.processEvent({1.0, core::EventType::TX_STREAMING_START, tx});
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 
-	// Test TX_CW_END
-	engine.processEvent({2.0, core::EventType::TX_CW_END, tx});
-	REQUIRE(world->getSimulationState().active_cw_transmitters.empty());
+	// Test TX_STREAMING_END
+	engine.processEvent({2.0, core::EventType::TX_STREAMING_END, tx});
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
 
-	// Test RX_CW_START
-	engine.processEvent({3.0, core::EventType::RX_CW_START, rx});
+	// Test RX_STREAMING_START
+	engine.processEvent({3.0, core::EventType::RX_STREAMING_START, rx});
 	REQUIRE(rx->isActive());
 
-	// Test RX_CW_END
-	engine.processEvent({4.0, core::EventType::RX_CW_END, rx});
+	// Test RX_STREAMING_END
+	engine.processEvent({4.0, core::EventType::RX_STREAMING_END, rx});
 	REQUIRE_FALSE(rx->isActive());
 
 	// Test TX_PULSED_START
@@ -681,7 +713,7 @@ TEST_CASE("SimulationEngine updateProgress safely handles null reporter", "[core
 
 	// Add an event to ensure the main loop runs at least once, triggering updateProgress()
 	auto* tx = world->getTransmitters().front().get();
-	world->getEventQueue().push({0.5, core::EventType::TX_CW_START, tx});
+	world->getEventQueue().push({0.5, core::EventType::TX_STREAMING_START, tx});
 
 	// Passing nullptr for the progress callback ensures the internal _reporter is null
 	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));

@@ -744,3 +744,68 @@ TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][c
 	REQUIRE(saw_monostatic);
 	REQUIRE(saw_tx_tgt);
 }
+
+TEST_CASE("calculatePreviewLinks FMCW labels distinguish average and peak power",
+		  "[simulation][channel_model][preview]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1e6);
+
+	auto tx_plat = std::make_unique<radar::Platform>("tx_plat");
+	setupPlatform(*tx_plat, math::Vec3{0.0, 0.0, 0.0});
+	auto* tx_plat_ptr = tx_plat.get();
+
+	auto tgt_plat = std::make_unique<radar::Platform>("tgt_plat");
+	setupPlatform(*tgt_plat, math::Vec3{1000.0, 0.0, 0.0});
+	auto* tgt_plat_ptr = tgt_plat.get();
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	auto tx = std::make_unique<radar::Transmitter>(tx_plat_ptr, "tx", radar::OperationMode::FMCW_MODE, 100);
+	tx->setAntenna(&iso_ant);
+	tx->setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-4, 4.0e-4);
+	auto wave = std::make_unique<fers_signal::RadarSignal>("sig", 1000.0, 1e9, 1.0e-4, std::move(sig), 300);
+	tx->setSignal(wave.get());
+
+	auto rx = std::make_unique<radar::Receiver>(tx_plat_ptr, "rx", 42, radar::OperationMode::FMCW_MODE, 200);
+	rx->setAntenna(&iso_ant);
+	rx->setTiming(timing);
+	rx->setNoiseTemperature(290.0);
+	tx->setAttached(rx.get());
+
+	auto tgt = radar::createIsoTarget(tgt_plat_ptr, "tgt", 1.0, 42, 400);
+
+	core::World world;
+	world.add(std::move(tx_plat));
+	world.add(std::move(tgt_plat));
+	world.add(std::move(tx));
+	world.add(std::move(rx));
+	world.add(std::move(tgt));
+	world.add(std::move(wave));
+
+	const auto links = simulation::calculatePreviewLinks(world, 0.0);
+	bool saw_fmcw_power_label = false;
+
+	for (const auto& link : links)
+	{
+		if (link.type == simulation::LinkType::Monostatic)
+		{
+			saw_fmcw_power_label = true;
+			REQUIRE(link.label.find("avg ") != std::string::npos);
+			REQUIRE(link.label.find("peak ") != std::string::npos);
+			REQUIRE(link.label.find("dBm") != std::string::npos);
+		}
+		if (link.type == simulation::LinkType::BistaticTxTgt)
+		{
+			REQUIRE(link.label.find("avg ") != std::string::npos);
+			REQUIRE(link.label.find("peak ") != std::string::npos);
+			REQUIRE(link.label.find("dBW/m") != std::string::npos);
+		}
+	}
+
+	REQUIRE(saw_fmcw_power_label);
+}

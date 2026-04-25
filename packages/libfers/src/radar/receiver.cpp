@@ -113,17 +113,17 @@ namespace radar
 		return stime;
 	}
 
-	void Receiver::prepareCwData(const size_t numSamples)
+	void Receiver::prepareStreamingData(const size_t numSamples)
 	{
 		std::scoped_lock lock(_cw_mutex);
-		_cw_iq_data.resize(numSamples);
+		_streaming_iq_data.resize(numSamples);
 	}
 
-	void Receiver::setCwSample(const size_t index, const ComplexType sample)
+	void Receiver::setStreamingSample(const size_t index, const ComplexType sample)
 	{
-		if (index < _cw_iq_data.size())
+		if (index < _streaming_iq_data.size())
 		{
-			_cw_iq_data[index] += sample;
+			_streaming_iq_data[index] += sample;
 		}
 	}
 

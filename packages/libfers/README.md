@@ -14,7 +14,8 @@ including the official `fers-cli` and `fers-ui` applications.
 - **C-API:** A stable C-style API for creating and managing simulation contexts.
 - **JSON & XML Serialization:** Robust serialization of the entire simulation state to and from JSON (for UI interoperability) and XML (for file-based workflows).
 - **Signal-Level Modeling:** Creation of radar signal returns, including Doppler and phase modeling.
-- **System Simulation:** Support for Monostatic, Multistatic, Continuous Wave (CW), and Pulsed radar systems.
+- **System Simulation:** Support for monostatic, multistatic, continuous wave (CW), pulsed, and native FMCW streaming
+  radar systems.
 - **Data Export:** Advanced data export in HDF5, CSV, and XML formats.
 - **Geographic Visualization:** Generate KML files from scenarios.
 - **Performance:** A unified event-driven architecture for efficient simulation of both pulsed and continuous-wave scenarios, with a global thread pool for parallelizing tasks.

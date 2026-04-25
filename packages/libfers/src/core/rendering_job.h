@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "config.h"
+#include "core/simulation_state.h"
 #include "radar/transmitter.h"
 #include "serial/response.h"
 
@@ -40,7 +41,7 @@ namespace core
 		/// A list of all Response objects that overlap with this window.
 		std::vector<std::unique_ptr<serial::Response>> responses{};
 
-		/// A list of all CW transmitters that were active during this window.
-		std::vector<radar::Transmitter*> active_cw_sources{};
+		/// A list of all streaming transmitters that overlap this window.
+		std::vector<ActiveStreamingSource> active_streaming_sources{};
 	};
 }

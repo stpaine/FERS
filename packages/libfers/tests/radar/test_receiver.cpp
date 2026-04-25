@@ -74,7 +74,7 @@ TEST_CASE("Receiver noise temperature guards and aggregation", "[radar][receiver
 	REQUIRE_THROWS_AS(rx.setNoiseTemperature(-1.0), std::runtime_error);
 }
 
-TEST_CASE("Receiver exposes RNG and mutable CW data", "[radar][receiver]")
+TEST_CASE("Receiver exposes RNG and mutable streaming data", "[radar][receiver]")
 {
 	radar::Platform platform("RxPlatform");
 	radar::Receiver rx(&platform, "RxA", 99, radar::OperationMode::CW_MODE);
@@ -82,11 +82,11 @@ TEST_CASE("Receiver exposes RNG and mutable CW data", "[radar][receiver]")
 	const auto first_sample = rx.getRngEngine()();
 	REQUIRE(first_sample != 0U);
 
-	rx.prepareCwData(2);
-	auto& mutable_data = rx.getMutableCwData();
+	rx.prepareStreamingData(2);
+	auto& mutable_data = rx.getMutableStreamingData();
 	mutable_data[0] = ComplexType(2.0, -1.0);
-	REQUIRE_THAT(rx.getCwData()[0].real(), WithinAbs(2.0, 1e-12));
-	REQUIRE_THAT(rx.getCwData()[0].imag(), WithinAbs(-1.0, 1e-12));
+	REQUIRE_THAT(rx.getStreamingData()[0].real(), WithinAbs(2.0, 1e-12));
+	REQUIRE_THAT(rx.getStreamingData()[0].imag(), WithinAbs(-1.0, 1e-12));
 }
 
 TEST_CASE("Receiver windows quantize to sampling rate", "[radar][receiver]")
@@ -138,22 +138,22 @@ TEST_CASE("Receiver inbox and interference log", "[radar][receiver]")
 	REQUIRE(rx.getPulsedInterferenceLog().size() == 1);
 }
 
-TEST_CASE("Receiver CW data accumulation", "[radar][receiver]")
+TEST_CASE("Receiver streaming data accumulation", "[radar][receiver]")
 {
 	radar::Platform platform("RxPlatform");
 	radar::Receiver rx(&platform, "RxA", 9, radar::OperationMode::CW_MODE);
 
-	rx.prepareCwData(3);
-	REQUIRE(rx.getCwData().size() == 3);
+	rx.prepareStreamingData(3);
+	REQUIRE(rx.getStreamingData().size() == 3);
 
-	rx.setCwSample(1, ComplexType(1.0, 2.0));
-	rx.setCwSample(1, ComplexType(0.5, -1.0));
+	rx.setStreamingSample(1, ComplexType(1.0, 2.0));
+	rx.setStreamingSample(1, ComplexType(0.5, -1.0));
 
-	REQUIRE_THAT(rx.getCwData()[1].real(), WithinAbs(1.5, 1e-12));
-	REQUIRE_THAT(rx.getCwData()[1].imag(), WithinAbs(1.0, 1e-12));
+	REQUIRE_THAT(rx.getStreamingData()[1].real(), WithinAbs(1.5, 1e-12));
+	REQUIRE_THAT(rx.getStreamingData()[1].imag(), WithinAbs(1.0, 1e-12));
 
-	rx.setCwSample(10, ComplexType(3.0, 3.0));
-	REQUIRE_THAT(rx.getCwData()[1].real(), WithinAbs(1.5, 1e-12));
+	rx.setStreamingSample(10, ComplexType(3.0, 3.0));
+	REQUIRE_THAT(rx.getStreamingData()[1].real(), WithinAbs(1.5, 1e-12));
 }
 
 TEST_CASE("Receiver schedule determines next window time", "[radar][receiver]")

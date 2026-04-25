@@ -240,20 +240,18 @@ namespace
 			auto proto_tim = world.findTiming(time_ids[i % time_ids.size()]);
 
 			// Standalone Transmitter
-			auto tx_mode = dist_mode(rng) == 0 ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
+			auto tx_mode = radar::OperationMode::CW_MODE;
 			auto tx = std::make_unique<radar::Transmitter>(plat.get(), "tx_" + std::to_string(i), tx_mode);
 			tx->setWave(world.findWaveform(wave_ids[i % wave_ids.size()]));
 			tx->setAntenna(world.findAntenna(ant_ids[i % ant_ids.size()]));
 			auto tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
 			tx_tim->initializeModel(proto_tim);
 			tx->setTiming(tx_tim);
-			if (tx_mode == radar::OperationMode::PULSED_MODE)
-				tx->setPrf(1000.0 + dist_real(rng));
 			tx->setSchedule({{0.01, 0.04}, {0.06, 0.09}}); // Scaled schedules to fit inside [0.0, 0.1]
 			world.add(std::move(tx));
 
 			// Standalone Receiver
-			auto rx_mode = dist_mode(rng) == 0 ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
+			auto rx_mode = radar::OperationMode::CW_MODE;
 			auto rx = std::make_unique<radar::Receiver>(plat.get(), "rx_" + std::to_string(i), seed_dist(rng), rx_mode);
 			rx->setAntenna(world.findAntenna(ant_ids[(i + 1) % ant_ids.size()]));
 			auto rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
@@ -264,13 +262,11 @@ namespace
 				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
 			if (i % 3 == 0)
 				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-			if (rx_mode == radar::OperationMode::PULSED_MODE)
-				rx->setWindowProperties(1e-5, 1000.0, 0.0);
 			rx->setSchedule({{0.02, 0.08}});
 			world.add(std::move(rx));
 
 			// Monostatic Radar Pair (Linked Tx/Rx)
-			auto mono_mode = dist_mode(rng) == 0 ? radar::OperationMode::PULSED_MODE : radar::OperationMode::CW_MODE;
+			auto mono_mode = radar::OperationMode::CW_MODE;
 			auto mono_tx = std::make_unique<radar::Transmitter>(plat.get(), "mono_tx_" + std::to_string(i), mono_mode);
 			mono_tx->setWave(world.findWaveform(wave_ids[(i + 2) % wave_ids.size()]));
 			mono_tx->setAntenna(world.findAntenna(ant_ids[(i + 2) % ant_ids.size()]));
@@ -278,8 +274,6 @@ namespace
 				std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
 			mono_tx_tim->initializeModel(proto_tim);
 			mono_tx->setTiming(mono_tx_tim);
-			if (mono_mode == radar::OperationMode::PULSED_MODE)
-				mono_tx->setPrf(2000.0 + dist_real(rng));
 			mono_tx->setSchedule({{0.01, 0.09}});
 
 			auto mono_rx = std::make_unique<radar::Receiver>(plat.get(), "mono_rx_" + std::to_string(i), seed_dist(rng),
@@ -291,8 +285,6 @@ namespace
 			mono_rx_tim->initializeModel(proto_tim);
 			mono_rx->setTiming(mono_rx_tim);
 			mono_rx->setNoiseTemperature(300.0);
-			if (mono_mode == radar::OperationMode::PULSED_MODE)
-				mono_rx->setWindowProperties(2e-5, mono_tx->getPrf(), 1e-6);
 			mono_rx->setSchedule({{0.01, 0.09}});
 
 			// Link them to form a monostatic radar

@@ -279,27 +279,42 @@ namespace core
 					}
 				}
 			}
-			else // CW_MODE
+			else
 			{
 				const auto& schedule = transmitter->getSchedule();
+				const auto clip_streaming_end = [&](const RealType start, const RealType end)
+				{
+					RealType clipped_end = std::min(sim_end, end);
+					// FMCW chirp_count is a per-schedule-segment cap. Each scheduled period starts its own count.
+					if (const auto* fmcw = transmitter->getFmcwSignal();
+						(fmcw != nullptr) && fmcw->getChirpCount().has_value())
+					{
+						clipped_end =
+							std::min(clipped_end,
+									 start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
+					}
+					return clipped_end;
+				};
 				if (schedule.empty())
 				{
-					// Legacy behavior: Always on for simulation duration
-					_event_queue.push({sim_start, EventType::TX_CW_START, transmitter.get()});
-					_event_queue.push({sim_end, EventType::TX_CW_END, transmitter.get()});
+					const RealType end = clip_streaming_end(sim_start, sim_end);
+					if (sim_start < end)
+					{
+						_event_queue.push({sim_start, EventType::TX_STREAMING_START, transmitter.get()});
+						_event_queue.push({end, EventType::TX_STREAMING_END, transmitter.get()});
+					}
 				}
 				else
 				{
 					for (const auto& period : schedule)
 					{
-						// Clip periods to simulation bounds
 						const RealType start = std::max(sim_start, period.start);
-						const RealType end = std::min(sim_end, period.end);
+						const RealType end = clip_streaming_end(period.start, period.end);
 
 						if (start < end)
 						{
-							_event_queue.push({start, EventType::TX_CW_START, transmitter.get()});
-							_event_queue.push({end, EventType::TX_CW_END, transmitter.get()});
+							_event_queue.push({start, EventType::TX_STREAMING_START, transmitter.get()});
+							_event_queue.push({end, EventType::TX_STREAMING_END, transmitter.get()});
 						}
 					}
 				}
@@ -317,14 +332,13 @@ namespace core
 					_event_queue.push({*start, EventType::RX_PULSED_WINDOW_START, receiver.get()});
 				}
 			}
-			else // CW_MODE
+			else
 			{
 				const auto& schedule = receiver->getSchedule();
 				if (schedule.empty())
 				{
-					// Legacy behavior: Always on for simulation duration
-					_event_queue.push({params::startTime(), EventType::RX_CW_START, receiver.get()});
-					_event_queue.push({params::endTime(), EventType::RX_CW_END, receiver.get()});
+					_event_queue.push({params::startTime(), EventType::RX_STREAMING_START, receiver.get()});
+					_event_queue.push({params::endTime(), EventType::RX_STREAMING_END, receiver.get()});
 				}
 				else
 				{
@@ -334,8 +348,8 @@ namespace core
 						const RealType end = std::min(params::endTime(), period.end);
 						if (start < end)
 						{
-							_event_queue.push({start, EventType::RX_CW_START, receiver.get()});
-							_event_queue.push({end, EventType::RX_CW_END, receiver.get()});
+							_event_queue.push({start, EventType::RX_STREAMING_START, receiver.get()});
+							_event_queue.push({end, EventType::RX_STREAMING_END, receiver.get()});
 						}
 					}
 				}

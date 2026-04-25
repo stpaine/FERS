@@ -18,6 +18,7 @@
 #include <format>
 #include <highfive/highfive.hpp>
 #include <stdexcept>
+#include <vector>
 
 #include "core/logging.h"
 #include "core/parameters.h"
@@ -38,6 +39,47 @@ namespace serial
 		file.createAttribute("total_samples", static_cast<unsigned long long>(metadata.total_samples));
 		file.createAttribute("sample_start", static_cast<unsigned long long>(metadata.sample_start));
 		file.createAttribute("sample_end_exclusive", static_cast<unsigned long long>(metadata.sample_end_exclusive));
+		file.createAttribute("streaming_segment_count",
+							 static_cast<unsigned long long>(metadata.streaming_segments.size()));
+		if (metadata.fmcw.has_value())
+		{
+			file.createAttribute("fmcw_chirp_bandwidth", metadata.fmcw->chirp_bandwidth);
+			file.createAttribute("fmcw_chirp_duration", metadata.fmcw->chirp_duration);
+			file.createAttribute("fmcw_chirp_period", metadata.fmcw->chirp_period);
+			file.createAttribute("fmcw_chirp_rate", metadata.fmcw->chirp_rate);
+			file.createAttribute("fmcw_start_frequency_offset", metadata.fmcw->start_frequency_offset);
+			if (metadata.fmcw->chirp_count.has_value())
+			{
+				file.createAttribute("fmcw_chirp_count", static_cast<unsigned long long>(*metadata.fmcw->chirp_count));
+			}
+			std::vector<RealType> streaming_first_chirp_starts;
+			std::vector<unsigned long long> streaming_emitted_chirp_counts;
+			for (const auto& segment : metadata.streaming_segments)
+			{
+				if (segment.first_chirp_start_time.has_value())
+				{
+					streaming_first_chirp_starts.push_back(*segment.first_chirp_start_time);
+				}
+				if (segment.emitted_chirp_count.has_value())
+				{
+					streaming_emitted_chirp_counts.push_back(
+						static_cast<unsigned long long>(*segment.emitted_chirp_count));
+				}
+			}
+			// Per-segment vectors use the streaming_ prefix; scalar fmcw_ attributes describe the waveform.
+			if (!streaming_first_chirp_starts.empty())
+			{
+				auto attr = file.createAttribute<RealType>("streaming_first_chirp_start_time",
+														   HighFive::DataSpace::From(streaming_first_chirp_starts));
+				attr.write(streaming_first_chirp_starts);
+			}
+			if (!streaming_emitted_chirp_counts.empty())
+			{
+				auto attr = file.createAttribute<unsigned long long>(
+					"streaming_emitted_chirp_count", HighFive::DataSpace::From(streaming_emitted_chirp_counts));
+				attr.write(streaming_emitted_chirp_counts);
+			}
+		}
 	}
 
 	void readPulseData(const std::string& name, std::vector<ComplexType>& data)

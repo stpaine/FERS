@@ -204,6 +204,12 @@ namespace fers_signal
 		 */
 		[[nodiscard]] const Signal* getSignal() const noexcept { return _signal.get(); }
 
+		[[nodiscard]] bool isCw() const noexcept;
+
+		[[nodiscard]] bool isFmcwUpChirp() const noexcept;
+
+		[[nodiscard]] const class FmcwChirpSignal* getFmcwChirpSignal() const noexcept;
+
 		/**
 		 * @brief Renders the radar signal.
 		 *
@@ -246,5 +252,57 @@ namespace fers_signal
 		 */
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const override;
+	};
+
+	class FmcwChirpSignal final : public Signal
+	{
+	public:
+		FmcwChirpSignal(RealType chirp_bandwidth, RealType chirp_duration, RealType chirp_period,
+						RealType start_frequency_offset = 0.0, std::optional<std::size_t> chirp_count = std::nullopt);
+
+		~FmcwChirpSignal() override = default;
+
+		FmcwChirpSignal(const FmcwChirpSignal&) noexcept = delete;
+
+		FmcwChirpSignal& operator=(const FmcwChirpSignal&) noexcept = delete;
+
+		FmcwChirpSignal(FmcwChirpSignal&&) noexcept = delete;
+
+		FmcwChirpSignal& operator=(FmcwChirpSignal&&) noexcept = delete;
+
+		[[nodiscard]] RealType getChirpBandwidth() const noexcept { return _chirp_bandwidth; }
+
+		[[nodiscard]] RealType getChirpDuration() const noexcept { return _chirp_duration; }
+
+		[[nodiscard]] RealType getChirpPeriod() const noexcept { return _chirp_period; }
+
+		[[nodiscard]] RealType getStartFrequencyOffset() const noexcept { return _start_frequency_offset; }
+
+		[[nodiscard]] const std::optional<std::size_t>& getChirpCount() const noexcept { return _chirp_count; }
+
+		[[nodiscard]] RealType getChirpRate() const noexcept { return _chirp_rate; }
+
+		[[nodiscard]] std::optional<std::size_t> activeChirpIndexAt(RealType time_since_segment_start) const noexcept;
+
+		[[nodiscard]] bool isActiveAt(RealType time_since_segment_start) const noexcept
+		{
+			return activeChirpIndexAt(time_since_segment_start).has_value();
+		}
+
+		[[nodiscard]] RealType basebandPhaseForChirpTime(RealType chirp_time) const noexcept;
+
+		[[nodiscard]] std::optional<RealType>
+		instantaneousBasebandPhase(RealType time_since_segment_start) const noexcept;
+
+		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+										RealType fracWinDelay) const override;
+
+	private:
+		RealType _chirp_bandwidth{};
+		RealType _chirp_duration{};
+		RealType _chirp_period{};
+		RealType _start_frequency_offset{};
+		std::optional<std::size_t> _chirp_count;
+		RealType _chirp_rate{};
 	};
 }

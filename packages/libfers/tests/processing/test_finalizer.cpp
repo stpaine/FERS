@@ -140,7 +140,7 @@ namespace
 	};
 }
 
-TEST_CASE("finalizeCwReceiver exits cleanly when no CW samples were collected", "[processing][finalizer]")
+TEST_CASE("finalizeStreamingReceiver exits cleanly when no streaming samples were collected", "[processing][finalizer]")
 {
 	ParamGuard guard;
 	params::setRate(4.0);
@@ -162,7 +162,7 @@ TEST_CASE("finalizeCwReceiver exits cleanly when no CW samples were collected", 
 		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
 												 { progress_calls.push_back({msg, current, total}); });
 
-	processing::finalizeCwReceiver(&receiver, nullptr, reporter, out_dir.string());
+	processing::finalizeStreamingReceiver(&receiver, nullptr, reporter, out_dir.string());
 
 	REQUIRE_FALSE(std::filesystem::exists(output_path));
 	REQUIRE(progress_calls.size() == 1u);
@@ -173,7 +173,8 @@ TEST_CASE("finalizeCwReceiver exits cleanly when no CW samples were collected", 
 	std::filesystem::remove_all(out_dir);
 }
 
-TEST_CASE("finalizeCwReceiver adds logged pulsed interference without rotating the summed CW buffer and exports HDF5",
+TEST_CASE("finalizeStreamingReceiver adds logged pulsed interference without rotating the summed streaming buffer and "
+		  "exports HDF5",
 		  "[processing][finalizer]")
 {
 	ParamGuard guard;
@@ -193,7 +194,7 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference without rotating t
 	auto timing_owner = makePhaseTiming("phase_clk", 22, 77.0, PI / 2.0, false);
 	receiver.setTiming(timing_owner.timing);
 	receiver.setNoiseTemperature(0.0);
-	receiver.prepareCwData(4);
+	receiver.prepareStreamingData(4);
 
 	radar::Platform tx_platform("TxPlatform");
 	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 601);
@@ -207,7 +208,7 @@ TEST_CASE("finalizeCwReceiver adds logged pulsed interference without rotating t
 		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
 												 { progress_calls.push_back({msg, current, total}); });
 
-	processing::finalizeCwReceiver(&receiver, nullptr, reporter, out_dir.string());
+	processing::finalizeStreamingReceiver(&receiver, nullptr, reporter, out_dir.string());
 
 	{
 		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);

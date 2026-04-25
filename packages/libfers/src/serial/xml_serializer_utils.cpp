@@ -114,6 +114,21 @@ namespace serial::xml_serializer_utils
 		{
 			(void)parent.addChild("cw"); // Empty element
 		}
+		else if (const auto* fmcw = waveform.getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			const XmlElement fmcw_elem = parent.addChild("fmcw_up_chirp");
+			addChildWithNumber(fmcw_elem, "chirp_bandwidth", fmcw->getChirpBandwidth());
+			addChildWithNumber(fmcw_elem, "chirp_duration", fmcw->getChirpDuration());
+			addChildWithNumber(fmcw_elem, "chirp_period", fmcw->getChirpPeriod());
+			if (std::abs(fmcw->getStartFrequencyOffset()) > EPSILON)
+			{
+				addChildWithNumber(fmcw_elem, "start_frequency_offset", fmcw->getStartFrequencyOffset());
+			}
+			if (fmcw->getChirpCount().has_value())
+			{
+				addChildWithNumber(fmcw_elem, "chirp_count", static_cast<RealType>(*fmcw->getChirpCount()));
+			}
+		}
 		else
 		{
 			const XmlElement pulsed_file = parent.addChild("pulsed_from_file");
@@ -298,6 +313,10 @@ namespace serial::xml_serializer_utils
 			const XmlElement mode_elem = tx_elem.addChild("pulsed_mode");
 			addChildWithNumber(mode_elem, "prf", tx.getPrf());
 		}
+		else if (tx.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			(void)tx_elem.addChild("fmcw_mode");
+		}
 		else
 		{
 			(void)tx_elem.addChild("cw_mode");
@@ -321,6 +340,10 @@ namespace serial::xml_serializer_utils
 			addChildWithNumber(mode_elem, "prf", rx.getWindowPrf());
 			addChildWithNumber(mode_elem, "window_skip", rx.getWindowSkip());
 			addChildWithNumber(mode_elem, "window_length", rx.getWindowLength());
+		}
+		else if (rx.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			(void)rx_elem.addChild("fmcw_mode");
 		}
 		else
 		{
@@ -351,6 +374,10 @@ namespace serial::xml_serializer_utils
 			addChildWithNumber(mode_elem, "prf", tx.getPrf());
 			addChildWithNumber(mode_elem, "window_skip", rx.getWindowSkip());
 			addChildWithNumber(mode_elem, "window_length", rx.getWindowLength());
+		}
+		else if (tx.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			(void)mono_elem.addChild("fmcw_mode");
 		}
 		else
 		{
