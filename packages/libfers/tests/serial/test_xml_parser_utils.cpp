@@ -400,7 +400,8 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 						   "  </fmcw_up_chirp>"
 						   "</waveform>");
 
-		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx), XmlException);
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx),
+							ContainsSubstring("FMCW requires T_rep >= T_c"));
 	}
 
 	SECTION("complex-baseband aliasing constraint uses both sweep edges")
@@ -721,6 +722,59 @@ TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial
 								 "</transmitter>");
 	REQUIRE_THROWS_AS(serial::xml_parser_utils::parseTransmitter(ambiguous_doc.getRootElement(), &platform, ctx, refs),
 					  XmlException);
+}
+
+TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timing", "[serial][xml_parser_utils][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-3, 2.0e-3);
+	world.add(std::make_unique<fers_signal::RadarSignal>("fmcw_wave", 1.0, 1e9, 1.0e-3, std::move(fmcw_signal), 10));
+	world.add(std::make_unique<antenna::Isotropic>("a1", 20));
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	timing_proto->setFrequency(1e6);
+	world.add(std::move(timing_proto));
+
+	std::unordered_map<std::string, SimId> w_refs = {{"fmcw_wave", 10}};
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	SECTION("period shorter than T_c is rejected")
+	{
+		auto doc = loadXml("<transmitter name=\"tx_short_tc\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode/>"
+						   "  <schedule><period start=\"0.1\" end=\"0.1005\"/></schedule>"
+						   "</transmitter>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseTransmitter(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("shorter than FMCW chirp_duration T_c"));
+	}
+
+	SECTION("period shorter than T_rep but at least T_c only warns")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<transmitter name=\"tx_short_trep\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode/>"
+						   "  <schedule><period start=\"0.1\" end=\"0.1015\"/></schedule>"
+						   "</transmitter>");
+
+		auto* tx = serial::xml_parser_utils::parseTransmitter(doc.getRootElement(), &platform, ctx, refs);
+		REQUIRE(tx->getSchedule().size() == 1);
+		REQUIRE_THAT(capture.str(), ContainsSubstring("shorter than FMCW chirp_period"));
+	}
 }
 
 TEST_CASE("parseReceiver resolves references and builds object with flags and schedule", "[serial][xml_parser_utils]")

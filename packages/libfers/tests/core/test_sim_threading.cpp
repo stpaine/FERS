@@ -1,12 +1,17 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <complex>
+#include <iostream>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "antenna/antenna_factory.h"
 #include "core/config.h"
+#include "core/logging.h"
 #include "core/parameters.h"
 #include "core/sim_events.h"
 #include "core/sim_threading.h"
@@ -25,6 +30,7 @@
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace
@@ -38,6 +44,21 @@ namespace
 		params::Parameters saved;
 		ParamGuard() : saved(params::params) {}
 		~ParamGuard() { params::params = saved; }
+	};
+
+	struct CerrCapture
+	{
+		std::ostringstream buffer;
+		std::streambuf* old{nullptr};
+		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		~CerrCapture() { std::cerr.rdbuf(old); }
+		[[nodiscard]] std::string str() const { return buffer.str(); }
+	};
+
+	struct LogLevelGuard
+	{
+		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
+		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
 
 	/**
@@ -113,6 +134,40 @@ namespace
 		world->add(std::move(rx));
 		world->add(std::move(target));
 
+		return world;
+	}
+
+	std::unique_ptr<core::World> createFmcwLoggingWorld(const std::optional<std::size_t> chirp_count,
+														std::vector<radar::SchedulePeriod> schedule = {})
+	{
+		auto world = std::make_unique<core::World>();
+
+		auto platform = std::make_unique<radar::Platform>("FmcwPlatform", 100);
+		auto* platform_ptr = platform.get();
+		auto timing_proto = std::make_unique<timing::PrototypeTiming>("FmcwClock", 101);
+		timing_proto->setFrequency(1.0e6);
+		auto timing = std::make_shared<timing::Timing>("FmcwClockInstance", 42);
+		timing->initializeModel(timing_proto.get());
+		auto antenna = std::make_unique<antenna::Isotropic>("FmcwAntenna", 102);
+		auto* antenna_ptr = antenna.get();
+		auto fmcw = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 0.04, 0.1, 0.0, chirp_count);
+		auto wave = std::make_unique<fers_signal::RadarSignal>("FmcwWave", 10.0, 1.0e9, 0.04, std::move(fmcw), 103);
+		auto* wave_ptr = wave.get();
+		auto transmitter =
+			std::make_unique<radar::Transmitter>(platform_ptr, "FmcwTx", radar::OperationMode::FMCW_MODE, 104);
+		transmitter->setTiming(timing);
+		transmitter->setAntenna(antenna_ptr);
+		transmitter->setSignal(wave_ptr);
+		if (!schedule.empty())
+		{
+			transmitter->setSchedule(std::move(schedule));
+		}
+
+		world->add(std::move(platform));
+		world->add(std::move(timing_proto));
+		world->add(std::move(antenna));
+		world->add(std::move(wave));
+		world->add(std::move(transmitter));
 		return world;
 	}
 
@@ -569,6 +624,48 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 
 		// Simulation time should have advanced to the last event
 		REQUIRE_THAT(world->getSimulationState().t_current, WithinAbs(0.004, 1e-9));
+	}
+}
+
+TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][threading][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+
+	SECTION("unbounded always-on transmitter logs total started chirps over simulation span")
+	{
+		params::setTime(0.0, 0.26);
+		auto world = createFmcwLoggingWorld(std::nullopt);
+		pool::ThreadPool pool(1);
+		LogLevelGuard log_level(logging::Level::INFO);
+		CerrCapture capture;
+
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.run();
+
+		const std::string output = capture.str();
+		REQUIRE_THAT(output, ContainsSubstring("chirp_count=unbounded"));
+		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=3"));
+	}
+
+	SECTION("scheduled capped transmitter logs per-segment and cumulative started chirps")
+	{
+		params::setTime(0.05, 0.45);
+		auto world = createFmcwLoggingWorld(std::size_t{3}, {{-0.05, 0.25}, {0.3, 0.36}});
+		pool::ThreadPool pool(1);
+		LogLevelGuard log_level(logging::Level::INFO);
+		CerrCapture capture;
+
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.run();
+
+		const std::string output = capture.str();
+		REQUIRE_THAT(output, ContainsSubstring("chirp_count=3"));
+		REQUIRE_THAT(output, ContainsSubstring("segment_chirp_count=2"));
+		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=2"));
+		REQUIRE_THAT(output, ContainsSubstring("segment_chirp_count=1"));
+		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=3"));
 	}
 }
 

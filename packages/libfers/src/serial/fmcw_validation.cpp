@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <format>
 
 #include "core/logging.h"
 #include "core/parameters.h"
@@ -56,7 +57,7 @@ namespace serial::fmcw_validation
 		}
 		if (fmcw->getChirpPeriod() < fmcw->getChirpDuration())
 		{
-			throw_error(owner + " has chirp_period shorter than chirp_duration.");
+			throw_error(owner + " has chirp_period shorter than chirp_duration; FMCW requires T_rep >= T_c.");
 		}
 
 		const RealType effective_rate = params::rate() * params::oversampleRatio();
@@ -104,7 +105,9 @@ namespace serial::fmcw_validation
 			const RealType duration = period.end - period.start;
 			if (duration < fmcw.getChirpDuration())
 			{
-				throw_error(owner + " has a schedule period shorter than FMCW chirp_duration.");
+				throw_error(std::format(
+					"{} has schedule period [{}, {}] duration {} s shorter than FMCW chirp_duration T_c={} s.", owner,
+					period.start, period.end, duration, fmcw.getChirpDuration()));
 			}
 			if (duration < fmcw.getChirpPeriod())
 			{

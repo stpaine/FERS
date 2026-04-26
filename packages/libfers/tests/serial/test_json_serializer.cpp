@@ -431,6 +431,61 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 	}
 }
 
+TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json][fmcw]")
+{
+	ParamGuard guard;
+	std::mt19937 seeder(42);
+
+	const auto make_scenario = [](const json& schedule)
+	{
+		json scenario;
+		scenario["simulation"]["parameters"] = {{"starttime", 0.0},
+												{"endtime", 10.0},
+												{"rate", 2.0e6},
+												{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+												{"coordinatesystem", {{"frame", "ENU"}}}};
+		scenario["simulation"]["waveforms"] = json::array(
+			{{{"id", 10},
+			  {"name", "fmcw_wave"},
+			  {"power", 1.0},
+			  {"carrier_frequency", 1.0e9},
+			  {"fmcw_up_chirp", {{"chirp_bandwidth", 1.0e6}, {"chirp_duration", 1.0e-3}, {"chirp_period", 2.0e-3}}}}});
+		scenario["simulation"]["antennas"] = json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}});
+		scenario["simulation"]["timings"] = json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1.0e6}}});
+		scenario["simulation"]["platforms"] = json::array({{{"id", 100},
+															{"name", "p1"},
+															{"components",
+															 json::array({{{"transmitter",
+																			{{"id", 101},
+																			 {"name", "tx1"},
+																			 {"waveform", 10},
+																			 {"antenna", 20},
+																			 {"timing", 30},
+																			 {"fmcw_mode", json::object()},
+																			 {"schedule", schedule}}}}})}}});
+		return scenario;
+	};
+
+	SECTION("period shorter than T_c is rejected")
+	{
+		core::World world;
+		const auto scenario = make_scenario(json::array({{{"start", 0.1}, {"end", 0.1005}}}));
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder),
+							ContainsSubstring("shorter than FMCW chirp_duration T_c"));
+	}
+
+	SECTION("period shorter than T_rep but at least T_c only warns")
+	{
+		core::World world;
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		const auto scenario = make_scenario(json::array({{{"start", 0.1}, {"end", 0.1015}}}));
+		REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+		REQUIRE(world.getTransmitters().size() == 1);
+		REQUIRE_THAT(capture.str(), ContainsSubstring("shorter than FMCW chirp_period"));
+	}
+}
+
 TEST_CASE("JSON: Vec3 Serialization and Deserialization", "[serial][json]")
 {
 	math::Vec3 v_orig(1.2, 3.4, 5.6);

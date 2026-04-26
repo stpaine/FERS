@@ -31,3 +31,7 @@ validation without relying on external files.
 When making changes to a schema definition, update both the XSD and DTD for that format to maintain consistency. Any
 changes must also be propagated throughout the codebase, particularly in the XML parsing logic within `libfers` and,
 for scenario-schema changes, the XML generation logic in `fers-ui`.
+
+The scenario XSD/DTD intentionally validate XML structure, not every numeric or cross-field physics rule. Scalar scenario
+values are parsed by `libfers`, which performs the strict numeric checks that schemas cannot express portably across both
+XSD and DTD, such as FMCW `chirp_period >= chirp_duration` and integer-positive `chirp_count`.
