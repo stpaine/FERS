@@ -11,10 +11,17 @@
 
 #pragma once
 
+#include <cstddef>
+#include <optional>
 #include <vector>
 
 #include "config.h"
 #include "radar/transmitter.h"
+
+namespace fers_signal
+{
+	class FmcwChirpSignal;
+}
 
 namespace core
 {
@@ -23,7 +30,25 @@ namespace core
 		const radar::Transmitter* transmitter = nullptr;
 		RealType segment_start = 0.0;
 		RealType segment_end = 0.0;
+
+		// Cached for one TX_STREAMING_START/TX_STREAMING_END segment. The world owns
+		// the waveform, so the raw FMCW pointer is stable while this source is active.
+		RealType carrier_freq = 0.0;
+		RealType amplitude = 0.0;
+		bool is_fmcw = false;
+
+		const fers_signal::FmcwChirpSignal* fmcw = nullptr;
+		RealType chirp_duration = 0.0;
+		RealType chirp_period = 0.0;
+		RealType chirp_rate = 0.0;
+		RealType start_freq_off = 0.0;
+		RealType two_pi_f0 = 0.0;
+		RealType pi_alpha = 0.0;
+		std::optional<std::size_t> chirp_count;
 	};
+
+	[[nodiscard]] ActiveStreamingSource makeActiveSource(const radar::Transmitter* tx, RealType segment_start,
+														 RealType segment_end);
 
 	struct FmcwChirpBoundaryTracker
 	{

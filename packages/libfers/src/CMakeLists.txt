@@ -66,6 +66,7 @@ set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/api.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/logging.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/output_metadata.cpp
+	${CMAKE_CURRENT_LIST_DIR}/core/simulation_state.cpp
 	${CMAKE_CURRENT_LIST_DIR}/core/sim_threading.cpp
 	${CMAKE_CURRENT_LIST_DIR}/simulation/channel_model.cpp
 	${CMAKE_CURRENT_LIST_DIR}/processing/signal_processor.cpp

@@ -168,7 +168,7 @@ TEST_CASE("FMCW monostatic reflected path dechirps to expected stationary-target
 	rx.setAttached(&tx);
 
 	auto target = radar::createIsoTarget(&target_platform, "target", 1.0, 7, 401);
-	const core::ActiveStreamingSource source{.transmitter = &tx, .segment_start = 0.0, .segment_end = chirp_duration};
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 0.0, chirp_duration);
 	core::FmcwChirpBoundaryTracker tracker;
 
 	const RealType dt = 1.0 / params::simSamplingRate();
@@ -228,7 +228,7 @@ TEST_CASE("FMCW chirp-boundary tracker matches cold-path direct contribution acr
 	rx.setAntenna(&iso_ant);
 	rx.setTiming(timing);
 
-	const core::ActiveStreamingSource source{.transmitter = &tx, .segment_start = 0.0, .segment_end = 3.0e-4};
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 0.0, 3.0e-4);
 	core::FmcwChirpBoundaryTracker tracker;
 	const RealType dt = 1.0 / params::simSamplingRate();
 

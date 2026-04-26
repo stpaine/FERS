@@ -433,7 +433,7 @@ TEST_CASE("FMCW streaming direct path preserves in-flight segment-end tail",
 	rx.setAntenna(&iso_ant);
 	rx.setTiming(timing);
 
-	const core::ActiveStreamingSource source{.transmitter = &tx, .segment_start = 0.0, .segment_end = segment_end};
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 0.0, segment_end);
 	core::FmcwChirpBoundaryTracker reference_tracker;
 	core::FmcwChirpBoundaryTracker tail_tracker;
 	std::vector<ComplexType> reference_samples;
@@ -511,8 +511,7 @@ TEST_CASE("CW streaming direct path gates schedules by retarded transmit time", 
 	rx.setAntenna(&iso_ant);
 	rx.setTiming(timing);
 
-	const core::ActiveStreamingSource source{
-		.transmitter = &tx, .segment_start = segment_start, .segment_end = segment_end};
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, segment_start, segment_end);
 
 	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_start + tau - eps)) ==
 			0.0);
@@ -521,6 +520,59 @@ TEST_CASE("CW streaming direct path gates schedules by retarded transmit time", 
 	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_end + 0.5 * tau)) > 0.0);
 	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_end + tau + eps)) ==
 			0.0);
+}
+
+TEST_CASE("FMCW streaming direct path keeps chirp cache per source", "[simulation][channel_model][direct][fmcw]")
+{
+	ParamGuard guard;
+	params::params.reset();
+
+	const RealType dist = 300.0;
+	const RealType tau = dist / params::c();
+	const RealType u_ret = 20.0e-6;
+	const RealType rx_time = tau + u_ret;
+	const RealType chirp_duration = 100.0e-6;
+	const RealType chirp_period = 100.0e-6;
+
+	radar::Platform tx1_plat("tx1_plat");
+	setupPlatform(tx1_plat, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform tx2_plat("tx2_plat");
+	setupPlatform(tx2_plat, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{dist, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx1(&tx1_plat, "tx1", radar::OperationMode::FMCW_MODE);
+	tx1.setAntenna(&iso_ant);
+	tx1.setTiming(timing);
+	auto sig1 = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, chirp_duration, chirp_period);
+	fers_signal::RadarSignal wave1("fmcw1", 1.0, 10.0e9, chirp_duration, std::move(sig1));
+	tx1.setSignal(&wave1);
+
+	radar::Transmitter tx2(&tx2_plat, "tx2", radar::OperationMode::FMCW_MODE);
+	tx2.setAntenna(&iso_ant);
+	tx2.setTiming(timing);
+	auto sig2 = std::make_unique<fers_signal::FmcwChirpSignal>(4.0e6, chirp_duration, chirp_period);
+	fers_signal::RadarSignal wave2("fmcw2", 1.0, 10.0e9, chirp_duration, std::move(sig2));
+	tx2.setSignal(&wave2);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	const core::ActiveStreamingSource source1 = core::makeActiveSource(&tx1, 0.0, 1.0e-3);
+	const core::ActiveStreamingSource source2 = core::makeActiveSource(&tx2, 0.0, 1.0e-3);
+	const ComplexType sample1 = simulation::calculateStreamingDirectPathContribution(source1, &rx, rx_time);
+	const ComplexType sample2 = simulation::calculateStreamingDirectPathContribution(source2, &rx, rx_time);
+
+	REQUIRE(std::abs(sample1) > 0.0);
+	REQUIRE(std::abs(sample2) > 0.0);
+	const RealType expected_delta =
+		(source2.two_pi_f0 - source1.two_pi_f0) * u_ret + (source2.pi_alpha - source1.pi_alpha) * u_ret * u_ret;
+	const RealType measured_delta = std::arg(sample2 / sample1);
+	REQUIRE_THAT(unwrapDelta(measured_delta - expected_delta), WithinAbs(0.0, 1.0e-10));
 }
 
 TEST_CASE("calculateDirectPathContribution with noproploss gives distance-independent amplitude",

@@ -109,9 +109,7 @@ TEST_CASE("applyStreamingInterference adds direct-path streaming energy sample b
 	std::vector<ComplexType> window(3, ComplexType{0.25, -0.5});
 	const std::vector<ComplexType> baseline = window;
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
-		{.transmitter = &transmitter,
-		 .segment_start = params::startTime(),
-		 .segment_end = std::numeric_limits<RealType>::max()}};
+		core::makeActiveSource(&transmitter, params::startTime(), std::numeric_limits<RealType>::max())};
 	const std::vector<std::unique_ptr<radar::Target>> targets;
 	const RealType start = 0.0;
 	const RealType dt = 0.25;
@@ -161,9 +159,7 @@ TEST_CASE("applyStreamingInterference respects FLAG_NODIRECT and keeps only phys
 
 	std::vector<ComplexType> window(3, ComplexType{});
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
-		{.transmitter = &transmitter,
-		 .segment_start = params::startTime(),
-		 .segment_end = std::numeric_limits<RealType>::max()}};
+		core::makeActiveSource(&transmitter, params::startTime(), std::numeric_limits<RealType>::max())};
 	const RealType start = 0.0;
 	const RealType dt = 0.2;
 
@@ -208,7 +204,7 @@ TEST_CASE("applyStreamingInterference adds FMCW energy to pulsed receiver window
 
 	std::vector<ComplexType> window(3, ComplexType{});
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
-		{.transmitter = &transmitter, .segment_start = 0.0, .segment_end = 300.0e-6}};
+		core::makeActiveSource(&transmitter, 0.0, 300.0e-6)};
 	const std::vector<std::unique_ptr<radar::Target>> targets;
 
 	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets);
@@ -248,7 +244,7 @@ TEST_CASE("applyStreamingInterference supports FMCW transmitter with CW streamin
 	std::vector<ComplexType> window(3, ComplexType{0.1, -0.2});
 	const std::vector<ComplexType> baseline = window;
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
-		{.transmitter = &transmitter, .segment_start = 0.0, .segment_end = 300.0e-6}};
+		core::makeActiveSource(&transmitter, 0.0, 300.0e-6)};
 	const std::vector<std::unique_ptr<radar::Target>> targets;
 
 	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets);

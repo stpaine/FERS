@@ -390,8 +390,9 @@ TEST_CASE("World clear resets storage and state", "[core][world]")
 
 	world.getEventQueue().push({1.0, core::EventType::TX_STREAMING_START, world.getTransmitters().front().get()});
 	world.getSimulationState().t_current = 42.0;
-	world.getSimulationState().active_streaming_transmitters.push_back(
-		{.transmitter = world.getTransmitters().front().get(), .segment_start = 0.0, .segment_end = 0.0});
+	core::ActiveStreamingSource source{};
+	source.transmitter = world.getTransmitters().front().get();
+	world.getSimulationState().active_streaming_transmitters.push_back(source);
 
 	world.clear();
 

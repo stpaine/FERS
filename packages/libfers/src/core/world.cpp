@@ -282,22 +282,9 @@ namespace core
 			else
 			{
 				const auto& schedule = transmitter->getSchedule();
-				const auto clip_streaming_end = [&](const RealType start, const RealType end)
-				{
-					RealType clipped_end = std::min(sim_end, end);
-					// FMCW chirp_count is a per-schedule-segment cap. Each scheduled period starts its own count.
-					if (const auto* fmcw = transmitter->getFmcwSignal();
-						(fmcw != nullptr) && fmcw->getChirpCount().has_value())
-					{
-						clipped_end =
-							std::min(clipped_end,
-									 start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
-					}
-					return clipped_end;
-				};
 				if (schedule.empty())
 				{
-					const RealType end = clip_streaming_end(sim_start, sim_end);
+					const RealType end = makeActiveSource(transmitter.get(), sim_start, sim_end).segment_end;
 					if (sim_start < end)
 					{
 						_event_queue.push({sim_start, EventType::TX_STREAMING_START, transmitter.get()});
@@ -309,7 +296,9 @@ namespace core
 					for (const auto& period : schedule)
 					{
 						const RealType start = std::max(sim_start, period.start);
-						const RealType end = clip_streaming_end(period.start, period.end);
+						const RealType end =
+							makeActiveSource(transmitter.get(), period.start, std::min(sim_end, period.end))
+								.segment_end;
 
 						if (start < end)
 						{

@@ -46,20 +46,20 @@ using radar::Transmitter;
 
 namespace
 {
-	void initializeFmcwTracker(const fers_signal::FmcwChirpSignal& fmcw, const RealType segment_start,
-							   const RealType t_ret, core::FmcwChirpBoundaryTracker& tracker)
+	void initializeFmcwTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+							   core::FmcwChirpBoundaryTracker& tracker)
 	{
 		tracker.initialized = true;
-		if (t_ret >= segment_start)
+		if (t_ret >= source.segment_start)
 		{
-			const RealType time_since_segment_start = t_ret - segment_start;
-			tracker.n_current = static_cast<std::size_t>(std::floor(time_since_segment_start / fmcw.getChirpPeriod()));
-			tracker.t_n = segment_start + static_cast<RealType>(tracker.n_current) * fmcw.getChirpPeriod();
+			const RealType time_since_segment_start = t_ret - source.segment_start;
+			tracker.n_current = static_cast<std::size_t>(std::floor(time_since_segment_start / source.chirp_period));
+			tracker.t_n = source.segment_start + static_cast<RealType>(tracker.n_current) * source.chirp_period;
 			return;
 		}
 
 		tracker.n_current = 0;
-		tracker.t_n = segment_start;
+		tracker.t_n = source.segment_start;
 	}
 
 	/**
@@ -249,68 +249,64 @@ namespace
 		return false;
 	}
 
-	RealType classicStreamingSegmentStart(const Transmitter* trans)
+	core::ActiveStreamingSource makeClassicStreamingSource(const Transmitter* trans)
 	{
-		const auto* const signal = trans == nullptr ? nullptr : trans->getSignal();
-		if (signal != nullptr && signal->isFmcwUpChirp())
+		auto source = core::makeActiveSource(trans, params::startTime(), std::numeric_limits<RealType>::max());
+		if (!source.is_fmcw)
 		{
-			return params::startTime();
+			source.segment_start = std::numeric_limits<RealType>::lowest();
 		}
-		return std::numeric_limits<RealType>::lowest();
+		return source;
 	}
 
-	bool computeStreamingPhase(const radar::Transmitter* trans, const RealType segment_start,
-							   const RealType segment_end, const RealType rx_time, const RealType tau,
+	bool computeStreamingPhase(const core::ActiveStreamingSource& source, const RealType rx_time, const RealType tau,
 							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
 	{
-		const auto* const signal = trans->getSignal();
-		if (signal == nullptr)
+		if (source.carrier_freq <= 0.0)
 		{
 			return false;
 		}
 
 		const RealType t_ret = rx_time - tau;
-		if (t_ret < segment_start || t_ret >= segment_end)
+		if (t_ret < source.segment_start || t_ret >= source.segment_end)
 		{
 			return false;
 		}
 
-		if (signal->isFmcwUpChirp())
+		if (source.is_fmcw)
 		{
-			const auto* fmcw = signal->getFmcwChirpSignal();
-
 			if (chirp_tracker == nullptr)
 			{
-				const RealType time_since_segment_start = t_ret - segment_start;
+				const RealType time_since_segment_start = t_ret - source.segment_start;
 				const auto chirp_index =
-					static_cast<std::size_t>(std::floor(time_since_segment_start / fmcw->getChirpPeriod()));
-				if (fmcw->getChirpCount().has_value() && chirp_index >= *fmcw->getChirpCount())
+					static_cast<std::size_t>(std::floor(time_since_segment_start / source.chirp_period));
+				if (source.chirp_count.has_value() && chirp_index >= *source.chirp_count)
 				{
 					return false;
 				}
 				const RealType chirp_time =
-					time_since_segment_start - static_cast<RealType>(chirp_index) * fmcw->getChirpPeriod();
-				if (chirp_time < 0.0 || chirp_time >= fmcw->getChirpDuration())
+					time_since_segment_start - static_cast<RealType>(chirp_index) * source.chirp_period;
+				if (chirp_time < 0.0 || chirp_time >= source.chirp_duration)
 				{
 					return false;
 				}
-				phase_out = -2.0 * PI * signal->getCarrier() * tau + fmcw->basebandPhaseForChirpTime(chirp_time);
+				phase_out = -2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * chirp_time +
+					source.pi_alpha * chirp_time * chirp_time;
 				return true;
 			}
 
 			if (!chirp_tracker->initialized)
 			{
-				initializeFmcwTracker(*fmcw, segment_start, t_ret, *chirp_tracker);
+				initializeFmcwTracker(source, t_ret, *chirp_tracker);
 			}
 
-			const RealType chirp_period = fmcw->getChirpPeriod();
-			while (t_ret >= chirp_tracker->t_n + chirp_period)
+			while (t_ret >= chirp_tracker->t_n + source.chirp_period)
 			{
-				chirp_tracker->t_n += chirp_period;
+				chirp_tracker->t_n += source.chirp_period;
 				++chirp_tracker->n_current;
 			}
 
-			if (fmcw->getChirpCount().has_value() && chirp_tracker->n_current >= *fmcw->getChirpCount())
+			if (source.chirp_count.has_value() && chirp_tracker->n_current >= *source.chirp_count)
 			{
 				return false;
 			}
@@ -320,16 +316,17 @@ namespace
 			// tracker to the segment start when the retarded time precedes the first chirp, and the
 			// advance loop can only move forward. Without the u_ret < 0 check, we'd evaluate the chirp
 			// polynomial at negative local time and extrapolate a non-causal signal before turn-on.
-			if (u_ret < 0.0 || u_ret >= fmcw->getChirpDuration())
+			if (u_ret < 0.0 || u_ret >= source.chirp_duration)
 			{
 				return false;
 			}
 
-			phase_out = -2.0 * PI * signal->getCarrier() * tau + fmcw->basebandPhaseForChirpTime(u_ret);
+			phase_out =
+				-2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * u_ret + source.pi_alpha * u_ret * u_ret;
 			return true;
 		}
 
-		phase_out = -2.0 * PI * signal->getCarrier() * tau;
+		phase_out = -2.0 * PI * source.carrier_freq * tau;
 		return true;
 	}
 
@@ -567,11 +564,8 @@ namespace simulation
 	ComplexType calculateDirectPathContribution(const Transmitter* trans, const Receiver* recv, const RealType timeK,
 												const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
-		return calculateStreamingDirectPathContribution(
-			core::ActiveStreamingSource{.transmitter = trans,
-										.segment_start = classicStreamingSegmentStart(trans),
-										.segment_end = std::numeric_limits<RealType>::max()},
-			recv, timeK, phase_noise_lookup);
+		return calculateStreamingDirectPathContribution(makeClassicStreamingSource(trans), recv, timeK,
+														phase_noise_lookup);
 	}
 
 	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
@@ -606,9 +600,11 @@ namespace simulation
 		}
 
 		const RealType tau = link.dist / params::c();
-		auto* const signal = trans->getSignal();
-		const RealType carrier_freq = signal->getCarrier();
-		const RealType lambda = params::c() / carrier_freq;
+		if (source.carrier_freq <= 0.0)
+		{
+			return {0.0, 0.0};
+		}
+		const RealType lambda = params::c() / source.carrier_freq;
 
 		// Tx Gain: Direction Tx -> Rx
 		const RealType tx_gain = computeAntennaGain(trans, link.u_vec, timeK, lambda);
@@ -619,11 +615,11 @@ namespace simulation
 		const RealType scaling_factor = computeDirectPathPower(tx_gain, rx_gain, lambda, link.dist, no_loss);
 
 		// Include Signal Power
-		const RealType amplitude = std::sqrt(signal->getPower() * scaling_factor);
+		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
 		// Carrier Phase
 		RealType phase = 0.0;
-		if (!computeStreamingPhase(trans, source.segment_start, source.segment_end, timeK, tau, chirp_tracker, phase))
+		if (!computeStreamingPhase(source, timeK, tau, chirp_tracker, phase))
 		{
 			return {0.0, 0.0};
 		}
@@ -640,11 +636,8 @@ namespace simulation
 												   const RealType timeK,
 												   const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
-		return calculateStreamingReflectedPathContribution(
-			core::ActiveStreamingSource{.transmitter = trans,
-										.segment_start = classicStreamingSegmentStart(trans),
-										.segment_end = std::numeric_limits<RealType>::max()},
-			recv, targ, timeK, phase_noise_lookup);
+		return calculateStreamingReflectedPathContribution(makeClassicStreamingSource(trans), recv, targ, timeK,
+														   phase_noise_lookup);
 	}
 
 	ComplexType calculateStreamingReflectedPathContribution(const core::ActiveStreamingSource& source,
@@ -683,9 +676,11 @@ namespace simulation
 		}
 
 		const RealType tau = (link_tx_tgt.dist + link_tgt_rx.dist) / params::c();
-		auto* const signal = trans->getSignal();
-		const RealType carrier_freq = signal->getCarrier();
-		const RealType lambda = params::c() / carrier_freq;
+		if (source.carrier_freq <= 0.0)
+		{
+			return {0.0, 0.0};
+		}
+		const RealType lambda = params::c() / source.carrier_freq;
 
 		// RCS Lookups: In (Tx->Tgt), Out (Rx->Tgt = - (Tgt->Rx))
 		SVec3 in_angle(link_tx_tgt.u_vec);
@@ -702,10 +697,10 @@ namespace simulation
 			computeReflectedPathPower(tx_gain, rx_gain, rcs, lambda, link_tx_tgt.dist, link_tgt_rx.dist, no_loss);
 
 		// Include Signal Power
-		const RealType amplitude = std::sqrt(signal->getPower() * scaling_factor);
+		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
 		RealType phase = 0.0;
-		if (!computeStreamingPhase(trans, source.segment_start, source.segment_end, timeK, tau, chirp_tracker, phase))
+		if (!computeStreamingPhase(source, timeK, tau, chirp_tracker, phase))
 		{
 			return {0.0, 0.0};
 		}

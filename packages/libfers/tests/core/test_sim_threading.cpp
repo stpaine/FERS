@@ -211,6 +211,39 @@ TEST_CASE("ProgressReporter safely wraps and calls callback", "[core][threading]
 	}
 }
 
+TEST_CASE("makeActiveSource caches streaming scalars and clips FMCW chirp count", "[core][threading][fmcw]")
+{
+	ParamGuard guard;
+
+	radar::Platform platform("TxPlatform");
+	antenna::Isotropic antenna("Iso");
+	auto timing = std::make_shared<timing::Timing>("Clock", 42);
+
+	radar::Transmitter tx(&platform, "FmcwTx", radar::OperationMode::FMCW_MODE, 101);
+	tx.setAntenna(&antenna);
+	tx.setTiming(timing);
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(20.0e6, 100.0e-6, 250.0e-6, 1.0e6, 1000);
+	fers_signal::RadarSignal wave("FmcwWave", 16.0, 10.0e9, 100.0e-6, std::move(fmcw_signal), 301);
+	tx.setSignal(&wave);
+
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 5.0, 65.0);
+
+	REQUIRE(source.transmitter == &tx);
+	REQUIRE(source.is_fmcw);
+	REQUIRE(source.fmcw == wave.getFmcwChirpSignal());
+	REQUIRE_THAT(source.segment_end, WithinAbs(5.25, 1.0e-12));
+	REQUIRE_THAT(source.carrier_freq, WithinAbs(10.0e9, 1.0e-6));
+	REQUIRE_THAT(source.amplitude, WithinAbs(4.0, 1.0e-12));
+	REQUIRE_THAT(source.chirp_duration, WithinAbs(100.0e-6, 1.0e-15));
+	REQUIRE_THAT(source.chirp_period, WithinAbs(250.0e-6, 1.0e-15));
+	REQUIRE_THAT(source.chirp_rate, WithinAbs(200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.start_freq_off, WithinAbs(1.0e6, 1.0e-9));
+	REQUIRE_THAT(source.two_pi_f0, WithinAbs(2.0 * PI * 1.0e6, 1.0e-9));
+	REQUIRE_THAT(source.pi_alpha, WithinAbs(PI * 200.0e9, 1.0e-3));
+	REQUIRE(source.chirp_count.has_value());
+	REQUIRE(*source.chirp_count == std::size_t{1000});
+}
+
 TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]")
 {
 	ParamGuard guard;
@@ -223,16 +256,14 @@ TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]"
 
 	SECTION("Tx streaming start adds to active list")
 	{
-		engine.handleTxStreamingStart(
-			{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
+		engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
 		REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 		REQUIRE(world->getSimulationState().active_streaming_transmitters[0].transmitter == tx);
 	}
 
 	SECTION("Tx streaming end keeps source as in-flight candidate")
 	{
-		engine.handleTxStreamingStart(
-			{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
+		engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
 		engine.handleTxStreamingEnd(tx);
 		REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 	}
@@ -437,8 +468,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics steps through time and updat
 
 	// Set state
 	world->getSimulationState().t_current = 0.0;
-	engine.handleTxStreamingStart(
-		{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
+	engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
 
 	SECTION("Processes correct number of samples based on dt")
 	{
@@ -474,7 +504,7 @@ TEST_CASE("SimulationEngine keeps streaming source through propagation tail afte
 	rx->prepareStreamingData(400);
 	rx->setActive(true);
 
-	const core::ActiveStreamingSource source{.transmitter = tx, .segment_start = 0.0, .segment_end = 0.2};
+	const core::ActiveStreamingSource source = core::makeActiveSource(tx, 0.0, 0.2);
 	engine.handleTxStreamingStart(source);
 	engine.handleTxStreamingEnd(tx);
 	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
@@ -586,8 +616,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics uses buffered shared timing 
 
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
-	engine.handleTxStreamingStart(
-		{.transmitter = tx_ptr, .segment_start = params::startTime(), .segment_end = params::endTime()});
+	engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, params::startTime(), params::endTime()));
 	engine.processStreamingPhysics(0.6);
 
 	const ComplexType expected = simulation::calculateDirectPathContribution(tx_ptr, rx_ptr, 0.5, &lookup);

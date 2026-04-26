@@ -49,19 +49,6 @@ namespace core
 {
 	namespace
 	{
-		RealType clippedStreamingSegmentEnd(const Transmitter& transmitter, const RealType segment_start,
-											const RealType segment_end)
-		{
-			RealType clipped_end = std::min(params::endTime(), segment_end);
-			if (const auto* fmcw = transmitter.getFmcwSignal(); (fmcw != nullptr) && fmcw->getChirpCount().has_value())
-			{
-				clipped_end =
-					std::min(clipped_end,
-							 segment_start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
-			}
-			return clipped_end;
-		}
-
 		std::uint64_t ceilToUint(const RealType value)
 		{
 			if (value <= 0.0)
@@ -122,11 +109,10 @@ namespace core
 			if (schedule.empty())
 			{
 				const RealType segment_start = params::startTime();
-				const RealType segment_end = clippedStreamingSegmentEnd(*transmitter, segment_start, params::endTime());
-				if (timestamp >= segment_start && timestamp < segment_end)
+				auto source = makeActiveSource(transmitter, segment_start, params::endTime());
+				if (timestamp >= segment_start && timestamp < source.segment_end)
 				{
-					return ActiveStreamingSource{
-						.transmitter = transmitter, .segment_start = segment_start, .segment_end = segment_end};
+					return source;
 				}
 				return std::nullopt;
 			}
@@ -134,11 +120,10 @@ namespace core
 			for (const auto& period : schedule)
 			{
 				const RealType active_start = std::max(params::startTime(), period.start);
-				const RealType active_end = clippedStreamingSegmentEnd(*transmitter, period.start, period.end);
-				if (timestamp >= active_start && timestamp < active_end)
+				auto source = makeActiveSource(transmitter, period.start, std::min(params::endTime(), period.end));
+				if (timestamp >= active_start && timestamp < source.segment_end)
 				{
-					return ActiveStreamingSource{
-						.transmitter = transmitter, .segment_start = period.start, .segment_end = active_end};
+					return source;
 				}
 			}
 			return std::nullopt;
@@ -200,9 +185,9 @@ namespace core
 				if (transmitter_ptr->getSchedule().empty())
 				{
 					const RealType active_start = params::startTime();
-					const RealType active_end =
-						clippedStreamingSegmentEnd(*transmitter_ptr, active_start, params::endTime());
-					const auto total_chirp_count = countFmcwChirpStarts(*fmcw, active_start, active_start, active_end);
+					const auto source = makeActiveSource(transmitter_ptr.get(), active_start, params::endTime());
+					const auto total_chirp_count =
+						countFmcwChirpStarts(*fmcw, source.segment_start, active_start, source.segment_end);
 					LOG(Level::INFO,
 						"FMCW transmitter '{}' B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s duty_cycle={} "
 						"chirp_count={} total_chirp_count={} average_power={} W",
@@ -216,16 +201,16 @@ namespace core
 					for (const auto& period : transmitter_ptr->getSchedule())
 					{
 						const RealType active_start = std::max(params::startTime(), period.start);
-						const RealType active_end =
-							clippedStreamingSegmentEnd(*transmitter_ptr, period.start, period.end);
+						const auto source = makeActiveSource(transmitter_ptr.get(), period.start,
+															 std::min(params::endTime(), period.end));
 						const auto segment_chirp_count =
-							countFmcwChirpStarts(*fmcw, period.start, active_start, active_end);
+							countFmcwChirpStarts(*fmcw, source.segment_start, active_start, source.segment_end);
 						total_chirp_count += segment_chirp_count;
 						LOG(Level::INFO,
 							"FMCW transmitter '{}' segment [{}, {}] B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} "
 							"Hz/s duty_cycle={} chirp_count={} segment_chirp_count={} total_chirp_count={} "
 							"average_power={} W",
-							transmitter_ptr->getName(), period.start, active_end, fmcw->getChirpBandwidth(),
+							transmitter_ptr->getName(), period.start, source.segment_end, fmcw->getChirpBandwidth(),
 							fmcw->getChirpDuration(), fmcw->getChirpPeriod(), fmcw->getStartFrequencyOffset(),
 							fmcw->getChirpRate(), duty_cycle, configured_count, segment_chirp_count, total_chirp_count,
 							average_power);
@@ -529,39 +514,22 @@ namespace core
 
 			const auto append_candidate = [&](const RealType segment_start, const RealType segment_end)
 			{
-				if (segment_start < segment_end && segment_start < end_time)
+				auto source = makeActiveSource(transmitter_ptr.get(), segment_start, segment_end);
+				if (source.segment_start < source.segment_end && source.segment_start < end_time)
 				{
-					sources.push_back({.transmitter = transmitter_ptr.get(),
-									   .segment_start = segment_start,
-									   .segment_end = segment_end});
+					sources.push_back(source);
 				}
 			};
 
 			if (transmitter_ptr->getSchedule().empty())
 			{
-				RealType segment_end = params::endTime();
-				if (const auto* fmcw = transmitter_ptr->getFmcwSignal();
-					(fmcw != nullptr) && fmcw->getChirpCount().has_value())
-				{
-					segment_end = std::min(segment_end,
-										   params::startTime() +
-											   static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
-				}
-				append_candidate(params::startTime(), segment_end);
+				append_candidate(params::startTime(), params::endTime());
 				continue;
 			}
 
 			for (const auto& period : transmitter_ptr->getSchedule())
 			{
-				RealType segment_end = std::min(params::endTime(), period.end);
-				if (const auto* fmcw = transmitter_ptr->getFmcwSignal();
-					(fmcw != nullptr) && fmcw->getChirpCount().has_value())
-				{
-					segment_end =
-						std::min(segment_end,
-								 period.start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
-				}
-				append_candidate(period.start, segment_end);
+				append_candidate(period.start, std::min(params::endTime(), period.end));
 			}
 		}
 		return sources;
