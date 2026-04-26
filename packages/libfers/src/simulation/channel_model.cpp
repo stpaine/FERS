@@ -249,19 +249,28 @@ namespace
 		return false;
 	}
 
+	RealType classicStreamingSegmentStart(const Transmitter* trans)
+	{
+		const auto* const signal = trans == nullptr ? nullptr : trans->getSignal();
+		if (signal != nullptr && signal->isFmcwUpChirp())
+		{
+			return params::startTime();
+		}
+		return std::numeric_limits<RealType>::lowest();
+	}
+
 	bool computeStreamingPhase(const radar::Transmitter* trans, const RealType segment_start,
 							   const RealType segment_end, const RealType rx_time, const RealType tau,
 							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
 	{
-		// TODO: By returning false the exact moment rx_time >= segment_end, we are
-		// violating the speed of light and instantly cutting off the signal at the receiver.
-		if (rx_time < segment_start || rx_time >= segment_end)
+		const auto* const signal = trans->getSignal();
+		if (signal == nullptr)
 		{
 			return false;
 		}
 
-		const auto* const signal = trans->getSignal();
-		if (signal == nullptr)
+		const RealType t_ret = rx_time - tau;
+		if (t_ret < segment_start || t_ret >= segment_end)
 		{
 			return false;
 		}
@@ -269,11 +278,6 @@ namespace
 		if (signal->isFmcwUpChirp())
 		{
 			const auto* fmcw = signal->getFmcwChirpSignal();
-			const RealType t_ret = rx_time - tau;
-			if (t_ret < segment_start || t_ret >= segment_end)
-			{
-				return false;
-			}
 
 			if (chirp_tracker == nullptr)
 			{
@@ -565,7 +569,7 @@ namespace simulation
 	{
 		return calculateStreamingDirectPathContribution(
 			core::ActiveStreamingSource{.transmitter = trans,
-										.segment_start = params::startTime(),
+										.segment_start = classicStreamingSegmentStart(trans),
 										.segment_end = std::numeric_limits<RealType>::max()},
 			recv, timeK, phase_noise_lookup);
 	}
@@ -638,7 +642,7 @@ namespace simulation
 	{
 		return calculateStreamingReflectedPathContribution(
 			core::ActiveStreamingSource{.transmitter = trans,
-										.segment_start = params::startTime(),
+										.segment_start = classicStreamingSegmentStart(trans),
 										.segment_end = std::numeric_limits<RealType>::max()},
 			recv, targ, timeK, phase_noise_lookup);
 	}

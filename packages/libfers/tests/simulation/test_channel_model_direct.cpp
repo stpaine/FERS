@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cmath>
 #include <memory>
+#include <vector>
 
 #include "antenna/antenna_factory.h"
 #include "core/config.h"
@@ -45,6 +46,29 @@ namespace
 	{
 		const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
 		return simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime());
+	}
+
+	RealType unwrapDelta(RealType delta)
+	{
+		while (delta > PI)
+		{
+			delta -= 2.0 * PI;
+		}
+		while (delta < -PI)
+		{
+			delta += 2.0 * PI;
+		}
+		return delta;
+	}
+
+	RealType rms(const std::vector<ComplexType>& samples)
+	{
+		RealType sum_square = 0.0;
+		for (const auto& sample : samples)
+		{
+			sum_square += std::norm(sample);
+		}
+		return std::sqrt(sum_square / static_cast<RealType>(samples.size()));
 	}
 }
 
@@ -364,6 +388,139 @@ TEST_CASE("calculateDirectPathContribution phase matches propagation delay", "[s
 	// sin(result_phase) == sin(expected_phase)
 	REQUIRE_THAT(std::cos(result_phase), WithinAbs(std::cos(expected_phase), 1e-6));
 	REQUIRE_THAT(std::sin(result_phase), WithinAbs(std::sin(expected_phase), 1e-6));
+}
+
+TEST_CASE("FMCW streaming direct path preserves in-flight segment-end tail",
+		  "[simulation][channel_model][direct][fmcw]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(80.0e6);
+	params::setSimSamplingRate(80.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.00502);
+
+	const RealType dist = 1500.0;
+	const RealType tau = dist / params::c();
+	const RealType segment_end = 0.005;
+	const RealType sample_rate = 80.0e6;
+	const RealType dt = 1.0 / sample_rate;
+	const RealType chirp_bandwidth = 20.0e6;
+	const RealType chirp_duration = 250.0e-6;
+	const RealType chirp_period = chirp_duration;
+	const RealType chirp_rate = chirp_bandwidth / chirp_duration;
+	const std::size_t sample_count = static_cast<std::size_t>(std::ceil(tau / dt));
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{dist, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::FMCW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::FmcwChirpSignal>(chirp_bandwidth, chirp_duration, chirp_period, 0.0, 20);
+	fers_signal::RadarSignal wave("fmcw", 1000.0, 10.0e9, chirp_duration, std::move(sig));
+	tx.setSignal(&wave);
+	const auto* fmcw = wave.getFmcwChirpSignal();
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	const core::ActiveStreamingSource source{.transmitter = &tx, .segment_start = 0.0, .segment_end = segment_end};
+	core::FmcwChirpBoundaryTracker reference_tracker;
+	core::FmcwChirpBoundaryTracker tail_tracker;
+	std::vector<ComplexType> reference_samples;
+	std::vector<ComplexType> tail_samples;
+	reference_samples.reserve(sample_count);
+	tail_samples.reserve(sample_count);
+
+	for (std::size_t i = 0; i < sample_count; ++i)
+	{
+		const RealType offset = static_cast<RealType>(i) * dt;
+		reference_samples.push_back(simulation::calculateStreamingDirectPathContribution(
+			source, &rx, segment_end - tau + offset, nullptr, &reference_tracker));
+		tail_samples.push_back(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_end + offset,
+																					nullptr, &tail_tracker));
+	}
+
+	const RealType reference_rms = rms(reference_samples);
+	const RealType tail_rms = rms(tail_samples);
+	REQUIRE(reference_samples.size() >= 400);
+	REQUIRE(reference_rms > 0.0);
+	REQUIRE(tail_rms > 0.0);
+	REQUIRE_THAT(tail_rms, WithinRel(reference_rms, 1.0e-12));
+
+	const RealType last_chirp_start = segment_end - chirp_period;
+	RealType unwrapped_span = 0.0;
+	RealType previous_phase = 0.0;
+	for (std::size_t i = 0; i < tail_samples.size(); ++i)
+	{
+		const RealType t = segment_end + static_cast<RealType>(i) * dt;
+		const RealType local_time = t - last_chirp_start;
+		const ComplexType dechirped = tail_samples[i] * std::polar(1.0, -fmcw->basebandPhaseForChirpTime(local_time));
+		const RealType phase = std::arg(dechirped);
+		if (i > 0)
+		{
+			unwrapped_span += unwrapDelta(phase - previous_phase);
+		}
+		previous_phase = phase;
+	}
+
+	const RealType measured_beat_hz = unwrapped_span / (2.0 * PI * dt * static_cast<RealType>(tail_samples.size() - 1));
+	const RealType expected_beat_hz = -chirp_rate * tau;
+	REQUIRE_THAT(measured_beat_hz, WithinRel(expected_beat_hz, 1.0e-6));
+}
+
+TEST_CASE("CW streaming direct path gates schedules by retarded transmit time", "[simulation][channel_model][direct]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setC(100.0);
+
+	const RealType dist = 10.0;
+	const RealType tau = dist / params::c();
+	const RealType segment_start = 0.2;
+	const RealType segment_end = 0.5;
+	const RealType eps = 1.0e-6;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});
+
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{dist, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("cw", 1.0, 1.0e9, 1.0, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	const core::ActiveStreamingSource source{
+		.transmitter = &tx, .segment_start = segment_start, .segment_end = segment_end};
+
+	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_start + tau - eps)) ==
+			0.0);
+	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_start + tau + eps)) >
+			0.0);
+	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_end + 0.5 * tau)) > 0.0);
+	REQUIRE(std::abs(simulation::calculateStreamingDirectPathContribution(source, &rx, segment_end + tau + eps)) ==
+			0.0);
 }
 
 TEST_CASE("calculateDirectPathContribution with noproploss gives distance-independent amplitude",

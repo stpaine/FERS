@@ -427,18 +427,11 @@ namespace core
 
 	void SimulationEngine::handleTxStreamingEnd(Transmitter* tx)
 	{
-		auto& state = _world->getSimulationState();
-		auto& streaming_txs = state.active_streaming_transmitters;
-		for (std::size_t index = streaming_txs.size(); index > 0; --index)
-		{
-			const std::size_t source_index = index - 1;
-			if (streaming_txs[source_index].transmitter == tx)
-			{
-				// Source and tracker vectors are source-index aligned; erase the same slot from both.
-				streaming_txs.erase(streaming_txs.begin() + static_cast<std::ptrdiff_t>(source_index));
-				eraseStreamingTrackerSource(source_index);
-			}
-		}
+		(void)tx;
+		// A transmitter stop is a transmit-time boundary, not an instantaneous receive-time cutoff.
+		// Keep the source as an in-flight candidate; per-path retarded-time gating zeros it once
+		// rx_time - tau reaches segment_end.
+		// TODO(perf): tx source now remains in active_streaming_transmitters forever. Find a clean solution for this.
 	}
 
 	void SimulationEngine::handleRxStreamingStart(Receiver* rx) { rx->setActive(true); }
@@ -468,6 +461,8 @@ namespace core
 	std::vector<ActiveStreamingSource> SimulationEngine::collectStreamingSourcesForWindow(const RealType start_time,
 																						  const RealType end_time) const
 	{
+		// A segment that ended before this window can still be in flight at the receiver.
+		(void)start_time;
 		std::vector<ActiveStreamingSource> sources;
 		for (const auto& transmitter_ptr : _world->getTransmitters())
 		{
@@ -476,11 +471,9 @@ namespace core
 				continue;
 			}
 
-			const auto append_overlap = [&](const RealType segment_start, const RealType segment_end)
+			const auto append_candidate = [&](const RealType segment_start, const RealType segment_end)
 			{
-				const RealType overlap_start = std::max(start_time, segment_start);
-				const RealType overlap_end = std::min(end_time, segment_end);
-				if (overlap_start < overlap_end)
+				if (segment_start < segment_end && segment_start < end_time)
 				{
 					sources.push_back({.transmitter = transmitter_ptr.get(),
 									   .segment_start = segment_start,
@@ -498,7 +491,7 @@ namespace core
 										   params::startTime() +
 											   static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
 				}
-				append_overlap(params::startTime(), segment_end);
+				append_candidate(params::startTime(), segment_end);
 				continue;
 			}
 
@@ -512,7 +505,7 @@ namespace core
 						std::min(segment_end,
 								 period.start + static_cast<RealType>(*fmcw->getChirpCount()) * fmcw->getChirpPeriod());
 				}
-				append_overlap(period.start, segment_end);
+				append_candidate(period.start, segment_end);
 			}
 		}
 		return sources;

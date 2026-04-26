@@ -120,8 +120,8 @@ TEST_CASE("applyStreamingInterference adds direct-path streaming energy sample b
 
 	for (size_t i = 0; i < window.size(); ++i)
 	{
-		const ComplexType expected =
-			simulation::calculateDirectPathContribution(&transmitter, &receiver, start + static_cast<RealType>(i) * dt);
+		const ComplexType expected = simulation::calculateStreamingDirectPathContribution(
+			streaming_sources.front(), &receiver, start + static_cast<RealType>(i) * dt);
 		const ComplexType actual = window[i] - baseline[i];
 		REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1e-12));
 		REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1e-12));
@@ -171,8 +171,8 @@ TEST_CASE("applyStreamingInterference respects FLAG_NODIRECT and keeps only phys
 
 	for (size_t i = 0; i < window.size(); ++i)
 	{
-		const ComplexType expected = simulation::calculateReflectedPathContribution(
-			&transmitter, &receiver, targets.front().get(), start + static_cast<RealType>(i) * dt);
+		const ComplexType expected = simulation::calculateStreamingReflectedPathContribution(
+			streaming_sources.front(), &receiver, targets.front().get(), start + static_cast<RealType>(i) * dt);
 		REQUIRE_THAT(window[i].real(), WithinAbs(expected.real(), 1e-12));
 		REQUIRE_THAT(window[i].imag(), WithinAbs(expected.imag(), 1e-12));
 	}

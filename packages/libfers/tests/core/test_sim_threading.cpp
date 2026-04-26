@@ -174,12 +174,12 @@ TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]"
 		REQUIRE(world->getSimulationState().active_streaming_transmitters[0].transmitter == tx);
 	}
 
-	SECTION("Tx streaming end removes from active list")
+	SECTION("Tx streaming end keeps source as in-flight candidate")
 	{
 		engine.handleTxStreamingStart(
 			{.transmitter = tx, .segment_start = params::startTime(), .segment_end = params::endTime()});
 		engine.handleTxStreamingEnd(tx);
-		REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
+		REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 	}
 
 	SECTION("Rx streaming start sets active")
@@ -391,13 +391,55 @@ TEST_CASE("SimulationEngine processStreamingPhysics steps through time and updat
 		engine.processStreamingPhysics(0.0025);
 
 		const auto& buffer = rx->getStreamingData();
-		// Samples 0, 1, 2 should be non-zero (populated with physics)
-		REQUIRE(std::abs(buffer[0]) > 0.0);
+		// Sample 0 arrives before the propagation delay; samples 1 and 2 contain retarded-time energy.
+		REQUIRE(std::abs(buffer[0]) == 0.0);
 		REQUIRE(std::abs(buffer[1]) > 0.0);
 		REQUIRE(std::abs(buffer[2]) > 0.0);
 
 		// Sample 3 should be untouched (0.0)
 		REQUIRE(std::abs(buffer[3]) == 0.0);
+	}
+}
+
+TEST_CASE("SimulationEngine keeps streaming source through propagation tail after transmit end", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.4);
+	params::setC(1000.0);
+
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+
+	auto* tx = world->getTransmitters().front().get();
+	auto* rx = world->getReceivers().front().get();
+
+	rx->prepareStreamingData(400);
+	rx->setActive(true);
+
+	const core::ActiveStreamingSource source{.transmitter = tx, .segment_start = 0.0, .segment_end = 0.2};
+	engine.handleTxStreamingStart(source);
+	engine.handleTxStreamingEnd(tx);
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+	world->getSimulationState().t_current = 0.2;
+	engine.processStreamingPhysics(0.205);
+
+	bool saw_tail_energy = false;
+	for (std::size_t index = 200; index < 205; ++index)
+	{
+		saw_tail_energy = saw_tail_energy || std::abs(rx->getStreamingData()[index]) > 0.0;
+	}
+	REQUIRE(saw_tail_energy);
+
+	world->getSimulationState().t_current = 0.31;
+	engine.processStreamingPhysics(0.315);
+
+	for (std::size_t index = 310; index < 315; ++index)
+	{
+		REQUIRE(std::abs(rx->getStreamingData()[index]) == 0.0);
 	}
 }
 
@@ -617,7 +659,7 @@ TEST_CASE("SimulationEngine processEvent dispatches all event types correctly", 
 
 	// Test TX_STREAMING_END
 	engine.processEvent({2.0, core::EventType::TX_STREAMING_END, tx});
-	REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 
 	// Test RX_STREAMING_START
 	engine.processEvent({3.0, core::EventType::RX_STREAMING_START, rx});
