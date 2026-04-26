@@ -133,16 +133,24 @@ namespace serial::xml_parser_utils
 
 	bool get_attribute_bool(const XmlElement& element, const std::string& attributeName, const bool defaultVal)
 	{
-		try
+		const auto attr_value = XmlElement::getOptionalAttribute(element, attributeName);
+		if (!attr_value.has_value())
 		{
-			return XmlElement::getSafeAttribute(element, attributeName) == "true";
-		}
-		catch (const XmlException&)
-		{
-			LOG(logging::Level::WARNING, "Failed to get boolean value for attribute '{}'. Defaulting to {}.",
-				attributeName, defaultVal);
+			LOG(logging::Level::DEBUG, "Attribute '{}' not specified. Defaulting to {}.", attributeName, defaultVal);
 			return defaultVal;
 		}
+		if (*attr_value == "true")
+		{
+			return true;
+		}
+		if (*attr_value == "false")
+		{
+			return false;
+		}
+
+		LOG(logging::Level::WARNING, "Invalid boolean value '{}' for attribute '{}'. Defaulting to {}.", *attr_value,
+			attributeName, defaultVal);
+		return defaultVal;
 	}
 
 	SimId assign_id_from_attribute(const std::string& owner, ObjectType type)
@@ -235,7 +243,7 @@ namespace serial::xml_parser_utils
 		{
 			if (!parameters.childElement(param_name, 0).isValid())
 			{
-				LOG(logging::Level::WARNING, "Failed to set parameter {}. Using default value. {}", param_name,
+				LOG(logging::Level::DEBUG, "Parameter '{}' not specified. Using default value {}.", param_name,
 					default_value);
 				return;
 			}
@@ -248,7 +256,7 @@ namespace serial::xml_parser_utils
 		{
 			if (!parameters.childElement(param_name, 0).isValid())
 			{
-				LOG(logging::Level::WARNING, "Failed to set parameter {}. Using default value. {}", param_name,
+				LOG(logging::Level::DEBUG, "Parameter '{}' not specified. Using default value {}.", param_name,
 					default_value);
 				return;
 			}
@@ -318,7 +326,15 @@ namespace serial::xml_parser_utils
 			{
 				params_out.origin_latitude = std::stod(XmlElement::getSafeAttribute(origin_element, "latitude"));
 				params_out.origin_longitude = std::stod(XmlElement::getSafeAttribute(origin_element, "longitude"));
-				params_out.origin_altitude = std::stod(XmlElement::getSafeAttribute(origin_element, "altitude"));
+				if (const auto altitude = XmlElement::getOptionalAttribute(origin_element, "altitude"))
+				{
+					params_out.origin_altitude = std::stod(*altitude);
+				}
+				else
+				{
+					params_out.origin_altitude = 0.0;
+					LOG(logging::Level::DEBUG, "Origin altitude not specified. Defaulting to 0.");
+				}
 				origin_set = true;
 				LOG(logging::Level::INFO, "Origin set to lat: {}, lon: {}, alt: {}", params_out.origin_latitude,
 					params_out.origin_longitude, params_out.origin_altitude);
@@ -484,41 +500,32 @@ namespace serial::xml_parser_utils
 								 get_child_real_type(noise_element, "weight"));
 		}
 
-		try
+		const auto set_optional_timing_parameter =
+			[&](const std::string& element_name, const std::string& description, auto setter)
 		{
-			timing_obj->setFreqOffset(get_child_real_type(timing, "freq_offset"));
-		}
-		catch (XmlException&)
-		{
-			LOG(logging::Level::WARNING, "Clock section '{}' does not specify frequency offset.", name);
-		}
+			if (!timing.childElement(element_name, 0).isValid())
+			{
+				LOG(logging::Level::DEBUG, "Clock section '{}' does not specify {}.", name, description);
+				return;
+			}
+			try
+			{
+				setter(get_child_real_type(timing, element_name));
+			}
+			catch (const XmlException&)
+			{
+				LOG(logging::Level::WARNING, "Clock section '{}' has an empty {}. Using default.", name, description);
+			}
+		};
 
-		try
-		{
-			timing_obj->setRandomFreqOffsetStdev(get_child_real_type(timing, "random_freq_offset_stdev"));
-		}
-		catch (XmlException&)
-		{
-			LOG(logging::Level::WARNING, "Clock section '{}' does not specify random frequency offset.", name);
-		}
-
-		try
-		{
-			timing_obj->setPhaseOffset(get_child_real_type(timing, "phase_offset"));
-		}
-		catch (XmlException&)
-		{
-			LOG(logging::Level::WARNING, "Clock section '{}' does not specify phase offset.", name);
-		}
-
-		try
-		{
-			timing_obj->setRandomPhaseOffsetStdev(get_child_real_type(timing, "random_phase_offset_stdev"));
-		}
-		catch (XmlException&)
-		{
-			LOG(logging::Level::WARNING, "Clock section '{}' does not specify random phase offset.", name);
-		}
+		set_optional_timing_parameter("freq_offset", "frequency offset",
+									  [&](const RealType value) { timing_obj->setFreqOffset(value); });
+		set_optional_timing_parameter("random_freq_offset_stdev", "random frequency offset",
+									  [&](const RealType value) { timing_obj->setRandomFreqOffsetStdev(value); });
+		set_optional_timing_parameter("phase_offset", "phase offset",
+									  [&](const RealType value) { timing_obj->setPhaseOffset(value); });
+		set_optional_timing_parameter("random_phase_offset_stdev", "random phase offset",
+									  [&](const RealType value) { timing_obj->setRandomPhaseOffsetStdev(value); });
 
 		if (get_attribute_bool(timing, "synconpulse", false))
 		{
@@ -574,13 +581,20 @@ namespace serial::xml_parser_utils
 			throw XmlException("Unsupported antenna pattern: " + pattern);
 		}
 
-		try
+		if (!antenna.childElement("efficiency", 0).isValid())
 		{
-			ant->setEfficiencyFactor(get_child_real_type(antenna, "efficiency"));
+			LOG(logging::Level::DEBUG, "Antenna '{}' does not specify efficiency, assuming unity.", name);
 		}
-		catch (XmlException&)
+		else
 		{
-			LOG(logging::Level::WARNING, "Antenna '{}' does not specify efficiency, assuming unity.", name);
+			try
+			{
+				ant->setEfficiencyFactor(get_child_real_type(antenna, "efficiency"));
+			}
+			catch (const XmlException&)
+			{
+				LOG(logging::Level::WARNING, "Antenna '{}' has an empty efficiency, assuming unity.", name);
+			}
 		}
 
 		ctx.world->add(std::move(ant));
@@ -589,31 +603,31 @@ namespace serial::xml_parser_utils
 	void parseMotionPath(const XmlElement& motionPath, radar::Platform* platform)
 	{
 		math::Path* path = platform->getMotionPath();
-		try
+		if (const auto interp_value = XmlElement::getOptionalAttribute(motionPath, "interpolation"))
 		{
-			if (std::string interp = XmlElement::getSafeAttribute(motionPath, "interpolation"); interp == "linear")
+			if (*interp_value == "linear")
 			{
 				path->setInterp(math::Path::InterpType::INTERP_LINEAR);
 			}
-			else if (interp == "cubic")
+			else if (*interp_value == "cubic")
 			{
 				path->setInterp(math::Path::InterpType::INTERP_CUBIC);
 			}
-			else if (interp == "static")
+			else if (*interp_value == "static")
 			{
 				path->setInterp(math::Path::InterpType::INTERP_STATIC);
 			}
 			else
 			{
 				LOG(logging::Level::ERROR, "Unsupported interpolation type: {} for platform {}. Defaulting to static",
-					interp, platform->getName());
+					*interp_value, platform->getName());
 				path->setInterp(math::Path::InterpType::INTERP_STATIC);
 			}
 		}
-		catch (XmlException&)
+		else
 		{
-			LOG(logging::Level::ERROR,
-				"Failed to set MotionPath interpolation type for platform {}. Defaulting to static",
+			LOG(logging::Level::DEBUG,
+				"MotionPath interpolation type for platform {} not specified. Defaulting to static.",
 				platform->getName());
 			path->setInterp(math::Path::InterpType::INTERP_STATIC);
 		}
@@ -832,14 +846,22 @@ namespace serial::xml_parser_utils
 		}
 		receiver_obj->setAntenna(antenna);
 
-		try
+		if (!receiver.childElement("noise_temp", 0).isValid())
 		{
-			receiver_obj->setNoiseTemperature(get_child_real_type(receiver, "noise_temp"));
-		}
-		catch (XmlException&)
-		{
-			LOG(logging::Level::INFO, "Receiver '{}' does not specify noise temperature",
+			LOG(logging::Level::DEBUG, "Receiver '{}' does not specify noise temperature",
 				receiver_obj->getName().c_str());
+		}
+		else
+		{
+			try
+			{
+				receiver_obj->setNoiseTemperature(get_child_real_type(receiver, "noise_temp"));
+			}
+			catch (const XmlException&)
+			{
+				LOG(logging::Level::WARNING, "Receiver '{}' has an empty noise temperature; using default.",
+					receiver_obj->getName().c_str());
+			}
 		}
 
 		if (is_pulsed)

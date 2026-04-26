@@ -89,13 +89,16 @@ TEST_CASE("get_child_real_type extracts floating point values", "[serial][xml_pa
 
 TEST_CASE("get_attribute_bool extracts boolean values safely", "[serial][xml_parser_utils]")
 {
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
 	auto doc = loadXml("<root flag_true=\"true\" flag_false=\"false\" flag_invalid=\"yes\"/>");
 	auto root = doc.getRootElement();
 
 	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_true", false) == true);
 	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_false", true) == false);
-	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_invalid", true) == false);
+	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_invalid", true) == true);
 	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "missing", true) == true); // Default fallback
+	REQUIRE_THAT(capture.str(), ContainsSubstring("Invalid boolean value"));
 }
 
 TEST_CASE("resolve_reference_id maps string names to SimIds", "[serial][xml_parser_utils]")
@@ -201,6 +204,43 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 		REQUIRE(p.random_seed.value() == 42);
 		REQUIRE(p.adc_bits == 12);
 		REQUIRE(p.oversample_ratio == 4);
+	}
+
+	SECTION("Missing optional parameters use defaults without warnings")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE_THAT(p.c, WithinAbs(params::Parameters::DEFAULT_C, 1e-5));
+		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(1000.0, 1e-5));
+		REQUIRE(p.adc_bits == 0);
+		REQUIRE(p.oversample_ratio == 1);
+		REQUIRE(capture.str().empty());
+	}
+
+	SECTION("Origin altitude defaults to zero when omitted")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "  <origin latitude=\"-33.0\" longitude=\"18.0\"/>"
+						   "  <coordinatesystem frame=\"ENU\"/>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
+		REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
+		REQUIRE_THAT(p.origin_altitude, WithinAbs(0.0, 1e-5));
+		REQUIRE(capture.str().empty());
 	}
 
 	SECTION("Unsigned optional parameters reject invalid values")
@@ -452,6 +492,29 @@ TEST_CASE("parseTiming extracts clock parameters and noise entries", "[serial][x
 	// Noise entries are added internally, we just verify it didn't crash
 }
 
+TEST_CASE("parseTiming accepts omitted defaults without warnings", "[serial][xml_parser_utils]")
+{
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+
+	auto doc = loadXml("<timing name=\"quiet\"><frequency>1e6</frequency></timing>");
+
+	serial::xml_parser_utils::parseTiming(doc.getRootElement(), ctx);
+	REQUIRE(world.getTimings().size() == 1);
+
+	auto* timing = world.getTimings().begin()->second.get();
+	REQUIRE(timing->getName() == "quiet");
+	REQUIRE_FALSE(timing->getFreqOffset().has_value());
+	REQUIRE_FALSE(timing->getRandomFreqOffsetStdev().has_value());
+	REQUIRE_FALSE(timing->getPhaseOffset().has_value());
+	REQUIRE_FALSE(timing->getRandomPhaseOffsetStdev().has_value());
+	REQUIRE_FALSE(timing->getSyncOnPulse());
+	REQUIRE(capture.str().empty());
+}
+
 TEST_CASE("parseAntenna instantiates correct antenna types", "[serial][xml_parser_utils]")
 {
 	core::World world;
@@ -526,6 +589,23 @@ TEST_CASE("parseAntenna instantiates correct antenna types", "[serial][xml_parse
 	}
 }
 
+TEST_CASE("parseAntenna accepts omitted efficiency without warnings", "[serial][xml_parser_utils]")
+{
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.loaders = createMockLoaders();
+
+	auto doc = loadXml("<antenna name=\"iso\" pattern=\"isotropic\"></antenna>");
+
+	serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+	REQUIRE(world.getAntennas().size() == 1);
+	REQUIRE_THAT(world.getAntennas().begin()->second->getEfficiencyFactor(), WithinAbs(1.0, 1e-12));
+	REQUIRE(capture.str().empty());
+}
+
 TEST_CASE("parseMotionPath handles all interpolation types", "[serial][xml_parser_utils]")
 {
 	radar::Platform platform("plat");
@@ -558,6 +638,18 @@ TEST_CASE("parseMotionPath handles all interpolation types", "[serial][xml_parse
 		auto doc = loadXml("<motionpath interpolation=\"magic\"></motionpath>");
 		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
 		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_STATIC);
+	}
+
+	SECTION("Missing interpolation defaults to static without warnings")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<motionpath>"
+						   "  <positionwaypoint><x>1</x><y>2</y><altitude>3</altitude><time>0</time></positionwaypoint>"
+						   "</motionpath>");
+		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_STATIC);
+		REQUIRE(capture.str().empty());
 	}
 }
 
@@ -825,6 +917,23 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 		REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 		REQUIRE(rx->getSchedule().size() == 1);
+	}
+
+	SECTION("Missing receiver defaults do not warn")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<receiver name=\"rx_defaults\" antenna=\"a1\" timing=\"t1\">"
+						   "  <cw_mode/>"
+						   "</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+
+		REQUIRE(rx->getName() == "rx_defaults");
+		REQUIRE(rx->getMode() == radar::OperationMode::CW_MODE);
+		REQUIRE_FALSE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
+		REQUIRE_FALSE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
+		REQUIRE(capture.str().empty());
 	}
 
 	SECTION("Invalid pulsed parameters throw")
