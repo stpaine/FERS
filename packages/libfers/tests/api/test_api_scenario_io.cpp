@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstdint>
 #include <filesystem>
 #include <libfers/api.h>
 
@@ -129,6 +130,32 @@ TEST_CASE("API loads a minimal scenario from XML file and exports XML", "[api][s
 	REQUIRE(xml_text.get() != nullptr);
 	REQUIRE_FALSE(xml_text.view().empty());
 	REQUIRE_THAT(xml_text.str(), ContainsSubstring("<simulation"));
+}
+
+TEST_CASE("API exposes memory projection JSON", "[api][scenario][memory_projection]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::previewScenarioXml("Memory Projection Scenario");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	api_test::ApiString projection_text(fers_get_memory_projection_json(context.get()));
+	REQUIRE(projection_text.get() != nullptr);
+
+	const json projection = json::parse(projection_text.str());
+	REQUIRE(projection["phase_noise_lookups"].contains("bytes"));
+	REQUIRE(projection["streaming_iq_buffers"]["bytes"].get<std::uint64_t>() > 0);
+	REQUIRE(projection["rendered_hdf5_dataset_payload"]["bytes"].get<std::uint64_t>() > 0);
+	REQUIRE(projection["resident_baseline"].contains("bytes"));
+	REQUIRE(projection["projected_total_footprint"].contains("bytes"));
+
+	REQUIRE(fers_get_memory_projection_json(nullptr) == nullptr);
+	api_test::ApiString error = api_test::lastError();
+	REQUIRE(error.get() != nullptr);
+	REQUIRE_THAT(error.str(), ContainsSubstring("Invalid context provided to fers_get_memory_projection_json"));
 }
 
 TEST_CASE("API scenario serialization and update helpers reject null arguments", "[api][scenario]")

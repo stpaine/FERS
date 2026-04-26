@@ -28,6 +28,7 @@
 
 #include "antenna/antenna_factory.h"
 #include "core/fers_context.h"
+#include "core/memory_projection.h"
 #include "core/sim_threading.h"
 #include "core/thread_pool.h"
 #include "fers_version.h"
@@ -446,6 +447,31 @@ char* fers_get_last_output_metadata_json(fers_context_t* context)
 	catch (const std::exception& e)
 	{
 		handle_api_exception(e, "fers_get_last_output_metadata_json");
+		return nullptr;
+	}
+}
+
+char* fers_get_memory_projection_json(fers_context_t* context)
+{
+	last_error_message.clear();
+	if (context == nullptr)
+	{
+		last_error_message = "Invalid context provided to fers_get_memory_projection_json.";
+		LOG(logging::Level::ERROR, last_error_message);
+		return nullptr;
+	}
+
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+
+	try
+	{
+		const auto projection = core::projectSimulationMemory(*ctx->getWorld());
+		const std::string json_str = core::memoryProjectionToJsonString(projection);
+		return strdup(json_str.c_str());
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_get_memory_projection_json");
 		return nullptr;
 	}
 }

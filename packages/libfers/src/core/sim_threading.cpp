@@ -25,10 +25,10 @@
 #include <format>
 #include <limits>
 #include <optional>
-#include <unordered_map>
 #include <utility>
 
 #include "logging.h"
+#include "memory_projection.h"
 #include "parameters.h"
 #include "processing/finalizer.h"
 #include "radar/receiver.h"
@@ -146,6 +146,8 @@ namespace core
 			_reporter->report("Initializing event-driven simulation...", 0, 100);
 		}
 
+		logSimulationMemoryProjection(*_world);
+
 		initializeFinalizers();
 
 		LOG(Level::INFO, "Starting unified event-driven simulation loop.");
@@ -239,34 +241,7 @@ namespace core
 			return;
 		}
 
-		std::vector<std::shared_ptr<timing::Timing>> timings;
-		std::unordered_map<SimId, std::shared_ptr<timing::Timing>> unique_timings;
-
-		for (const auto& transmitter_ptr : _world->getTransmitters())
-		{
-			if (!transmitter_ptr->isStreamingMode())
-			{
-				continue;
-			}
-			unique_timings.try_emplace(transmitter_ptr->getTiming()->getId(), transmitter_ptr->getTiming());
-		}
-
-		for (const auto& receiver_ptr : _world->getReceivers())
-		{
-			if ((receiver_ptr->getMode() != OperationMode::CW_MODE) &&
-				(receiver_ptr->getMode() != OperationMode::FMCW_MODE))
-			{
-				continue;
-			}
-			unique_timings.try_emplace(receiver_ptr->getTiming()->getId(), receiver_ptr->getTiming());
-		}
-
-		timings.reserve(unique_timings.size());
-		for (const auto& entry : unique_timings)
-		{
-			timings.push_back(entry.second);
-		}
-
+		const auto timings = collectCwPhaseNoiseTimings(*_world);
 		_cw_phase_noise_lookup = std::make_unique<simulation::CwPhaseNoiseLookup>(
 			simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime()));
 	}

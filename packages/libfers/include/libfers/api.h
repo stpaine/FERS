@@ -227,6 +227,19 @@ char* fers_get_scenario_as_xml(fers_context_t* context);
 char* fers_get_last_output_metadata_json(fers_context_t* context);
 
 /**
+ * @brief Returns a JSON projection of simulation startup memory and HDF5 payload size.
+ *
+ * The projection includes phase-noise lookup memory, streaming I/Q buffer memory,
+ * rendered HDF5 payload size, current resident memory not attributed to streaming
+ * I/Q buffers where available, and an aggregate projected total. The caller owns
+ * the returned string and must free it with `fers_free_string`.
+ *
+ * @param context A valid `fers_context_t` handle.
+ * @return A heap-allocated JSON string, or NULL on error.
+ */
+char* fers_get_memory_projection_json(fers_context_t* context);
+
+/**
  * @brief Updates the simulation scenario from a JSON string.
  *
  * This is the primary method for the UI to push its state back to the C++

@@ -23,6 +23,7 @@ add_executable(libfers_tests
 			   core/test_config.cpp
 			   core/test_fers_context.cpp
 			   core/test_logging.cpp
+			   core/test_memory_projection.cpp
 			   core/test_parameters.cpp
 			   core/test_sim_threading.cpp
 			   core/test_portable_utils.cpp
