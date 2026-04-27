@@ -204,10 +204,13 @@ namespace fers_signal
 		 */
 		[[nodiscard]] const Signal* getSignal() const noexcept { return _signal.get(); }
 
+		/// Returns true when this signal is a continuous-wave signal.
 		[[nodiscard]] bool isCw() const noexcept;
 
+		/// Returns true when this signal is an FMCW up-chirp signal.
 		[[nodiscard]] bool isFmcwUpChirp() const noexcept;
 
+		/// Gets the FMCW chirp implementation, if this signal owns one.
 		[[nodiscard]] const class FmcwChirpSignal* getFmcwChirpSignal() const noexcept;
 
 		/**
@@ -231,6 +234,7 @@ namespace fers_signal
 		std::optional<std::string> _filename; ///< The original filename for file-based signals.
 	};
 
+	/// Continuous-wave signal implementation.
 	class CwSignal final : public Signal
 	{
 	public:
@@ -254,9 +258,11 @@ namespace fers_signal
 										RealType fracWinDelay) const override;
 	};
 
+	/// FMCW up-chirp signal implementation.
 	class FmcwChirpSignal final : public Signal
 	{
 	public:
+		/// Constructs an FMCW chirp signal with timing and sweep parameters.
 		FmcwChirpSignal(RealType chirp_bandwidth, RealType chirp_duration, RealType chirp_period,
 						RealType start_frequency_offset = 0.0, std::optional<std::size_t> chirp_count = std::nullopt);
 
@@ -270,39 +276,50 @@ namespace fers_signal
 
 		FmcwChirpSignal& operator=(FmcwChirpSignal&&) noexcept = delete;
 
+		/// Gets the chirp bandwidth in hertz.
 		[[nodiscard]] RealType getChirpBandwidth() const noexcept { return _chirp_bandwidth; }
 
+		/// Gets the chirp duration in seconds.
 		[[nodiscard]] RealType getChirpDuration() const noexcept { return _chirp_duration; }
 
+		/// Gets the chirp period in seconds.
 		[[nodiscard]] RealType getChirpPeriod() const noexcept { return _chirp_period; }
 
+		/// Gets the start frequency offset relative to carrier in hertz.
 		[[nodiscard]] RealType getStartFrequencyOffset() const noexcept { return _start_frequency_offset; }
 
+		/// Gets the optional finite chirp count.
 		[[nodiscard]] const std::optional<std::size_t>& getChirpCount() const noexcept { return _chirp_count; }
 
+		/// Gets the chirp rate in hertz per second.
 		[[nodiscard]] RealType getChirpRate() const noexcept { return _chirp_rate; }
 
+		/// Returns the active chirp index for a time since the segment start.
 		[[nodiscard]] std::optional<std::size_t> activeChirpIndexAt(RealType time_since_segment_start) const noexcept;
 
+		/// Returns true when the signal is inside an active chirp at the specified time.
 		[[nodiscard]] bool isActiveAt(RealType time_since_segment_start) const noexcept
 		{
 			return activeChirpIndexAt(time_since_segment_start).has_value();
 		}
 
+		/// Computes baseband phase for a time inside a chirp.
 		[[nodiscard]] RealType basebandPhaseForChirpTime(RealType chirp_time) const noexcept;
 
+		/// Computes instantaneous baseband phase at a time since segment start.
 		[[nodiscard]] std::optional<RealType>
 		instantaneousBasebandPhase(RealType time_since_segment_start) const noexcept;
 
+		/// Renders an FMCW waveform from interpolation points.
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const override;
 
 	private:
-		RealType _chirp_bandwidth{};
-		RealType _chirp_duration{};
-		RealType _chirp_period{};
-		RealType _start_frequency_offset{};
-		std::optional<std::size_t> _chirp_count;
-		RealType _chirp_rate{};
+		RealType _chirp_bandwidth{}; ///< Chirp bandwidth in hertz.
+		RealType _chirp_duration{}; ///< Active chirp duration in seconds.
+		RealType _chirp_period{}; ///< Chirp repetition period in seconds.
+		RealType _start_frequency_offset{}; ///< Start frequency offset relative to carrier in hertz.
+		std::optional<std::size_t> _chirp_count; ///< Optional finite chirp count.
+		RealType _chirp_rate{}; ///< Frequency sweep rate in hertz per second.
 	};
 }

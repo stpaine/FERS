@@ -84,13 +84,13 @@ int fers_set_output_directory(fers_context_t* context, const char* out_dir);
  */
 typedef enum // NOLINT(*-use-using)
 {
-	FERS_LOG_TRACE,
-	FERS_LOG_DEBUG,
-	FERS_LOG_INFO,
-	FERS_LOG_WARNING,
-	FERS_LOG_ERROR,
-	FERS_LOG_FATAL,
-	FERS_LOG_OFF
+	FERS_LOG_TRACE, ///< Trace-level diagnostic logging.
+	FERS_LOG_DEBUG, ///< Debug-level diagnostic logging.
+	FERS_LOG_INFO, ///< Informational logging.
+	FERS_LOG_WARNING, ///< Warning logging for recoverable issues.
+	FERS_LOG_ERROR, ///< Error logging for failed operations.
+	FERS_LOG_FATAL, ///< Fatal logging for unrecoverable failures.
+	FERS_LOG_OFF ///< Disables logging output.
 } fers_log_level_t;
 
 /**
@@ -421,10 +421,10 @@ int fers_generate_kml(const fers_context_t* context, const char* output_kml_file
  */
 typedef struct // NOLINT(*-use-using)
 {
-	double* gains; // Flat array of gain values [el_count * az_count]
-	size_t az_count; // Number of samples along azimuth (-180 to +180 deg)
-	size_t el_count; // Number of samples along elevation (-90 to +90 deg)
-	double max_gain; // The peak gain found in the pattern (linear scale)
+	double* gains; ///< Flat array of gain values [el_count * az_count].
+	size_t az_count; ///< Number of samples along azimuth (-180 to +180 deg).
+	size_t el_count; ///< Number of samples along elevation (-90 to +90 deg).
+	double max_gain; ///< Peak gain found in the pattern, in linear scale.
 } fers_antenna_pattern_data_t;
 
 
@@ -534,8 +534,8 @@ typedef struct // NOLINT(*-use-using)
  */
 typedef struct // NOLINT(*-use-using)
 {
-	fers_interpolated_point_t* points;
-	size_t count;
+	fers_interpolated_point_t* points; ///< Heap-allocated interpolated motion points.
+	size_t count; ///< Number of interpolated motion points.
 } fers_interpolated_path_t;
 
 /**
@@ -544,8 +544,8 @@ typedef struct // NOLINT(*-use-using)
  */
 typedef struct // NOLINT(*-use-using)
 {
-	fers_interpolated_rotation_point_t* points;
-	size_t count;
+	fers_interpolated_rotation_point_t* points; ///< Heap-allocated interpolated rotation points.
+	size_t count; ///< Number of interpolated rotation points.
 } fers_interpolated_rotation_path_t;
 
 
@@ -640,8 +640,8 @@ typedef struct // NOLINT(*-use-using)
  */
 typedef struct // NOLINT(*-use-using)
 {
-	fers_visual_link_t* links;
-	size_t count;
+	fers_visual_link_t* links; ///< Heap-allocated visual link array.
+	size_t count; ///< Number of visual links in the array.
 } fers_visual_link_list_t;
 
 /**

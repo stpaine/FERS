@@ -34,35 +34,41 @@ using math::Vec3;
 
 namespace
 {
+	/// Unit used for XML antenna axis sample angles.
 	enum class AxisUnit
 	{
-		Radians,
-		Degrees,
+		Radians, ///< Axis samples are expressed in radians.
+		Degrees, ///< Axis samples are expressed in degrees.
 	};
 
+	/// Gain format used for XML antenna axis sample values.
 	enum class AxisGainFormat
 	{
-		Linear,
-		DBi,
+		Linear, ///< Gain samples are already linear.
+		DBi, ///< Gain samples are expressed in dBi.
 	};
 
+	/// Parsed metadata attributes for one XML antenna axis.
 	struct AxisMetadata
 	{
-		AxisUnit unit{AxisUnit::Radians};
-		AxisGainFormat format{AxisGainFormat::Linear};
-		antenna::XmlAntenna::AxisSymmetry symmetry{antenna::XmlAntenna::AxisSymmetry::Mirrored};
-		bool unit_explicit{};
-		bool format_explicit{};
-		bool symmetry_explicit{};
+		AxisUnit unit{AxisUnit::Radians}; ///< Parsed angle unit.
+		AxisGainFormat format{AxisGainFormat::Linear}; ///< Parsed gain format.
+		antenna::XmlAntenna::AxisSymmetry symmetry{antenna::XmlAntenna::AxisSymmetry::Mirrored}; ///< Parsed symmetry.
+		bool unit_explicit{}; ///< True when unit was explicitly set.
+		bool format_explicit{}; ///< True when format was explicitly set.
+		bool symmetry_explicit{}; ///< True when symmetry was explicitly set.
 	};
 
+	/// Result from loading one XML antenna gain axis.
 	struct AxisLoadResult
 	{
-		RealType max_gain{};
-		antenna::XmlAntenna::AxisSymmetry symmetry{antenna::XmlAntenna::AxisSymmetry::Mirrored};
-		std::size_t sample_count{};
+		RealType max_gain{}; ///< Maximum linear gain found on the axis.
+		antenna::XmlAntenna::AxisSymmetry symmetry{
+			antenna::XmlAntenna::AxisSymmetry::Mirrored}; ///< Axis symmetry mode.
+		std::size_t sample_count{}; ///< Number of parsed samples.
 	};
 
+	/// Returns a lowercase copy of a string.
 	std::string toLowerCopy(std::string value)
 	{
 		std::transform(value.begin(), value.end(), value.begin(),
@@ -70,6 +76,7 @@ namespace
 		return value;
 	}
 
+	/// Parses a finite real value and reports the provided context on failure.
 	RealType parseRealValue(const std::string_view text, const std::string_view context)
 	{
 		const std::string value(text);
@@ -103,18 +110,22 @@ namespace
 		return static_cast<RealType>(parsed);
 	}
 
+	/// Returns the XML token for an axis unit.
 	const char* axisUnitName(const AxisUnit unit) noexcept { return unit == AxisUnit::Degrees ? "deg" : "rad"; }
 
+	/// Returns the XML token for an axis gain format.
 	const char* axisFormatName(const AxisGainFormat format) noexcept
 	{
 		return format == AxisGainFormat::DBi ? "dBi" : "linear";
 	}
 
+	/// Returns the XML token for an axis symmetry mode.
 	const char* axisSymmetryName(const antenna::XmlAntenna::AxisSymmetry symmetry) noexcept
 	{
 		return symmetry == antenna::XmlAntenna::AxisSymmetry::None ? "none" : "mirrored";
 	}
 
+	/// Parses optional metadata attributes from one XML antenna axis.
 	AxisMetadata parseAxisMetadata(const XmlElement& axisXml)
 	{
 		AxisMetadata metadata;

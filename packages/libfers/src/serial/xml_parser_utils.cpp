@@ -44,6 +44,7 @@ namespace serial::xml_parser_utils
 {
 	namespace
 	{
+		/// Parses the mutually exclusive radar operation mode elements.
 		radar::OperationMode parse_mode_elements(const XmlElement& parent, const std::string& owner)
 		{
 			std::optional<radar::OperationMode> selected_mode;
@@ -73,25 +74,30 @@ namespace serial::xml_parser_utils
 			return *selected_mode;
 		}
 
+		/// Throws an XML validation exception with the provided message.
 		void throw_xml_validation_error(const std::string& message) { throw XmlException(message); }
 
+		/// Validates an FMCW waveform while adapting validation errors to XmlException.
 		void validate_fmcw_waveform(const fers_signal::RadarSignal& wave, const std::string& owner)
 		{
 			serial::fmcw_validation::validateWaveform(wave, owner, throw_xml_validation_error);
 		}
 
+		/// Validates waveform/mode compatibility while adapting validation errors to XmlException.
 		void validate_waveform_mode_match(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
 										  const std::string& owner)
 		{
 			serial::fmcw_validation::validateWaveformModeMatch(wave, mode, owner, throw_xml_validation_error);
 		}
 
+		/// Validates an FMCW schedule while adapting validation errors to XmlException.
 		void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
 									const fers_signal::FmcwChirpSignal& fmcw, const std::string& owner)
 		{
 			serial::fmcw_validation::validateSchedule(schedule, fmcw, owner, throw_xml_validation_error);
 		}
 
+		/// Draws the next unsigned seed from the master random generator.
 		[[nodiscard]] unsigned next_seed(std::mt19937& master_seeder)
 		{
 			static_assert(std::mt19937::max() <= std::numeric_limits<unsigned>::max(),
@@ -99,6 +105,7 @@ namespace serial::xml_parser_utils
 			return static_cast<unsigned>(master_seeder());
 		}
 
+		/// Resolves or instantiates a shared timing instance by prototype SimId.
 		std::shared_ptr<timing::Timing> resolve_timing_instance(const SimId timing_id, ParserContext& ctx,
 																const std::string& owner)
 		{
@@ -763,6 +770,7 @@ namespace serial::xml_parser_utils
 		}
 	}
 
+	/// Parses a transmitter after its operation mode has already been determined.
 	radar::Transmitter* parseTransmitterWithMode(const XmlElement& transmitter, radar::Platform* platform,
 												 ParserContext& ctx, const ReferenceLookup& refs,
 												 const radar::OperationMode mode)
@@ -828,6 +836,7 @@ namespace serial::xml_parser_utils
 		return parseTransmitterWithMode(transmitter, platform, ctx, refs, mode);
 	}
 
+	/// Parses a receiver after its operation mode has already been determined.
 	radar::Receiver* parseReceiverWithMode(const XmlElement& receiver, radar::Platform* platform, ParserContext& ctx,
 										   const ReferenceLookup& refs, const radar::OperationMode mode)
 	{

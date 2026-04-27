@@ -22,15 +22,17 @@ namespace serial::rotation_warning_utils
 {
 	namespace
 	{
-		thread_local std::vector<std::string> captured_warnings;
+		thread_local std::vector<std::string> captured_warnings; ///< Thread-local warning buffer for API callers.
 
-		constexpr RealType kEpsilon = 1e-9;
-		constexpr RealType kMatchTolerance = 1e-3;
-		constexpr RealType kIrrationalLookingTolerance = 5e-3;
+		constexpr RealType kEpsilon = 1e-9; ///< Near-zero tolerance for rotation heuristics.
+		constexpr RealType kMatchTolerance = 1e-3; ///< Match tolerance for common-angle comparisons.
+		constexpr RealType kIrrationalLookingTolerance = 5e-3; ///< Tolerance for non-round radian-looking values.
 
+		/// Common degree values used by unit inference.
 		constexpr std::array<RealType, 12> common_degree_angles = {0.0,	  30.0,	 45.0,	60.0,  90.0,  120.0,
 																   135.0, 150.0, 180.0, 225.0, 270.0, 360.0};
 
+		/// Common radian values used by unit inference.
 		constexpr std::array<RealType, 9> common_radian_angles = {0.0,
 																  std::numbers::pi_v<RealType> / 6.0,
 																  std::numbers::pi_v<RealType> / 4.0,
@@ -41,22 +43,26 @@ namespace serial::rotation_warning_utils
 																  5.0 * std::numbers::pi_v<RealType> / 6.0,
 																  std::numbers::pi_v<RealType>};
 
+		/// Returns true when two values are within the provided tolerance.
 		[[nodiscard]] bool is_close(const RealType a, const RealType b,
 									const RealType tolerance = kMatchTolerance) noexcept
 		{
 			return std::abs(a - b) <= tolerance;
 		}
 
+		/// Returns true when a value is nearly integral.
 		[[nodiscard]] bool is_near_integer(const RealType value) noexcept
 		{
 			return is_close(value, std::round(value), 1e-6);
 		}
 
+		/// Returns true when a value is nearly a tenth increment.
 		[[nodiscard]] bool is_near_tenth(const RealType value) noexcept
 		{
 			return is_close(value * 10.0, std::round(value * 10.0), kIrrationalLookingTolerance * 10.0);
 		}
 
+		/// Returns true when an absolute value matches a common-angle candidate.
 		[[nodiscard]] bool matches_common_angle(const RealType abs_value,
 												const std::ranges::input_range auto& candidates) noexcept
 		{
@@ -70,6 +76,7 @@ namespace serial::rotation_warning_utils
 			return false;
 		}
 
+		/// Returns true when an absolute value matches a simple rational multiple of pi.
 		[[nodiscard]] bool matches_simple_pi_ratio(const RealType abs_value) noexcept
 		{
 			if (abs_value <= kEpsilon)
@@ -98,6 +105,7 @@ namespace serial::rotation_warning_utils
 			return false;
 		}
 
+		/// Finds the closest clean sine/cosine value for a radian input.
 		[[nodiscard]] RealType best_clean_trig_distance(const RealType radians) noexcept
 		{
 			constexpr std::array<RealType, 5> clean_values = {0.0, 0.5, std::numbers::sqrt2_v<RealType> / 2.0,
@@ -114,11 +122,13 @@ namespace serial::rotation_warning_utils
 			return best;
 		}
 
+		/// Returns the external token for a rotation angle unit.
 		[[nodiscard]] std::string unit_token(const params::RotationAngleUnit unit)
 		{
 			return std::string(params::rotationAngleUnitToken(unit));
 		}
 
+		/// Returns a display token for an inference confidence.
 		[[nodiscard]] std::string confidence_token(const Confidence confidence)
 		{
 			switch (confidence)

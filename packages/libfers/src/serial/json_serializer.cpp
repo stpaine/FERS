@@ -45,10 +45,13 @@
 
 namespace
 {
+	/// Map from timing prototype SimId to shared runtime timing instance.
 	using TimingInstanceMap = std::unordered_map<SimId, std::shared_ptr<timing::Timing>>;
 
+	/// Serializes a SimId as a JSON string.
 	nlohmann::json sim_id_to_json(const SimId id) { return std::to_string(id); }
 
+	/// Parses a required SimId from a JSON object.
 	SimId parse_json_id(const nlohmann::json& j, const std::string& key, const std::string& owner)
 	{
 		if (!j.contains(key))
@@ -89,6 +92,7 @@ namespace
 		throw std::runtime_error("Invalid '" + key + "' type for " + owner + ".");
 	}
 
+	/// Resolves or instantiates a shared timing instance by prototype SimId.
 	std::shared_ptr<timing::Timing> resolve_timing_instance(core::World& world, std::mt19937& masterSeeder,
 															TimingInstanceMap& timing_instances, const SimId timing_id)
 	{
@@ -110,19 +114,23 @@ namespace
 		return timing;
 	}
 
+	/// Throws a JSON validation error with the provided message.
 	void throw_json_validation_error(const std::string& message) { throw std::runtime_error(message); }
 
+	/// Validates an FMCW waveform while adapting validation errors to std::runtime_error.
 	void validate_fmcw_waveform(const fers_signal::RadarSignal& wave, const std::string& owner)
 	{
 		serial::fmcw_validation::validateWaveform(wave, owner, throw_json_validation_error);
 	}
 
+	/// Validates waveform/mode compatibility while adapting validation errors to std::runtime_error.
 	void validate_waveform_mode_match(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
 									  const std::string& owner)
 	{
 		serial::fmcw_validation::validateWaveformModeMatch(wave, mode, owner, throw_json_validation_error);
 	}
 
+	/// Validates an FMCW schedule while adapting validation errors to std::runtime_error.
 	void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
 								const fers_signal::FmcwChirpSignal& fmcw, const std::string& owner)
 	{
@@ -707,6 +715,7 @@ namespace params
 
 namespace
 {
+	/// Serializes a platform and its attached components to JSON.
 	nlohmann::json serialize_platform(const radar::Platform* p, const core::World& world)
 	{
 		nlohmann::json plat_json = *p;
@@ -795,6 +804,7 @@ namespace
 		return plat_json;
 	}
 
+	/// Parses simulation parameters from JSON and updates the master seeder.
 	void parse_parameters(const nlohmann::json& sim, std::mt19937& masterSeeder)
 	{
 		auto new_params = sim.at("parameters").get<params::Parameters>();
@@ -817,6 +827,7 @@ namespace
 		params::params.simulation_name = sim.value("name", "");
 	}
 
+	/// Parses top-level reusable assets from JSON into the world.
 	void parse_assets(const nlohmann::json& sim, core::World& world)
 	{
 		if (sim.contains("waveforms"))
@@ -858,6 +869,7 @@ namespace
 		}
 	}
 
+	/// Parses the mutually exclusive operation mode block for a component.
 	radar::OperationMode parse_mode(const nlohmann::json& comp_json, const std::string& error_context)
 	{
 		if (comp_json.contains("pulsed_mode"))
@@ -875,6 +887,7 @@ namespace
 		throw std::runtime_error(error_context + " must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block.");
 	}
 
+	/// Parses a transmitter component from JSON into the world.
 	void parse_transmitter(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 						   std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
@@ -945,6 +958,7 @@ namespace
 		world.add(std::move(trans));
 	}
 
+	/// Parses a receiver component from JSON into the world.
 	void parse_receiver(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 						std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
@@ -1013,6 +1027,7 @@ namespace
 		world.add(std::move(recv));
 	}
 
+	/// Parses a target component from JSON into the world.
 	void parse_target(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 					  std::mt19937& masterSeeder)
 	{
@@ -1069,6 +1084,7 @@ namespace
 		}
 	}
 
+	/// Parses a monostatic component into linked transmitter and receiver objects.
 	void parse_monostatic(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 						  std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
@@ -1177,6 +1193,7 @@ namespace
 		world.add(std::move(recv));
 	}
 
+	/// Parses a platform and its component list from JSON into the world.
 	void parse_platform(const nlohmann::json& plat_json, core::World& world, std::mt19937& masterSeeder,
 						TimingInstanceMap& timing_instances)
 	{

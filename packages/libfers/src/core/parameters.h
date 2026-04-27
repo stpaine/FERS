@@ -55,9 +55,8 @@ namespace params
 		RealType boltzmann_k = DEFAULT_BOLTZMANN_K; ///< Boltzmann constant
 		RealType start = 0; ///< Start time for the simulation.
 		RealType end = 0; ///< End time for the simulation.
-		RealType sim_sampling_rate = 1000;
+		RealType sim_sampling_rate = 1000; ///< Time-step sampling rate for radar pulse simulation.
 
-		///< Temporal sampling rate (Hz) that determines time-step resolution for radar pulse simulation.
 		// Default to the location of the University of Cape Town in South Africa
 		double origin_latitude = -33.957652; ///< Geodetic origin latitude
 		double origin_longitude = 18.4611991; ///< Geodetic origin longitude
@@ -82,7 +81,7 @@ namespace params
 		void reset() noexcept { *this = Parameters{}; }
 	};
 
-	inline Parameters params;
+	inline Parameters params; ///< Global simulation parameter state.
 
 	/**
 	 * @brief Get the speed of light.
@@ -150,8 +149,17 @@ namespace params
 	 */
 	inline unsigned oversampleRatio() noexcept { return params.oversample_ratio; }
 
+	/**
+	 * @brief Gets the maximum supported oversampling ratio.
+	 * @return The maximum supported oversampling ratio.
+	 */
 	inline constexpr unsigned maxSupportedOversampleRatio() noexcept { return 8u; }
 
+	/**
+	 * @brief Validates that an oversampling ratio is supported.
+	 * @param ratio The oversampling ratio to validate.
+	 * @throws std::runtime_error if the ratio is outside the supported range.
+	 */
 	inline void validateOversampleRatio(const unsigned ratio)
 	{
 		if (ratio == 0)
@@ -257,10 +265,22 @@ namespace params
 		LOG(logging::Level::INFO, "Origin set to lat: {}, lon: {}, alt: {}", lat, lon, alt);
 	}
 
+	/**
+	 * @brief Gets the geodetic origin latitude.
+	 * @return The origin latitude in degrees.
+	 */
 	inline double originLatitude() noexcept { return params.origin_latitude; }
 
+	/**
+	 * @brief Gets the geodetic origin longitude.
+	 * @return The origin longitude in degrees.
+	 */
 	inline double originLongitude() noexcept { return params.origin_longitude; }
 
+	/**
+	 * @brief Gets the geodetic origin altitude.
+	 * @return The origin altitude in meters.
+	 */
 	inline double originAltitude() noexcept { return params.origin_altitude; }
 
 	/**
@@ -293,21 +313,51 @@ namespace params
 		params.utm_north_hemisphere = north;
 	}
 
+	/**
+	 * @brief Gets the active coordinate frame.
+	 * @return The active coordinate frame.
+	 */
 	inline CoordinateFrame coordinateFrame() noexcept { return params.coordinate_frame; }
 
+	/**
+	 * @brief Gets the external rotation angle unit.
+	 * @return The active rotation angle unit.
+	 */
 	inline RotationAngleUnit rotationAngleUnit() noexcept { return params.rotation_angle_unit; }
 
+	/**
+	 * @brief Gets the configured UTM zone.
+	 * @return The UTM zone, or zero when UTM is not configured.
+	 */
 	inline int utmZone() noexcept { return params.utm_zone; }
 
+	/**
+	 * @brief Gets the configured UTM hemisphere.
+	 * @return true for northern hemisphere, false for southern hemisphere.
+	 */
 	inline bool utmNorthHemisphere() noexcept { return params.utm_north_hemisphere; }
 
+	/**
+	 * @brief Sets the external rotation angle unit.
+	 * @param unit The rotation angle unit to store.
+	 */
 	inline void setRotationAngleUnit(const RotationAngleUnit unit) noexcept { params.rotation_angle_unit = unit; }
 
+	/**
+	 * @brief Converts a rotation angle unit to its XML token.
+	 * @param unit The rotation angle unit.
+	 * @return The corresponding token string.
+	 */
 	inline constexpr std::string_view rotationAngleUnitToken(const RotationAngleUnit unit) noexcept
 	{
 		return unit == RotationAngleUnit::Radians ? "rad" : "deg";
 	}
 
+	/**
+	 * @brief Parses a rotation angle unit from an XML token.
+	 * @param token The token to parse.
+	 * @return The parsed unit, or std::nullopt if the token is unknown.
+	 */
 	inline std::optional<RotationAngleUnit> rotationAngleUnitFromToken(const std::string_view token) noexcept
 	{
 		if (token == "deg")

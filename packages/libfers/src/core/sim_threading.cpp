@@ -49,6 +49,7 @@ namespace core
 {
 	namespace
 	{
+		/// Rounds a non-negative floating-point value up to an unsigned integer.
 		std::uint64_t ceilToUint(const RealType value)
 		{
 			if (value <= 0.0)
@@ -65,6 +66,7 @@ namespace core
 			return static_cast<std::uint64_t>(std::ceil(value));
 		}
 
+		/// Counts FMCW chirp starts that fall inside an active interval.
 		std::uint64_t countFmcwChirpStarts(const fers_signal::FmcwChirpSignal& fmcw, const RealType segment_start,
 										   const RealType active_start, const RealType active_end)
 		{
@@ -97,6 +99,7 @@ namespace core
 			return std::min(starts_in_interval, configured - first_index);
 		}
 
+		/// Builds an active streaming source for a transmitter at an event timestamp.
 		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
 																	const RealType timestamp)
 		{

@@ -15,6 +15,7 @@ namespace core
 {
 	namespace
 	{
+		/// Converts one pulsed chunk metadata entry to JSON.
 		nlohmann::json chunkToJson(const PulseChunkMetadata& chunk)
 		{
 			return {{"chunk_index", chunk.chunk_index},
@@ -26,6 +27,7 @@ namespace core
 					{"sample_end_exclusive", chunk.sample_end_exclusive}};
 		}
 
+		/// Converts one streaming segment metadata entry to JSON.
 		nlohmann::json streamingSegmentToJson(const StreamingSegmentMetadata& segment)
 		{
 			nlohmann::json result = {{"start_time", segment.start_time},
@@ -44,6 +46,7 @@ namespace core
 			return result;
 		}
 
+		/// Converts FMCW output metadata to JSON.
 		nlohmann::json fmcwToJson(const FmcwMetadata& fmcw)
 		{
 			nlohmann::json result = {{"chirp_bandwidth", fmcw.chirp_bandwidth},
@@ -58,6 +61,7 @@ namespace core
 			return result;
 		}
 
+		/// Converts one output file metadata entry to JSON.
 		nlohmann::json fileToJson(const OutputFileMetadata& file)
 		{
 			nlohmann::json chunks = nlohmann::json::array();
@@ -92,6 +96,7 @@ namespace core
 			return result;
 		}
 
+		/// Converts a full output metadata snapshot to JSON.
 		nlohmann::json metadataToJson(const OutputMetadata& metadata)
 		{
 			nlohmann::json files = nlohmann::json::array();

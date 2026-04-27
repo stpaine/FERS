@@ -32,6 +32,7 @@ namespace processing
 {
 	namespace
 	{
+		/// Finalizes aggregate pulsed metadata after all chunks have been collected.
 		void finalizePulsedMetadata(core::OutputFileMetadata& metadata)
 		{
 			metadata.pulse_count = static_cast<std::uint64_t>(metadata.chunks.size());
@@ -58,6 +59,7 @@ namespace processing
 			metadata.sample_end_exclusive = metadata.total_samples;
 		}
 
+		/// Builds output metadata for a streaming receiver result file.
 		core::OutputFileMetadata buildStreamingMetadata(const radar::Receiver* receiver,
 														const std::string& hdf5_filename,
 														const std::size_t total_samples)

@@ -46,6 +46,7 @@ using radar::Transmitter;
 
 namespace
 {
+	/// Initializes an FMCW chirp tracker from a retarded time.
 	void initializeFmcwTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
 							   core::FmcwChirpBoundaryTracker& tracker)
 	{
@@ -176,6 +177,7 @@ namespace
 		return 2 * PI * delta_f * time + delta_phi;
 	}
 
+	/// Computes timing phase with an optional precomputed CW phase-noise lookup.
 	RealType computeTimingPhase(const Transmitter* tx, const Receiver* rx, const RealType rx_time,
 								const RealType tx_time, const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
 	{
@@ -186,7 +188,7 @@ namespace
 		return phase_noise_lookup->phaseDifference(rx->getTiming().get(), rx_time, tx->getTiming().get(), tx_time);
 	}
 
-	// Helper to check noise floor threshold (Signal > kTB)
+	/// Checks whether received power is above the thermal noise floor.
 	bool isSignalStrong(RealType power_watts, RealType temp_kelvin)
 	{
 		// Use configured rate or default to 1Hz if unconfigured to prevent divide-by-zero or silly values
@@ -249,6 +251,7 @@ namespace
 		return false;
 	}
 
+	/// Builds a compatibility streaming-source cache for classic CW paths.
 	core::ActiveStreamingSource makeClassicStreamingSource(const Transmitter* trans)
 	{
 		auto source = core::makeActiveSource(trans, params::startTime(), std::numeric_limits<RealType>::max());
@@ -259,6 +262,7 @@ namespace
 		return source;
 	}
 
+	/// Computes streaming phase for CW or FMCW sources at a receiver time.
 	bool computeStreamingPhase(const core::ActiveStreamingSource& source, const RealType rx_time, const RealType tau,
 							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
 	{
@@ -330,6 +334,7 @@ namespace
 		return true;
 	}
 
+	/// Returns average radiated power for preview visualization.
 	RealType previewRadiatedPower(const RadarSignal* waveform)
 	{
 		if (waveform == nullptr)
@@ -343,6 +348,7 @@ namespace
 		return waveform->getPower();
 	}
 
+	/// Returns waveform duty cycle for preview labels.
 	RealType previewDutyCycle(const RadarSignal* waveform)
 	{
 		if (const auto* fmcw = (waveform != nullptr) ? waveform->getFmcwChirpSignal() : nullptr; fmcw != nullptr)
@@ -352,6 +358,7 @@ namespace
 		return 1.0;
 	}
 
+	/// Formats received or radiated power as a dBm preview label.
 	std::string formatPreviewDbmLabel(const RadarSignal* waveform, const RealType average_watts,
 									  const std::string_view prefix = {})
 	{
@@ -363,6 +370,7 @@ namespace
 		return std::format("{}{:.1f} dBm", prefix, wattsToDbm(average_watts));
 	}
 
+	/// Formats target illumination density as a dBW-per-square-meter preview label.
 	std::string formatPreviewDbwPerSquareMeterLabel(const RadarSignal* waveform, const RealType average_watts)
 	{
 		if (const RealType duty_cycle = previewDutyCycle(waveform); duty_cycle < 1.0)

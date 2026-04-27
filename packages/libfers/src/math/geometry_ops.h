@@ -191,6 +191,7 @@ namespace math
 		 */
 		Vec3 operator+(const RealType value) const { return {x + value, y + value, z + value}; }
 
+		/** @brief Unary negation operator for Vec3. @return The negated vector. */
 		Vec3 operator-() const { return {-x, -y, -z}; }
 
 		/**

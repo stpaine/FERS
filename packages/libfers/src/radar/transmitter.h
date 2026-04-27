@@ -71,8 +71,10 @@ namespace radar
 		 */
 		[[nodiscard]] fers_signal::RadarSignal* getSignal() const noexcept { return _signal; }
 
+		/// Gets the FMCW chirp signal when this transmitter uses one.
 		[[nodiscard]] const fers_signal::FmcwChirpSignal* getFmcwSignal() const noexcept;
 
+		/// Returns true when the transmitter uses a continuous streaming mode.
 		[[nodiscard]] bool isStreamingMode() const noexcept
 		{
 			return _mode == OperationMode::CW_MODE || _mode == OperationMode::FMCW_MODE;

@@ -20,6 +20,7 @@
 
 namespace interp
 {
+	/// Concept constraining interpolation inputs to arithmetic values.
 	template <typename T>
 	concept RealConcept = std::is_arithmetic_v<T>;
 

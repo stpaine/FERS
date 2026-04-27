@@ -75,10 +75,21 @@ public:
 	 */
 	[[nodiscard]] const std::string& getOutputDir() const noexcept { return _output_dir; }
 
+	/**
+	 * @brief Stores metadata from the most recent simulation run.
+	 * @param metadata The metadata snapshot to store.
+	 */
 	void setLastOutputMetadata(core::OutputMetadata metadata) { _last_output_metadata = std::move(metadata); }
 
+	/**
+	 * @brief Clears any stored simulation output metadata.
+	 */
 	void clearLastOutputMetadata() { _last_output_metadata = core::OutputMetadata{}; }
 
+	/**
+	 * @brief Serializes the last simulation output metadata as JSON.
+	 * @return JSON representation of the last output metadata.
+	 */
 	[[nodiscard]] std::string getLastOutputMetadataJson() const
 	{
 		return core::outputMetadataToJsonString(_last_output_metadata);
@@ -96,5 +107,6 @@ private:
 	/// Output directory for the simulation files
 	std::string _output_dir = ".";
 
+	/// Metadata from the most recent simulation output.
 	core::OutputMetadata _last_output_metadata;
 };

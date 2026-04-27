@@ -284,22 +284,22 @@ namespace core
 		[[nodiscard]] SimulationState& getSimulationState() noexcept { return _simulation_state; }
 
 	private:
-		std::vector<std::unique_ptr<radar::Platform>> _platforms;
+		std::vector<std::unique_ptr<radar::Platform>> _platforms; ///< Owned radar platforms.
 
-		std::vector<std::unique_ptr<radar::Transmitter>> _transmitters;
+		std::vector<std::unique_ptr<radar::Transmitter>> _transmitters; ///< Owned transmitters.
 
-		std::vector<std::unique_ptr<radar::Receiver>> _receivers;
+		std::vector<std::unique_ptr<radar::Receiver>> _receivers; ///< Owned receivers.
 
-		std::vector<std::unique_ptr<radar::Target>> _targets;
+		std::vector<std::unique_ptr<radar::Target>> _targets; ///< Owned targets.
 
-		std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>> _waveforms;
+		std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>> _waveforms; ///< Owned waveform assets.
 
-		std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>> _antennas;
+		std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>> _antennas; ///< Owned antenna assets.
 
-		std::unordered_map<SimId, std::unique_ptr<timing::PrototypeTiming>> _timings;
+		std::unordered_map<SimId, std::unique_ptr<timing::PrototypeTiming>> _timings; ///< Owned timing prototypes.
 
-		std::priority_queue<Event, std::vector<Event>, EventComparator> _event_queue;
+		std::priority_queue<Event, std::vector<Event>, EventComparator> _event_queue; ///< Pending simulation events.
 
-		SimulationState _simulation_state;
+		SimulationState _simulation_state; ///< Mutable runtime simulation state.
 	};
 }

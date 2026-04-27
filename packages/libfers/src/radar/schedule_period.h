@@ -19,8 +19,8 @@ namespace radar
 	 */
 	struct SchedulePeriod
 	{
-		RealType start{};
-		RealType end{};
+		RealType start{}; ///< Period start time in seconds.
+		RealType end{}; ///< Period end time in seconds.
 	};
 
 	/**

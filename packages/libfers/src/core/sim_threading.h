@@ -174,21 +174,28 @@ namespace core
 		void handleRxStreamingEnd(radar::Receiver* rx);
 
 	private:
+		/// Per-receiver FMCW tracker state for direct and reflected streaming paths.
 		struct ReceiverTrackerCache
 		{
-			std::vector<FmcwChirpBoundaryTracker> direct;
-			std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected;
+			std::vector<FmcwChirpBoundaryTracker> direct; ///< Trackers for direct paths by source index.
+			std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected; ///< Trackers for reflected paths.
 		};
 
+		/// Calculates one streaming I/Q sample for the receiver at the specified time step.
 		[[nodiscard]] ComplexType calculateStreamingSample(radar::Receiver* rx, RealType t_step,
 														   const std::vector<ActiveStreamingSource>& streaming_sources,
 														   ReceiverTrackerCache& tracker_cache) const;
 
+		/// Adds tracker storage for a newly active streaming source.
 		void appendStreamingTrackerSource();
+
+		/// Removes tracker storage for a streaming source that has ended.
 		void eraseStreamingTrackerSource(std::size_t source_index);
 
+		/// Creates the CW phase-noise lookup if any active timing source needs it.
 		void ensureCwPhaseNoiseLookup();
 
+		/// Emits summary logs for streaming receiver buffers.
 		void logStreamingSummaries() const;
 
 		/**
@@ -208,6 +215,7 @@ namespace core
 		 */
 		void updateProgress();
 
+		/// Collects streaming sources active anywhere within the requested time window.
 		[[nodiscard]] std::vector<ActiveStreamingSource> collectStreamingSourcesForWindow(RealType start_time,
 																						  RealType end_time) const;
 
@@ -220,14 +228,14 @@ namespace core
 		pool::ThreadPool& _pool; ///< Reference to the global thread pool.
 		std::shared_ptr<ProgressReporter> _reporter; ///< Shared progress reporter instance.
 		std::vector<std::jthread> _finalizer_threads; ///< Collection of dedicated pulsed finalizer threads.
-		std::shared_ptr<OutputMetadataCollector> _metadata_collector;
+		std::shared_ptr<OutputMetadataCollector> _metadata_collector; ///< Collector for generated output metadata.
 
 		std::chrono::steady_clock::time_point _last_report_time; ///< Timestamp of the last progress report.
 		int _last_reported_percent = -1; ///< The last reported percentage to prevent redundant updates.
 
 		std::string _output_dir; ///< Output directory for the simulation files.
-		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup;
-		std::vector<ReceiverTrackerCache> _streaming_tracker_caches;
+		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup; ///< Cached CW phase-noise lookup.
+		std::vector<ReceiverTrackerCache> _streaming_tracker_caches; ///< Per-receiver streaming tracker caches.
 	};
 
 	/**

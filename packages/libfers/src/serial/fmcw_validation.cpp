@@ -19,6 +19,7 @@ namespace serial::fmcw_validation
 {
 	namespace
 	{
+		/// Emits a warning when a streaming scenario may allocate a large I/Q buffer.
 		void warnStreamingMemory(const std::string& owner)
 		{
 			const RealType duration = std::max<RealType>(0.0, params::endTime() - params::startTime());

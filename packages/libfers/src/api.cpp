@@ -165,10 +165,11 @@ static fers_log_level_t map_internal_log_level(logging::Level level)
 
 namespace
 {
-	std::mutex log_callback_mutex;
-	fers_log_callback_t log_callback = nullptr;
-	void* log_callback_user_data = nullptr;
+	std::mutex log_callback_mutex; ///< Guards C API log callback state.
+	fers_log_callback_t log_callback = nullptr; ///< Registered C API log callback, if any.
+	void* log_callback_user_data = nullptr; ///< Opaque user data passed to the registered log callback.
 
+	/// Forwards an internal formatted log line to the registered C API callback.
 	void forward_log_callback(const logging::Level level, const std::string& line, void* /*user_data*/)
 	{
 		fers_log_callback_t callback = nullptr;

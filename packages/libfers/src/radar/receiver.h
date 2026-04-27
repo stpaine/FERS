@@ -42,8 +42,8 @@ namespace radar
 		 */
 		enum class RecvFlag
 		{
-			FLAG_NODIRECT = 1,
-			FLAG_NOPROPLOSS = 2
+			FLAG_NODIRECT = 1, ///< Disable direct-path reception.
+			FLAG_NOPROPLOSS = 2 ///< Disable propagation-loss scaling.
 		};
 
 		/**
@@ -286,7 +286,7 @@ namespace radar
 
 	private:
 		// --- Common Members ---
-		bool _is_active = false;
+		bool _is_active = false; ///< True while the receiver is active.
 		RealType _noise_temperature = 0; ///< The noise temperature of the receiver.
 		int _flags = 0; ///< Flags for receiver configuration.
 		OperationMode _mode; ///< The operational mode of the receiver.
@@ -298,17 +298,17 @@ namespace radar
 		RealType _window_prf = 0; ///< The pulse repetition frequency (PRF) of the radar window.
 		RealType _window_skip = 0; ///< The skip time between radar windows.
 		std::vector<std::unique_ptr<serial::Response>>
-			_inbox; /// Mailbox for incoming Response objects during a receive window.
-		std::mutex _inbox_mutex;
-		std::queue<core::RenderingJob> _finalizer_queue; /// Queue of completed windows waiting for final processing.
-		std::mutex _finalizer_queue_mutex;
-		std::condition_variable _finalizer_queue_cv;
+			_inbox; ///< Mailbox for incoming Response objects during a receive window.
+		std::mutex _inbox_mutex; ///< Mutex guarding the pulsed receive inbox.
+		std::queue<core::RenderingJob> _finalizer_queue; ///< Completed windows waiting for final processing.
+		std::mutex _finalizer_queue_mutex; ///< Mutex guarding the finalizer queue.
+		std::condition_variable _finalizer_queue_cv; ///< Condition variable for finalizer queue updates.
 
 		// --- CW Mode Members ---
 		std::vector<std::unique_ptr<serial::Response>>
-			_pulsed_interference_log; /// Log of pulsed signals that interfere with CW reception.
-		std::mutex _interference_log_mutex;
-		std::vector<ComplexType> _streaming_iq_data; /// Buffer for raw, simulation-long I/Q data.
+			_pulsed_interference_log; ///< Log of pulsed signals that interfere with CW reception.
+		std::mutex _interference_log_mutex; ///< Mutex guarding the pulsed interference log.
+		std::vector<ComplexType> _streaming_iq_data; ///< Buffer for raw, simulation-long I/Q data.
 		std::mutex _cw_mutex; ///< Mutex for handling CW data.
 	};
 }

@@ -25,36 +25,37 @@ namespace fers_signal
 
 namespace core
 {
+	/// Cached description of an active streaming transmitter segment.
 	struct ActiveStreamingSource
 	{
-		const radar::Transmitter* transmitter = nullptr;
-		RealType segment_start = 0.0;
-		RealType segment_end = 0.0;
+		const radar::Transmitter* transmitter = nullptr; ///< Transmitter active during this segment.
+		RealType segment_start = 0.0; ///< Segment start time in seconds.
+		RealType segment_end = 0.0; ///< Segment end time in seconds.
 
-		// Cached for one TX_STREAMING_START/TX_STREAMING_END segment. The world owns
-		// the waveform, so the raw FMCW pointer is stable while this source is active.
-		RealType carrier_freq = 0.0;
-		RealType amplitude = 0.0;
-		bool is_fmcw = false;
+		RealType carrier_freq = 0.0; ///< Cached carrier frequency in hertz.
+		RealType amplitude = 0.0; ///< Cached emitted signal amplitude.
+		bool is_fmcw = false; ///< True when the source waveform is FMCW.
 
-		const fers_signal::FmcwChirpSignal* fmcw = nullptr;
-		RealType chirp_duration = 0.0;
-		RealType chirp_period = 0.0;
-		RealType chirp_rate = 0.0;
-		RealType start_freq_off = 0.0;
-		RealType two_pi_f0 = 0.0;
-		RealType pi_alpha = 0.0;
-		std::optional<std::size_t> chirp_count;
+		const fers_signal::FmcwChirpSignal* fmcw = nullptr; ///< Stable pointer to the FMCW waveform, if any.
+		RealType chirp_duration = 0.0; ///< Cached FMCW chirp duration in seconds.
+		RealType chirp_period = 0.0; ///< Cached FMCW chirp period in seconds.
+		RealType chirp_rate = 0.0; ///< Cached FMCW chirp rate in hertz per second.
+		RealType start_freq_off = 0.0; ///< Cached FMCW start frequency offset in hertz.
+		RealType two_pi_f0 = 0.0; ///< Cached two-pi carrier angular frequency factor.
+		RealType pi_alpha = 0.0; ///< Cached pi-scaled FMCW chirp-rate factor.
+		std::optional<std::size_t> chirp_count; ///< Optional finite chirp count for the segment.
 	};
 
+	/// Builds an active-source cache from a streaming transmitter and segment bounds.
 	[[nodiscard]] ActiveStreamingSource makeActiveSource(const radar::Transmitter* tx, RealType segment_start,
 														 RealType segment_end);
 
+	/// Tracks the current FMCW chirp boundary for a streaming path.
 	struct FmcwChirpBoundaryTracker
 	{
-		bool initialized = false;
-		RealType t_n = 0.0;
-		std::size_t n_current = 0;
+		bool initialized = false; ///< True after the tracker has been initialized for a path.
+		RealType t_n = 0.0; ///< Current chirp boundary time in seconds.
+		std::size_t n_current = 0; ///< Current zero-based chirp index.
 	};
 
 	/**

@@ -38,7 +38,7 @@ namespace core
 	{
 		using radar::OperationMode;
 
-		constexpr std::uint64_t max_uint64 = std::numeric_limits<std::uint64_t>::max();
+		constexpr std::uint64_t max_uint64 = std::numeric_limits<std::uint64_t>::max(); ///< Saturating byte-count cap.
 
 		/**
 		 * @brief Checks whether a receiver stores a full-duration streaming IQ buffer.

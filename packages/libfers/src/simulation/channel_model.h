@@ -59,25 +59,33 @@ namespace fers_signal
 
 namespace simulation
 {
+	/// Sampled phase-noise buffer for one timing source.
 	struct CwPhaseNoiseBuffer
 	{
-		RealType start_time{};
-		RealType dt{};
-		std::vector<RealType> samples;
+		RealType start_time{}; ///< First sample time in seconds.
+		RealType dt{}; ///< Time spacing between phase-noise samples in seconds.
+		std::vector<RealType> samples; ///< Phase-noise samples in radians.
 
+		/// Returns the interpolated phase-noise sample at the specified time.
 		[[nodiscard]] RealType sampleAt(RealType time) const noexcept;
 	};
 
+	/// Lookup table for CW phase noise across timing sources.
 	struct CwPhaseNoiseLookup
 	{
-		RealType start_time{};
-		RealType end_time{};
-		RealType dt{};
-		std::unordered_map<SimId, CwPhaseNoiseBuffer> buffers;
+		RealType start_time{}; ///< Lookup start time in seconds.
+		RealType end_time{}; ///< Lookup end time in seconds.
+		RealType dt{}; ///< Lookup sample spacing in seconds.
+		std::unordered_map<SimId, CwPhaseNoiseBuffer> buffers; ///< Per-timing-source phase-noise buffers.
 
+		/// Builds a phase-noise lookup for the requested timing sources and time range.
 		[[nodiscard]] static CwPhaseNoiseLookup build(std::span<const std::shared_ptr<timing::Timing>> timings,
 													  RealType start_time, RealType end_time);
+
+		/// Samples phase noise for one timing source at the specified time.
 		[[nodiscard]] RealType sample(const timing::Timing* timing, RealType time) const noexcept;
+
+		/// Computes receiver-minus-transmitter phase noise at two propagation times.
 		[[nodiscard]] RealType phaseDifference(const timing::Timing* rx_timing, RealType rx_time,
 											   const timing::Timing* tx_timing, RealType tx_time) const noexcept;
 	};
@@ -157,6 +165,7 @@ namespace simulation
 	ComplexType calculateDirectPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
 												RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
+	/// Calculates a direct-path contribution from a cached streaming source.
 	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
 														 const radar::Receiver* recv, RealType timeK,
 														 const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
@@ -176,6 +185,7 @@ namespace simulation
 												   const radar::Target* targ, RealType timeK,
 												   const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
+	/// Calculates a reflected-path contribution from a cached streaming source.
 	ComplexType calculateStreamingReflectedPathContribution(const core::ActiveStreamingSource& source,
 															const radar::Receiver* recv, const radar::Target* targ,
 															RealType timeK,
@@ -231,14 +241,14 @@ namespace simulation
 	 */
 	struct PreviewLink
 	{
-		LinkType type;
-		LinkQuality quality;
-		std::string label;
-		SimId source_id; // The start of this specific link segment
-		SimId dest_id; // The end of this specific link segment
-		SimId origin_id; // The original source of energy (Transmitter)
-		double rcs{-1.0}; // RCS in m^2 for this path; -1.0 if not applicable
-		double actual_power_dbm{-999.0}; // Received power with actual RCS applied; -999 if not applicable
+		LinkType type; ///< Visual link category.
+		LinkQuality quality; ///< Radiometric link quality.
+		std::string label; ///< Human-readable label for display.
+		SimId source_id; ///< SimId at the start of this specific link segment.
+		SimId dest_id; ///< SimId at the end of this specific link segment.
+		SimId origin_id; ///< Original transmitted-energy source SimId.
+		double rcs{-1.0}; ///< RCS in square meters, or -1.0 when not applicable.
+		double actual_power_dbm{-999.0}; ///< Received power in dBm with actual RCS, or sentinel when unavailable.
 	};
 
 	/**

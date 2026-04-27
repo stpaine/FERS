@@ -133,8 +133,10 @@ namespace fers_signal
 
 		~FirFilter() override = default;
 
+		/// Filters a single real-valued sample; FIR scalar filtering is unsupported.
 		RealType filter(RealType) override { return 0; }
 
+		/// Filters real-valued samples; FIR block filtering is unsupported for this overload.
 		void filter(std::span<RealType> /*samples*/) noexcept override {}
 
 		/**

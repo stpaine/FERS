@@ -27,6 +27,7 @@
 
 namespace serial
 {
+	/// Reads a 2D antenna gain pattern from the named dataset.
 	std::vector<std::vector<RealType>> readPattern(const std::string& name, const std::string& datasetName);
 }
 
@@ -436,10 +437,11 @@ namespace antenna
 	class XmlAntenna final : public Antenna
 	{
 	public:
+		/// Symmetry mode for one-dimensional XML antenna gain axes.
 		enum class AxisSymmetry
 		{
-			Mirrored,
-			None,
+			Mirrored, ///< Mirror positive-axis samples onto negative angles.
+			None, ///< Use the axis samples exactly as provided.
 		};
 
 		/**
@@ -492,6 +494,7 @@ namespace antenna
 		[[nodiscard]] const interp::InterpSet* getElevationSamples() const noexcept { return _elev_samples.get(); }
 
 	private:
+		/// Looks up a gain value from an XML antenna axis interpolation set.
 		[[nodiscard]] std::optional<RealType> lookupAxisGain(const interp::InterpSet* set, RealType angle,
 															 AxisSymmetry symmetry) const noexcept;
 
