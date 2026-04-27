@@ -656,6 +656,45 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 	}
 }
 
+TEST_CASE("SimulationEngine reports progress while processing long streaming spans", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(100.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	auto world = createPhysicsWorld();
+	auto* rx = world->getReceivers().front().get();
+	rx->prepareStreamingData(100);
+	rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	std::vector<int> progress_updates;
+	std::vector<std::string> messages;
+	auto reporter = std::make_shared<core::ProgressReporter>(
+		[&](const std::string& message, const int current, int)
+		{
+			messages.push_back(message);
+			progress_updates.push_back(current);
+		});
+
+	core::SimulationEngine engine(world.get(), pool, reporter, ".");
+	engine.processStreamingPhysics(1.0);
+
+	REQUIRE_FALSE(progress_updates.empty());
+	bool saw_intermediate_progress = false;
+	for (const int progress : progress_updates)
+	{
+		if (progress > 0 && progress < 100)
+		{
+			saw_intermediate_progress = true;
+			break;
+		}
+	}
+	REQUIRE(saw_intermediate_progress);
+	REQUIRE_THAT(messages.front(), ContainsSubstring("Simulating..."));
+}
+
 TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][threading][fmcw]")
 {
 	ParamGuard guard;

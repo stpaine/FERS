@@ -30,6 +30,75 @@ import {
     Section,
 } from './InspectorControls';
 
+export type RadarType = 'pulsed' | 'cw' | 'fmcw';
+type CompatibleWaveform = {
+    id: string;
+    name: string;
+    waveformType: string;
+};
+
+export const RADAR_MODE_OPTIONS: ReadonlyArray<{
+    value: RadarType;
+    label: string;
+}> = [
+    { value: 'pulsed', label: 'Pulsed' },
+    { value: 'cw', label: 'CW' },
+    { value: 'fmcw', label: 'FMCW' },
+];
+
+const WAVEFORM_TYPE_BY_RADAR_TYPE: Record<RadarType, string> = {
+    pulsed: 'pulsed_from_file',
+    cw: 'cw',
+    fmcw: 'fmcw_up_chirp',
+};
+
+export function isWaveformCompatibleWithRadarType(
+    waveform: CompatibleWaveform | undefined,
+    radarType: RadarType
+): boolean {
+    return waveform?.waveformType === WAVEFORM_TYPE_BY_RADAR_TYPE[radarType];
+}
+
+export function getCompatibleWaveforms(
+    waveforms: CompatibleWaveform[],
+    radarType: RadarType
+): CompatibleWaveform[] {
+    return waveforms.filter((waveform) =>
+        isWaveformCompatibleWithRadarType(waveform, radarType)
+    );
+}
+
+export function shouldClearWaveformForRadarType(
+    waveformId: string | null | undefined,
+    waveforms: CompatibleWaveform[],
+    radarType: RadarType
+): boolean {
+    if (!waveformId) {
+        return false;
+    }
+
+    return !isWaveformCompatibleWithRadarType(
+        waveforms.find((waveform) => waveform.id === waveformId),
+        radarType
+    );
+}
+
+export function resolveWaveformSelectValue(
+    waveformId: string | null | undefined,
+    waveforms: CompatibleWaveform[],
+    radarType: RadarType
+): string {
+    return shouldClearWaveformForRadarType(waveformId, waveforms, radarType)
+        ? ''
+        : (waveformId ?? '');
+}
+
+export function getPulsedRadarFieldLabels(radarType: RadarType): string[] {
+    return radarType === 'pulsed'
+        ? ['PRF (Hz)', 'Window Skip (s)', 'Window Length (s)']
+        : [];
+}
+
 interface PlatformComponentInspectorProps {
     component: PlatformComponent;
     platformId: string;
@@ -47,6 +116,8 @@ export function PlatformComponentInspector({
     // Updates are targeted using the array index in the path string
     const handleChange = (path: string, value: unknown) =>
         updateItem(platformId, `components.${index}.${path}`, value);
+    const handleComponentChange = (value: PlatformComponent) =>
+        updateItem(platformId, `components.${index}`, value);
 
     const renderSchedule = (
         c: MonostaticComponent | TransmitterComponent | ReceiverComponent
@@ -128,93 +199,142 @@ export function PlatformComponentInspector({
 
     const renderCommonRadarFields = (
         c: MonostaticComponent | TransmitterComponent | ReceiverComponent
-    ) => (
-        <>
-            <BufferedTextField
-                label="Component Name"
-                size="small"
-                fullWidth
-                value={c.name}
-                allowEmpty={false}
-                onChange={(v) => handleChange('name', v)}
-                sx={{ mb: 2 }}
-            />
-            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Radar Mode</InputLabel>
-                <Select
-                    label="Radar Mode"
-                    value={c.radarType}
-                    onChange={(e) => handleChange('radarType', e.target.value)}
-                >
-                    <MenuItem value="pulsed">Pulsed</MenuItem>
-                    <MenuItem value="cw">CW</MenuItem>
-                </Select>
-            </FormControl>
+    ) => {
+        const radarType = c.radarType as RadarType;
+        const compatibleWaveforms = getCompatibleWaveforms(
+            waveforms,
+            radarType
+        );
+        const handleRadarTypeChange = (nextRadarType: RadarType) => {
+            if ('waveformId' in c) {
+                const waveformId = shouldClearWaveformForRadarType(
+                    c.waveformId,
+                    waveforms,
+                    nextRadarType
+                )
+                    ? null
+                    : c.waveformId;
 
-            {'waveformId' in c && (
+                handleComponentChange({
+                    ...c,
+                    radarType: nextRadarType,
+                    waveformId,
+                });
+                return;
+            }
+
+            handleComponentChange({
+                ...c,
+                radarType: nextRadarType,
+            });
+        };
+
+        return (
+            <>
+                <BufferedTextField
+                    label="Component Name"
+                    size="small"
+                    fullWidth
+                    value={c.name}
+                    allowEmpty={false}
+                    onChange={(v) => handleChange('name', v)}
+                    sx={{ mb: 2 }}
+                />
                 <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                    <InputLabel>Waveform</InputLabel>
+                    <InputLabel>Radar Mode</InputLabel>
                     <Select
-                        label="Waveform"
-                        value={c.waveformId ?? ''}
+                        label="Radar Mode"
+                        value={radarType}
                         onChange={(e) =>
-                            handleChange('waveformId', e.target.value)
+                            handleRadarTypeChange(e.target.value as RadarType)
+                        }
+                    >
+                        {RADAR_MODE_OPTIONS.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+
+                {'waveformId' in c && (
+                    <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                        <InputLabel>Waveform</InputLabel>
+                        <Select
+                            label="Waveform"
+                            value={resolveWaveformSelectValue(
+                                c.waveformId,
+                                waveforms,
+                                radarType
+                            )}
+                            onChange={(e) =>
+                                handleChange(
+                                    'waveformId',
+                                    e.target.value === ''
+                                        ? null
+                                        : e.target.value
+                                )
+                            }
+                        >
+                            <MenuItem value="">
+                                <em>None</em>
+                            </MenuItem>
+                            {compatibleWaveforms.map((w) => (
+                                <MenuItem key={w.id} value={w.id}>
+                                    {w.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                )}
+
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                    <InputLabel>Antenna</InputLabel>
+                    <Select
+                        label="Antenna"
+                        value={c.antennaId ?? ''}
+                        onChange={(e) =>
+                            handleChange('antennaId', e.target.value)
                         }
                     >
                         <MenuItem value="">
                             <em>None</em>
                         </MenuItem>
-                        {waveforms.map((w) => (
-                            <MenuItem key={w.id} value={w.id}>
-                                {w.name}
+                        {antennas.map((a) => (
+                            <MenuItem key={a.id} value={a.id}>
+                                {a.name}
                             </MenuItem>
                         ))}
                     </Select>
                 </FormControl>
-            )}
-
-            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Antenna</InputLabel>
-                <Select
-                    label="Antenna"
-                    value={c.antennaId ?? ''}
-                    onChange={(e) => handleChange('antennaId', e.target.value)}
-                >
-                    <MenuItem value="">
-                        <em>None</em>
-                    </MenuItem>
-                    {antennas.map((a) => (
-                        <MenuItem key={a.id} value={a.id}>
-                            {a.name}
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                    <InputLabel>Timing Source</InputLabel>
+                    <Select
+                        label="Timing Source"
+                        value={c.timingId ?? ''}
+                        onChange={(e) =>
+                            handleChange('timingId', e.target.value)
+                        }
+                    >
+                        <MenuItem value="">
+                            <em>None</em>
                         </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-            <FormControl fullWidth size="small" sx={{ mb: 2 }}>
-                <InputLabel>Timing Source</InputLabel>
-                <Select
-                    label="Timing Source"
-                    value={c.timingId ?? ''}
-                    onChange={(e) => handleChange('timingId', e.target.value)}
-                >
-                    <MenuItem value="">
-                        <em>None</em>
-                    </MenuItem>
-                    {timings.map((t) => (
-                        <MenuItem key={t.id} value={t.id}>
-                            {t.name}
-                        </MenuItem>
-                    ))}
-                </Select>
-            </FormControl>
-        </>
-    );
+                        {timings.map((t) => (
+                            <MenuItem key={t.id} value={t.id}>
+                                {t.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+            </>
+        );
+    };
 
     const renderReceiverFields = (
         c: MonostaticComponent | ReceiverComponent
     ) => (
         <>
-            {c.radarType === 'pulsed' && (
+            {(c.radarType as RadarType) === 'pulsed' && (
                 <>
                     <NumberField
                         label="Window Skip (s)"
@@ -266,7 +386,7 @@ export function PlatformComponentInspector({
             return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {renderCommonRadarFields(component)}
-                    {component.radarType === 'pulsed' && (
+                    {(component.radarType as RadarType) === 'pulsed' && (
                         <NumberField
                             label="PRF (Hz)"
                             value={component.prf}
@@ -282,7 +402,7 @@ export function PlatformComponentInspector({
             return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {renderCommonRadarFields(component)}
-                    {component.radarType === 'pulsed' && (
+                    {(component.radarType as RadarType) === 'pulsed' && (
                         <NumberField
                             label="PRF (Hz)"
                             value={component.prf}
@@ -297,7 +417,7 @@ export function PlatformComponentInspector({
             return (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {renderCommonRadarFields(component)}
-                    {component.radarType === 'pulsed' && (
+                    {(component.radarType as RadarType) === 'pulsed' && (
                         <NumberField
                             label="PRF (Hz)"
                             value={component.prf}

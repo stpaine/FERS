@@ -19,6 +19,8 @@ export type SimulationProgressDetail = {
 
 export type SimulationRunStatus = 'idle' | 'running' | 'completed' | 'failed';
 
+export type SimulationOutputMode = 'pulsed' | 'cw' | 'fmcw';
+
 export type SimulationOutputChunkMetadata = {
     chunk_index: number;
     i_dataset: string;
@@ -29,18 +31,29 @@ export type SimulationOutputChunkMetadata = {
     sample_end_exclusive: number;
 };
 
-export type SimulationOutputCwSegmentMetadata = {
+export type SimulationOutputStreamingSegmentMetadata = {
     start_time: number;
     end_time: number;
     sample_count: number;
     sample_start: number;
     sample_end_exclusive: number;
+    first_chirp_start_time?: number;
+    emitted_chirp_count?: number;
+};
+
+export type SimulationOutputFmcwMetadata = {
+    chirp_bandwidth: number;
+    chirp_duration: number;
+    chirp_period: number;
+    chirp_rate: number;
+    start_frequency_offset: number;
+    chirp_count?: number;
 };
 
 export type SimulationOutputFileMetadata = {
     receiver_id: number;
     receiver_name: string;
-    mode: 'pulsed' | 'cw';
+    mode: SimulationOutputMode;
     path: string;
     total_samples: number;
     sample_start: number;
@@ -50,7 +63,8 @@ export type SimulationOutputFileMetadata = {
     max_pulse_length_samples: number;
     uniform_pulse_length: boolean;
     chunks: SimulationOutputChunkMetadata[];
-    cw_segments: SimulationOutputCwSegmentMetadata[];
+    streaming_segments: SimulationOutputStreamingSegmentMetadata[];
+    fmcw?: SimulationOutputFmcwMetadata;
 };
 
 export type SimulationOutputMetadata = {
@@ -63,6 +77,34 @@ export type SimulationOutputMetadata = {
     oversample_ratio: number;
     files: SimulationOutputFileMetadata[];
 };
+
+export type RawSimulationOutputFileMetadata = Omit<
+    SimulationOutputFileMetadata,
+    'streaming_segments'
+> & {
+    streaming_segments?: SimulationOutputStreamingSegmentMetadata[];
+    cw_segments?: SimulationOutputStreamingSegmentMetadata[];
+};
+
+export type RawSimulationOutputMetadata = Omit<
+    SimulationOutputMetadata,
+    'files'
+> & {
+    files: RawSimulationOutputFileMetadata[];
+};
+
+export const normalizeSimulationOutputMetadata = (
+    metadata: RawSimulationOutputMetadata
+): SimulationOutputMetadata => ({
+    ...metadata,
+    files: metadata.files.map((file) => {
+        const { cw_segments, streaming_segments, ...normalizedFile } = file;
+        return {
+            ...normalizedFile,
+            streaming_segments: streaming_segments ?? cw_segments ?? [],
+        };
+    }),
+});
 
 type SimulationProgressStore = {
     isSimulating: boolean;

@@ -8,7 +8,7 @@ import type {
 
 type ProgressMessageMatch =
     | { kind: 'main'; key: 'main'; detailId: string }
-    | { kind: 'cw'; key: string; receiverName: string; detailId: string }
+    | { kind: 'streaming'; key: string; receiverName: string; detailId: string }
     | { kind: 'export'; key: string; receiverName: string; detailId: string }
     | { kind: 'unknown'; key: string; detailId: string };
 
@@ -23,11 +23,11 @@ const detailOrder: Record<string, number> = {
     'main-progress': 0,
     'main-export-wait': 1,
     'main-complete': 2,
-    'cw-finalizing': 0,
-    'cw-rendering-interference': 1,
-    'cw-applying-noise': 2,
-    'cw-writing-hdf5': 3,
-    'cw-finalized': 4,
+    'streaming-finalizing': 0,
+    'streaming-rendering-interference': 1,
+    'streaming-applying-noise': 2,
+    'streaming-writing-hdf5': 3,
+    'streaming-finalized': 4,
     'export-chunk': 0,
     'export-finished': 1,
 };
@@ -40,7 +40,7 @@ const sortDetails = (details: SimulationProgressDetail[]) =>
     );
 
 const buildReceiverMatch = (
-    kind: 'cw' | 'export',
+    kind: 'streaming' | 'export',
     receiverName: string,
     detailId: string
 ): ProgressMessageMatch => ({
@@ -76,41 +76,49 @@ const matchProgressMessage = (message: string): ProgressMessageMatch => {
 
     if (message.startsWith('Finalizing CW Receiver ')) {
         return buildReceiverMatch(
-            'cw',
+            'streaming',
             message.slice('Finalizing CW Receiver '.length),
-            'cw-finalizing'
+            'streaming-finalizing'
+        );
+    }
+
+    if (message.startsWith('Finalizing FMCW Receiver ')) {
+        return buildReceiverMatch(
+            'streaming',
+            message.slice('Finalizing FMCW Receiver '.length),
+            'streaming-finalizing'
         );
     }
 
     if (message.startsWith('Rendering Interference for ')) {
         return buildReceiverMatch(
-            'cw',
+            'streaming',
             message.slice('Rendering Interference for '.length),
-            'cw-rendering-interference'
+            'streaming-rendering-interference'
         );
     }
 
     if (message.startsWith('Applying Noise for ')) {
         return buildReceiverMatch(
-            'cw',
+            'streaming',
             message.slice('Applying Noise for '.length),
-            'cw-applying-noise'
+            'streaming-applying-noise'
         );
     }
 
     if (message.startsWith('Writing HDF5 for ')) {
         return buildReceiverMatch(
-            'cw',
+            'streaming',
             message.slice('Writing HDF5 for '.length),
-            'cw-writing-hdf5'
+            'streaming-writing-hdf5'
         );
     }
 
     if (message.startsWith('Finalized ')) {
         return buildReceiverMatch(
-            'cw',
+            'streaming',
             message.slice('Finalized '.length),
-            'cw-finalized'
+            'streaming-finalized'
         );
     }
 
@@ -175,6 +183,10 @@ const mergeProgress = (
     const match = matchProgressMessage(progress.message);
     const existingDetails = existing?.details ?? [];
 
+    if (match.kind === 'main') {
+        return stripDetails(progress);
+    }
+
     return {
         ...stripDetails(progress),
         details: upsertDetail(existingDetails, toDetail(match, progress)),
@@ -206,7 +218,7 @@ const completeProgressForMatch = (
         };
     }
 
-    if (match.kind === 'cw') {
+    if (match.kind === 'streaming') {
         return {
             message: `Finalized ${match.receiverName}`,
             current: 100,

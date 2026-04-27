@@ -136,6 +136,16 @@ namespace processing
 
 			return metadata;
 		}
+
+		/// Returns the UI-facing finalization label for a streaming receiver.
+		std::string streamingFinalizerLabel(const radar::Receiver* receiver)
+		{
+			if (receiver->getMode() == radar::OperationMode::FMCW_MODE)
+			{
+				return "FMCW";
+			}
+			return "CW";
+		}
 	}
 
 	void runPulsedFinalizer(radar::Receiver* receiver, const std::vector<std::unique_ptr<radar::Target>>* targets,
@@ -272,16 +282,19 @@ namespace processing
 								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector)
 	{
 		LOG(logging::Level::INFO, "Finalization task started for streaming receiver '{}'.", receiver->getName());
-		if (reporter)
-		{
-			reporter->report(std::format("Finalizing Streaming Receiver {}", receiver->getName()), 0, 100);
-		}
 
 		auto& iq_buffer = receiver->getMutableStreamingData();
 		if (iq_buffer.empty())
 		{
 			LOG(logging::Level::INFO, "No streaming data to finalize for receiver '{}'.", receiver->getName());
 			return;
+		}
+
+		if (reporter)
+		{
+			reporter->report(
+				std::format("Finalizing {} Receiver {}", streamingFinalizerLabel(receiver), receiver->getName()), 0,
+				100);
 		}
 
 		if (reporter)

@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { defaultGlobalParameters } from './defaults';
-import { buildHydratedScenarioState } from './hydration';
+import { buildHydratedScenarioState, parseScenarioData } from './hydration';
 import { ScenarioData, ScenarioState } from './types';
 
 function createScenarioData(): ScenarioData {
@@ -141,5 +141,76 @@ describe('buildHydratedScenarioState', () => {
         expect(hydrated.selectedComponentId).toBeNull();
         expect(hydrated.currentTime).toBe(5);
         expect(hydrated.isDirty).toBe(true);
+    });
+});
+
+describe('parseScenarioData FMCW hydration', () => {
+    test('hydrates FMCW waveform and component mode from backend data', () => {
+        const scenario = parseScenarioData({
+            name: 'FMCW Scenario',
+            parameters: {},
+            waveforms: [
+                {
+                    id: 1,
+                    name: 'Up Chirp',
+                    power: 50,
+                    carrier_frequency: 10e9,
+                    fmcw_up_chirp: {
+                        chirp_bandwidth: 20e6,
+                        chirp_duration: 250e-6,
+                        chirp_period: 300e-6,
+                        start_frequency_offset: -10e6,
+                        chirp_count: 8,
+                    },
+                },
+            ],
+            timings: [],
+            antennas: [],
+            platforms: [
+                {
+                    id: 2,
+                    name: 'Radar Platform',
+                    motionpath: {
+                        interpolation: 'static',
+                        positionwaypoints: [
+                            { x: 0, y: 0, altitude: 0, time: 0 },
+                        ],
+                    },
+                    fixedrotation: {
+                        startazimuth: 0,
+                        startelevation: 0,
+                        azimuthrate: 0,
+                        elevationrate: 0,
+                    },
+                    components: [
+                        {
+                            transmitter: {
+                                id: 3,
+                                name: 'FMCW TX',
+                                fmcw_mode: {},
+                                waveform: 1,
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        expect(scenario).not.toBeNull();
+        expect(scenario?.waveforms[0]).toMatchObject({
+            id: '1',
+            waveformType: 'fmcw_up_chirp',
+            chirp_bandwidth: 20e6,
+            chirp_duration: 250e-6,
+            chirp_period: 300e-6,
+            start_frequency_offset: -10e6,
+            chirp_count: 8,
+        });
+        expect(scenario?.platforms[0].components[0]).toMatchObject({
+            id: '3',
+            type: 'transmitter',
+            radarType: 'fmcw',
+            waveformId: '1',
+        });
     });
 });

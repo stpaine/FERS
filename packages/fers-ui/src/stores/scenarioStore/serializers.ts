@@ -48,20 +48,28 @@ export const cleanObject = <T>(obj: T): T => {
  * This is the exact format the C++ backend expects for granular updates.
  */
 export const serializeComponentInner = (component: PlatformComponent) => {
-    const mode =
-        'radarType' in component && component.radarType === 'pulsed'
-            ? {
-                  pulsed_mode: {
-                      prf: component.prf,
-                      ...(component.type !== 'transmitter' && {
-                          window_skip: component.window_skip,
-                          window_length: component.window_length,
-                      }),
-                  },
-              }
-            : 'radarType' in component && component.radarType === 'cw'
-              ? { cw_mode: {} }
-              : {};
+    const mode = (() => {
+        if (!('radarType' in component)) {
+            return {};
+        }
+
+        switch (component.radarType) {
+            case 'pulsed':
+                return {
+                    pulsed_mode: {
+                        prf: component.prf,
+                        ...(component.type !== 'transmitter' && {
+                            window_skip: component.window_skip,
+                            window_length: component.window_length,
+                        }),
+                    },
+                };
+            case 'cw':
+                return { cw_mode: {} };
+            case 'fmcw':
+                return { fmcw_mode: {} };
+        }
+    })();
 
     switch (component.type) {
         case 'monostatic':
@@ -167,10 +175,31 @@ export const serializePlatform = (p: Platform) => {
 };
 
 export const serializeWaveform = (w: Waveform) => {
-    const waveformContent =
-        w.waveformType === 'cw'
-            ? { cw: {} }
-            : { pulsed_from_file: { filename: w.filename } };
+    const waveformContent = (() => {
+        switch (w.waveformType) {
+            case 'cw':
+                return { cw: {} };
+            case 'pulsed_from_file':
+                return { pulsed_from_file: { filename: w.filename } };
+            case 'fmcw_up_chirp':
+                return {
+                    fmcw_up_chirp: {
+                        chirp_bandwidth: w.chirp_bandwidth,
+                        chirp_duration: w.chirp_duration,
+                        chirp_period: w.chirp_period,
+                        ...(w.start_frequency_offset
+                            ? {
+                                  start_frequency_offset:
+                                      w.start_frequency_offset,
+                              }
+                            : {}),
+                        ...(w.chirp_count !== null
+                            ? { chirp_count: w.chirp_count }
+                            : {}),
+                    },
+                };
+        }
+    })();
 
     return cleanObject({
         id: w.id,

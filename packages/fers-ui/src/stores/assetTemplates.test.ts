@@ -114,6 +114,79 @@ function createScenarioFixture(): ScenarioData {
     };
 }
 
+function createFmcwScenarioFixture(): ScenarioData {
+    const scenario = createScenarioFixture();
+    return {
+        ...scenario,
+        waveforms: [
+            {
+                id: '6002',
+                type: 'Waveform',
+                name: 'FMCW Up Chirp',
+                waveformType: 'fmcw_up_chirp',
+                power: 50,
+                carrier_frequency: 10e9,
+                chirp_bandwidth: 20e6,
+                chirp_duration: 250e-6,
+                chirp_period: 500e-6,
+                start_frequency_offset: 1e6,
+                chirp_count: 8,
+            },
+        ],
+        platforms: [
+            {
+                ...scenario.platforms[0],
+                components: [
+                    {
+                        id: '2101',
+                        type: 'transmitter',
+                        name: 'FMCW Tx',
+                        radarType: 'fmcw',
+                        prf: null,
+                        antennaId: '5001',
+                        waveformId: '6002',
+                        timingId: '7001',
+                        schedule: [{ start: 0, end: 0.01 }],
+                    },
+                    {
+                        id: '2102',
+                        type: 'receiver',
+                        name: 'FMCW Rx',
+                        radarType: 'fmcw',
+                        window_skip: null,
+                        window_length: null,
+                        prf: null,
+                        antennaId: '5001',
+                        timingId: '7001',
+                        noiseTemperature: 290,
+                        noDirectPaths: false,
+                        noPropagationLoss: false,
+                        schedule: [{ start: 0, end: 0.01 }],
+                    },
+                    {
+                        id: '2103',
+                        type: 'monostatic',
+                        name: 'FMCW Monostatic',
+                        txId: '2104',
+                        rxId: '2105',
+                        radarType: 'fmcw',
+                        window_skip: null,
+                        window_length: null,
+                        prf: null,
+                        antennaId: '5001',
+                        waveformId: '6002',
+                        timingId: '7001',
+                        noiseTemperature: 290,
+                        noDirectPaths: false,
+                        noPropagationLoss: false,
+                        schedule: [{ start: 0, end: 0.01 }],
+                    },
+                ],
+            },
+        ],
+    };
+}
+
 describe('asset templates', () => {
     test('creates top-level asset snapshots', () => {
         const scenario = createScenarioFixture();
@@ -260,5 +333,91 @@ describe('asset templates', () => {
         expect(prepared).toHaveLength(1);
         expect(prepared[0].id).not.toBe('template-original');
         expect(prepared[0].payload.id).toBe('6001');
+    });
+
+    test('round trips FMCW waveform templates', () => {
+        const scenario = createFmcwScenarioFixture();
+        const template = createTemplateFromScenarioItem(scenario, '6002', {
+            id: 'template-fmcw-waveform',
+            timestamp: '2026-04-13T00:00:00.000Z',
+        });
+        if (template?.kind !== 'waveform') {
+            throw new Error('Expected waveform template.');
+        }
+
+        const [parsed] = parseAssetTemplates(
+            createAssetLibraryFile([template])
+        );
+        const { scenarioData, result } = cloneTemplateIntoScenarioData(
+            scenario,
+            parsed
+        );
+        const insertedWaveform = scenarioData.waveforms.at(-1);
+
+        expect(result.warnings).toEqual([]);
+        expect(parsed.payload).toMatchObject({
+            waveformType: 'fmcw_up_chirp',
+            chirp_bandwidth: 20e6,
+            chirp_duration: 250e-6,
+            chirp_period: 500e-6,
+            start_frequency_offset: 1e6,
+            chirp_count: 8,
+        });
+        expect(insertedWaveform).toMatchObject({
+            name: 'FMCW Up Chirp Copy',
+            waveformType: 'fmcw_up_chirp',
+            chirp_bandwidth: 20e6,
+            chirp_duration: 250e-6,
+            chirp_period: 500e-6,
+        });
+    });
+
+    test('round trips platform templates with FMCW components', () => {
+        const scenario = createFmcwScenarioFixture();
+        const template = createTemplateFromScenarioItem(scenario, '1001');
+        if (template?.kind !== 'platform') {
+            throw new Error('Expected platform template.');
+        }
+
+        const [parsed] = parseAssetTemplates(
+            createAssetLibraryFile([template])
+        );
+        const { scenarioData, result } = cloneTemplateIntoScenarioData(
+            scenario,
+            parsed
+        );
+        const insertedPlatform = scenarioData.platforms.at(-1);
+
+        expect(result.warnings).toEqual([]);
+        expect(
+            insertedPlatform?.components.map((component) => component.type)
+        ).toEqual(['transmitter', 'receiver', 'monostatic']);
+        expect(
+            insertedPlatform?.components.map((component) =>
+                'radarType' in component ? component.radarType : null
+            )
+        ).toEqual(['fmcw', 'fmcw', 'fmcw']);
+        expect(
+            insertedPlatform?.components.every(
+                (component) =>
+                    !('waveformId' in component) ||
+                    component.waveformId !== '6002'
+            )
+        ).toBe(true);
+    });
+
+    test('collects FMCW waveform dependencies for platform templates', () => {
+        const scenario = createFmcwScenarioFixture();
+        const template = createTemplateFromScenarioItem(scenario, '1001');
+        if (template?.kind !== 'platform') {
+            throw new Error('Expected platform template.');
+        }
+
+        expect(template.dependencies.waveforms).toHaveLength(1);
+        expect(template.dependencies.waveforms[0]).toMatchObject({
+            id: '6002',
+            waveformType: 'fmcw_up_chirp',
+            chirp_bandwidth: 20e6,
+        });
     });
 });

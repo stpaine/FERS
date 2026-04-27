@@ -3,6 +3,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <chrono>
 #include <filesystem>
+#include <format>
 #include <highfive/highfive.hpp>
 #include <memory>
 #include <string>
@@ -165,10 +166,7 @@ TEST_CASE("finalizeStreamingReceiver exits cleanly when no streaming samples wer
 	processing::finalizeStreamingReceiver(&receiver, nullptr, reporter, out_dir.string());
 
 	REQUIRE_FALSE(std::filesystem::exists(output_path));
-	REQUIRE(progress_calls.size() == 1u);
-	REQUIRE(progress_calls.front().current == 0);
-	REQUIRE(progress_calls.front().total == 100);
-	REQUIRE(progress_calls.front().message.find(receiver_name) != std::string::npos);
+	REQUIRE(progress_calls.empty());
 
 	std::filesystem::remove_all(out_dir);
 }
@@ -236,10 +234,47 @@ TEST_CASE("finalizeStreamingReceiver adds logged pulsed interference without rot
 
 	const std::vector<int> expected_progress = {0, 25, 50, 75, 100};
 	REQUIRE(progress_calls.size() == expected_progress.size());
+	REQUIRE(progress_calls.front().message == std::format("Finalizing CW Receiver {}", receiver_name));
 	for (size_t i = 0; i < expected_progress.size(); ++i)
 	{
 		REQUIRE(progress_calls[i].current == expected_progress[i]);
 	}
+
+	std::filesystem::remove_all(out_dir);
+}
+
+TEST_CASE("finalizeStreamingReceiver labels FMCW receiver progress distinctly", "[processing][finalizer][fmcw]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 1.0);
+	params::setRate(4.0);
+	params::setOversampleRatio(1);
+	params::setAdcBits(0);
+
+	const std::string receiver_name = uniqueName("fmcw_finalize");
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("fmcw_finalize_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
+	removeIfExists(output_path);
+
+	radar::Platform rx_platform("RxPlatform");
+	radar::Receiver receiver(&rx_platform, receiver_name, 57, radar::OperationMode::FMCW_MODE);
+	auto timing_owner = makeQuietTiming("fmcw_clk", 23, 77.0);
+	receiver.setTiming(timing_owner.timing);
+	receiver.setNoiseTemperature(0.0);
+	receiver.prepareStreamingData(4);
+
+	std::vector<ProgressCall> progress_calls;
+	auto reporter =
+		std::make_shared<core::ProgressReporter>([&progress_calls](const std::string& msg, int current, int total)
+												 { progress_calls.push_back({msg, current, total}); });
+
+	processing::finalizeStreamingReceiver(&receiver, nullptr, reporter, out_dir.string());
+
+	REQUIRE(std::filesystem::exists(output_path));
+	REQUIRE(progress_calls.size() == 5u);
+	REQUIRE(progress_calls.front().message == std::format("Finalizing FMCW Receiver {}", receiver_name));
+	REQUIRE(progress_calls.back().message == std::format("Finalized {}", receiver_name));
 
 	std::filesystem::remove_all(out_dir);
 }

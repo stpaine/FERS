@@ -32,7 +32,9 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import {
-    type SimulationOutputMetadata,
+    normalizeSimulationOutputMetadata,
+    type RawSimulationOutputMetadata,
+    type SimulationOutputFileMetadata,
     type SimulationProgressState,
     useSimulationProgressStore,
 } from '@/stores/simulationProgressStore';
@@ -148,7 +150,11 @@ export const SimulationView = React.memo(function SimulationView() {
             (event) => {
                 try {
                     setSimulationOutputMetadata(
-                        JSON.parse(event.payload) as SimulationOutputMetadata
+                        normalizeSimulationOutputMetadata(
+                            JSON.parse(
+                                event.payload
+                            ) as RawSimulationOutputMetadata
+                        )
                     );
                 } catch (err) {
                     const errorMessage =
@@ -367,6 +373,32 @@ export const SimulationView = React.memo(function SimulationView() {
             return '0';
         }
         return uniform ? String(minSamples) : `${minSamples} - ${maxSamples}`;
+    };
+    const formatMetric = (value: number) =>
+        value.toLocaleString(undefined, { maximumSignificantDigits: 6 });
+    const formatPulseOrSegmentSummary = (
+        file: SimulationOutputFileMetadata
+    ) => {
+        if (file.mode === 'pulsed') {
+            return `${file.pulse_count} pulses, ${formatPulseLength(
+                file.min_pulse_length_samples,
+                file.max_pulse_length_samples,
+                file.uniform_pulse_length
+            )} samples`;
+        }
+
+        const segmentSummary = `${
+            file.streaming_segments.length
+        } streaming segments`;
+        if (file.mode !== 'fmcw' || !file.fmcw) {
+            return segmentSummary;
+        }
+
+        return `${segmentSummary}, B=${formatMetric(
+            file.fmcw.chirp_bandwidth
+        )}, T_c=${formatMetric(
+            file.fmcw.chirp_duration
+        )}, T_rep=${formatMetric(file.fmcw.chirp_period)}`;
     };
 
     return (
@@ -594,14 +626,6 @@ export const SimulationView = React.memo(function SimulationView() {
                                                 >
                                                     <ListItemText
                                                         primary={prog.message}
-                                                        secondary={
-                                                            progressPercent !==
-                                                                null &&
-                                                            progressPercent <
-                                                                100
-                                                                ? 'Processing...'
-                                                                : ''
-                                                        }
                                                     />
                                                     {showChunkLabel && (
                                                         <Box
@@ -738,9 +762,9 @@ export const SimulationView = React.memo(function SimulationView() {
                                                         )}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {file.mode === 'pulsed'
-                                                            ? `${file.pulse_count} pulses, ${formatPulseLength(file.min_pulse_length_samples, file.max_pulse_length_samples, file.uniform_pulse_length)} samples`
-                                                            : `${file.cw_segments.length} CW segments`}
+                                                        {formatPulseOrSegmentSummary(
+                                                            file
+                                                        )}
                                                     </TableCell>
                                                     <TableCell
                                                         sx={{

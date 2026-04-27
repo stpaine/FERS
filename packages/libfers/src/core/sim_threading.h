@@ -215,6 +215,11 @@ namespace core
 		 */
 		void updateProgress();
 
+		/**
+		 * @brief Throttles and emits progress updates at an explicit simulation time.
+		 */
+		void reportSimulationProgress(RealType t_current);
+
 		/// Collects streaming sources active anywhere within the requested time window.
 		[[nodiscard]] std::vector<ActiveStreamingSource> collectStreamingSourcesForWindow(RealType start_time,
 																						  RealType end_time) const;

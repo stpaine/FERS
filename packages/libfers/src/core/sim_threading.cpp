@@ -263,6 +263,8 @@ namespace core
 		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
 		const auto start_index = static_cast<size_t>(std::ceil((t_current - params::startTime()) / dt_sim));
 		const auto end_index = static_cast<size_t>(std::ceil((t_event - params::startTime()) / dt_sim));
+		const auto sample_count = end_index - start_index;
+		const auto progress_report_stride = std::max<std::size_t>(1, sample_count / 1000);
 
 		ensureCwPhaseNoiseLookup();
 
@@ -282,6 +284,10 @@ namespace core
 												 _streaming_tracker_caches[receiver_index]);
 					receiver_ptr->setStreamingSample(sample_index, sample);
 				}
+			}
+			if (((sample_index - start_index) % progress_report_stride) == 0 || sample_index + 1 == end_index)
+			{
+				reportSimulationProgress(t_step);
 			}
 		}
 	}
@@ -457,16 +463,21 @@ namespace core
 
 	void SimulationEngine::handleRxStreamingEnd(Receiver* rx) { rx->setActive(false); }
 
-	void SimulationEngine::updateProgress()
+	void SimulationEngine::updateProgress() { reportSimulationProgress(_world->getSimulationState().t_current); }
+
+	void SimulationEngine::reportSimulationProgress(const RealType t_current)
 	{
 		if (!_reporter)
 		{
 			return;
 		}
 
-		const RealType t_current = _world->getSimulationState().t_current;
+		const RealType start_time = params::startTime();
 		const RealType end_time = params::endTime();
-		const int progress = static_cast<int>(t_current / end_time * 100.0);
+		const RealType duration = end_time - start_time;
+		const RealType progress_fraction = duration > 0.0 ? (t_current - start_time) / duration : 1.0;
+		const int progress = static_cast<int>(
+			std::clamp(progress_fraction * 100.0, static_cast<RealType>(0.0), static_cast<RealType>(100.0)));
 
 		if (const auto now = std::chrono::steady_clock::now();
 			progress != _last_reported_percent || now - _last_report_time >= std::chrono::milliseconds(100))
