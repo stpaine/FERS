@@ -488,6 +488,49 @@ TEST_CASE("JSON: Full world skips incomplete numeric-placeholder radar component
 	REQUIRE(world.getReceivers().empty());
 }
 
+TEST_CASE("JSON: Full world rejects duplicate scenario object names", "[serial][json]")
+{
+	ParamGuard guard;
+	core::World world;
+	std::mt19937 seeder(42);
+
+	json scenario = {{"simulation",
+					  {{"parameters",
+						{{"starttime", 0.0},
+						 {"endtime", 1.0},
+						 {"rate", 1000.0},
+						 {"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+						 {"coordinatesystem", {{"frame", "ENU"}}}}},
+					   {"platforms",
+						json::array({{{"id", 100},
+									  {"name", "MonoRadar"},
+									  {"components",
+									   json::array({{{"monostatic",
+													  {{"name", "MonoRadar Monostatic"},
+													   {"tx_id", 101},
+													   {"rx_id", 102},
+													   {"waveform", 10},
+													   {"antenna", 20},
+													   {"timing", 30},
+													   {"cw_mode", json::object()}}}}})}},
+									 {{"id", 103},
+									  {"name", "MonoRadar Copy"},
+									  {"components",
+									   json::array({{{"monostatic",
+													  {{"name", "MonoRadar Monostatic"},
+													   {"tx_id", 104},
+													   {"rx_id", 105},
+													   {"waveform", 11},
+													   {"antenna", 21},
+													   {"timing", 31},
+													   {"cw_mode", json::object()}}}}})}}})}}}};
+
+	REQUIRE_THROWS_WITH(
+		serial::json_to_world(scenario, world, seeder),
+		ContainsSubstring(
+			"Duplicate name 'MonoRadar Monostatic' found for monostatic; previously used by monostatic."));
+}
+
 TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit", "[serial][json]")
 {
 	ParamGuard guard;
@@ -555,7 +598,8 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 
 	SECTION("Unsupported RCS type throws")
 	{
-		json test_comps = json::array({{{"target", {{"id", 1}, {"name", "t1"}, {"rcs", {{"type", "magic"}}}}}}});
+		json test_comps =
+			json::array({{{"target", {{"id", 1}, {"name", "bad-target"}, {"rcs", {{"type", "magic"}}}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps), ContainsSubstring("Unsupported target RCS type: magic"));
 	}
 
@@ -563,7 +607,7 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 	{
 		json test_comps = json::array({{{"target",
 										 {{"id", 1},
-										  {"name", "t1"},
+										  {"name", "bad-target"},
 										  {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
 										  {"model", {{"type", "magic"}}}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps),
@@ -572,8 +616,8 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 
 	SECTION("Negative ID throws")
 	{
-		json test_comps =
-			json::array({{{"target", {{"id", -5}, {"name", "t1"}, {"rcs", {{"type", "isotropic"}, {"value", 1.0}}}}}}});
+		json test_comps = json::array(
+			{{{"target", {{"id", -5}, {"name", "bad-target"}, {"rcs", {{"type", "isotropic"}, {"value", 1.0}}}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps), ContainsSubstring("negative id"));
 	}
 }

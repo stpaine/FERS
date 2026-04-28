@@ -7,6 +7,10 @@ import { useSimulationProgressStore } from '../../simulationProgressStore';
 import { defaultGlobalParameters } from '../defaults';
 import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
 import {
+    createUniqueScenarioName,
+    getComponentIdentityIds,
+} from '../nameUtils';
+import {
     serializeAntenna,
     serializeGlobalParameters,
     serializePlatform,
@@ -144,7 +148,31 @@ export const createScenarioSlice: StateCreator<
                 );
                 if (!item) continue;
 
-                setPropertyByPath(item, propertyPath, value);
+                let nextValue = value;
+                if (typeof value === 'string') {
+                    if (propertyPath === 'name') {
+                        nextValue = createUniqueScenarioName(state, value, [
+                            item.id,
+                        ]);
+                    } else if (item.type === 'Platform') {
+                        const componentNameMatch = propertyPath.match(
+                            /^components\.(\d+)\.name$/
+                        );
+                        if (componentNameMatch) {
+                            const component =
+                                item.components[Number(componentNameMatch[1])];
+                            if (component) {
+                                nextValue = createUniqueScenarioName(
+                                    state,
+                                    value,
+                                    getComponentIdentityIds(component)
+                                );
+                            }
+                        }
+                    }
+                }
+
+                setPropertyByPath(item, propertyPath, nextValue);
                 state.isDirty = true;
                 if (item.type === 'Antenna') {
                     delete state.antennaPreviewErrors[item.id];

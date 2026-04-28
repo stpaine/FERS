@@ -248,6 +248,7 @@ describe('asset templates', () => {
         if (insertedComponent?.type !== 'transmitter') {
             throw new Error('Expected transmitter component.');
         }
+        expect(insertedComponent.name).toBe('Tx A Copy');
         expect(insertedComponent.antennaId).not.toBe('5001');
         expect(insertedComponent.waveformId).not.toBe('6001');
         expect(insertedComponent.timingId).not.toBe('7001');
@@ -395,6 +396,9 @@ describe('asset templates', () => {
         expect(
             insertedPlatform?.components.map((component) => component.type)
         ).toEqual(['transmitter', 'receiver', 'monostatic']);
+        expect(
+            insertedPlatform?.components.map((component) => component.name)
+        ).toEqual(['FMCW Tx Copy', 'FMCW Rx Copy', 'FMCW Monostatic Copy']);
         expect(
             insertedPlatform?.components.map((component) =>
                 'radarType' in component ? component.radarType : null

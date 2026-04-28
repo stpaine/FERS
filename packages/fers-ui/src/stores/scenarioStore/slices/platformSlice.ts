@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { StateCreator } from 'zustand';
 import { createDefaultPlatform } from '../defaults';
 import { generateSimId } from '../idUtils';
+import { createUniqueScenarioName } from '../nameUtils';
 import {
     cleanObject,
     serializeComponentInner,
@@ -61,7 +62,7 @@ export const createPlatformSlice: StateCreator<
             const newPlatform: Platform = {
                 ...createDefaultPlatform(),
                 id,
-                name: newName,
+                name: createUniqueScenarioName(state, newName),
             };
             // Defaults to empty components list
             state.platforms.push(newPlatform);
@@ -163,6 +164,7 @@ export const createPlatformSlice: StateCreator<
             const name = `${platform.name} ${
                 componentType.charAt(0).toUpperCase() + componentType.slice(1)
             }`;
+            const uniqueName = createUniqueScenarioName(state, name);
             let newComponent: PlatformComponent;
 
             switch (componentType) {
@@ -172,7 +174,7 @@ export const createPlatformSlice: StateCreator<
                         type: 'monostatic',
                         txId: id,
                         rxId: rxId ?? generateSimId('Receiver'),
-                        name,
+                        name: uniqueName,
                         radarType: 'pulsed',
                         window_skip: 0,
                         window_length: 1e-5,
@@ -190,7 +192,7 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'transmitter',
-                        name,
+                        name: uniqueName,
                         radarType: 'pulsed',
                         prf: 1000,
                         antennaId: null,
@@ -203,7 +205,7 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'receiver',
-                        name,
+                        name: uniqueName,
                         radarType: 'pulsed',
                         window_skip: 0,
                         window_length: 1e-5,
@@ -220,7 +222,7 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'target',
-                        name,
+                        name: uniqueName,
                         rcs_type: 'isotropic',
                         rcs_value: 1,
                         rcs_model: 'constant',

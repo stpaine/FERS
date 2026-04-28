@@ -924,6 +924,76 @@ namespace
 		}
 	}
 
+	void validate_unique_names(const nlohmann::json& sim)
+	{
+		std::unordered_map<std::string, std::string> name_registry;
+		name_registry.reserve(64);
+
+		const auto register_name = [&name_registry](const nlohmann::json& element, const std::string_view kind)
+		{
+			if (!element.is_object() || !element.contains("name"))
+			{
+				return;
+			}
+
+			const auto name = element.at("name").get<std::string>();
+			const auto [iter, inserted] = name_registry.emplace(name, std::string(kind));
+			if (!inserted)
+			{
+				throw std::runtime_error("Duplicate name '" + name + "' found for " + std::string(kind) +
+										 "; previously used by " + iter->second + ".");
+			}
+		};
+
+		if (sim.contains("waveforms"))
+		{
+			for (const auto& waveform : sim.at("waveforms"))
+			{
+				register_name(waveform, "waveform");
+			}
+		}
+
+		if (sim.contains("timings"))
+		{
+			for (const auto& timing : sim.at("timings"))
+			{
+				register_name(timing, "timing");
+			}
+		}
+
+		if (sim.contains("antennas"))
+		{
+			for (const auto& antenna : sim.at("antennas"))
+			{
+				register_name(antenna, "antenna");
+			}
+		}
+
+		if (sim.contains("platforms"))
+		{
+			for (const auto& platform : sim.at("platforms"))
+			{
+				register_name(platform, "platform");
+				if (!platform.contains("components") || !platform.at("components").is_array())
+				{
+					continue;
+				}
+
+				for (const auto& component_wrapper : platform.at("components"))
+				{
+					if (!component_wrapper.is_object())
+					{
+						continue;
+					}
+					for (const auto& [kind, component] : component_wrapper.items())
+					{
+						register_name(component, kind);
+					}
+				}
+			}
+		}
+	}
+
 	/// Parses the mutually exclusive operation mode block for a component.
 	radar::OperationMode parse_mode(const nlohmann::json& comp_json, const std::string& error_context)
 	{
@@ -1301,6 +1371,7 @@ namespace
 		world.clear();
 
 		const auto& sim = j.at("simulation");
+		validate_unique_names(sim);
 
 		parse_parameters(sim, masterSeeder);
 		parse_assets(sim, world);

@@ -4,6 +4,7 @@
 import { StateCreator } from 'zustand';
 import { defaultAntenna, defaultTiming, defaultWaveform } from '../defaults';
 import { generateSimId } from '../idUtils';
+import { createUniqueScenarioName } from '../nameUtils';
 import { cleanObject, serializeAntenna, serializeTiming } from '../serializers';
 import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
 import { Antenna, AssetActions, ScenarioStore } from '../types';
@@ -21,7 +22,10 @@ export const createAssetSlice: StateCreator<
             state.waveforms.push({
                 ...defaultWaveform,
                 id,
-                name: `Waveform ${state.waveforms.length + 1}`,
+                name: createUniqueScenarioName(
+                    state,
+                    `Waveform ${state.waveforms.length + 1}`
+                ),
             });
             state.isDirty = true;
         });
@@ -34,7 +38,10 @@ export const createAssetSlice: StateCreator<
             state.timings.push({
                 ...defaultTiming,
                 id,
-                name: `Timing ${state.timings.length + 1}`,
+                name: createUniqueScenarioName(
+                    state,
+                    `Timing ${state.timings.length + 1}`
+                ),
             });
             state.isDirty = true;
         });
@@ -47,7 +54,10 @@ export const createAssetSlice: StateCreator<
             state.antennas.push({
                 ...defaultAntenna,
                 id,
-                name: `Antenna ${state.antennas.length + 1}`,
+                name: createUniqueScenarioName(
+                    state,
+                    `Antenna ${state.antennas.length + 1}`
+                ),
             });
             state.isDirty = true;
         });
