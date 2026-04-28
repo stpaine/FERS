@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include <random>
 #include <sstream>
+#include <string_view>
 
 #include "antenna/antenna_factory.h"
 #include "core/logging.h"
@@ -35,6 +36,11 @@ namespace math
 	// Their definitions are in json_serializer.cpp.
 	void to_json(nlohmann::json& j, const Vec3& v);
 	void from_json(const nlohmann::json& j, Vec3& v);
+}
+
+namespace fers_signal
+{
+	void to_json(nlohmann::json& j, const RadarSignal& rs);
 }
 
 namespace
@@ -110,11 +116,49 @@ TEST_CASE("JSON: FMCW waveform emits large-buffer warning", "[serial][json]")
 		{"name", "HugeFmcw"},
 		{"power", 500.0},
 		{"carrier_frequency", 2.4e9},
-		{"fmcw_up_chirp", {{"chirp_bandwidth", 1.0e6}, {"chirp_duration", 1.0e-3}, {"chirp_period", 1.0e-3}}}};
+		{"fmcw_linear_chirp",
+		 {{"direction", "up"}, {"chirp_bandwidth", 1.0e6}, {"chirp_duration", 1.0e-3}, {"chirp_period", 1.0e-3}}}};
 
 	auto wf = serial::parse_waveform_from_json(wf_json);
 	REQUIRE(wf != nullptr);
 	REQUIRE_THAT(capture.str(), ContainsSubstring("GiB of FMCW streaming IQ data"));
+}
+
+TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	for (const auto direction : {"up", "down"})
+	{
+		json wf_json = {{"id", 457},
+						{"name", std::string("Fmcw") + direction},
+						{"power", 500.0},
+						{"carrier_frequency", 2.4e9},
+						{"fmcw_linear_chirp",
+						 {{"direction", direction},
+						  {"chirp_bandwidth", 1.0e6},
+						  {"chirp_duration", 1.0e-3},
+						  {"chirp_period", 1.0e-3}}}};
+
+		auto wf = serial::parse_waveform_from_json(wf_json);
+		REQUIRE(wf != nullptr);
+		REQUIRE(wf->getFmcwChirpSignal() != nullptr);
+		REQUIRE(wf->getFmcwChirpSignal()->isDownChirp() == (std::string_view(direction) == "down"));
+
+		json serialized;
+		fers_signal::to_json(serialized, *wf);
+		REQUIRE(serialized.contains("fmcw_linear_chirp"));
+		REQUIRE_FALSE(serialized.contains("fmcw_up_chirp"));
+		REQUIRE(serialized.at("fmcw_linear_chirp").at("direction") == direction);
+
+		auto reparsed = serial::parse_waveform_from_json(serialized);
+		REQUIRE(reparsed != nullptr);
+		REQUIRE(reparsed->getFmcwChirpSignal() != nullptr);
+		REQUIRE(reparsed->getFmcwChirpSignal()->isDownChirp() == (std::string_view(direction) == "down"));
+	}
 }
 
 TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
@@ -444,12 +488,15 @@ TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json]
 												{"rate", 2.0e6},
 												{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
 												{"coordinatesystem", {{"frame", "ENU"}}}};
-		scenario["simulation"]["waveforms"] = json::array(
-			{{{"id", 10},
-			  {"name", "fmcw_wave"},
-			  {"power", 1.0},
-			  {"carrier_frequency", 1.0e9},
-			  {"fmcw_up_chirp", {{"chirp_bandwidth", 1.0e6}, {"chirp_duration", 1.0e-3}, {"chirp_period", 2.0e-3}}}}});
+		scenario["simulation"]["waveforms"] = json::array({{{"id", 10},
+															{"name", "fmcw_wave"},
+															{"power", 1.0},
+															{"carrier_frequency", 1.0e9},
+															{"fmcw_linear_chirp",
+															 {{"direction", "up"},
+															  {"chirp_bandwidth", 1.0e6},
+															  {"chirp_duration", 1.0e-3},
+															  {"chirp_period", 2.0e-3}}}}});
 		scenario["simulation"]["antennas"] = json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}});
 		scenario["simulation"]["timings"] = json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1.0e6}}});
 		scenario["simulation"]["platforms"] = json::array({{{"id", 100},

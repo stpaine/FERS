@@ -4,6 +4,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <fstream>
+#include <optional>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,7 @@
 #include "radar/target.h"
 #include "radar/transmitter.h"
 #include "serial/libxml_wrapper.h"
+#include "serial/xml_parser_utils.h"
 #include "serial/xml_serializer.h"
 #include "serial/xml_serializer_utils.h"
 #include "signal/radar_signal.h"
@@ -158,6 +161,41 @@ TEST_CASE("serializeWaveform processes CW and Pulsed correctly", "[serial][xml_s
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("<pulsed_from_file filename=\"\"/>"));
 	}
+}
+
+TEST_CASE("serializeWaveform round trips FMCW linear chirp direction", "[serial][xml_serializer][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	XmlDocument doc;
+	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("waveform")));
+	doc.setRootElement(root);
+
+	auto sig = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-3, 1.0e-3, 0.0, std::nullopt,
+															  fers_signal::FmcwChirpDirection::Down);
+	fers_signal::RadarSignal wave("down", 20.0, 2e9, 1.0e-3, std::move(sig));
+
+	serial::xml_serializer_utils::serializeWaveform(wave, root);
+	const std::string serialized = dumpElement(root);
+	REQUIRE_THAT(serialized, ContainsSubstring("<fmcw_linear_chirp direction=\"down\">"));
+	REQUIRE_THAT(serialized, !ContainsSubstring("fmcw_up_chirp"));
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+	ctx.parameters.start = 0.0;
+	ctx.parameters.end = 1.0;
+	serial::xml_parser_utils::parseWaveform(root, ctx);
+
+	REQUIRE(world.getWaveforms().size() == 1);
+	const auto* parsed_wave = world.getWaveforms().begin()->second.get();
+	REQUIRE(parsed_wave->getFmcwChirpSignal() != nullptr);
+	REQUIRE(parsed_wave->getFmcwChirpSignal()->isDownChirp());
 }
 
 TEST_CASE("serializeTiming preserves clock phase and jitter characteristics", "[serial][xml_serializer]")

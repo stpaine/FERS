@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -29,6 +30,19 @@ namespace interp
 
 namespace fers_signal
 {
+	/// Sweep direction for a linear FMCW chirp.
+	enum class FmcwChirpDirection
+	{
+		Up, ///< Instantaneous baseband frequency increases over the chirp.
+		Down ///< Instantaneous baseband frequency decreases over the chirp.
+	};
+
+	/// Converts a chirp direction to the schema token.
+	[[nodiscard]] std::string_view fmcwChirpDirectionToken(FmcwChirpDirection direction) noexcept;
+
+	/// Parses a schema chirp direction token.
+	[[nodiscard]] FmcwChirpDirection parseFmcwChirpDirection(std::string_view direction);
+
 	/**
 	 * @class Signal
 	 * @brief Class for handling radar waveform signal data.
@@ -207,8 +221,8 @@ namespace fers_signal
 		/// Returns true when this signal is a continuous-wave signal.
 		[[nodiscard]] bool isCw() const noexcept;
 
-		/// Returns true when this signal is an FMCW up-chirp signal.
-		[[nodiscard]] bool isFmcwUpChirp() const noexcept;
+		/// Returns true when this signal is an FMCW linear chirp signal.
+		[[nodiscard]] bool isFmcwChirp() const noexcept;
 
 		/// Gets the FMCW chirp implementation, if this signal owns one.
 		[[nodiscard]] const class FmcwChirpSignal* getFmcwChirpSignal() const noexcept;
@@ -258,13 +272,14 @@ namespace fers_signal
 										RealType fracWinDelay) const override;
 	};
 
-	/// FMCW up-chirp signal implementation.
+	/// FMCW linear chirp signal implementation.
 	class FmcwChirpSignal final : public Signal
 	{
 	public:
 		/// Constructs an FMCW chirp signal with timing and sweep parameters.
 		FmcwChirpSignal(RealType chirp_bandwidth, RealType chirp_duration, RealType chirp_period,
-						RealType start_frequency_offset = 0.0, std::optional<std::size_t> chirp_count = std::nullopt);
+						RealType start_frequency_offset = 0.0, std::optional<std::size_t> chirp_count = std::nullopt,
+						FmcwChirpDirection direction = FmcwChirpDirection::Up);
 
 		~FmcwChirpSignal() override = default;
 
@@ -294,6 +309,18 @@ namespace fers_signal
 		/// Gets the chirp rate in hertz per second.
 		[[nodiscard]] RealType getChirpRate() const noexcept { return _chirp_rate; }
 
+		/// Gets the signed chirp rate in hertz per second.
+		[[nodiscard]] RealType getSignedChirpRate() const noexcept
+		{
+			return isDownChirp() ? -_chirp_rate : _chirp_rate;
+		}
+
+		/// Gets the FMCW sweep direction.
+		[[nodiscard]] FmcwChirpDirection getDirection() const noexcept { return _direction; }
+
+		/// Returns true when this chirp sweeps downward.
+		[[nodiscard]] bool isDownChirp() const noexcept { return _direction == FmcwChirpDirection::Down; }
+
 		/// Returns the active chirp index for a time since the segment start.
 		[[nodiscard]] std::optional<std::size_t> activeChirpIndexAt(RealType time_since_segment_start) const noexcept;
 
@@ -321,5 +348,6 @@ namespace fers_signal
 		RealType _start_frequency_offset{}; ///< Start frequency offset relative to carrier in hertz.
 		std::optional<std::size_t> _chirp_count; ///< Optional finite chirp count.
 		RealType _chirp_rate{}; ///< Frequency sweep rate in hertz per second.
+		FmcwChirpDirection _direction{FmcwChirpDirection::Up}; ///< Frequency sweep direction.
 	};
 }

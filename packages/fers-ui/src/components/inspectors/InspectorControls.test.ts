@@ -85,11 +85,11 @@ describe('InspectorControls blur resolution', () => {
 });
 
 describe('Waveform inspector authoring options', () => {
-    test('offers pulse file, CW, and FMCW up-chirp waveform types', () => {
+    test('offers pulse file, CW, and FMCW linear chirp waveform types', () => {
         expect(WAVEFORM_TYPE_OPTIONS).toEqual([
             { value: 'pulsed_from_file', label: 'Pulse File' },
             { value: 'cw', label: 'CW' },
-            { value: 'fmcw_up_chirp', label: 'FMCW Up-Chirp' },
+            { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
         ]);
     });
 
@@ -105,26 +105,28 @@ describe('Waveform inspector authoring options', () => {
                 chirp_count: 4.8,
                 start_frequency_offset: 125,
             },
-            'fmcw_up_chirp'
+            'fmcw_linear_chirp'
         );
 
         expect(fmcwWaveform).toMatchObject({
             id: '1',
             type: 'Waveform',
             name: 'Search chirp',
-            waveformType: 'fmcw_up_chirp',
+            waveformType: 'fmcw_linear_chirp',
+            direction: 'up',
             power: 250,
             carrier_frequency: 9.6e9,
-            chirp_bandwidth: 20e6,
-            chirp_duration: 250e-6,
-            chirp_period: 250e-6,
+            chirp_bandwidth: 4e3,
+            chirp_duration: 1e-3,
+            chirp_period: 1e-3,
             start_frequency_offset: 125,
             chirp_count: 4,
         });
     });
 
     test('reports FMCW chirp fields only for FMCW waveforms', () => {
-        expect(getVisibleWaveformFieldLabels('fmcw_up_chirp')).toEqual([
+        expect(getVisibleWaveformFieldLabels('fmcw_linear_chirp')).toEqual([
+            'Direction',
             'Chirp Bandwidth (Hz)',
             'Chirp Duration (s)',
             'Chirp Period (s)',
@@ -139,7 +141,7 @@ describe('Platform component inspector waveform compatibility', () => {
     const waveforms = [
         { id: '1', name: 'Pulse', waveformType: 'pulsed_from_file' },
         { id: '2', name: 'Tone', waveformType: 'cw' },
-        { id: '3', name: 'Chirp', waveformType: 'fmcw_up_chirp' },
+        { id: '3', name: 'Chirp', waveformType: 'fmcw_linear_chirp' },
     ];
 
     test('offers FMCW radar mode and hides pulsed-only fields for FMCW/CW', () => {

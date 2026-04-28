@@ -68,6 +68,10 @@ namespace processing
 				.chirp_duration = source.chirp_duration,
 				.chirp_period = source.chirp_period,
 				.chirp_rate = source.chirp_rate,
+				.chirp_rate_signed = source.signed_chirp_rate,
+				.chirp_direction = source.fmcw != nullptr
+					? std::string(fers_signal::fmcwChirpDirectionToken(source.fmcw->getDirection()))
+					: std::string("up"),
 				.start_frequency_offset = source.start_freq_off,
 				.chirp_count = source.chirp_count.has_value()
 					? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*source.chirp_count))

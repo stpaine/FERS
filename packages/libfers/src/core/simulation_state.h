@@ -41,9 +41,10 @@ namespace core
 		RealType chirp_duration = 0.0; ///< Cached FMCW chirp duration in seconds.
 		RealType chirp_period = 0.0; ///< Cached FMCW chirp period in seconds.
 		RealType chirp_rate = 0.0; ///< Cached FMCW chirp rate in hertz per second.
+		RealType signed_chirp_rate = 0.0; ///< Cached signed FMCW chirp rate in hertz per second.
 		RealType start_freq_off = 0.0; ///< Cached FMCW start frequency offset in hertz.
 		RealType two_pi_f0 = 0.0; ///< Cached two-pi carrier angular frequency factor.
-		RealType pi_alpha = 0.0; ///< Cached pi-scaled FMCW chirp-rate factor.
+		RealType s_pi_alpha = 0.0; ///< Cached signed pi-scaled FMCW chirp-rate factor.
 		std::optional<std::size_t> chirp_count; ///< Optional finite chirp count for the segment.
 	};
 

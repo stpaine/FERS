@@ -49,7 +49,7 @@ export const RADAR_MODE_OPTIONS: ReadonlyArray<{
 const WAVEFORM_TYPE_BY_RADAR_TYPE: Record<RadarType, string> = {
     pulsed: 'pulsed_from_file',
     cw: 'cw',
-    fmcw: 'fmcw_up_chirp',
+    fmcw: 'fmcw_linear_chirp',
 };
 
 export function isWaveformCompatibleWithRadarType(

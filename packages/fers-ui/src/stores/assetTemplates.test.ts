@@ -123,7 +123,8 @@ function createFmcwScenarioFixture(): ScenarioData {
                 id: '6002',
                 type: 'Waveform',
                 name: 'FMCW Up Chirp',
-                waveformType: 'fmcw_up_chirp',
+                waveformType: 'fmcw_linear_chirp',
+                direction: 'up',
                 power: 50,
                 carrier_frequency: 10e9,
                 chirp_bandwidth: 20e6,
@@ -356,7 +357,8 @@ describe('asset templates', () => {
 
         expect(result.warnings).toEqual([]);
         expect(parsed.payload).toMatchObject({
-            waveformType: 'fmcw_up_chirp',
+            waveformType: 'fmcw_linear_chirp',
+            direction: 'up',
             chirp_bandwidth: 20e6,
             chirp_duration: 250e-6,
             chirp_period: 500e-6,
@@ -365,7 +367,8 @@ describe('asset templates', () => {
         });
         expect(insertedWaveform).toMatchObject({
             name: 'FMCW Up Chirp Copy',
-            waveformType: 'fmcw_up_chirp',
+            waveformType: 'fmcw_linear_chirp',
+            direction: 'up',
             chirp_bandwidth: 20e6,
             chirp_duration: 250e-6,
             chirp_period: 500e-6,
@@ -416,7 +419,8 @@ describe('asset templates', () => {
         expect(template.dependencies.waveforms).toHaveLength(1);
         expect(template.dependencies.waveforms[0]).toMatchObject({
             id: '6002',
-            waveformType: 'fmcw_up_chirp',
+            waveformType: 'fmcw_linear_chirp',
+            direction: 'up',
             chirp_bandwidth: 20e6,
         });
     });

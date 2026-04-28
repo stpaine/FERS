@@ -61,9 +61,13 @@ namespace serial::fmcw_validation
 			throw_error(owner + " has chirp_period shorter than chirp_duration; FMCW requires T_rep >= T_c.");
 		}
 
+		const RealType sweep_start = fmcw->getStartFrequencyOffset();
+		const RealType sweep_end =
+			sweep_start + (fmcw->isDownChirp() ? -fmcw->getChirpBandwidth() : fmcw->getChirpBandwidth());
+		const RealType f_low = std::min(sweep_start, sweep_end);
+		const RealType f_high = std::max(sweep_start, sweep_end);
 		const RealType effective_rate = params::rate() * params::oversampleRatio();
-		const RealType max_baseband = std::max(std::abs(fmcw->getStartFrequencyOffset()),
-											   std::abs(fmcw->getStartFrequencyOffset() + fmcw->getChirpBandwidth()));
+		const RealType max_baseband = std::max(std::abs(f_low), std::abs(f_high));
 		if (effective_rate <= max_baseband)
 		{
 			throw_error(owner + " violates FMCW baseband aliasing constraint.");
@@ -75,8 +79,7 @@ namespace serial::fmcw_validation
 				effective_rate, max_baseband);
 		}
 
-		const RealType min_rf = wave.getCarrier() +
-			std::min(fmcw->getStartFrequencyOffset(), fmcw->getStartFrequencyOffset() + fmcw->getChirpBandwidth());
+		const RealType min_rf = wave.getCarrier() + f_low;
 		if (min_rf <= 0.0)
 		{
 			throw_error(owner + " yields a non-positive RF-equivalent frequency.");
@@ -88,10 +91,10 @@ namespace serial::fmcw_validation
 	void validateWaveformModeMatch(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
 								   const std::string& owner, const Thrower& throw_error)
 	{
-		const bool is_pulsed = !wave.isCw() && !wave.isFmcwUpChirp();
+		const bool is_pulsed = !wave.isCw() && !wave.isFmcwChirp();
 		const bool matches = (mode == radar::OperationMode::PULSED_MODE && is_pulsed) ||
 			(mode == radar::OperationMode::CW_MODE && wave.isCw()) ||
-			(mode == radar::OperationMode::FMCW_MODE && wave.isFmcwUpChirp());
+			(mode == radar::OperationMode::FMCW_MODE && wave.isFmcwChirp());
 		if (!matches)
 		{
 			throw_error(owner + " mode does not match waveform '" + wave.getName() + "'.");

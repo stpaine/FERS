@@ -57,6 +57,28 @@ TEST_CASE("RadarSignal requires a signal", "[signal][radar]")
 					  std::runtime_error);
 }
 
+TEST_CASE("FmcwChirpSignal applies sweep direction to phase only", "[signal][radar][fmcw]")
+{
+	const RealType bandwidth = 2.0e6;
+	const RealType duration = 1.0e-3;
+	const RealType offset = 1.0e5;
+	const RealType u = 4.0e-4;
+
+	fers_signal::FmcwChirpSignal up(bandwidth, duration, duration, offset);
+	fers_signal::FmcwChirpSignal down(bandwidth, duration, duration, offset, std::nullopt,
+									  fers_signal::FmcwChirpDirection::Down);
+
+	const RealType alpha = bandwidth / duration;
+	REQUIRE_FALSE(up.isDownChirp());
+	REQUIRE(down.isDownChirp());
+	REQUIRE_THAT(up.getChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(down.getChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(up.getSignedChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(down.getSignedChirpRate(), WithinAbs(-alpha, 1e-6));
+	REQUIRE_THAT(up.basebandPhaseForChirpTime(u), WithinAbs(2.0 * PI * offset * u + PI * alpha * u * u, 1e-9));
+	REQUIRE_THAT(down.basebandPhaseForChirpTime(u), WithinAbs(2.0 * PI * offset * u - PI * alpha * u * u, 1e-9));
+}
+
 TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 {
 	ParamGuard guard;

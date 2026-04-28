@@ -87,7 +87,7 @@ namespace core
 
 		source.carrier_freq = signal->getCarrier();
 		source.amplitude = std::sqrt(signal->getPower());
-		source.is_fmcw = signal->isFmcwUpChirp();
+		source.is_fmcw = signal->isFmcwChirp();
 		if (!source.is_fmcw)
 		{
 			return source;
@@ -103,9 +103,10 @@ namespace core
 		source.chirp_duration = source.fmcw->getChirpDuration();
 		source.chirp_period = source.fmcw->getChirpPeriod();
 		source.chirp_rate = source.fmcw->getChirpRate();
+		source.signed_chirp_rate = source.fmcw->getSignedChirpRate();
 		source.start_freq_off = source.fmcw->getStartFrequencyOffset();
 		source.two_pi_f0 = 2.0 * PI * source.start_freq_off;
-		source.pi_alpha = PI * source.chirp_rate;
+		source.s_pi_alpha = PI * source.signed_chirp_rate;
 		source.chirp_count = source.fmcw->getChirpCount();
 		if (source.chirp_count.has_value())
 		{

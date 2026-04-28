@@ -2,6 +2,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "antenna/antenna_factory.h"
@@ -253,6 +254,63 @@ TEST_CASE("applyStreamingInterference supports FMCW transmitter with CW streamin
 	{
 		const ComplexType expected = simulation::calculateStreamingDirectPathContribution(
 			streaming_sources.front(), &receiver, 10.0e-6 + static_cast<RealType>(i) * 50.0e-6);
+		const ComplexType actual = window[i] - baseline[i];
+		REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1.0e-12));
+		REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1.0e-12));
+	}
+}
+
+TEST_CASE("applyStreamingInterference superposes up- and down-chirp FMCW transmitters",
+		  "[processing][finalizer][interference][fmcw]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e6);
+	params::setOversampleRatio(1);
+
+	radar::Platform tx_up_platform("TxUpPlatform");
+	setupPlatform(tx_up_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform tx_down_platform("TxDownPlatform");
+	setupPlatform(tx_down_platform, math::Vec3{150.0, 0.0, 0.0});
+	radar::Platform rx_platform("RxPlatform");
+	setupPlatform(rx_platform, math::Vec3{300.0, 0.0, 0.0});
+
+	antenna::Isotropic antenna("iso");
+	auto timing_model = makeQuietTiming("clk", 15);
+
+	radar::Transmitter up_tx(&tx_up_platform, "UpTx", radar::OperationMode::FMCW_MODE, 105);
+	up_tx.setAntenna(&antenna);
+	up_tx.setTiming(timing_model);
+	auto up_signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 50.0e-6, 100.0e-6);
+	fers_signal::RadarSignal up_wave("up_fmcw", 16.0, 1.0e9, 50.0e-6, std::move(up_signal), 305);
+	up_tx.setSignal(&up_wave);
+
+	radar::Transmitter down_tx(&tx_down_platform, "DownTx", radar::OperationMode::FMCW_MODE, 106);
+	down_tx.setAntenna(&antenna);
+	down_tx.setTiming(timing_model);
+	auto down_signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 50.0e-6, 100.0e-6, 0.0, std::nullopt,
+																	  fers_signal::FmcwChirpDirection::Down);
+	fers_signal::RadarSignal down_wave("down_fmcw", 16.0, 1.0e9, 50.0e-6, std::move(down_signal), 306);
+	down_tx.setSignal(&down_wave);
+
+	radar::Receiver receiver(&rx_platform, "CwRx", 103, radar::OperationMode::CW_MODE, 206);
+	receiver.setAntenna(&antenna);
+	receiver.setTiming(timing_model);
+
+	std::vector<ComplexType> window(3, ComplexType{0.1, -0.2});
+	const std::vector<ComplexType> baseline = window;
+	const std::vector<core::ActiveStreamingSource> streaming_sources = {
+		core::makeActiveSource(&up_tx, 0.0, 300.0e-6), core::makeActiveSource(&down_tx, 0.0, 300.0e-6)};
+	const std::vector<std::unique_ptr<radar::Target>> targets;
+
+	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets);
+
+	for (std::size_t i = 0; i < window.size(); ++i)
+	{
+		const RealType sample_time = 10.0e-6 + static_cast<RealType>(i) * 50.0e-6;
+		const ComplexType expected =
+			simulation::calculateStreamingDirectPathContribution(streaming_sources[0], &receiver, sample_time) +
+			simulation::calculateStreamingDirectPathContribution(streaming_sources[1], &receiver, sample_time);
 		const ComplexType actual = window[i] - baseline[i];
 		REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1.0e-12));
 		REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1.0e-12));

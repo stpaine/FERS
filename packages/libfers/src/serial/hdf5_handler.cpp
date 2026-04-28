@@ -48,6 +48,8 @@ namespace serial
 			file.createAttribute("fmcw_chirp_duration", metadata.fmcw->chirp_duration);
 			file.createAttribute("fmcw_chirp_period", metadata.fmcw->chirp_period);
 			file.createAttribute("fmcw_chirp_rate", metadata.fmcw->chirp_rate);
+			file.createAttribute("fmcw_chirp_rate_signed", metadata.fmcw->chirp_rate_signed);
+			file.createAttribute("fmcw_chirp_direction", metadata.fmcw->chirp_direction);
 			file.createAttribute("fmcw_start_frequency_offset", metadata.fmcw->start_frequency_offset);
 			if (metadata.fmcw->chirp_count.has_value())
 			{

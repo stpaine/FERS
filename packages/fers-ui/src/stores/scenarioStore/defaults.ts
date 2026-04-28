@@ -49,8 +49,8 @@ export function createWaveformForType(
     waveformType: 'cw'
 ): WaveformDefaults<'cw'>;
 export function createWaveformForType(
-    waveformType: 'fmcw_up_chirp'
-): WaveformDefaults<'fmcw_up_chirp'>;
+    waveformType: 'fmcw_linear_chirp'
+): WaveformDefaults<'fmcw_linear_chirp'>;
 export function createWaveformForType(
     waveformType: WaveformType
 ): WaveformDefaults {
@@ -72,13 +72,14 @@ export function createWaveformForType(
                 ...common,
                 waveformType,
             };
-        case 'fmcw_up_chirp':
+        case 'fmcw_linear_chirp':
             return {
                 ...common,
                 waveformType,
-                chirp_bandwidth: 20e6,
-                chirp_duration: 250e-6,
-                chirp_period: 250e-6,
+                direction: 'up',
+                chirp_bandwidth: 4e3,
+                chirp_duration: 1e-3,
+                chirp_period: 1e-3,
                 start_frequency_offset: 0,
                 chirp_count: null,
             };

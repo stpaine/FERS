@@ -26,6 +26,24 @@
 
 namespace fers_signal
 {
+	std::string_view fmcwChirpDirectionToken(const FmcwChirpDirection direction) noexcept
+	{
+		return direction == FmcwChirpDirection::Down ? "down" : "up";
+	}
+
+	FmcwChirpDirection parseFmcwChirpDirection(const std::string_view direction)
+	{
+		if (direction == "up")
+		{
+			return FmcwChirpDirection::Up;
+		}
+		if (direction == "down")
+		{
+			return FmcwChirpDirection::Down;
+		}
+		throw std::runtime_error("Unsupported FMCW chirp direction '" + std::string(direction) + "'.");
+	}
+
 	std::vector<ComplexType> CwSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
 											  const RealType /*fracWinDelay*/) const
 	{
@@ -35,10 +53,10 @@ namespace fers_signal
 
 	FmcwChirpSignal::FmcwChirpSignal(const RealType chirp_bandwidth, const RealType chirp_duration,
 									 const RealType chirp_period, const RealType start_frequency_offset,
-									 std::optional<std::size_t> chirp_count) :
+									 std::optional<std::size_t> chirp_count, const FmcwChirpDirection direction) :
 		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration), _chirp_period(chirp_period),
 		_start_frequency_offset(start_frequency_offset), _chirp_count(std::move(chirp_count)),
-		_chirp_rate(chirp_bandwidth / chirp_duration)
+		_chirp_rate(chirp_bandwidth / chirp_duration), _direction(direction)
 	{
 	}
 
@@ -81,7 +99,7 @@ namespace fers_signal
 
 	RealType FmcwChirpSignal::basebandPhaseForChirpTime(const RealType chirp_time) const noexcept
 	{
-		return 2.0 * PI * _start_frequency_offset * chirp_time + PI * _chirp_rate * chirp_time * chirp_time;
+		return 2.0 * PI * _start_frequency_offset * chirp_time + PI * getSignedChirpRate() * chirp_time * chirp_time;
 	}
 
 	std::vector<ComplexType> FmcwChirpSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
@@ -115,7 +133,7 @@ namespace fers_signal
 
 	bool RadarSignal::isCw() const noexcept { return dynamic_cast<const CwSignal*>(_signal.get()) != nullptr; }
 
-	bool RadarSignal::isFmcwUpChirp() const noexcept
+	bool RadarSignal::isFmcwChirp() const noexcept
 	{
 		return dynamic_cast<const FmcwChirpSignal*>(_signal.get()) != nullptr;
 	}

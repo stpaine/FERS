@@ -116,7 +116,9 @@ namespace serial::xml_serializer_utils
 		}
 		else if (const auto* fmcw = waveform.getFmcwChirpSignal(); fmcw != nullptr)
 		{
-			const XmlElement fmcw_elem = parent.addChild("fmcw_up_chirp");
+			const XmlElement fmcw_elem = parent.addChild("fmcw_linear_chirp");
+			fmcw_elem.setAttribute("direction",
+								   std::string(fers_signal::fmcwChirpDirectionToken(fmcw->getDirection())));
 			addChildWithNumber(fmcw_elem, "chirp_bandwidth", fmcw->getChirpBandwidth());
 			addChildWithNumber(fmcw_elem, "chirp_duration", fmcw->getChirpDuration());
 			addChildWithNumber(fmcw_elem, "chirp_period", fmcw->getChirpPeriod());

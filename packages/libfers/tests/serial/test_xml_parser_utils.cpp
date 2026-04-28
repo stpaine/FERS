@@ -379,11 +379,11 @@ TEST_CASE("parseWaveform warns for large FMCW streaming allocation", "[serial][x
 	auto doc = loadXml("<waveform name=\"huge_fmcw\">"
 					   "  <power>10</power>"
 					   "  <carrier_frequency>2.4e9</carrier_frequency>"
-					   "  <fmcw_up_chirp>"
+					   "  <fmcw_linear_chirp direction=\"up\">"
 					   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
 					   "    <chirp_duration>1e-3</chirp_duration>"
 					   "    <chirp_period>1e-3</chirp_period>"
-					   "  </fmcw_up_chirp>"
+					   "  </fmcw_linear_chirp>"
 					   "</waveform>");
 
 	serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
@@ -412,19 +412,21 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 		auto doc = loadXml("<waveform name=\"fmcw_good\">"
 						   "  <power>10</power>"
 						   "  <carrier_frequency>2.4e9</carrier_frequency>"
-						   "  <fmcw_up_chirp>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
 						   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
 						   "    <chirp_duration>1e-3</chirp_duration>"
 						   "    <chirp_period>2e-3</chirp_period>"
 						   "    <start_frequency_offset>-2.5e5</start_frequency_offset>"
 						   "    <chirp_count>4</chirp_count>"
-						   "  </fmcw_up_chirp>"
+						   "  </fmcw_linear_chirp>"
 						   "</waveform>");
 
 		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
 		REQUIRE(world.getWaveforms().size() == 1);
 		const auto* wave = world.getWaveforms().begin()->second.get();
-		REQUIRE(wave->getFmcwChirpSignal() != nullptr);
+		const auto* fmcw = wave->getFmcwChirpSignal();
+		REQUIRE(fmcw != nullptr);
+		REQUIRE(fmcw->isDownChirp());
 		REQUIRE_THAT(wave->getLength(), WithinAbs(1.0e-3, 1.0e-12));
 	}
 
@@ -433,11 +435,11 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 		auto doc = loadXml("<waveform name=\"fmcw_bad_period\">"
 						   "  <power>10</power>"
 						   "  <carrier_frequency>2.4e9</carrier_frequency>"
-						   "  <fmcw_up_chirp>"
+						   "  <fmcw_linear_chirp direction=\"up\">"
 						   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
 						   "    <chirp_duration>2e-3</chirp_duration>"
 						   "    <chirp_period>1e-3</chirp_period>"
-						   "  </fmcw_up_chirp>"
+						   "  </fmcw_linear_chirp>"
 						   "</waveform>");
 
 		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx),
@@ -449,15 +451,50 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 		auto doc = loadXml("<waveform name=\"fmcw_bad_alias\">"
 						   "  <power>10</power>"
 						   "  <carrier_frequency>2.4e9</carrier_frequency>"
-						   "  <fmcw_up_chirp>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
 						   "    <chirp_bandwidth>5e5</chirp_bandwidth>"
 						   "    <chirp_duration>1e-3</chirp_duration>"
 						   "    <chirp_period>1e-3</chirp_period>"
-						   "    <start_frequency_offset>-3e6</start_frequency_offset>"
-						   "  </fmcw_up_chirp>"
+						   "    <start_frequency_offset>-1.6e6</start_frequency_offset>"
+						   "  </fmcw_linear_chirp>"
 						   "</waveform>");
 
 		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx), XmlException);
+	}
+
+	SECTION("down-chirp aliasing constraint uses actual sweep interval")
+	{
+		params::setRate(26.0e6);
+		auto doc = loadXml("<waveform name=\"fmcw_down_centered\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
+						   "    <chirp_bandwidth>50e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <chirp_period>1e-3</chirp_period>"
+						   "    <start_frequency_offset>25e6</start_frequency_offset>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		REQUIRE_NOTHROW(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx));
+	}
+
+	SECTION("down-chirp carrier sanity check uses actual lower sweep edge")
+	{
+		params::setRate(80.0e6);
+		auto doc = loadXml("<waveform name=\"fmcw_bad_rf\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>40e6</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
+						   "    <chirp_bandwidth>70e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <chirp_period>1e-3</chirp_period>"
+						   "    <start_frequency_offset>25e6</start_frequency_offset>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx),
+							ContainsSubstring("non-positive RF-equivalent frequency"));
 	}
 }
 

@@ -237,11 +237,36 @@ TEST_CASE("makeActiveSource caches streaming scalars and clips FMCW chirp count"
 	REQUIRE_THAT(source.chirp_duration, WithinAbs(100.0e-6, 1.0e-15));
 	REQUIRE_THAT(source.chirp_period, WithinAbs(250.0e-6, 1.0e-15));
 	REQUIRE_THAT(source.chirp_rate, WithinAbs(200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.signed_chirp_rate, WithinAbs(200.0e9, 1.0e-3));
 	REQUIRE_THAT(source.start_freq_off, WithinAbs(1.0e6, 1.0e-9));
 	REQUIRE_THAT(source.two_pi_f0, WithinAbs(2.0 * PI * 1.0e6, 1.0e-9));
-	REQUIRE_THAT(source.pi_alpha, WithinAbs(PI * 200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.s_pi_alpha, WithinAbs(PI * 200.0e9, 1.0e-3));
 	REQUIRE(source.chirp_count.has_value());
 	REQUIRE(*source.chirp_count == std::size_t{1000});
+}
+
+TEST_CASE("makeActiveSource caches signed FMCW down-chirp coefficient", "[core][threading][fmcw]")
+{
+	ParamGuard guard;
+
+	radar::Platform platform("TxPlatform");
+	antenna::Isotropic antenna("Iso");
+	auto timing = std::make_shared<timing::Timing>("Clock", 42);
+
+	radar::Transmitter tx(&platform, "FmcwTx", radar::OperationMode::FMCW_MODE, 101);
+	tx.setAntenna(&antenna);
+	tx.setTiming(timing);
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(20.0e6, 100.0e-6, 250.0e-6, 1.0e6, std::nullopt,
+																	  fers_signal::FmcwChirpDirection::Down);
+	fers_signal::RadarSignal wave("FmcwWave", 16.0, 10.0e9, 100.0e-6, std::move(fmcw_signal), 301);
+	tx.setSignal(&wave);
+
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 5.0, 65.0);
+
+	REQUIRE(source.is_fmcw);
+	REQUIRE_THAT(source.chirp_rate, WithinAbs(200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.signed_chirp_rate, WithinAbs(-200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.s_pi_alpha, WithinAbs(-PI * 200.0e9, 1.0e-3));
 }
 
 TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]")
@@ -713,6 +738,7 @@ TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][
 		engine.run();
 
 		const std::string output = capture.str();
+		REQUIRE_THAT(output, ContainsSubstring("direction=up"));
 		REQUIRE_THAT(output, ContainsSubstring("chirp_count=unbounded"));
 		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=3"));
 	}
@@ -729,6 +755,7 @@ TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][
 		engine.run();
 
 		const std::string output = capture.str();
+		REQUIRE_THAT(output, ContainsSubstring("direction=up"));
 		REQUIRE_THAT(output, ContainsSubstring("chirp_count=3"));
 		REQUIRE_THAT(output, ContainsSubstring("segment_chirp_count=2"));
 		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=2"));

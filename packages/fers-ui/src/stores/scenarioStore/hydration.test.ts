@@ -152,10 +152,11 @@ describe('parseScenarioData FMCW hydration', () => {
             waveforms: [
                 {
                     id: 1,
-                    name: 'Up Chirp',
+                    name: 'FMCW Down Chirp',
                     power: 50,
                     carrier_frequency: 10e9,
-                    fmcw_up_chirp: {
+                    fmcw_linear_chirp: {
+                        direction: 'down',
                         chirp_bandwidth: 20e6,
                         chirp_duration: 250e-6,
                         chirp_period: 300e-6,
@@ -199,7 +200,8 @@ describe('parseScenarioData FMCW hydration', () => {
         expect(scenario).not.toBeNull();
         expect(scenario?.waveforms[0]).toMatchObject({
             id: '1',
-            waveformType: 'fmcw_up_chirp',
+            waveformType: 'fmcw_linear_chirp',
+            direction: 'down',
             chirp_bandwidth: 20e6,
             chirp_duration: 250e-6,
             chirp_period: 300e-6,

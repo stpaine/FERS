@@ -100,7 +100,8 @@ interface BackendWaveform {
     pulsed_from_file?: {
         filename: string;
     };
-    fmcw_up_chirp?: {
+    fmcw_linear_chirp?: {
+        direction: 'up' | 'down';
         chirp_bandwidth: number;
         chirp_duration: number;
         chirp_period: number;
@@ -293,27 +294,34 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                 power: w.power,
                 carrier_frequency: w.carrier_frequency,
             };
-            const waveform: Waveform = w.fmcw_up_chirp
+            const waveform: Waveform = w.fmcw_linear_chirp
                 ? {
                       ...commonWaveform,
-                      waveformType: 'fmcw_up_chirp',
-                      chirp_bandwidth: w.fmcw_up_chirp.chirp_bandwidth,
-                      chirp_duration: w.fmcw_up_chirp.chirp_duration,
-                      chirp_period: w.fmcw_up_chirp.chirp_period,
+                      waveformType: 'fmcw_linear_chirp',
+                      direction: w.fmcw_linear_chirp.direction,
+                      chirp_bandwidth: w.fmcw_linear_chirp.chirp_bandwidth,
+                      chirp_duration: w.fmcw_linear_chirp.chirp_duration,
+                      chirp_period: w.fmcw_linear_chirp.chirp_period,
                       start_frequency_offset:
-                          w.fmcw_up_chirp.start_frequency_offset ?? null,
-                      chirp_count: w.fmcw_up_chirp.chirp_count ?? null,
+                          w.fmcw_linear_chirp.start_frequency_offset ?? null,
+                      chirp_count: w.fmcw_linear_chirp.chirp_count ?? null,
                   }
                 : w.cw
                   ? {
                         ...commonWaveform,
                         waveformType: 'cw',
                     }
-                  : {
-                        ...commonWaveform,
-                        waveformType: 'pulsed_from_file',
-                        filename: w.pulsed_from_file?.filename ?? '',
-                    };
+                  : w.pulsed_from_file
+                    ? {
+                          ...commonWaveform,
+                          waveformType: 'pulsed_from_file',
+                          filename: w.pulsed_from_file.filename ?? '',
+                      }
+                    : (() => {
+                          throw new Error(
+                              `Unsupported waveform type for '${w.name}'.`
+                          );
+                      })();
             nameToIdMap.set(waveform.name, waveform.id);
             reserveSimId(waveformId);
             return waveform;

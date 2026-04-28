@@ -6,9 +6,10 @@ import { useScenarioStore, Waveform } from '@/stores/scenarioStore';
 import { createWaveformForType as createWaveformDefaultsForType } from '@/stores/scenarioStore/defaults';
 import { BufferedTextField, FileInput, NumberField } from './InspectorControls';
 
-export type WaveformType = 'pulsed_from_file' | 'cw' | 'fmcw_up_chirp';
+export type WaveformType = 'pulsed_from_file' | 'cw' | 'fmcw_linear_chirp';
 
-type FmcwUpChirpFields = {
+type FmcwLinearChirpFields = {
+    direction: 'up' | 'down';
     chirp_bandwidth: number;
     chirp_duration: number;
     chirp_period: number;
@@ -17,7 +18,7 @@ type FmcwUpChirpFields = {
 };
 
 type AuthorableWaveform = Omit<Waveform, 'waveformType'> &
-    Partial<FmcwUpChirpFields> & {
+    Partial<FmcwLinearChirpFields> & {
         waveformType: WaveformType;
         filename?: string;
     };
@@ -28,11 +29,11 @@ export const WAVEFORM_TYPE_OPTIONS: ReadonlyArray<{
 }> = [
     { value: 'pulsed_from_file', label: 'Pulse File' },
     { value: 'cw', label: 'CW' },
-    { value: 'fmcw_up_chirp', label: 'FMCW Up-Chirp' },
+    { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
 ];
 
-const DEFAULT_FMCW_UP_CHIRP_FIELDS =
-    createWaveformDefaultsForType('fmcw_up_chirp');
+const DEFAULT_FMCW_LINEAR_CHIRP_FIELDS =
+    createWaveformDefaultsForType('fmcw_linear_chirp');
 
 interface WaveformInspectorProps {
     item: Waveform;
@@ -72,24 +73,25 @@ export function createWaveformForType(
         };
     }
 
-    if (waveformType === 'fmcw_up_chirp') {
+    if (waveformType === 'fmcw_linear_chirp') {
         return {
             ...nextWaveform,
+            direction: waveform.direction === 'down' ? 'down' : 'up',
             chirp_bandwidth: asNumberOrDefault(
                 waveform.chirp_bandwidth,
-                DEFAULT_FMCW_UP_CHIRP_FIELDS.chirp_bandwidth
+                DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_bandwidth
             ),
             chirp_duration: asNumberOrDefault(
                 waveform.chirp_duration,
-                DEFAULT_FMCW_UP_CHIRP_FIELDS.chirp_duration
+                DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_duration
             ),
             chirp_period: asNumberOrDefault(
                 waveform.chirp_period,
-                DEFAULT_FMCW_UP_CHIRP_FIELDS.chirp_period
+                DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_period
             ),
             start_frequency_offset: asNullableNumberOrDefault(
                 waveform.start_frequency_offset,
-                DEFAULT_FMCW_UP_CHIRP_FIELDS.start_frequency_offset
+                DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.start_frequency_offset
             ),
             chirp_count: asNullableInteger(waveform.chirp_count),
         };
@@ -105,8 +107,9 @@ export function getVisibleWaveformFieldLabels(
         return ['Waveform File (.csv, .h5)'];
     }
 
-    if (waveformType === 'fmcw_up_chirp') {
+    if (waveformType === 'fmcw_linear_chirp') {
         return [
+            'Direction',
             'Chirp Bandwidth (Hz)',
             'Chirp Duration (s)',
             'Chirp Period (s)',
@@ -193,13 +196,26 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                     ]}
                 />
             )}
-            {waveform.waveformType === 'fmcw_up_chirp' && (
+            {waveform.waveformType === 'fmcw_linear_chirp' && (
                 <>
+                    <FormControl fullWidth size="small">
+                        <InputLabel>Direction</InputLabel>
+                        <Select
+                            label="Direction"
+                            value={waveform.direction ?? 'up'}
+                            onChange={(e) =>
+                                handleChange('direction', e.target.value)
+                            }
+                        >
+                            <MenuItem value="up">Up</MenuItem>
+                            <MenuItem value="down">Down</MenuItem>
+                        </Select>
+                    </FormControl>
                     <NumberField
                         label="Chirp Bandwidth (Hz)"
                         value={asNumberOrDefault(
                             waveform.chirp_bandwidth,
-                            DEFAULT_FMCW_UP_CHIRP_FIELDS.chirp_bandwidth
+                            DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_bandwidth
                         )}
                         emptyBehavior="revert"
                         onChange={(v) => handleChange('chirp_bandwidth', v)}
@@ -208,7 +224,7 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                         label="Chirp Duration (s)"
                         value={asNumberOrDefault(
                             waveform.chirp_duration,
-                            DEFAULT_FMCW_UP_CHIRP_FIELDS.chirp_duration
+                            DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_duration
                         )}
                         emptyBehavior="revert"
                         onChange={(v) => handleChange('chirp_duration', v)}
@@ -217,7 +233,7 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                         label="Chirp Period (s)"
                         value={asNumberOrDefault(
                             waveform.chirp_period,
-                            DEFAULT_FMCW_UP_CHIRP_FIELDS.chirp_period
+                            DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_period
                         )}
                         emptyBehavior="revert"
                         onChange={(v) => handleChange('chirp_period', v)}

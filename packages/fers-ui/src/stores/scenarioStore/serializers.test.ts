@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { PlatformComponentSchema, WaveformSchema } from '../scenarioSchema';
-import { createWaveformForType } from './defaults';
+import { createWaveformForType, defaultGlobalParameters } from './defaults';
 import {
     serializeAntenna,
     serializeComponentInner,
@@ -55,14 +55,31 @@ describe('serializeAntenna', () => {
 });
 
 describe('FMCW schema', () => {
-    const validWaveform: Waveform = {
-        ...createWaveformForType('fmcw_up_chirp'),
+    const validWaveform: Extract<
+        Waveform,
+        { waveformType: 'fmcw_linear_chirp' }
+    > = {
+        ...createWaveformForType('fmcw_linear_chirp'),
         id: '10',
         name: 'FMCW',
     };
 
     test('accepts valid FMCW waveform fields', () => {
         expect(WaveformSchema.safeParse(validWaveform).success).toBe(true);
+    });
+
+    test('keeps generated FMCW defaults within the backend aliasing limit', () => {
+        const sweepStart = validWaveform.start_frequency_offset ?? 0;
+        const sweepEnd =
+            sweepStart +
+            (validWaveform.direction === 'down' ? -1 : 1) *
+                validWaveform.chirp_bandwidth;
+        const maxBaseband = Math.max(Math.abs(sweepStart), Math.abs(sweepEnd));
+        const effectiveRate =
+            defaultGlobalParameters.rate *
+            defaultGlobalParameters.oversample_ratio;
+
+        expect(effectiveRate).toBeGreaterThan(maxBaseband);
     });
 
     test('rejects invalid FMCW waveform fields', () => {
@@ -107,7 +124,7 @@ describe('FMCW schema', () => {
 describe('serializeWaveform', () => {
     test('serializes FMCW waveform payload and omits unset optional fields', () => {
         const waveform: Waveform = {
-            ...createWaveformForType('fmcw_up_chirp'),
+            ...createWaveformForType('fmcw_linear_chirp'),
             id: '30',
             name: 'FMCW',
         };
@@ -117,17 +134,18 @@ describe('serializeWaveform', () => {
             name: 'FMCW',
             power: 1000,
             carrier_frequency: 1e9,
-            fmcw_up_chirp: {
-                chirp_bandwidth: 20e6,
-                chirp_duration: 250e-6,
-                chirp_period: 250e-6,
+            fmcw_linear_chirp: {
+                direction: 'up',
+                chirp_bandwidth: 4e3,
+                chirp_duration: 1e-3,
+                chirp_period: 1e-3,
             },
         });
     });
 
     test('serializes FMCW optional fields when set', () => {
         const waveform: Waveform = {
-            ...createWaveformForType('fmcw_up_chirp'),
+            ...createWaveformForType('fmcw_linear_chirp'),
             id: '31',
             name: 'FMCW Offset',
             start_frequency_offset: -1000,
@@ -135,7 +153,8 @@ describe('serializeWaveform', () => {
         };
 
         expect(serializeWaveform(waveform)).toMatchObject({
-            fmcw_up_chirp: {
+            fmcw_linear_chirp: {
+                direction: 'up',
                 start_frequency_offset: -1000,
                 chirp_count: 4,
             },

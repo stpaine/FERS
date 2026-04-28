@@ -74,7 +74,8 @@ export const WaveformSchema = z
             waveformType: z.literal('cw'),
         }),
         BaseWaveformSchema.extend({
-            waveformType: z.literal('fmcw_up_chirp'),
+            waveformType: z.literal('fmcw_linear_chirp'),
+            direction: z.enum(['up', 'down']),
             chirp_bandwidth: z
                 .number()
                 .positive('Chirp bandwidth must be positive.'),
@@ -92,7 +93,7 @@ export const WaveformSchema = z
     ])
     .superRefine((data, ctx) => {
         if (
-            data.waveformType === 'fmcw_up_chirp' &&
+            data.waveformType === 'fmcw_linear_chirp' &&
             data.chirp_period < data.chirp_duration
         ) {
             ctx.addIssue({

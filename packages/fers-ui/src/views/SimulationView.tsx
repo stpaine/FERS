@@ -394,7 +394,7 @@ export const SimulationView = React.memo(function SimulationView() {
             return segmentSummary;
         }
 
-        return `${segmentSummary}, B=${formatMetric(
+        return `${segmentSummary}, ${file.fmcw.chirp_direction}, B=${formatMetric(
             file.fmcw.chirp_bandwidth
         )}, T_c=${formatMetric(
             file.fmcw.chirp_duration

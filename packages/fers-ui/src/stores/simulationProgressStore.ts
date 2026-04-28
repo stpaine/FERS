@@ -46,6 +46,8 @@ export type SimulationOutputFmcwMetadata = {
     chirp_duration: number;
     chirp_period: number;
     chirp_rate: number;
+    chirp_rate_signed: number;
+    chirp_direction: 'up' | 'down';
     start_frequency_offset: number;
     chirp_count?: number;
 };

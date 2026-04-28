@@ -445,8 +445,10 @@ namespace serial::xml_parser_utils
 				name, power, carrier, ctx.parameters.end - ctx.parameters.start, std::move(cw_signal), id);
 			ctx.world->add(std::move(wave));
 		}
-		else if (const XmlElement fmcw_element = waveform.childElement("fmcw_up_chirp", 0); fmcw_element.isValid())
+		else if (const XmlElement fmcw_element = waveform.childElement("fmcw_linear_chirp", 0); fmcw_element.isValid())
 		{
+			const auto direction =
+				fers_signal::parseFmcwChirpDirection(XmlElement::getSafeAttribute(fmcw_element, "direction"));
 			const RealType chirp_bandwidth = get_child_real_type(fmcw_element, "chirp_bandwidth");
 			const RealType chirp_duration = get_child_real_type(fmcw_element, "chirp_duration");
 			const RealType chirp_period = get_child_real_type(fmcw_element, "chirp_period");
@@ -471,7 +473,7 @@ namespace serial::xml_parser_utils
 			}
 
 			auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(
-				chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset, chirp_count);
+				chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset, chirp_count, direction);
 			// RadarSignal length is the active chirp duration, not T_rep. The repeat period only spaces chirps.
 			auto wave = std::make_unique<fers_signal::RadarSignal>(name, power, carrier, chirp_duration,
 																   std::move(fmcw_signal), id);

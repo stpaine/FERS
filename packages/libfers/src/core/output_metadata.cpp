@@ -53,6 +53,8 @@ namespace core
 									 {"chirp_duration", fmcw.chirp_duration},
 									 {"chirp_period", fmcw.chirp_period},
 									 {"chirp_rate", fmcw.chirp_rate},
+									 {"chirp_rate_signed", fmcw.chirp_rate_signed},
+									 {"chirp_direction", fmcw.chirp_direction},
 									 {"start_frequency_offset", fmcw.start_frequency_offset}};
 			if (fmcw.chirp_count.has_value())
 			{

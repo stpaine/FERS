@@ -52,6 +52,8 @@ describe('simulation output metadata', () => {
                         chirp_duration: 250e-6,
                         chirp_period: 500e-6,
                         chirp_rate: 80e9,
+                        chirp_rate_signed: -80e9,
+                        chirp_direction: 'down',
                         start_frequency_offset: 0,
                         chirp_count: 4,
                     },
@@ -66,6 +68,8 @@ describe('simulation output metadata', () => {
                             chirp_duration: 250e-6,
                             chirp_period: 500e-6,
                             chirp_rate: 80e9,
+                            chirp_rate_signed: -80e9,
+                            chirp_direction: 'down',
                             start_frequency_offset: 0,
                             chirp_count: 4,
                             segments: [
@@ -96,6 +100,7 @@ describe('simulation output metadata', () => {
                 chirp_bandwidth: 20e6,
                 chirp_duration: 250e-6,
                 chirp_period: 500e-6,
+                chirp_direction: 'down',
             },
             fmcw_sources: [
                 {

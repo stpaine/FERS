@@ -181,9 +181,10 @@ export const serializeWaveform = (w: Waveform) => {
                 return { cw: {} };
             case 'pulsed_from_file':
                 return { pulsed_from_file: { filename: w.filename } };
-            case 'fmcw_up_chirp':
+            case 'fmcw_linear_chirp':
                 return {
-                    fmcw_up_chirp: {
+                    fmcw_linear_chirp: {
+                        direction: w.direction,
                         chirp_bandwidth: w.chirp_bandwidth,
                         chirp_duration: w.chirp_duration,
                         chirp_period: w.chirp_period,

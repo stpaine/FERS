@@ -409,7 +409,7 @@ export default function LinkVisualizer() {
                     ? waveformById.get(c.waveformId)
                     : undefined;
                 if (
-                    waveform?.waveformType !== 'fmcw_up_chirp' ||
+                    waveform?.waveformType !== 'fmcw_linear_chirp' ||
                     waveform.chirp_period <= 0
                 ) {
                     return;

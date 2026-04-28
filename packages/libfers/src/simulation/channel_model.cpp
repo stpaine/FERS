@@ -295,7 +295,7 @@ namespace
 					return false;
 				}
 				phase_out = -2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * chirp_time +
-					source.pi_alpha * chirp_time * chirp_time;
+					source.s_pi_alpha * chirp_time * chirp_time;
 				return true;
 			}
 
@@ -326,7 +326,7 @@ namespace
 			}
 
 			phase_out =
-				-2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * u_ret + source.pi_alpha * u_ret * u_ret;
+				-2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * u_ret + source.s_pi_alpha * u_ret * u_ret;
 			return true;
 		}
 

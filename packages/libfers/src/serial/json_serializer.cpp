@@ -350,16 +350,17 @@ namespace fers_signal
 		}
 		else if (const auto* fmcw = rs.getFmcwChirpSignal(); fmcw != nullptr)
 		{
-			j["fmcw_up_chirp"] = {{"chirp_bandwidth", fmcw->getChirpBandwidth()},
-								  {"chirp_duration", fmcw->getChirpDuration()},
-								  {"chirp_period", fmcw->getChirpPeriod()}};
+			j["fmcw_linear_chirp"] = {{"direction", std::string(fmcwChirpDirectionToken(fmcw->getDirection()))},
+									  {"chirp_bandwidth", fmcw->getChirpBandwidth()},
+									  {"chirp_duration", fmcw->getChirpDuration()},
+									  {"chirp_period", fmcw->getChirpPeriod()}};
 			if (std::abs(fmcw->getStartFrequencyOffset()) > EPSILON)
 			{
-				j["fmcw_up_chirp"]["start_frequency_offset"] = fmcw->getStartFrequencyOffset();
+				j["fmcw_linear_chirp"]["start_frequency_offset"] = fmcw->getStartFrequencyOffset();
 			}
 			if (fmcw->getChirpCount().has_value())
 			{
-				j["fmcw_up_chirp"]["chirp_count"] = *fmcw->getChirpCount();
+				j["fmcw_linear_chirp"]["chirp_count"] = *fmcw->getChirpCount();
 			}
 		}
 		else
@@ -389,9 +390,10 @@ namespace fers_signal
 			rs = std::make_unique<RadarSignal>(name, power, carrier, params::endTime() - params::startTime(),
 											   std::move(cw_signal), id);
 		}
-		else if (j.contains("fmcw_up_chirp"))
+		else if (j.contains("fmcw_linear_chirp"))
 		{
-			const auto& fmcw_json = j.at("fmcw_up_chirp");
+			const auto& fmcw_json = j.at("fmcw_linear_chirp");
+			const auto direction = parseFmcwChirpDirection(fmcw_json.at("direction").get<std::string>());
 			std::optional<std::size_t> chirp_count;
 			if (fmcw_json.contains("chirp_count"))
 			{
@@ -406,7 +408,7 @@ namespace fers_signal
 			auto fmcw_signal = std::make_unique<FmcwChirpSignal>(
 				fmcw_json.at("chirp_bandwidth").get<RealType>(), fmcw_json.at("chirp_duration").get<RealType>(),
 				fmcw_json.at("chirp_period").get<RealType>(), fmcw_json.value("start_frequency_offset", 0.0),
-				chirp_count);
+				chirp_count, direction);
 			rs = std::make_unique<RadarSignal>(name, power, carrier, fmcw_signal->getChirpDuration(),
 											   std::move(fmcw_signal), id);
 			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");

@@ -240,6 +240,8 @@ TEST_CASE("HDF5 writer exposes FMCW segment metadata without cw_segments JSON al
 																	  .chirp_duration = 0.01,
 																	  .chirp_period = 0.02,
 																	  .chirp_rate = 10'000.0,
+																	  .chirp_rate_signed = -10'000.0,
+																	  .chirp_direction = "down",
 																	  .start_frequency_offset = -50.0,
 																	  .chirp_count = 3}};
 	file_metadata.streaming_segments.push_back({.start_time = 1.0,
@@ -266,21 +268,29 @@ TEST_CASE("HDF5 writer exposes FMCW segment metadata without cw_segments JSON al
 	{
 		HighFive::File file(path, HighFive::File::ReadOnly);
 		unsigned long long segment_count = 0;
+		RealType signed_rate = 0.0;
+		std::string direction;
 		std::vector<RealType> first_chirp_starts;
 		std::vector<unsigned long long> emitted_chirp_counts;
 		std::string metadata_json;
 
 		file.getAttribute("streaming_segment_count").read(segment_count);
+		file.getAttribute("fmcw_chirp_rate_signed").read(signed_rate);
+		file.getAttribute("fmcw_chirp_direction").read(direction);
 		file.getAttribute("streaming_first_chirp_start_time").read(first_chirp_starts);
 		file.getAttribute("streaming_emitted_chirp_count").read(emitted_chirp_counts);
 		file.getAttribute("fers_metadata_json").read(metadata_json);
 
 		REQUIRE(segment_count == 2ULL);
+		REQUIRE_THAT(signed_rate, WithinAbs(-10'000.0, 1e-12));
+		REQUIRE(direction == "down");
 		REQUIRE(first_chirp_starts.size() == 2u);
 		REQUIRE_THAT(first_chirp_starts[0], WithinAbs(1.0, 1e-12));
 		REQUIRE_THAT(first_chirp_starts[1], WithinAbs(2.0, 1e-12));
 		REQUIRE(emitted_chirp_counts == std::vector<unsigned long long>{3ULL, 3ULL});
 		REQUIRE(metadata_json.find("\"streaming_segments\"") != std::string::npos);
+		REQUIRE(metadata_json.find("\"chirp_direction\": \"down\"") != std::string::npos);
+		REQUIRE(metadata_json.find("\"chirp_rate_signed\": -10000.0") != std::string::npos);
 		REQUIRE(metadata_json.find("\"cw_segments\"") == std::string::npos);
 	}
 

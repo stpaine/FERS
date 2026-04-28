@@ -48,6 +48,8 @@ namespace core
 		RealType chirp_duration = 0.0; ///< Active chirp duration in seconds.
 		RealType chirp_period = 0.0; ///< Chirp repetition period in seconds.
 		RealType chirp_rate = 0.0; ///< Frequency sweep rate in hertz per second.
+		RealType chirp_rate_signed = 0.0; ///< Signed frequency sweep rate in hertz per second.
+		std::string chirp_direction = "up"; ///< Frequency sweep direction token.
 		RealType start_frequency_offset = 0.0; ///< Start frequency offset relative to carrier in hertz.
 		std::optional<std::uint64_t> chirp_count = std::nullopt; ///< Optional finite chirp count.
 	};

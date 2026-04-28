@@ -34,6 +34,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "signal/radar_signal.h"
 #include "sim_events.h"
 #include "simulation/channel_model.h"
 #include "thread_pool.h"
@@ -134,6 +135,7 @@ namespace core
 			{
 				const RealType duty_cycle = fmcw->getChirpDuration() / fmcw->getChirpPeriod();
 				const RealType average_power = transmitter_ptr->getSignal()->getPower() * duty_cycle;
+				const auto direction = fers_signal::fmcwChirpDirectionToken(fmcw->getDirection());
 				const auto configured_count = fmcw->getChirpCount().has_value()
 					? std::format("{}", *fmcw->getChirpCount())
 					: std::string("unbounded");
@@ -143,9 +145,9 @@ namespace core
 					const auto source = makeActiveSource(transmitter_ptr.get(), active_start, params::endTime());
 					const auto total_chirp_count = countFmcwChirpStarts(source, active_start, source.segment_end);
 					LOG(Level::INFO,
-						"FMCW transmitter '{}' B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s duty_cycle={} "
-						"chirp_count={} total_chirp_count={} average_power={} W",
-						transmitter_ptr->getName(), fmcw->getChirpBandwidth(), fmcw->getChirpDuration(),
+						"FMCW transmitter '{}' direction={} B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s "
+						"duty_cycle={} chirp_count={} total_chirp_count={} average_power={} W",
+						transmitter_ptr->getName(), direction, fmcw->getChirpBandwidth(), fmcw->getChirpDuration(),
 						fmcw->getChirpPeriod(), fmcw->getStartFrequencyOffset(), fmcw->getChirpRate(), duty_cycle,
 						configured_count, total_chirp_count, average_power);
 				}
@@ -160,13 +162,13 @@ namespace core
 						const auto segment_chirp_count = countFmcwChirpStarts(source, active_start, source.segment_end);
 						total_chirp_count += segment_chirp_count;
 						LOG(Level::INFO,
-							"FMCW transmitter '{}' segment [{}, {}] B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} "
-							"Hz/s duty_cycle={} chirp_count={} segment_chirp_count={} total_chirp_count={} "
+							"FMCW transmitter '{}' segment [{}, {}] direction={} B={} Hz T_c={} s T_rep={} s f_0={} "
+							"Hz alpha={} Hz/s duty_cycle={} chirp_count={} segment_chirp_count={} total_chirp_count={} "
 							"average_power={} W",
-							transmitter_ptr->getName(), period.start, source.segment_end, fmcw->getChirpBandwidth(),
-							fmcw->getChirpDuration(), fmcw->getChirpPeriod(), fmcw->getStartFrequencyOffset(),
-							fmcw->getChirpRate(), duty_cycle, configured_count, segment_chirp_count, total_chirp_count,
-							average_power);
+							transmitter_ptr->getName(), period.start, source.segment_end, direction,
+							fmcw->getChirpBandwidth(), fmcw->getChirpDuration(), fmcw->getChirpPeriod(),
+							fmcw->getStartFrequencyOffset(), fmcw->getChirpRate(), duty_cycle, configured_count,
+							segment_chirp_count, total_chirp_count, average_power);
 					}
 				}
 			}

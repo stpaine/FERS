@@ -365,6 +365,8 @@ TEST_CASE("finalizeStreamingReceiver records FMCW source metadata for detached r
 	REQUIRE_THAT(source_json.at("chirp_bandwidth").get<RealType>(), WithinAbs(200.0, 1e-12));
 	REQUIRE_THAT(source_json.at("chirp_duration").get<RealType>(), WithinAbs(0.001, 1e-12));
 	REQUIRE_THAT(source_json.at("chirp_period").get<RealType>(), WithinAbs(0.002, 1e-12));
+	REQUIRE(source_json.at("chirp_direction") == "up");
+	REQUIRE_THAT(source_json.at("chirp_rate_signed").get<RealType>(), WithinAbs(200'000.0, 1e-12));
 	REQUIRE(source_json.at("chirp_count") == 4);
 	REQUIRE(source_json.at("segments").size() == 1u);
 	REQUIRE_THAT(source_json.at("segments").front().at("first_chirp_start_time").get<RealType>(),

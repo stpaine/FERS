@@ -104,7 +104,7 @@
                     <xs:element name="cw">
                         <xs:complexType/>
                     </xs:element>
-                    <xs:element name="fmcw_up_chirp">
+                    <xs:element name="fmcw_linear_chirp">
                         <xs:complexType>
                             <xs:sequence>
                                 <xs:element name="chirp_bandwidth" type="xs:string"/>
@@ -120,6 +120,14 @@
                                     </xs:annotation>
                                 </xs:element>
                             </xs:sequence>
+                            <xs:attribute name="direction" use="required">
+                                <xs:simpleType>
+                                    <xs:restriction base="xs:token">
+                                        <xs:enumeration value="up"/>
+                                        <xs:enumeration value="down"/>
+                                    </xs:restriction>
+                                </xs:simpleType>
+                            </xs:attribute>
                         </xs:complexType>
                     </xs:element>
                 </xs:choice>

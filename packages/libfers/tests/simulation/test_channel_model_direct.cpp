@@ -570,7 +570,7 @@ TEST_CASE("FMCW streaming direct path keeps chirp cache per source", "[simulatio
 	REQUIRE(std::abs(sample1) > 0.0);
 	REQUIRE(std::abs(sample2) > 0.0);
 	const RealType expected_delta =
-		(source2.two_pi_f0 - source1.two_pi_f0) * u_ret + (source2.pi_alpha - source1.pi_alpha) * u_ret * u_ret;
+		(source2.two_pi_f0 - source1.two_pi_f0) * u_ret + (source2.s_pi_alpha - source1.s_pi_alpha) * u_ret * u_ret;
 	const RealType measured_delta = std::arg(sample2 / sample1);
 	REQUIRE_THAT(unwrapDelta(measured_delta - expected_delta), WithinAbs(0.0, 1.0e-10));
 }

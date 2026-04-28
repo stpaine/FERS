@@ -47,7 +47,7 @@
                 >
 
         <!-- Waveform definition -->
-        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw | fmcw_up_chirp))>
+        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw | fmcw_linear_chirp))>
         <!ATTLIST waveform
                 name CDATA #REQUIRED>
 
@@ -61,7 +61,8 @@
         <!ELEMENT pulsed_from_file EMPTY>
         <!ATTLIST pulsed_from_file filename CDATA #REQUIRED>
         <!ELEMENT cw EMPTY>
-        <!ELEMENT fmcw_up_chirp (chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset?, chirp_count?)>
+        <!ELEMENT fmcw_linear_chirp (chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset?, chirp_count?)>
+        <!ATTLIST fmcw_linear_chirp direction (up|down) #REQUIRED>
         <!ELEMENT chirp_bandwidth (#PCDATA)>
         <!ELEMENT chirp_duration (#PCDATA)>
         <!ELEMENT chirp_period (#PCDATA)>
