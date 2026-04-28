@@ -348,37 +348,16 @@ namespace
 		return waveform->getPower();
 	}
 
-	/// Returns waveform duty cycle for preview labels.
-	RealType previewDutyCycle(const RadarSignal* waveform)
-	{
-		if (const auto* fmcw = (waveform != nullptr) ? waveform->getFmcwChirpSignal() : nullptr; fmcw != nullptr)
-		{
-			return fmcw->getChirpDuration() / fmcw->getChirpPeriod();
-		}
-		return 1.0;
-	}
-
 	/// Formats received or radiated power as a dBm preview label.
-	std::string formatPreviewDbmLabel(const RadarSignal* waveform, const RealType average_watts,
-									  const std::string_view prefix = {})
+	std::string formatPreviewDbmLabel(const RealType watts, const std::string_view prefix = {})
 	{
-		if (const RealType duty_cycle = previewDutyCycle(waveform); duty_cycle < 1.0)
-		{
-			return std::format("{}avg {:.1f} dBm (peak {:.1f} dBm)", prefix, wattsToDbm(average_watts),
-							   wattsToDbm(average_watts / duty_cycle));
-		}
-		return std::format("{}{:.1f} dBm", prefix, wattsToDbm(average_watts));
+		return std::format("{}{:.1f} dBm", prefix, wattsToDbm(watts));
 	}
 
 	/// Formats target illumination density as a dBW-per-square-meter preview label.
-	std::string formatPreviewDbwPerSquareMeterLabel(const RadarSignal* waveform, const RealType average_watts)
+	std::string formatPreviewDbwPerSquareMeterLabel(const RealType watts)
 	{
-		if (const RealType duty_cycle = previewDutyCycle(waveform); duty_cycle < 1.0)
-		{
-			return std::format("avg {:.1f} dBW/m\u00B2 (peak {:.1f} dBW/m\u00B2)", wattsToDb(average_watts),
-							   wattsToDb(average_watts / duty_cycle));
-		}
-		return std::format("{:.1f} dBW/m\u00B2", wattsToDb(average_watts));
+		return std::format("{:.1f} dBW/m\u00B2", wattsToDb(watts));
 	}
 }
 
@@ -838,7 +817,7 @@ namespace simulation
 
 				links.push_back({.type = LinkType::BistaticTxTgt,
 								 .quality = LinkQuality::Strong,
-								 .label = formatPreviewDbwPerSquareMeterLabel(waveform, p_density),
+								 .label = formatPreviewDbwPerSquareMeterLabel(p_density),
 								 .source_id = tx->getId(),
 								 .dest_id = tgt->getId(),
 								 .origin_id = tx->getId()});
@@ -901,7 +880,7 @@ namespace simulation
 										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = formatPreviewDbmLabel(waveform, pr_unit_watts),
+										 .label = formatPreviewDbmLabel(pr_unit_watts),
 										 .source_id = tx->getId(),
 										 .dest_id = tgt->getId(),
 										 .origin_id = tx->getId(),
@@ -933,7 +912,7 @@ namespace simulation
 
 							links.push_back({.type = LinkType::DirectTxRx,
 											 .quality = LinkQuality::Strong,
-											 .label = formatPreviewDbmLabel(waveform, pr_watts, "Direct: "),
+											 .label = formatPreviewDbmLabel(pr_watts, "Direct: "),
 											 .source_id = tx->getId(),
 											 .dest_id = rx->getId(),
 											 .origin_id = tx->getId()});
@@ -980,7 +959,7 @@ namespace simulation
 										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = formatPreviewDbmLabel(waveform, pr_unit_watts),
+										 .label = formatPreviewDbmLabel(pr_unit_watts),
 										 .source_id = tgt->getId(),
 										 .dest_id = rx->getId(),
 										 .origin_id = tx->getId(),

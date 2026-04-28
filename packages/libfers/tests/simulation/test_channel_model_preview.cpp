@@ -6,6 +6,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "antenna/antenna_factory.h"
@@ -54,6 +55,14 @@ namespace
 			}
 		}
 		return count;
+	}
+
+	void requireSingleValuePreviewLabel(const std::string& label)
+	{
+		REQUIRE(label.find("avg ") == std::string::npos);
+		REQUIRE(label.find("peak ") == std::string::npos);
+		REQUIRE(label.find('(') == std::string::npos);
+		REQUIRE(label.find(')') == std::string::npos);
 	}
 }
 
@@ -745,8 +754,7 @@ TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][c
 	REQUIRE(saw_tx_tgt);
 }
 
-TEST_CASE("calculatePreviewLinks FMCW labels distinguish average and peak power",
-		  "[simulation][channel_model][preview]")
+TEST_CASE("calculatePreviewLinks FMCW labels use single-value preview style", "[simulation][channel_model][preview]")
 {
 	ParamGuard guard;
 	params::params.reset();
@@ -795,15 +803,15 @@ TEST_CASE("calculatePreviewLinks FMCW labels distinguish average and peak power"
 		if (link.type == simulation::LinkType::Monostatic)
 		{
 			saw_fmcw_power_label = true;
-			REQUIRE(link.label.find("avg ") != std::string::npos);
-			REQUIRE(link.label.find("peak ") != std::string::npos);
+			requireSingleValuePreviewLabel(link.label);
 			REQUIRE(link.label.find("dBm") != std::string::npos);
+			(void)std::stod(link.label);
 		}
 		if (link.type == simulation::LinkType::BistaticTxTgt)
 		{
-			REQUIRE(link.label.find("avg ") != std::string::npos);
-			REQUIRE(link.label.find("peak ") != std::string::npos);
+			requireSingleValuePreviewLabel(link.label);
 			REQUIRE(link.label.find("dBW/m") != std::string::npos);
+			(void)std::stod(link.label);
 		}
 	}
 
