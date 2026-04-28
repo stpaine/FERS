@@ -6,6 +6,8 @@
 #include <format>
 #include <highfive/highfive.hpp>
 #include <memory>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -106,6 +108,27 @@ namespace
 		return owned;
 	}
 
+	struct FmcwTxFixture
+	{
+		radar::Platform platform;
+		std::unique_ptr<fers_signal::RadarSignal> wave;
+		radar::Transmitter transmitter;
+
+		FmcwTxFixture(const std::string& name, SimId tx_id, SimId waveform_id, RealType chirp_bandwidth,
+					  RealType chirp_duration, RealType chirp_period, RealType start_frequency_offset,
+					  std::optional<std::size_t> chirp_count) :
+			platform(name + "Platform"),
+			wave(std::make_unique<fers_signal::RadarSignal>(
+				name + "Wave", 1.0, 10.0e9, chirp_duration,
+				std::make_unique<fers_signal::FmcwChirpSignal>(chirp_bandwidth, chirp_duration, chirp_period,
+															   start_frequency_offset, chirp_count),
+				waveform_id)),
+			transmitter(&platform, name, radar::OperationMode::FMCW_MODE, tx_id)
+		{
+			transmitter.setSignal(wave.get());
+		}
+	};
+
 	std::unique_ptr<serial::Response>
 	makeFixedResponse(const radar::Transmitter* transmitter,
 					  std::vector<std::unique_ptr<fers_signal::RadarSignal>>& wave_store,
@@ -131,6 +154,14 @@ namespace
 		std::vector<RealType> values;
 		file.getDataSet(name).read(values);
 		return values;
+	}
+
+	nlohmann::json readMetadataJson(const std::filesystem::path& output_path)
+	{
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		std::string metadata_json;
+		file.getAttribute("fers_metadata_json").read(metadata_json);
+		return nlohmann::json::parse(metadata_json);
 	}
 
 	struct ProgressCall
@@ -275,6 +306,122 @@ TEST_CASE("finalizeStreamingReceiver labels FMCW receiver progress distinctly", 
 	REQUIRE(progress_calls.size() == 5u);
 	REQUIRE(progress_calls.front().message == std::format("Finalizing FMCW Receiver {}", receiver_name));
 	REQUIRE(progress_calls.back().message == std::format("Finalized {}", receiver_name));
+
+	const auto metadata = readMetadataJson(output_path);
+	REQUIRE(metadata.at("mode") == "fmcw");
+	REQUIRE(metadata.at("fmcw_sources").empty());
+	REQUIRE_FALSE(metadata.contains("fmcw"));
+
+	std::filesystem::remove_all(out_dir);
+}
+
+TEST_CASE("finalizeStreamingReceiver records FMCW source metadata for detached receivers",
+		  "[processing][finalizer][fmcw][metadata]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 0.01);
+	params::setRate(1'000.0);
+	params::setOversampleRatio(1);
+	params::setAdcBits(0);
+
+	const std::string receiver_name = uniqueName("fmcw_detached");
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("fmcw_detached_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
+	removeIfExists(output_path);
+
+	radar::Platform rx_platform("RxPlatform");
+	radar::Receiver receiver(&rx_platform, receiver_name, 58, radar::OperationMode::FMCW_MODE);
+	auto timing_owner = makeQuietTiming("detached_clk", 24, 77.0);
+	receiver.setTiming(timing_owner.timing);
+	receiver.setNoiseTemperature(0.0);
+	receiver.prepareStreamingData(10);
+
+	FmcwTxFixture source_fixture("DetachedTx", 901, 902, 200.0, 0.001, 0.002, 5.0, std::size_t{4});
+	const auto source = core::makeActiveSource(&source_fixture.transmitter, 0.0, params::endTime());
+
+	processing::finalizeStreamingReceiver(&receiver, nullptr, nullptr, out_dir.string(), nullptr, {source});
+
+	{
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		unsigned long long source_count = 0;
+		RealType scalar_bandwidth = 0.0;
+		file.getAttribute("fmcw_source_count").read(source_count);
+		file.getAttribute("fmcw_chirp_bandwidth").read(scalar_bandwidth);
+		REQUIRE(source_count == 1ULL);
+		REQUIRE_THAT(scalar_bandwidth, WithinAbs(200.0, 1e-12));
+	}
+
+	const auto metadata = readMetadataJson(output_path);
+	REQUIRE(metadata.at("mode") == "fmcw");
+	REQUIRE(metadata.contains("fmcw"));
+	REQUIRE(metadata.at("fmcw_sources").size() == 1u);
+
+	const auto& source_json = metadata.at("fmcw_sources").front();
+	REQUIRE(source_json.at("transmitter_id") == 901);
+	REQUIRE(source_json.at("transmitter_name") == "DetachedTx");
+	REQUIRE(source_json.at("waveform_id") == 902);
+	REQUIRE(source_json.at("waveform_name") == "DetachedTxWave");
+	REQUIRE_THAT(source_json.at("chirp_bandwidth").get<RealType>(), WithinAbs(200.0, 1e-12));
+	REQUIRE_THAT(source_json.at("chirp_duration").get<RealType>(), WithinAbs(0.001, 1e-12));
+	REQUIRE_THAT(source_json.at("chirp_period").get<RealType>(), WithinAbs(0.002, 1e-12));
+	REQUIRE(source_json.at("chirp_count") == 4);
+	REQUIRE(source_json.at("segments").size() == 1u);
+	REQUIRE_THAT(source_json.at("segments").front().at("first_chirp_start_time").get<RealType>(),
+				 WithinAbs(0.0, 1e-12));
+	REQUIRE(source_json.at("segments").front().at("emitted_chirp_count") == 4);
+
+	const auto& streaming_segment = metadata.at("streaming_segments").front();
+	REQUIRE_THAT(streaming_segment.at("first_chirp_start_time").get<RealType>(), WithinAbs(0.0, 1e-12));
+	REQUIRE(streaming_segment.at("emitted_chirp_count") == 4);
+
+	std::filesystem::remove_all(out_dir);
+}
+
+TEST_CASE("finalizeStreamingReceiver keeps multiple FMCW sources unambiguous",
+		  "[processing][finalizer][fmcw][metadata]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 0.01);
+	params::setRate(1'000.0);
+	params::setOversampleRatio(1);
+	params::setAdcBits(0);
+
+	const std::string receiver_name = uniqueName("fmcw_multi");
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("fmcw_multi_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
+	removeIfExists(output_path);
+
+	radar::Platform rx_platform("RxPlatform");
+	radar::Receiver receiver(&rx_platform, receiver_name, 59, radar::OperationMode::FMCW_MODE);
+	auto timing_owner = makeQuietTiming("multi_clk", 25, 77.0);
+	receiver.setTiming(timing_owner.timing);
+	receiver.setNoiseTemperature(0.0);
+	receiver.prepareStreamingData(10);
+
+	FmcwTxFixture first_source("FirstTx", 911, 912, 200.0, 0.001, 0.002, 0.0, std::size_t{4});
+	FmcwTxFixture second_source("SecondTx", 921, 922, 300.0, 0.0015, 0.003, 10.0, std::size_t{2});
+
+	processing::finalizeStreamingReceiver(&receiver, nullptr, nullptr, out_dir.string(), nullptr,
+										  {core::makeActiveSource(&first_source.transmitter, 0.0, params::endTime()),
+										   core::makeActiveSource(&second_source.transmitter, 0.0, params::endTime())});
+
+	{
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		unsigned long long source_count = 0;
+		file.getAttribute("fmcw_source_count").read(source_count);
+		REQUIRE(source_count == 2ULL);
+	}
+
+	const auto metadata = readMetadataJson(output_path);
+	REQUIRE(metadata.at("mode") == "fmcw");
+	REQUIRE_FALSE(metadata.contains("fmcw"));
+	REQUIRE(metadata.at("fmcw_sources").size() == 2u);
+	REQUIRE(metadata.at("fmcw_sources")[0].at("transmitter_id") == 911);
+	REQUIRE(metadata.at("fmcw_sources")[1].at("transmitter_id") == 921);
+	REQUIRE(metadata.at("fmcw_sources")[0].at("segments").front().at("emitted_chirp_count") == 4);
+	REQUIRE(metadata.at("fmcw_sources")[1].at("segments").front().at("emitted_chirp_count") == 2);
 
 	std::filesystem::remove_all(out_dir);
 }

@@ -14,6 +14,8 @@
 #include <memory>
 #include <vector>
 
+#include "core/simulation_state.h"
+
 namespace radar
 {
 	class Receiver;
@@ -63,5 +65,6 @@ namespace processing
 	 */
 	void finalizeStreamingReceiver(radar::Receiver* receiver, pool::ThreadPool* pool,
 								   std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
-								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr);
+								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr,
+								   std::vector<core::ActiveStreamingSource> streaming_sources = {});
 }

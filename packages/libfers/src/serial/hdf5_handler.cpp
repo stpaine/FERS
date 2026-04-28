@@ -41,6 +41,7 @@ namespace serial
 		file.createAttribute("sample_end_exclusive", static_cast<unsigned long long>(metadata.sample_end_exclusive));
 		file.createAttribute("streaming_segment_count",
 							 static_cast<unsigned long long>(metadata.streaming_segments.size()));
+		file.createAttribute("fmcw_source_count", static_cast<unsigned long long>(metadata.fmcw_sources.size()));
 		if (metadata.fmcw.has_value())
 		{
 			file.createAttribute("fmcw_chirp_bandwidth", metadata.fmcw->chirp_bandwidth);

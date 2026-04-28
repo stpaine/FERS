@@ -55,6 +55,29 @@ describe('simulation output metadata', () => {
                         start_frequency_offset: 0,
                         chirp_count: 4,
                     },
+                    fmcw_sources: [
+                        {
+                            transmitter_id: 11,
+                            transmitter_name: 'FMCW Tx',
+                            waveform_id: 12,
+                            waveform_name: 'FMCW Wave',
+                            carrier_frequency: 10e9,
+                            chirp_bandwidth: 20e6,
+                            chirp_duration: 250e-6,
+                            chirp_period: 500e-6,
+                            chirp_rate: 80e9,
+                            start_frequency_offset: 0,
+                            chirp_count: 4,
+                            segments: [
+                                {
+                                    start_time: 0,
+                                    end_time: 0.001,
+                                    first_chirp_start_time: 0,
+                                    emitted_chirp_count: 4,
+                                },
+                            ],
+                        },
+                    ],
                 },
             ],
         };
@@ -74,6 +97,18 @@ describe('simulation output metadata', () => {
                 chirp_duration: 250e-6,
                 chirp_period: 500e-6,
             },
+            fmcw_sources: [
+                {
+                    transmitter_id: 11,
+                    waveform_id: 12,
+                    segments: [
+                        {
+                            first_chirp_start_time: 0,
+                            emitted_chirp_count: 4,
+                        },
+                    ],
+                },
+            ],
         });
     });
 
@@ -111,6 +146,7 @@ describe('simulation output metadata', () => {
             normalizeSimulationOutputMetadata(legacyMetadata).files[0];
 
         expect(normalizedFile.streaming_segments).toHaveLength(1);
+        expect(normalizedFile.fmcw_sources).toEqual([]);
         expect('cw_segments' in normalizedFile).toBe(false);
     });
 });

@@ -50,6 +50,23 @@ export type SimulationOutputFmcwMetadata = {
     chirp_count?: number;
 };
 
+export type SimulationOutputFmcwSourceSegmentMetadata = {
+    start_time: number;
+    end_time: number;
+    first_chirp_start_time?: number;
+    emitted_chirp_count?: number;
+};
+
+export type SimulationOutputFmcwSourceMetadata =
+    SimulationOutputFmcwMetadata & {
+        transmitter_id: number;
+        transmitter_name: string;
+        waveform_id: number;
+        waveform_name: string;
+        carrier_frequency: number;
+        segments: SimulationOutputFmcwSourceSegmentMetadata[];
+    };
+
 export type SimulationOutputFileMetadata = {
     receiver_id: number;
     receiver_name: string;
@@ -65,6 +82,7 @@ export type SimulationOutputFileMetadata = {
     chunks: SimulationOutputChunkMetadata[];
     streaming_segments: SimulationOutputStreamingSegmentMetadata[];
     fmcw?: SimulationOutputFmcwMetadata;
+    fmcw_sources: SimulationOutputFmcwSourceMetadata[];
 };
 
 export type SimulationOutputMetadata = {
@@ -80,10 +98,11 @@ export type SimulationOutputMetadata = {
 
 export type RawSimulationOutputFileMetadata = Omit<
     SimulationOutputFileMetadata,
-    'streaming_segments'
+    'streaming_segments' | 'fmcw_sources'
 > & {
     streaming_segments?: SimulationOutputStreamingSegmentMetadata[];
     cw_segments?: SimulationOutputStreamingSegmentMetadata[];
+    fmcw_sources?: SimulationOutputFmcwSourceMetadata[];
 };
 
 export type RawSimulationOutputMetadata = Omit<
@@ -98,10 +117,16 @@ export const normalizeSimulationOutputMetadata = (
 ): SimulationOutputMetadata => ({
     ...metadata,
     files: metadata.files.map((file) => {
-        const { cw_segments, streaming_segments, ...normalizedFile } = file;
+        const {
+            cw_segments,
+            streaming_segments,
+            fmcw_sources,
+            ...normalizedFile
+        } = file;
         return {
             ...normalizedFile,
             streaming_segments: streaming_segments ?? cw_segments ?? [],
+            fmcw_sources: fmcw_sources ?? [],
         };
     }),
 });

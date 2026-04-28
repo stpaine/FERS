@@ -52,6 +52,27 @@ namespace core
 		std::optional<std::uint64_t> chirp_count = std::nullopt; ///< Optional finite chirp count.
 	};
 
+	/// Metadata for one active FMCW transmitter schedule segment.
+	struct FmcwSourceSegmentMetadata
+	{
+		RealType start_time = 0.0; ///< Transmitter segment start time in seconds.
+		RealType end_time = 0.0; ///< Transmitter segment end time in seconds.
+		std::optional<RealType> first_chirp_start_time = std::nullopt; ///< First emitted chirp start in the segment.
+		std::optional<std::uint64_t> emitted_chirp_count = std::nullopt; ///< Number of chirps emitted in the segment.
+	};
+
+	/// Metadata for one FMCW illuminator represented in a streaming output file.
+	struct FmcwSourceMetadata
+	{
+		SimId transmitter_id = 0; ///< FMCW transmitter SimId.
+		std::string transmitter_name; ///< FMCW transmitter display name.
+		SimId waveform_id = 0; ///< FMCW waveform SimId.
+		std::string waveform_name; ///< FMCW waveform display name.
+		RealType carrier_frequency = 0.0; ///< Waveform carrier frequency in hertz.
+		FmcwMetadata waveform; ///< FMCW chirp parameters.
+		std::vector<FmcwSourceSegmentMetadata> segments = {}; ///< Active transmitter segments.
+	};
+
 	/// Metadata for one receiver output file.
 	struct OutputFileMetadata
 	{
@@ -69,6 +90,7 @@ namespace core
 		std::vector<PulseChunkMetadata> chunks = {}; ///< Pulsed output chunks written to the file.
 		std::vector<StreamingSegmentMetadata> streaming_segments = {}; ///< Streaming segments written to the file.
 		std::optional<FmcwMetadata> fmcw = std::nullopt; ///< Optional FMCW metadata for streaming outputs.
+		std::vector<FmcwSourceMetadata> fmcw_sources = {}; ///< FMCW illuminators represented in the output.
 	};
 
 	/// Metadata summary for the full simulation output set.

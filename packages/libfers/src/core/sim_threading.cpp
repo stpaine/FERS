@@ -49,56 +49,6 @@ namespace core
 {
 	namespace
 	{
-		/// Rounds a non-negative floating-point value up to an unsigned integer.
-		std::uint64_t ceilToUint(const RealType value)
-		{
-			if (value <= 0.0)
-			{
-				return 0;
-			}
-
-			const RealType nearest = std::round(value);
-			const RealType tolerance = 1.0e-12 * std::max<RealType>(1.0, std::abs(nearest));
-			if (std::abs(value - nearest) <= tolerance)
-			{
-				return static_cast<std::uint64_t>(nearest);
-			}
-			return static_cast<std::uint64_t>(std::ceil(value));
-		}
-
-		/// Counts FMCW chirp starts that fall inside an active interval.
-		std::uint64_t countFmcwChirpStarts(const fers_signal::FmcwChirpSignal& fmcw, const RealType segment_start,
-										   const RealType active_start, const RealType active_end)
-		{
-			if (active_end <= active_start)
-			{
-				return 0;
-			}
-
-			const RealType chirp_period = fmcw.getChirpPeriod();
-			const auto first_index = active_start <= segment_start
-				? std::uint64_t{0}
-				: ceilToUint((active_start - segment_start) / chirp_period);
-			const RealType first_start = segment_start + static_cast<RealType>(first_index) * chirp_period;
-			if (first_start >= active_end)
-			{
-				return 0;
-			}
-
-			const auto starts_in_interval = ceilToUint((active_end - first_start) / chirp_period);
-			if (!fmcw.getChirpCount().has_value())
-			{
-				return starts_in_interval;
-			}
-
-			const auto configured = static_cast<std::uint64_t>(*fmcw.getChirpCount());
-			if (first_index >= configured)
-			{
-				return 0;
-			}
-			return std::min(starts_in_interval, configured - first_index);
-		}
-
 		/// Builds an active streaming source for a transmitter at an event timestamp.
 		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
 																	const RealType timestamp)
@@ -191,8 +141,7 @@ namespace core
 				{
 					const RealType active_start = params::startTime();
 					const auto source = makeActiveSource(transmitter_ptr.get(), active_start, params::endTime());
-					const auto total_chirp_count =
-						countFmcwChirpStarts(*fmcw, source.segment_start, active_start, source.segment_end);
+					const auto total_chirp_count = countFmcwChirpStarts(source, active_start, source.segment_end);
 					LOG(Level::INFO,
 						"FMCW transmitter '{}' B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s duty_cycle={} "
 						"chirp_count={} total_chirp_count={} average_power={} W",
@@ -208,8 +157,7 @@ namespace core
 						const RealType active_start = std::max(params::startTime(), period.start);
 						const auto source = makeActiveSource(transmitter_ptr.get(), period.start,
 															 std::min(params::endTime(), period.end));
-						const auto segment_chirp_count =
-							countFmcwChirpStarts(*fmcw, source.segment_start, active_start, source.segment_end);
+						const auto segment_chirp_count = countFmcwChirpStarts(source, active_start, source.segment_end);
 						total_chirp_count += segment_chirp_count;
 						LOG(Level::INFO,
 							"FMCW transmitter '{}' segment [{}, {}] B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} "
@@ -532,13 +480,14 @@ namespace core
 			_reporter->report("Main simulation finished. Waiting for data export...", 100, 100);
 		}
 
+		const auto streaming_sources = collectStreamingSourcesForWindow(params::startTime(), params::endTime());
 		for (const auto& receiver_ptr : _world->getReceivers())
 		{
 			if (receiver_ptr->getMode() == OperationMode::CW_MODE ||
 				receiver_ptr->getMode() == OperationMode::FMCW_MODE)
 			{
 				_pool.enqueue(processing::finalizeStreamingReceiver, receiver_ptr.get(), &_pool, _reporter, _output_dir,
-							  _metadata_collector);
+							  _metadata_collector, streaming_sources);
 			}
 			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
 			{

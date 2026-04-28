@@ -12,6 +12,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -49,6 +50,14 @@ namespace core
 	/// Builds an active-source cache from a streaming transmitter and segment bounds.
 	[[nodiscard]] ActiveStreamingSource makeActiveSource(const radar::Transmitter* tx, RealType segment_start,
 														 RealType segment_end);
+
+	/// Returns the first FMCW chirp start inside the absolute interval, if one exists.
+	[[nodiscard]] std::optional<RealType> firstFmcwChirpStart(const ActiveStreamingSource& source,
+															  RealType active_start, RealType active_end);
+
+	/// Counts FMCW chirps that start inside the absolute interval.
+	[[nodiscard]] std::uint64_t countFmcwChirpStarts(const ActiveStreamingSource& source, RealType active_start,
+													 RealType active_end);
 
 	/// Tracks the current FMCW chirp boundary for a streaming path.
 	struct FmcwChirpBoundaryTracker

@@ -61,6 +61,40 @@ namespace core
 			return result;
 		}
 
+		/// Converts one FMCW source segment metadata entry to JSON.
+		nlohmann::json fmcwSourceSegmentToJson(const FmcwSourceSegmentMetadata& segment)
+		{
+			nlohmann::json result = {{"start_time", segment.start_time}, {"end_time", segment.end_time}};
+			if (segment.first_chirp_start_time.has_value())
+			{
+				result["first_chirp_start_time"] = *segment.first_chirp_start_time;
+			}
+			if (segment.emitted_chirp_count.has_value())
+			{
+				result["emitted_chirp_count"] = *segment.emitted_chirp_count;
+			}
+			return result;
+		}
+
+		/// Converts one FMCW source metadata entry to JSON.
+		nlohmann::json fmcwSourceToJson(const FmcwSourceMetadata& source)
+		{
+			nlohmann::json segments = nlohmann::json::array();
+			for (const auto& segment : source.segments)
+			{
+				segments.push_back(fmcwSourceSegmentToJson(segment));
+			}
+
+			nlohmann::json result = {{"transmitter_id", source.transmitter_id},
+									 {"transmitter_name", source.transmitter_name},
+									 {"waveform_id", source.waveform_id},
+									 {"waveform_name", source.waveform_name},
+									 {"carrier_frequency", source.carrier_frequency},
+									 {"segments", segments}};
+			result.update(fmcwToJson(source.waveform));
+			return result;
+		}
+
 		/// Converts one output file metadata entry to JSON.
 		nlohmann::json fileToJson(const OutputFileMetadata& file)
 		{
@@ -76,6 +110,12 @@ namespace core
 				streaming_segments.push_back(streamingSegmentToJson(segment));
 			}
 
+			nlohmann::json fmcw_sources = nlohmann::json::array();
+			for (const auto& source : file.fmcw_sources)
+			{
+				fmcw_sources.push_back(fmcwSourceToJson(source));
+			}
+
 			nlohmann::json result = {{"receiver_id", file.receiver_id},
 									 {"receiver_name", file.receiver_name},
 									 {"mode", file.mode},
@@ -88,7 +128,8 @@ namespace core
 									 {"max_pulse_length_samples", file.max_pulse_length_samples},
 									 {"uniform_pulse_length", file.uniform_pulse_length},
 									 {"chunks", chunks},
-									 {"streaming_segments", streaming_segments}};
+									 {"streaming_segments", streaming_segments},
+									 {"fmcw_sources", fmcw_sources}};
 			if (file.fmcw.has_value())
 			{
 				result["fmcw"] = fmcwToJson(*file.fmcw);

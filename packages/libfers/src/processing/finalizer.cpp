@@ -24,6 +24,7 @@
 #include "processing/finalizer_pipeline.h"
 #include "processing/signal_processor.h"
 #include "radar/receiver.h"
+#include "radar/transmitter.h"
 #include "serial/hdf5_handler.h"
 #include "signal/radar_signal.h"
 #include "timing/timing.h"
@@ -59,13 +60,108 @@ namespace processing
 			metadata.sample_end_exclusive = metadata.total_samples;
 		}
 
-		/// Builds output metadata for a streaming receiver result file.
-		core::OutputFileMetadata buildStreamingMetadata(const radar::Receiver* receiver,
-														const std::string& hdf5_filename,
-														const std::size_t total_samples)
+		/// Converts a cached streaming source to reusable FMCW waveform metadata.
+		core::FmcwMetadata buildFmcwMetadata(const core::ActiveStreamingSource& source)
 		{
-			const auto* attached_tx = dynamic_cast<const radar::Transmitter*>(receiver->getAttached());
-			const auto* fmcw = (attached_tx != nullptr) ? attached_tx->getFmcwSignal() : nullptr;
+			return core::FmcwMetadata{
+				.chirp_bandwidth = source.fmcw != nullptr ? source.fmcw->getChirpBandwidth() : 0.0,
+				.chirp_duration = source.chirp_duration,
+				.chirp_period = source.chirp_period,
+				.chirp_rate = source.chirp_rate,
+				.start_frequency_offset = source.start_freq_off,
+				.chirp_count = source.chirp_count.has_value()
+					? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*source.chirp_count))
+					: std::nullopt};
+		}
+
+		/// Builds one FMCW source schedule segment from an active source cache.
+		core::FmcwSourceSegmentMetadata buildFmcwSourceSegment(const core::ActiveStreamingSource& source)
+		{
+			const RealType active_start = std::max(params::startTime(), source.segment_start);
+			const RealType active_end = std::min(params::endTime(), source.segment_end);
+			core::FmcwSourceSegmentMetadata segment{.start_time = source.segment_start,
+													.end_time = source.segment_end,
+													.first_chirp_start_time =
+														core::firstFmcwChirpStart(source, active_start, active_end)};
+			const auto emitted = core::countFmcwChirpStarts(source, active_start, active_end);
+			segment.emitted_chirp_count = emitted;
+			return segment;
+		}
+
+		/// Finds the first source metadata entry for a transmitter/waveform pair.
+		std::vector<core::FmcwSourceMetadata>::iterator findFmcwSource(std::vector<core::FmcwSourceMetadata>& sources,
+																	   const SimId transmitter_id,
+																	   const SimId waveform_id)
+		{
+			return std::ranges::find_if(
+				sources, [&](const core::FmcwSourceMetadata& source)
+				{ return source.transmitter_id == transmitter_id && source.waveform_id == waveform_id; });
+		}
+
+		/// Builds explicit per-source FMCW metadata from active streaming transmitters.
+		std::vector<core::FmcwSourceMetadata>
+		buildFmcwSources(const std::vector<core::ActiveStreamingSource>& streaming_sources)
+		{
+			std::vector<core::FmcwSourceMetadata> fmcw_sources;
+			for (const auto& streaming_source : streaming_sources)
+			{
+				if (!streaming_source.is_fmcw || streaming_source.transmitter == nullptr ||
+					streaming_source.fmcw == nullptr)
+				{
+					continue;
+				}
+
+				const auto* signal = streaming_source.transmitter->getSignal();
+				if (signal == nullptr)
+				{
+					continue;
+				}
+
+				const auto transmitter_id = streaming_source.transmitter->getId();
+				const auto waveform_id = signal->getId();
+				auto existing = findFmcwSource(fmcw_sources, transmitter_id, waveform_id);
+				if (existing == fmcw_sources.end())
+				{
+					core::FmcwSourceMetadata source{.transmitter_id = transmitter_id,
+													.transmitter_name = streaming_source.transmitter->getName(),
+													.waveform_id = waveform_id,
+													.waveform_name = signal->getName(),
+													.carrier_frequency = signal->getCarrier(),
+													.waveform = buildFmcwMetadata(streaming_source)};
+					source.segments.push_back(buildFmcwSourceSegment(streaming_source));
+					fmcw_sources.push_back(std::move(source));
+					continue;
+				}
+
+				existing->segments.push_back(buildFmcwSourceSegment(streaming_source));
+			}
+			return fmcw_sources;
+		}
+
+		/// Adds scalar compatibility chirp metadata to receiver streaming segments for one FMCW source.
+		void annotateStreamingSegmentsForSingleFmcwSource(core::OutputFileMetadata& metadata,
+														  const core::ActiveStreamingSource& source)
+		{
+			for (auto& segment : metadata.streaming_segments)
+			{
+				const RealType active_start = std::max(segment.start_time, source.segment_start);
+				const RealType active_end = std::min(segment.end_time, source.segment_end);
+				const auto first_chirp = core::firstFmcwChirpStart(source, active_start, active_end);
+				const auto emitted = core::countFmcwChirpStarts(source, active_start, active_end);
+				if (first_chirp.has_value() || emitted > 0)
+				{
+					segment.first_chirp_start_time = first_chirp;
+					segment.emitted_chirp_count = emitted;
+				}
+			}
+		}
+
+		/// Builds output metadata for a streaming receiver result file.
+		core::OutputFileMetadata
+		buildStreamingMetadata(const radar::Receiver* receiver, const std::string& hdf5_filename,
+							   const std::size_t total_samples,
+							   const std::vector<core::ActiveStreamingSource>& streaming_sources)
+		{
 			core::OutputFileMetadata metadata{.receiver_id = receiver->getId(),
 											  .receiver_name = receiver->getName(),
 											  .mode = receiver->getMode() == radar::OperationMode::FMCW_MODE ? "fmcw"
@@ -74,18 +170,6 @@ namespace processing
 											  .total_samples = static_cast<std::uint64_t>(total_samples),
 											  .sample_start = 0,
 											  .sample_end_exclusive = static_cast<std::uint64_t>(total_samples)};
-			if (fmcw != nullptr)
-			{
-				metadata.fmcw = core::FmcwMetadata{
-					.chirp_bandwidth = fmcw->getChirpBandwidth(),
-					.chirp_duration = fmcw->getChirpDuration(),
-					.chirp_period = fmcw->getChirpPeriod(),
-					.chirp_rate = fmcw->getChirpRate(),
-					.start_frequency_offset = fmcw->getStartFrequencyOffset(),
-					.chirp_count = fmcw->getChirpCount().has_value()
-						? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*fmcw->getChirpCount()))
-						: std::nullopt};
-			}
 
 			const auto append_segment = [&](const RealType start_time, const RealType end_time)
 			{
@@ -102,16 +186,6 @@ namespace processing
 														   .sample_count = end_sample - start_sample,
 														   .sample_start = start_sample,
 														   .sample_end_exclusive = end_sample};
-					if (fmcw != nullptr)
-					{
-						segment.first_chirp_start_time = start_time;
-						const auto chirps = static_cast<std::uint64_t>(
-							std::ceil(std::max<RealType>(0.0, end_time - start_time) / fmcw->getChirpPeriod()));
-						const auto available = fmcw->getChirpCount().has_value()
-							? static_cast<std::uint64_t>(*fmcw->getChirpCount())
-							: chirps;
-						segment.emitted_chirp_count = std::min(chirps, available);
-					}
 					metadata.streaming_segments.push_back(std::move(segment));
 				}
 			};
@@ -130,6 +204,20 @@ namespace processing
 					if (start < end)
 					{
 						append_segment(start, end);
+					}
+				}
+			}
+
+			metadata.fmcw_sources = buildFmcwSources(streaming_sources);
+			if (metadata.fmcw_sources.size() == 1)
+			{
+				metadata.fmcw = metadata.fmcw_sources.front().waveform;
+				for (const auto& streaming_source : streaming_sources)
+				{
+					if (streaming_source.is_fmcw && streaming_source.transmitter != nullptr &&
+						streaming_source.transmitter->getId() == metadata.fmcw_sources.front().transmitter_id)
+					{
+						annotateStreamingSegmentsForSingleFmcwSource(metadata, streaming_source);
 					}
 				}
 			}
@@ -279,7 +367,8 @@ namespace processing
 
 	void finalizeStreamingReceiver(radar::Receiver* receiver, pool::ThreadPool* /*pool*/,
 								   std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
-								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector)
+								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector,
+								   std::vector<core::ActiveStreamingSource> streaming_sources)
 	{
 		LOG(logging::Level::INFO, "Finalization task started for streaming receiver '{}'.", receiver->getName());
 
@@ -322,7 +411,7 @@ namespace processing
 			std::filesystem::create_directories(out_path);
 		}
 		const auto hdf5_filename = (out_path / std::format("{}_results.h5", receiver->getName())).string();
-		auto file_metadata = buildStreamingMetadata(receiver, hdf5_filename, iq_buffer.size());
+		auto file_metadata = buildStreamingMetadata(receiver, hdf5_filename, iq_buffer.size(), streaming_sources);
 		pipeline::exportStreamingToHdf5(hdf5_filename, iq_buffer, fullscale, receiver->getTiming()->getFrequency(),
 										&file_metadata);
 		if (metadata_collector)

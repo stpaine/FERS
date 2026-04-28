@@ -8,11 +8,65 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "signal/radar_signal.h"
 
 namespace core
 {
+	namespace
+	{
+		/// Rounds a non-negative floating-point value up to an unsigned integer.
+		std::uint64_t ceilToUint(const RealType value)
+		{
+			if (value <= 0.0)
+			{
+				return 0;
+			}
+
+			const RealType nearest = std::round(value);
+			const RealType tolerance = 1.0e-12 * std::max<RealType>(1.0, std::abs(nearest));
+			if (std::abs(value - nearest) <= tolerance)
+			{
+				return static_cast<std::uint64_t>(nearest);
+			}
+			return static_cast<std::uint64_t>(std::ceil(value));
+		}
+
+		/// Returns the first FMCW chirp index that can contribute inside an interval.
+		std::optional<std::uint64_t> firstFmcwChirpIndex(const ActiveStreamingSource& source,
+														 const RealType active_start, const RealType active_end)
+		{
+			if (!source.is_fmcw || source.chirp_period <= 0.0)
+			{
+				return std::nullopt;
+			}
+
+			const RealType clipped_start = std::max(active_start, source.segment_start);
+			const RealType clipped_end = std::min(active_end, source.segment_end);
+			if (clipped_end <= clipped_start)
+			{
+				return std::nullopt;
+			}
+
+			const auto first_index = clipped_start <= source.segment_start
+				? std::uint64_t{0}
+				: ceilToUint((clipped_start - source.segment_start) / source.chirp_period);
+			if (source.chirp_count.has_value() && first_index >= *source.chirp_count)
+			{
+				return std::nullopt;
+			}
+
+			const RealType first_start =
+				source.segment_start + static_cast<RealType>(first_index) * source.chirp_period;
+			if (first_start >= clipped_end)
+			{
+				return std::nullopt;
+			}
+			return first_index;
+		}
+	}
+
 	ActiveStreamingSource makeActiveSource(const radar::Transmitter* const tx, const RealType segment_start,
 										   const RealType segment_end)
 	{
@@ -60,5 +114,37 @@ namespace core
 		}
 
 		return source;
+	}
+
+	std::optional<RealType> firstFmcwChirpStart(const ActiveStreamingSource& source, const RealType active_start,
+												const RealType active_end)
+	{
+		const auto first_index = firstFmcwChirpIndex(source, active_start, active_end);
+		if (!first_index.has_value())
+		{
+			return std::nullopt;
+		}
+		return source.segment_start + static_cast<RealType>(*first_index) * source.chirp_period;
+	}
+
+	std::uint64_t countFmcwChirpStarts(const ActiveStreamingSource& source, const RealType active_start,
+									   const RealType active_end)
+	{
+		const auto first_index = firstFmcwChirpIndex(source, active_start, active_end);
+		if (!first_index.has_value())
+		{
+			return 0;
+		}
+
+		const RealType clipped_end = std::min(active_end, source.segment_end);
+		const RealType first_start = source.segment_start + static_cast<RealType>(*first_index) * source.chirp_period;
+		const auto starts_in_interval = ceilToUint((clipped_end - first_start) / source.chirp_period);
+		if (!source.chirp_count.has_value())
+		{
+			return starts_in_interval;
+		}
+
+		const auto configured = static_cast<std::uint64_t>(*source.chirp_count);
+		return std::min(starts_in_interval, configured - *first_index);
 	}
 }
