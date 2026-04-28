@@ -300,44 +300,43 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                 power: w.power,
                 carrier_frequency: w.carrier_frequency,
             };
-            const waveform: Waveform = w.fmcw_linear_chirp
-                ? {
-                      ...commonWaveform,
-                      waveformType: 'fmcw_linear_chirp',
-                      direction: w.fmcw_linear_chirp.direction,
-                      chirp_bandwidth: w.fmcw_linear_chirp.chirp_bandwidth,
-                      chirp_duration: w.fmcw_linear_chirp.chirp_duration,
-                      chirp_period: w.fmcw_linear_chirp.chirp_period,
-                      start_frequency_offset:
-                          w.fmcw_linear_chirp.start_frequency_offset ?? null,
-                      chirp_count: w.fmcw_linear_chirp.chirp_count ?? null,
-                  }
-                : w.fmcw_triangle
-                  ? {
-                        ...commonWaveform,
-                        waveformType: 'fmcw_triangle',
-                        chirp_bandwidth: w.fmcw_triangle.chirp_bandwidth,
-                        chirp_duration: w.fmcw_triangle.chirp_duration,
-                        start_frequency_offset:
-                            w.fmcw_triangle.start_frequency_offset ?? null,
-                        triangle_count: w.fmcw_triangle.triangle_count ?? null,
-                    }
-                  : w.cw
-                    ? {
-                          ...commonWaveform,
-                          waveformType: 'cw',
-                      }
-                    : w.pulsed_from_file
-                      ? {
-                            ...commonWaveform,
-                            waveformType: 'pulsed_from_file',
-                            filename: w.pulsed_from_file.filename ?? '',
-                        }
-                      : (() => {
-                            throw new Error(
-                                `Unsupported waveform type for '${w.name}'.`
-                            );
-                        })();
+            let waveform: Waveform;
+            if (w.fmcw_linear_chirp) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'fmcw_linear_chirp',
+                    direction: w.fmcw_linear_chirp.direction,
+                    chirp_bandwidth: w.fmcw_linear_chirp.chirp_bandwidth,
+                    chirp_duration: w.fmcw_linear_chirp.chirp_duration,
+                    chirp_period: w.fmcw_linear_chirp.chirp_period,
+                    start_frequency_offset:
+                        w.fmcw_linear_chirp.start_frequency_offset ?? null,
+                    chirp_count: w.fmcw_linear_chirp.chirp_count ?? null,
+                };
+            } else if (w.fmcw_triangle) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'fmcw_triangle',
+                    chirp_bandwidth: w.fmcw_triangle.chirp_bandwidth,
+                    chirp_duration: w.fmcw_triangle.chirp_duration,
+                    start_frequency_offset:
+                        w.fmcw_triangle.start_frequency_offset ?? null,
+                    triangle_count: w.fmcw_triangle.triangle_count ?? null,
+                };
+            } else if (w.cw) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'cw',
+                };
+            } else if (w.pulsed_from_file) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'pulsed_from_file',
+                    filename: w.pulsed_from_file.filename ?? '',
+                };
+            } else {
+                throw new Error(`Unsupported waveform type for '${w.name}'.`);
+            }
             nameToIdMap.set(waveform.name, waveform.id);
             reserveSimId(waveformId);
             return waveform;

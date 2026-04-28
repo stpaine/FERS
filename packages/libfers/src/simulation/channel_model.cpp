@@ -925,6 +925,7 @@ namespace simulation
 				links.push_back({.type = LinkType::BistaticTxTgt,
 								 .quality = LinkQuality::Strong,
 								 .label = formatPreviewDbwPerSquareMeterLabel(p_density),
+								 .display_value = wattsToDb(p_density),
 								 .source_id = tx->getId(),
 								 .dest_id = tgt->getId(),
 								 .origin_id = tx->getId()});
@@ -988,6 +989,7 @@ namespace simulation
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
 										 .label = formatPreviewDbmLabel(pr_unit_watts),
+										 .display_value = wattsToDbm(pr_unit_watts),
 										 .source_id = tx->getId(),
 										 .dest_id = tgt->getId(),
 										 .origin_id = tx->getId(),
@@ -1020,6 +1022,7 @@ namespace simulation
 							links.push_back({.type = LinkType::DirectTxRx,
 											 .quality = LinkQuality::Strong,
 											 .label = formatPreviewDbmLabel(pr_watts, "Direct: "),
+											 .display_value = wattsToDbm(pr_watts),
 											 .source_id = tx->getId(),
 											 .dest_id = rx->getId(),
 											 .origin_id = tx->getId()});
@@ -1067,6 +1070,7 @@ namespace simulation
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
 										 .label = formatPreviewDbmLabel(pr_unit_watts),
+										 .display_value = wattsToDbm(pr_unit_watts),
 										 .source_id = tgt->getId(),
 										 .dest_id = rx->getId(),
 										 .origin_id = tx->getId(),

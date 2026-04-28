@@ -17,6 +17,11 @@ namespace core
 {
 	namespace
 	{
+		/// Absorbs division roundoff when an expected chirp/triangle boundary lands just below an integer index.
+		constexpr RealType kWaveformBoundaryIndexTolerance = 1.0e-12;
+		/// Ignores sub-picosecond schedule leftovers caused by arithmetic at exact triangle boundaries.
+		constexpr RealType kWaveformBoundaryTimeToleranceSeconds = 1.0e-12;
+
 		/// Rounds a non-negative floating-point value up to an unsigned integer.
 		std::uint64_t ceilToUint(const RealType value)
 		{
@@ -26,7 +31,7 @@ namespace core
 			}
 
 			const RealType nearest = std::round(value);
-			const RealType tolerance = 1.0e-12 * std::max<RealType>(1.0, std::abs(nearest));
+			const RealType tolerance = kWaveformBoundaryIndexTolerance * std::max<RealType>(1.0, std::abs(nearest));
 			if (std::abs(value - nearest) <= tolerance)
 			{
 				return static_cast<std::uint64_t>(nearest);
@@ -184,15 +189,15 @@ namespace core
 				return source;
 			}
 
-			const auto full_by_duration =
-				static_cast<std::size_t>(std::floor(raw_duration / source.triangle_period + 1.0e-12));
+			const auto full_by_duration = static_cast<std::size_t>(
+				std::floor(raw_duration / source.triangle_period + kWaveformBoundaryIndexTolerance));
 			std::size_t emitted_triangles = full_by_duration;
 			if (source.triangle_count.has_value())
 			{
 				emitted_triangles = std::min(emitted_triangles, *source.triangle_count);
 			}
 			source.segment_end = segment_start + static_cast<RealType>(emitted_triangles) * source.triangle_period;
-			if (source.segment_end + 1.0e-12 < raw_end)
+			if (source.segment_end + kWaveformBoundaryTimeToleranceSeconds < raw_end)
 			{
 				LOG(logging::Level::WARNING,
 					"FMCW triangle transmitter '{}' segment [{}, {}] emits {} complete triangles and drops {} s of "

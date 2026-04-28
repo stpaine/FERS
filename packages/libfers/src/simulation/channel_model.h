@@ -244,6 +244,7 @@ namespace simulation
 		LinkType type; ///< Visual link category.
 		LinkQuality quality; ///< Radiometric link quality.
 		std::string label; ///< Human-readable label for display.
+		double display_value{-999.0}; ///< Numeric value represented by label, in the label's unit.
 		SimId source_id; ///< SimId at the start of this specific link segment.
 		SimId dest_id; ///< SimId at the end of this specific link segment.
 		SimId origin_id; ///< Original transmitted-energy source SimId.

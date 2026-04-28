@@ -43,6 +43,7 @@ interface LinkMetadata {
     origin_id: string;
     rcs: number; // RCS in m^2; negative if not applicable
     actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
+    display_value: number; // Numeric value represented by label, in the label's unit
 }
 
 interface LinkRange {
@@ -74,6 +75,7 @@ interface RustVisualLink {
     origin_id: string;
     rcs: number; // RCS in m^2; negative if not applicable
     actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
+    display_value: number; // Numeric value represented by label, in the label's unit
 }
 
 // Helper to determine color based on link type and quality
@@ -90,11 +92,6 @@ const getLinkColor = (link: LinkMetadata) => {
         return COLORS.direct;
     }
     return '#ffffff';
-};
-
-const extractFirstNumber = (value: string) => {
-    const match = value.match(/-?\d+(?:\.\d+)?/);
-    return match ? Number(match[0]) : null;
 };
 
 const getLinkValueUnit = (link: LinkMetadata) =>
@@ -135,12 +132,9 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
     const dutyCycleOffsetDb = hasDutyCycledValue
         ? -10.0 * Math.log10(dutyCycle)
         : 0.0;
-    const averageDisplayValue = extractFirstNumber(link.label);
     const peakDisplayValue =
-        hasDutyCycledValue &&
-        averageDisplayValue !== null &&
-        averageDisplayValue > -990
-            ? averageDisplayValue + dutyCycleOffsetDb
+        hasDutyCycledValue && link.display_value > -990
+            ? link.display_value + dutyCycleOffsetDb
             : null;
     const actualPeakPowerDbm =
         hasDutyCycledValue && link.actual_power_dbm > -990
@@ -497,6 +491,7 @@ export default function LinkVisualizer() {
                             origin_id: l.origin_id,
                             rcs: l.rcs,
                             actual_power_dbm: l.actual_power_dbm,
+                            display_value: l.display_value,
                         })
                     );
                     setLinkMetadata(reconstructedLinks);

@@ -741,12 +741,14 @@ TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][c
 			REQUIRE(link.actual_power_dbm > -999.0);
 
 			const double label_power_dbm = std::stod(link.label);
-			REQUIRE_THAT(link.actual_power_dbm, WithinAbs(label_power_dbm + 10.0 * std::log10(link.rcs), 0.1));
+			REQUIRE_THAT(link.display_value, WithinAbs(label_power_dbm, 0.1));
+			REQUIRE_THAT(link.actual_power_dbm, WithinAbs(link.display_value + 10.0 * std::log10(link.rcs), 0.1));
 		}
 		if (link.type == simulation::LinkType::BistaticTxTgt)
 		{
 			saw_tx_tgt = true;
 			REQUIRE(link.label.find("dBW") != std::string::npos);
+			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
 		}
 	}
 
@@ -805,13 +807,13 @@ TEST_CASE("calculatePreviewLinks FMCW labels use single-value preview style", "[
 			saw_fmcw_power_label = true;
 			requireSingleValuePreviewLabel(link.label);
 			REQUIRE(link.label.find("dBm") != std::string::npos);
-			(void)std::stod(link.label);
+			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
 		}
 		if (link.type == simulation::LinkType::BistaticTxTgt)
 		{
 			requireSingleValuePreviewLabel(link.label);
 			REQUIRE(link.label.find("dBW/m") != std::string::npos);
-			(void)std::stod(link.label);
+			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
 		}
 	}
 
