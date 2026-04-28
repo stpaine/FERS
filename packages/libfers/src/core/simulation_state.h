@@ -117,6 +117,13 @@ namespace core
 		FmcwTriangleBoundaryTracker triangle;
 	};
 
+	/// Per-receiver FMCW tracker state for direct and reflected streaming paths.
+	struct ReceiverTrackerCache
+	{
+		std::vector<FmcwChirpBoundaryTracker> direct; ///< Trackers for direct paths by source index.
+		std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected; ///< Trackers for reflected paths.
+	};
+
 	/**
 	 * @struct SimulationState
 	 * @brief Holds the dynamic global state of the simulation.

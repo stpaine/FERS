@@ -27,6 +27,7 @@
 #include "core/output_metadata.h"
 #include "core/parameters.h"
 #include "core/sim_events.h"
+#include "core/simulation_state.h"
 #include "simulation/channel_model.h"
 
 namespace pool
@@ -174,13 +175,6 @@ namespace core
 		void handleRxStreamingEnd(radar::Receiver* rx);
 
 	private:
-		/// Per-receiver FMCW tracker state for direct and reflected streaming paths.
-		struct ReceiverTrackerCache
-		{
-			std::vector<FmcwChirpBoundaryTracker> direct; ///< Trackers for direct paths by source index.
-			std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected; ///< Trackers for reflected paths.
-		};
-
 		/// Calculates one streaming I/Q sample for the receiver at the specified time step.
 		[[nodiscard]] ComplexType calculateStreamingSample(radar::Receiver* rx, RealType t_step,
 														   const std::vector<ActiveStreamingSource>& streaming_sources,

@@ -114,8 +114,10 @@ TEST_CASE("applyStreamingInterference adds direct-path streaming energy sample b
 	const std::vector<std::unique_ptr<radar::Target>> targets;
 	const RealType start = 0.0;
 	const RealType dt = 0.25;
+	core::ReceiverTrackerCache tracker_cache;
 
-	processing::pipeline::applyStreamingInterference(window, start, dt, &receiver, streaming_sources, &targets);
+	processing::pipeline::applyStreamingInterference(window, start, dt, &receiver, streaming_sources, &targets,
+													 tracker_cache);
 
 	for (size_t i = 0; i < window.size(); ++i)
 	{
@@ -163,8 +165,10 @@ TEST_CASE("applyStreamingInterference respects FLAG_NODIRECT and keeps only phys
 		core::makeActiveSource(&transmitter, params::startTime(), std::numeric_limits<RealType>::max())};
 	const RealType start = 0.0;
 	const RealType dt = 0.2;
+	core::ReceiverTrackerCache tracker_cache;
 
-	processing::pipeline::applyStreamingInterference(window, start, dt, &receiver, streaming_sources, &targets);
+	processing::pipeline::applyStreamingInterference(window, start, dt, &receiver, streaming_sources, &targets,
+													 tracker_cache);
 
 	for (size_t i = 0; i < window.size(); ++i)
 	{
@@ -207,8 +211,10 @@ TEST_CASE("applyStreamingInterference adds FMCW energy to pulsed receiver window
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
 		core::makeActiveSource(&transmitter, 0.0, 300.0e-6)};
 	const std::vector<std::unique_ptr<radar::Target>> targets;
+	core::ReceiverTrackerCache tracker_cache;
 
-	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets);
+	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets,
+													 tracker_cache);
 
 	REQUIRE(std::abs(window[0]) > 0.0);
 	REQUIRE_THAT(std::abs(window[1]), WithinAbs(0.0, 1.0e-18));
@@ -247,8 +253,10 @@ TEST_CASE("applyStreamingInterference supports FMCW transmitter with CW streamin
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
 		core::makeActiveSource(&transmitter, 0.0, 300.0e-6)};
 	const std::vector<std::unique_ptr<radar::Target>> targets;
+	core::ReceiverTrackerCache tracker_cache;
 
-	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets);
+	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets,
+													 tracker_cache);
 
 	for (std::size_t i = 0; i < window.size(); ++i)
 	{
@@ -302,8 +310,10 @@ TEST_CASE("applyStreamingInterference superposes up- and down-chirp FMCW transmi
 	const std::vector<core::ActiveStreamingSource> streaming_sources = {
 		core::makeActiveSource(&up_tx, 0.0, 300.0e-6), core::makeActiveSource(&down_tx, 0.0, 300.0e-6)};
 	const std::vector<std::unique_ptr<radar::Target>> targets;
+	core::ReceiverTrackerCache tracker_cache;
 
-	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets);
+	processing::pipeline::applyStreamingInterference(window, 10.0e-6, 50.0e-6, &receiver, streaming_sources, &targets,
+													 tracker_cache);
 
 	for (std::size_t i = 0; i < window.size(); ++i)
 	{
@@ -314,6 +324,69 @@ TEST_CASE("applyStreamingInterference superposes up- and down-chirp FMCW transmi
 		const ComplexType actual = window[i] - baseline[i];
 		REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1.0e-12));
 		REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1.0e-12));
+	}
+}
+
+TEST_CASE("applyStreamingInterference reuses tracker cache without carrying window state",
+		  "[processing][finalizer][interference][fmcw]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e6);
+	params::setOversampleRatio(1);
+
+	radar::Platform tx_platform("TxPlatform");
+	setupPlatform(tx_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_platform("RxPlatform");
+	setupPlatform(rx_platform, math::Vec3{300.0, 0.0, 0.0});
+	radar::Platform target_platform("TargetPlatform");
+	setupPlatform(target_platform, math::Vec3{150.0, 100.0, 0.0});
+
+	antenna::Isotropic antenna("iso");
+	auto timing_model = makeQuietTiming("clk", 16);
+
+	radar::Transmitter transmitter(&tx_platform, "FmcwTx", radar::OperationMode::FMCW_MODE, 107);
+	transmitter.setAntenna(&antenna);
+	transmitter.setTiming(timing_model);
+	auto signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 50.0e-6, 100.0e-6);
+	fers_signal::RadarSignal wave("fmcw", 16.0, 1.0e9, 50.0e-6, std::move(signal), 307);
+	transmitter.setSignal(&wave);
+
+	radar::Receiver receiver(&rx_platform, "PulsedRx", 104, radar::OperationMode::PULSED_MODE, 207);
+	receiver.setAntenna(&antenna);
+	receiver.setTiming(timing_model);
+	receiver.setWindowProperties(150.0e-6, 1.0e3, 0.0);
+
+	std::vector<std::unique_ptr<radar::Target>> targets;
+	targets.push_back(radar::createIsoTarget(&target_platform, "TargetA", 2.0, 8, 502));
+
+	const std::vector<core::ActiveStreamingSource> streaming_sources = {
+		core::makeActiveSource(&transmitter, 0.0, 300.0e-6)};
+	core::ReceiverTrackerCache tracker_cache;
+	std::vector<ComplexType> first_window(3, ComplexType{});
+	std::vector<ComplexType> second_window(3, ComplexType{});
+
+	processing::pipeline::applyStreamingInterference(first_window, 10.0e-6, 50.0e-6, &receiver, streaming_sources,
+													 &targets, tracker_cache);
+
+	REQUIRE(tracker_cache.direct.size() == 1);
+	REQUIRE(tracker_cache.reflected.size() == 1);
+	REQUIRE(tracker_cache.reflected.front().size() == 1);
+	const std::size_t direct_capacity = tracker_cache.direct.capacity();
+	const std::size_t reflected_capacity = tracker_cache.reflected.capacity();
+	const std::size_t reflected_row_capacity = tracker_cache.reflected.front().capacity();
+
+	processing::pipeline::applyStreamingInterference(second_window, 10.0e-6, 50.0e-6, &receiver, streaming_sources,
+													 &targets, tracker_cache);
+
+	REQUIRE(tracker_cache.direct.capacity() == direct_capacity);
+	REQUIRE(tracker_cache.reflected.capacity() == reflected_capacity);
+	REQUIRE(tracker_cache.reflected.front().capacity() == reflected_row_capacity);
+	REQUIRE(std::abs(first_window.front()) > 0.0);
+	for (std::size_t i = 0; i < first_window.size(); ++i)
+	{
+		REQUIRE_THAT(second_window[i].real(), WithinAbs(first_window[i].real(), 1.0e-12));
+		REQUIRE_THAT(second_window[i].imag(), WithinAbs(first_window[i].imag(), 1.0e-12));
 	}
 }
 

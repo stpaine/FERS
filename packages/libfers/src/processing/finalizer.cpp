@@ -309,6 +309,7 @@ namespace processing
 		const auto report_interval = std::chrono::milliseconds(100);
 		const RealType rate = params::rate() * params::oversampleRatio();
 		const RealType dt = 1.0 / rate;
+		core::ReceiverTrackerCache streaming_tracker_cache;
 
 		while (true)
 		{
@@ -338,7 +339,7 @@ namespace processing
 							  receiver->getRngEngine());
 
 			pipeline::applyStreamingInterference(window_buffer, actual_start, dt, receiver,
-												 job.active_streaming_sources, targets);
+												 job.active_streaming_sources, targets, streaming_tracker_cache);
 
 			renderWindow(window_buffer, job.duration, actual_start, frac_delay, job.responses);
 

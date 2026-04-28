@@ -29,6 +29,38 @@
 
 namespace processing::pipeline
 {
+	namespace
+	{
+		/// Prepares caller-owned tracker storage for one independent receive window without shrinking capacity.
+		void prepareWindowTrackerCache(core::ReceiverTrackerCache& tracker_cache, const std::size_t source_count,
+									   const std::size_t target_count)
+		{
+			if (tracker_cache.direct.size() < source_count)
+			{
+				tracker_cache.direct.resize(source_count);
+			}
+			if (tracker_cache.reflected.size() < source_count)
+			{
+				tracker_cache.reflected.resize(source_count);
+			}
+
+			for (std::size_t source_index = 0; source_index < source_count; ++source_index)
+			{
+				tracker_cache.direct[source_index] = {};
+
+				auto& reflected_trackers = tracker_cache.reflected[source_index];
+				if (reflected_trackers.size() < target_count)
+				{
+					reflected_trackers.resize(target_count);
+				}
+				for (std::size_t target_index = 0; target_index < target_count; ++target_index)
+				{
+					reflected_trackers[target_index] = {};
+				}
+			}
+		}
+	}
+
 	void advanceTimingModel(timing::Timing* timing_model, const radar::Receiver* receiver, const RealType rate)
 	{
 
@@ -80,6 +112,7 @@ namespace processing::pipeline
 									const radar::Receiver* receiver,
 									const std::vector<core::ActiveStreamingSource>& streaming_sources,
 									const std::vector<std::unique_ptr<radar::Target>>* targets,
+									core::ReceiverTrackerCache& tracker_cache,
 									const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
 	{
 		const simulation::CwPhaseNoiseLookup* lookup = phase_noise_lookup;
@@ -107,15 +140,7 @@ namespace processing::pipeline
 			lookup = &*owned_lookup;
 		}
 
-		// Pulsed receiver windows are finalized off the event-loop timeline, so they cannot reuse the
-		// global streaming tracker cache. Local trackers keep each window self-contained; the only cost
-		// is cold-path initialization at the first sample for each path.
-		std::vector<core::FmcwChirpBoundaryTracker> direct_trackers(streaming_sources.size());
-		std::vector<std::vector<core::FmcwChirpBoundaryTracker>> reflected_trackers(streaming_sources.size());
-		for (auto& per_source_reflected_trackers : reflected_trackers)
-		{
-			per_source_reflected_trackers.resize(targets->size());
-		}
+		prepareWindowTrackerCache(tracker_cache, streaming_sources.size(), targets->size());
 
 		RealType t_sample = actual_start;
 		for (auto& window_sample : window)
@@ -127,14 +152,14 @@ namespace processing::pipeline
 				if (!receiver->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT))
 				{
 					streaming_interference_sample += simulation::calculateStreamingDirectPathContribution(
-						streaming_source, receiver, t_sample, lookup, &direct_trackers[source_index]);
+						streaming_source, receiver, t_sample, lookup, &tracker_cache.direct[source_index]);
 				}
 				for (std::size_t target_index = 0; target_index < targets->size(); ++target_index)
 				{
 					const auto& target_ptr = (*targets)[target_index];
 					streaming_interference_sample += simulation::calculateStreamingReflectedPathContribution(
 						streaming_source, receiver, target_ptr.get(), t_sample, lookup,
-						&reflected_trackers[source_index][target_index]);
+						&tracker_cache.reflected[source_index][target_index]);
 				}
 			}
 			window_sample += streaming_interference_sample;

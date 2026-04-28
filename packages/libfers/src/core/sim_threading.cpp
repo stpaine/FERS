@@ -71,6 +71,9 @@ namespace core
 				return std::nullopt;
 			}
 
+			// TODO: O(N) Schedule Lookups - Since the schedule is guaranteed to be sorted (enforced by
+			// `processRawSchedule`), should be using `std::lower_bound` or binary search to find the relevant period in
+			// $O(\log N)$ time.
 			for (const auto& period : schedule)
 			{
 				const RealType active_start = std::max(params::startTime(), period.start);
