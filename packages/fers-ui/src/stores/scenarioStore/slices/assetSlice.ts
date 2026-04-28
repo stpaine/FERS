@@ -5,7 +5,7 @@ import { StateCreator } from 'zustand';
 import { defaultAntenna, defaultTiming, defaultWaveform } from '../defaults';
 import { generateSimId } from '../idUtils';
 import { cleanObject, serializeAntenna, serializeTiming } from '../serializers';
-import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
 import { Antenna, AssetActions, ScenarioStore } from '../types';
 import { buildScenarioJson } from './backendSlice';
 
@@ -71,7 +71,7 @@ export const createAssetSlice: StateCreator<
         if (touched) {
             const timing = get().timings.find((t) => t.id === timingId);
             if (timing) {
-                void enqueueGranularSync(
+                enqueueGranularSyncDetached(
                     'Timing',
                     timing.id,
                     JSON.stringify(cleanObject(serializeTiming(timing)))
@@ -97,7 +97,7 @@ export const createAssetSlice: StateCreator<
         if (touched) {
             const timing = get().timings.find((t) => t.id === timingId);
             if (timing) {
-                void enqueueGranularSync(
+                enqueueGranularSyncDetached(
                     'Timing',
                     timing.id,
                     JSON.stringify(cleanObject(serializeTiming(timing)))
@@ -172,7 +172,7 @@ export const createAssetSlice: StateCreator<
         if (touched) {
             const antenna = get().antennas.find((a) => a.id === antennaId);
             if (antenna) {
-                void enqueueGranularSync(
+                enqueueGranularSyncDetached(
                     'Antenna',
                     antenna.id,
                     JSON.stringify(cleanObject(serializeAntenna(antenna)))

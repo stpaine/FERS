@@ -114,6 +114,20 @@ namespace
 		return timing;
 	}
 
+	/// Formats a JSON field for warnings without assuming the field type.
+	std::string json_field_for_log(const nlohmann::json& j, const char* key)
+	{
+		if (!j.contains(key) || j.at(key).is_null())
+		{
+			return "";
+		}
+		if (j.at(key).is_string())
+		{
+			return j.at(key).get<std::string>();
+		}
+		return j.at(key).dump();
+	}
+
 	/// Throws a JSON validation error with the provided message.
 	void throw_json_validation_error(const std::string& message) { throw std::runtime_error(message); }
 
@@ -941,19 +955,19 @@ namespace
 		if (world.findWaveform(wave_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid waveform '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("waveform", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "waveform"));
 			return;
 		}
 		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid timing source '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "timing"));
 			return;
 		}
 		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid antenna '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "antenna"));
 			return;
 		}
 
@@ -1015,14 +1029,14 @@ namespace
 		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Receiver '{}': Missing or invalid timing source '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "timing"));
 			return;
 		}
 
 		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Receiver '{}': Missing or invalid antenna '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "antenna"));
 			return;
 		}
 
@@ -1144,19 +1158,19 @@ namespace
 		if (world.findWaveform(wave_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid waveform '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("waveform", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "waveform"));
 			return;
 		}
 		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid timing source '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "timing"));
 			return;
 		}
 		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid antenna '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "antenna"));
 			return;
 		}
 
@@ -1280,6 +1294,41 @@ namespace
 		}
 
 		world.add(std::move(plat));
+	}
+
+	void populate_world_from_json(const nlohmann::json& j, core::World& world, std::mt19937& masterSeeder)
+	{
+		world.clear();
+
+		const auto& sim = j.at("simulation");
+
+		parse_parameters(sim, masterSeeder);
+		parse_assets(sim, world);
+
+		if (sim.contains("platforms"))
+		{
+			TimingInstanceMap timing_instances;
+			for (const auto& plat_json : sim.at("platforms"))
+			{
+				parse_platform(plat_json, world, masterSeeder, timing_instances);
+			}
+		}
+
+		const RealType start_time = params::startTime();
+		const RealType end_time = params::endTime();
+		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
+		const auto num_samples = static_cast<size_t>(std::ceil((end_time - start_time) / dt_sim));
+
+		for (const auto& receiver : world.getReceivers())
+		{
+			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
+				receiver->getMode() == radar::OperationMode::FMCW_MODE)
+			{
+				receiver->prepareStreamingData(num_samples);
+			}
+		}
+
+		world.scheduleInitialEvents();
 	}
 }
 
@@ -1787,43 +1836,8 @@ namespace serial
 
 	void json_to_world(const nlohmann::json& j, core::World& world, std::mt19937& masterSeeder)
 	{
-		// 1. Clear the existing world state. This function always performs a full
-		//    replacement to ensure the C++ state is a perfect mirror of the UI state.
-		world.clear();
-
-		const auto& sim = j.at("simulation");
-
-		parse_parameters(sim, masterSeeder);
-		parse_assets(sim, world);
-
-		// 3. Restore platforms and their components.
-		if (sim.contains("platforms"))
-		{
-			TimingInstanceMap timing_instances;
-			for (const auto& plat_json : sim.at("platforms"))
-			{
-				parse_platform(plat_json, world, masterSeeder, timing_instances);
-			}
-		}
-
-		// 4. Finalize world state after all objects are loaded.
-
-		// Prepare CW receiver buffers before starting simulation
-		const RealType start_time = params::startTime();
-		const RealType end_time = params::endTime();
-		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
-		const auto num_samples = static_cast<size_t>(std::ceil((end_time - start_time) / dt_sim));
-
-		for (const auto& receiver : world.getReceivers())
-		{
-			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
-				receiver->getMode() == radar::OperationMode::FMCW_MODE)
-			{
-				receiver->prepareStreamingData(num_samples);
-			}
-		}
-
-		// Schedule initial events after all objects are loaded.
-		world.scheduleInitialEvents();
+		core::World parsed_world;
+		populate_world_from_json(j, parsed_world, masterSeeder);
+		world.swap(parsed_world);
 	}
 }

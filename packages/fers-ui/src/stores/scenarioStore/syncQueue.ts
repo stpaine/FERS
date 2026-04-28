@@ -196,12 +196,24 @@ export function enqueueGranularSync(
     itemId: string,
     json: string
 ): Promise<void> {
+    if (pendingFullSync) {
+        return pendingFullSync;
+    }
+
     pendingGranularUpdates.set(getGranularUpdateKey(itemType, itemId), {
         itemType,
         itemId,
         json,
     });
     return scheduleGranularFlush();
+}
+
+export function enqueueGranularSyncDetached(
+    itemType: string,
+    itemId: string,
+    json: string
+): void {
+    void enqueueGranularSync(itemType, itemId, json).catch(() => undefined);
 }
 
 export function registerGranularSyncFailureHandler(

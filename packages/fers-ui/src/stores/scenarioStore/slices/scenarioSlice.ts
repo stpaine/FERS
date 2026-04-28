@@ -13,7 +13,7 @@ import {
     serializeTiming,
     serializeWaveform,
 } from '../serializers';
-import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
 import {
     Antenna,
     GlobalParameters,
@@ -197,7 +197,11 @@ export const createScenarioSlice: StateCreator<
         if (requiresFullSync) {
             void enqueueFullSync(() => buildScenarioJson(get()));
         } else if (jsonPayload) {
-            void enqueueGranularSync(targetItemType, targetItemId, jsonPayload);
+            enqueueGranularSyncDetached(
+                targetItemType,
+                targetItemId,
+                jsonPayload
+            );
         }
     },
     setRotationAngleUnit: (unit, convertExisting) => {

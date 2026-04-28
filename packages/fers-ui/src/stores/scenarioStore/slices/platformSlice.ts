@@ -10,7 +10,7 @@ import {
     serializeComponentInner,
     serializePlatform,
 } from '../serializers';
-import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
 import {
     Platform,
     PlatformActions,
@@ -41,7 +41,7 @@ function syncPlatformGranular(
 ): void {
     const platform = getFn().platforms.find((p) => p.id === platformId);
     if (!platform) return;
-    void enqueueGranularSync(
+    enqueueGranularSyncDetached(
         'Platform',
         platform.id,
         JSON.stringify(cleanObject(serializePlatform(platform)))
@@ -288,7 +288,7 @@ export const createPlatformSlice: StateCreator<
                 (c) => c.id === componentId
             );
             if (component) {
-                void enqueueGranularSync(
+                enqueueGranularSyncDetached(
                     'Target',
                     component.id,
                     JSON.stringify(

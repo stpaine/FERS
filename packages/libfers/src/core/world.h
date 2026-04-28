@@ -257,6 +257,11 @@ namespace core
 		void clear() noexcept;
 
 		/**
+		 * @brief Exchanges all owned world state with another world.
+		 */
+		void swap(World& other) noexcept;
+
+		/**
 		 * @brief Populates the event queue with the initial events for the simulation.
 		 * This method should be called after all simulation objects have been parsed and added to the world.
 		 */

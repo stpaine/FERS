@@ -438,6 +438,56 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 	REQUIRE(tx->getSchedule().size() == 1);
 }
 
+TEST_CASE("JSON: Full world skips incomplete numeric-placeholder radar components", "[serial][json]")
+{
+	ParamGuard guard;
+	core::World world;
+	std::mt19937 seeder(42);
+
+	json scenario = {
+		{"simulation",
+		 {{"parameters",
+		   {{"starttime", 0.0},
+			{"endtime", 1.0},
+			{"rate", 1000.0},
+			{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+			{"coordinatesystem", {{"frame", "ENU"}}}}},
+		  {"platforms",
+		   json::array(
+			   {{{"id", 100},
+				 {"name", "draft-platform"},
+				 {"components",
+				  json::array({{{"transmitter",
+								 {{"id", 101},
+								  {"name", "draft-tx"},
+								  {"waveform", 0},
+								  {"antenna", 0},
+								  {"timing", 0},
+								  {"pulsed_mode", {{"prf", 1000.0}}}}}},
+							   {{"receiver",
+								 {{"id", 102},
+								  {"name", "draft-rx"},
+								  {"antenna", 0},
+								  {"timing", 0},
+								  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1.0e-5}, {"window_skip", 0.0}}},
+								  {"noise_temp", 290.0}}}},
+							   {{"monostatic",
+								 {{"name", "draft-mono"},
+								  {"tx_id", 103},
+								  {"rx_id", 104},
+								  {"waveform", 0},
+								  {"antenna", 0},
+								  {"timing", 0},
+								  {"pulsed_mode", {{"prf", 1000.0}, {"window_length", 1.0e-5}, {"window_skip", 0.0}}},
+								  {"noise_temp", 290.0}}}}})}}})}}}};
+
+	REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+	REQUIRE(world.getPlatforms().size() == 1);
+	REQUIRE(world.findPlatform(100) != nullptr);
+	REQUIRE(world.getTransmitters().empty());
+	REQUIRE(world.getReceivers().empty());
+}
+
 TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit", "[serial][json]")
 {
 	ParamGuard guard;

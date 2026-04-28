@@ -226,6 +226,32 @@ TEST_CASE("API update scenario from JSON modifies serialized state", "[api][scen
 	REQUIRE(updated.at("simulation").at("name") == "After Update");
 }
 
+TEST_CASE("API failed JSON scenario update preserves previous world for later granular edits", "[api][scenario]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::minimalScenarioXml("Before Failed Update");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	auto scenario = api_test::parseScenarioJson(context.get());
+	const auto original_platform = scenario["simulation"]["platforms"][0];
+	const uint64_t platform_id = api_test::parseId(original_platform["id"]);
+
+	auto invalid = scenario;
+	invalid["simulation"]["platforms"][0].erase("name");
+	REQUIRE(fers_update_scenario_from_json(context.get(), invalid.dump().c_str()) == 2);
+
+	auto platform_update = original_platform;
+	platform_update["name"] = "Rename After Failed Full Sync";
+	REQUIRE(fers_update_platform_from_json(context.get(), platform_id, platform_update.dump().c_str()) == 0);
+
+	const auto updated = api_test::parseScenarioJson(context.get());
+	REQUIRE(updated["simulation"]["platforms"][0]["name"] == "Rename After Failed Full Sync");
+}
+
 TEST_CASE("API update scenario from malformed JSON returns JSON-specific error code", "[api][scenario]")
 {
 	api_test::clearLastError();

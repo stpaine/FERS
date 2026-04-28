@@ -16,6 +16,7 @@
 #include <limits>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 
 #include "antenna/antenna_factory.h"
 #include "core/sim_events.h"
@@ -259,6 +260,21 @@ namespace core
 		_timings.clear();
 		_event_queue = {};
 		_simulation_state = {};
+	}
+
+	void World::swap(World& other) noexcept
+	{
+		using std::swap;
+
+		_platforms.swap(other._platforms);
+		_transmitters.swap(other._transmitters);
+		_receivers.swap(other._receivers);
+		_targets.swap(other._targets);
+		_waveforms.swap(other._waveforms);
+		_antennas.swap(other._antennas);
+		_timings.swap(other._timings);
+		_event_queue.swap(other._event_queue);
+		swap(_simulation_state, other._simulation_state);
 	}
 
 	void World::scheduleInitialEvents()
