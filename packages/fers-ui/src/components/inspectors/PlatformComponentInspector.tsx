@@ -294,7 +294,10 @@ export function PlatformComponentInspector({
                         label="Antenna"
                         value={c.antennaId ?? ''}
                         onChange={(e) =>
-                            handleChange('antennaId', e.target.value)
+                            handleChange(
+                                'antennaId',
+                                e.target.value === '' ? null : e.target.value
+                            )
                         }
                     >
                         <MenuItem value="">
@@ -313,7 +316,10 @@ export function PlatformComponentInspector({
                         label="Timing Source"
                         value={c.timingId ?? ''}
                         onChange={(e) =>
-                            handleChange('timingId', e.target.value)
+                            handleChange(
+                                'timingId',
+                                e.target.value === '' ? null : e.target.value
+                            )
                         }
                     >
                         <MenuItem value="">

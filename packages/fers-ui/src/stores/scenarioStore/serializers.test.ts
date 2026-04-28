@@ -7,6 +7,7 @@ import { createWaveformForType, defaultGlobalParameters } from './defaults';
 import {
     serializeAntenna,
     serializeComponentInner,
+    serializeGlobalParameters,
     serializeWaveform,
 } from './serializers';
 import type { Antenna, PlatformComponent, Waveform } from './types';
@@ -50,6 +51,23 @@ describe('serializeAntenna', () => {
             pattern: 'file',
             filename: '/tmp/pattern.h5',
             efficiency: 1,
+        });
+    });
+});
+
+describe('serializeGlobalParameters', () => {
+    test('fills UTM zone and hemisphere defaults before backend sync', () => {
+        expect(
+            serializeGlobalParameters({
+                ...defaultGlobalParameters,
+                coordinateSystem: { frame: 'UTM' },
+            })
+        ).toMatchObject({
+            coordinatesystem: {
+                frame: 'UTM',
+                zone: 34,
+                hemisphere: 'S',
+            },
         });
     });
 });
@@ -163,6 +181,26 @@ describe('serializeWaveform', () => {
 });
 
 describe('serializeComponentInner', () => {
+    test('serializes empty component references as backend placeholders', () => {
+        const component: PlatformComponent = {
+            id: '41',
+            type: 'transmitter',
+            name: 'Draft Tx',
+            radarType: 'pulsed',
+            prf: 1000,
+            antennaId: '',
+            waveformId: '',
+            timingId: '',
+            schedule: [],
+        };
+
+        expect(serializeComponentInner(component)).toMatchObject({
+            antenna: 0,
+            waveform: 0,
+            timing: 0,
+        });
+    });
+
     test('serializes FMCW mode without pulsed fields', () => {
         const component: PlatformComponent = {
             id: '40',
@@ -195,6 +233,46 @@ describe('serializeComponentInner', () => {
             nodirect: false,
             nopropagationloss: false,
             schedule: [],
+        });
+    });
+
+    test('uses an isotropic backend placeholder while a file target has no filename', () => {
+        const component: PlatformComponent = {
+            id: '50',
+            type: 'target',
+            name: 'Draft Target',
+            rcs_type: 'file',
+            rcs_value: 3,
+            rcs_model: 'constant',
+        };
+
+        expect(serializeComponentInner(component)).toEqual({
+            id: '50',
+            name: 'Draft Target',
+            rcs: {
+                type: 'isotropic',
+                value: 3,
+            },
+        });
+    });
+
+    test('serializes file target RCS once a filename is present', () => {
+        const component: PlatformComponent = {
+            id: '51',
+            type: 'target',
+            name: 'Loaded Target',
+            rcs_type: 'file',
+            rcs_filename: '/tmp/target.xml',
+            rcs_model: 'constant',
+        };
+
+        expect(serializeComponentInner(component)).toEqual({
+            id: '51',
+            name: 'Loaded Target',
+            rcs: {
+                type: 'file',
+                filename: '/tmp/target.xml',
+            },
         });
     });
 });

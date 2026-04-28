@@ -7,9 +7,7 @@ import { useSimulationProgressStore } from '../../simulationProgressStore';
 import { defaultGlobalParameters } from '../defaults';
 import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
 import {
-    cleanObject,
     serializeAntenna,
-    serializeComponentInner,
     serializeGlobalParameters,
     serializePlatform,
     serializeTiming,
@@ -107,6 +105,7 @@ export const createScenarioSlice: StateCreator<
         let targetItemType = '';
         let targetItemId = '';
         let jsonPayload: string | null = null;
+        let requiresFullSync = false;
 
         set((state) => {
             if (itemId === 'global-parameters') {
@@ -164,20 +163,11 @@ export const createScenarioSlice: StateCreator<
                     /^components\.(\d+)(?:\.|$)/
                 );
                 if (item.type === 'Platform' && componentMatch) {
-                    const compIndex = parseInt(componentMatch[1], 10);
-                    const component = (item as Platform).components[compIndex];
-                    if (component) {
-                        jsonPayload = JSON.stringify(
-                            cleanObject(serializeComponentInner(component))
-                        );
-                        // Map frontend component type to backend expected type string
-                        targetItemType =
-                            component.type === 'monostatic'
-                                ? 'Monostatic'
-                                : component.type.charAt(0).toUpperCase() +
-                                  component.type.slice(1);
-                        targetItemId = component.id;
-                    }
+                    // Backend full-scenario parsing skips incomplete child
+                    // components until required references or file paths exist.
+                    // Rebuild from the snapshot so draft components become real
+                    // as soon as their authoring state is complete.
+                    requiresFullSync = true;
                     return;
                 }
 
@@ -204,7 +194,9 @@ export const createScenarioSlice: StateCreator<
             }
         });
 
-        if (jsonPayload) {
+        if (requiresFullSync) {
+            void enqueueFullSync(() => buildScenarioJson(get()));
+        } else if (jsonPayload) {
             void enqueueGranularSync(targetItemType, targetItemId, jsonPayload);
         }
     },

@@ -15,6 +15,10 @@ import {
     shouldClearWaveformForRadarType,
 } from './PlatformComponentInspector';
 import {
+    ensureCubicPositionWaypoints,
+    ensureCubicRotationWaypoints,
+} from './PlatformInspector';
+import {
     createWaveformForType,
     getVisibleWaveformFieldLabels,
     WAVEFORM_TYPE_OPTIONS,
@@ -134,6 +138,54 @@ describe('Waveform inspector authoring options', () => {
             'Chirp Count',
         ]);
         expect(getVisibleWaveformFieldLabels('cw')).toEqual([]);
+    });
+});
+
+describe('Platform inspector authoring helpers', () => {
+    test('adds a second position waypoint before selecting cubic interpolation', () => {
+        const waypoints = [
+            {
+                id: 'position-1',
+                x: 1,
+                y: 2,
+                altitude: 3,
+                time: 4,
+            },
+        ];
+
+        const next = ensureCubicPositionWaypoints(waypoints);
+
+        expect(next).toHaveLength(2);
+        expect(next[0]).toEqual(waypoints[0]);
+        expect(next[1]).toMatchObject({
+            x: 1,
+            y: 2,
+            altitude: 3,
+            time: 5,
+        });
+        expect(next[1].id).not.toBe('position-1');
+    });
+
+    test('adds a second rotation waypoint before selecting cubic interpolation', () => {
+        const waypoints = [
+            {
+                id: 'rotation-1',
+                azimuth: 10,
+                elevation: 20,
+                time: 4,
+            },
+        ];
+
+        const next = ensureCubicRotationWaypoints(waypoints);
+
+        expect(next).toHaveLength(2);
+        expect(next[0]).toEqual(waypoints[0]);
+        expect(next[1]).toMatchObject({
+            azimuth: 10,
+            elevation: 20,
+            time: 5,
+        });
+        expect(next[1].id).not.toBe('rotation-1');
     });
 });
 
