@@ -12,6 +12,33 @@
 
 #include "geometry_ops.h"
 
+namespace
+{
+	/**
+	 * @brief Normalizes an angle to the signed principal range.
+	 *
+	 * Wraps the input angle modulo 2π and returns the equivalent signed angle in
+	 * the range (-π, π]. This is useful for angular differences where the shortest
+	 * signed rotation is required.
+	 *
+	 * @param angle The input angle in radians.
+	 * @return The equivalent wrapped angle in radians.
+	 */
+	[[nodiscard]] RealType wrapSignedAngle(const RealType angle) noexcept
+	{
+		RealType wrapped = std::remainder(angle, 2 * PI);
+
+		// Preserve the previous operator- behavior:
+		// old code mapped -PI to PI, giving the range (-PI, PI].
+		if (wrapped <= -PI)
+		{
+			wrapped += 2 * PI;
+		}
+
+		return wrapped;
+	}
+}
+
 namespace math
 {
 	Vec3::Vec3(const SVec3& svec) noexcept :
@@ -90,29 +117,20 @@ namespace math
 
 	SVec3 operator+(const SVec3& a, const SVec3& b) noexcept
 	{
-		RealType new_azimuth = fmod(a.azimuth + b.azimuth, 2 * PI);
-		if (new_azimuth < 0)
-		{
-			new_azimuth += 2 * PI;
-		}
-		RealType new_elevation = fmod(a.elevation + b.elevation, PI);
+		const RealType new_azimuth = wrapSignedAngle(a.azimuth + b.azimuth);
+		const RealType new_elevation = std::fmod(a.elevation + b.elevation, PI);
+
 		return {a.length + b.length, new_azimuth, new_elevation};
 	}
 
 	SVec3 operator-(const SVec3& a, const SVec3& b) noexcept
 	{
-		RealType new_azimuth = a.azimuth - b.azimuth;
-
-		// Wrap the azimuth to the range [-PI, PI] to find the shortest angle
-		// TODO: Has to be a better way to do this...
-		while (new_azimuth <= -PI)
-			new_azimuth += 2 * PI;
-		while (new_azimuth > PI)
-			new_azimuth -= 2 * PI;
+		const RealType new_azimuth = wrapSignedAngle(a.azimuth - b.azimuth);
 
 		// Elevation difference is typically simpler and doesn't need wrapping
 		// unless 180 degree elevation sweeps are expected.
-		RealType new_elevation = fmod(a.elevation - b.elevation, PI);
+		const RealType new_elevation = std::fmod(a.elevation - b.elevation, PI);
+
 		return {a.length - b.length, new_azimuth, new_elevation};
 	}
 }
