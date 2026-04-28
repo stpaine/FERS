@@ -430,6 +430,29 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 		REQUIRE_THAT(wave->getLength(), WithinAbs(1.0e-3, 1.0e-12));
 	}
 
+	SECTION("well-formed FMCW triangle waveform")
+	{
+		auto doc = loadXml("<waveform name=\"fmcw_triangle_good\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_triangle>"
+						   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <start_frequency_offset>1e3</start_frequency_offset>"
+						   "    <triangle_count>4</triangle_count>"
+						   "  </fmcw_triangle>"
+						   "</waveform>");
+
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		REQUIRE(world.getWaveforms().size() == 1);
+		const auto* wave = world.getWaveforms().begin()->second.get();
+		const auto* triangle = wave->getFmcwTriangleSignal();
+		REQUIRE(triangle != nullptr);
+		REQUIRE(wave->isFmcwFamily());
+		REQUIRE_THAT(wave->getLength(), WithinAbs(2.0e-3, 1.0e-12));
+		REQUIRE(triangle->getTriangleCount().value() == 4);
+	}
+
 	SECTION("chirp period shorter than duration is rejected")
 	{
 		auto doc = loadXml("<waveform name=\"fmcw_bad_period\">"

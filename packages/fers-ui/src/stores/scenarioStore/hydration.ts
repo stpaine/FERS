@@ -108,6 +108,12 @@ interface BackendWaveform {
         start_frequency_offset?: number | null;
         chirp_count?: number | null;
     };
+    fmcw_triangle?: {
+        chirp_bandwidth: number;
+        chirp_duration: number;
+        start_frequency_offset?: number | null;
+        triangle_count?: number | null;
+    };
 }
 
 type HydratedScenarioState = Pick<
@@ -306,22 +312,32 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                           w.fmcw_linear_chirp.start_frequency_offset ?? null,
                       chirp_count: w.fmcw_linear_chirp.chirp_count ?? null,
                   }
-                : w.cw
+                : w.fmcw_triangle
                   ? {
                         ...commonWaveform,
-                        waveformType: 'cw',
+                        waveformType: 'fmcw_triangle',
+                        chirp_bandwidth: w.fmcw_triangle.chirp_bandwidth,
+                        chirp_duration: w.fmcw_triangle.chirp_duration,
+                        start_frequency_offset:
+                            w.fmcw_triangle.start_frequency_offset ?? null,
+                        triangle_count: w.fmcw_triangle.triangle_count ?? null,
                     }
-                  : w.pulsed_from_file
+                  : w.cw
                     ? {
                           ...commonWaveform,
-                          waveformType: 'pulsed_from_file',
-                          filename: w.pulsed_from_file.filename ?? '',
+                          waveformType: 'cw',
                       }
-                    : (() => {
-                          throw new Error(
-                              `Unsupported waveform type for '${w.name}'.`
-                          );
-                      })();
+                    : w.pulsed_from_file
+                      ? {
+                            ...commonWaveform,
+                            waveformType: 'pulsed_from_file',
+                            filename: w.pulsed_from_file.filename ?? '',
+                        }
+                      : (() => {
+                            throw new Error(
+                                `Unsupported waveform type for '${w.name}'.`
+                            );
+                        })();
             nameToIdMap.set(waveform.name, waveform.id);
             reserveSimId(waveformId);
             return waveform;

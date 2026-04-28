@@ -63,6 +63,41 @@ namespace
 		tracker.t_n = source.segment_start;
 	}
 
+	/// Initializes an FMCW triangle tracker from a retarded time.
+	void initializeFmcwTriangleTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+									   core::FmcwChirpBoundaryTracker& tracker)
+	{
+		tracker.triangle_initialized = true;
+		if (t_ret < source.segment_start)
+		{
+			tracker.triangle_index = 0;
+			tracker.triangle_leg = 0;
+			tracker.triangle_t_leg = source.segment_start;
+			tracker.triangle_phi_base = 0.0;
+			return;
+		}
+
+		const RealType delta = t_ret - source.segment_start;
+		tracker.triangle_index = static_cast<std::size_t>(std::floor(delta / source.triangle_period));
+		const RealType local_triangle_time =
+			delta - static_cast<RealType>(tracker.triangle_index) * source.triangle_period;
+		tracker.triangle_leg = local_triangle_time < source.chirp_duration ? 0U : 1U;
+		tracker.triangle_t_leg = source.segment_start +
+			static_cast<RealType>(tracker.triangle_index) * source.triangle_period +
+			(tracker.triangle_leg == 1U ? source.chirp_duration : 0.0);
+		tracker.triangle_phi_base =
+			std::fmod(static_cast<RealType>(tracker.triangle_index) * source.mod_phi_tri, 2.0 * PI) +
+			(tracker.triangle_leg == 1U ? source.mod_phi_up : 0.0);
+		if (tracker.triangle_phi_base >= 2.0 * PI)
+		{
+			tracker.triangle_phi_base -= 2.0 * PI;
+		}
+		if (tracker.triangle_phi_base < 0.0)
+		{
+			tracker.triangle_phi_base += 2.0 * PI;
+		}
+	}
+
 	/**
 	 * @struct LinkGeometry
 	 * @brief Holds geometric properties of a path segment between two points.
@@ -255,7 +290,7 @@ namespace
 	core::ActiveStreamingSource makeClassicStreamingSource(const Transmitter* trans)
 	{
 		auto source = core::makeActiveSource(trans, params::startTime(), std::numeric_limits<RealType>::max());
-		if (!source.is_fmcw)
+		if (source.kind == core::StreamingWaveformKind::Cw)
 		{
 			source.segment_start = std::numeric_limits<RealType>::lowest();
 		}
@@ -277,7 +312,7 @@ namespace
 			return false;
 		}
 
-		if (source.is_fmcw)
+		if (source.kind == core::StreamingWaveformKind::FmcwLinear)
 		{
 			if (chirp_tracker == nullptr)
 			{
@@ -330,6 +365,74 @@ namespace
 			return true;
 		}
 
+		if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+		{
+			if (chirp_tracker == nullptr)
+			{
+				const RealType delta = t_ret - source.segment_start;
+				const auto triangle_index = static_cast<std::size_t>(std::floor(delta / source.triangle_period));
+				if (source.triangle_count.has_value() && triangle_index >= *source.triangle_count)
+				{
+					return false;
+				}
+				const RealType local_triangle_time =
+					delta - static_cast<RealType>(triangle_index) * source.triangle_period;
+				const bool down_leg = local_triangle_time >= source.chirp_duration;
+				const RealType u_ret = down_leg ? local_triangle_time - source.chirp_duration : local_triangle_time;
+				if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+				{
+					return false;
+				}
+				const RealType phi_base =
+					std::fmod(static_cast<RealType>(triangle_index) * source.mod_phi_tri, 2.0 * PI) +
+					(down_leg ? source.mod_phi_up : 0.0);
+				const RealType modular_phi_base = phi_base >= 2.0 * PI ? phi_base - 2.0 * PI : phi_base;
+				const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
+				const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
+				phase_out = -2.0 * PI * source.carrier_freq * tau + modular_phi_base + linear_coeff * u_ret +
+					quad_coeff * u_ret * u_ret;
+				return true;
+			}
+
+			if (!chirp_tracker->triangle_initialized)
+			{
+				initializeFmcwTriangleTracker(source, t_ret, *chirp_tracker);
+			}
+
+			while (t_ret >= chirp_tracker->triangle_t_leg + source.chirp_duration)
+			{
+				chirp_tracker->triangle_t_leg += source.chirp_duration;
+				chirp_tracker->triangle_leg = 1U - chirp_tracker->triangle_leg;
+				if (chirp_tracker->triangle_leg == 0U)
+				{
+					++chirp_tracker->triangle_index;
+				}
+				chirp_tracker->triangle_phi_base += source.mod_phi_up;
+				if (chirp_tracker->triangle_phi_base >= 2.0 * PI)
+				{
+					chirp_tracker->triangle_phi_base -= 2.0 * PI;
+				}
+			}
+
+			if (source.triangle_count.has_value() && chirp_tracker->triangle_index >= *source.triangle_count)
+			{
+				return false;
+			}
+
+			const RealType u_ret = t_ret - chirp_tracker->triangle_t_leg;
+			if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+			{
+				return false;
+			}
+
+			const bool down_leg = chirp_tracker->triangle_leg == 1U;
+			const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
+			const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
+			phase_out = -2.0 * PI * source.carrier_freq * tau + chirp_tracker->triangle_phi_base +
+				linear_coeff * u_ret + quad_coeff * u_ret * u_ret;
+			return true;
+		}
+
 		phase_out = -2.0 * PI * source.carrier_freq * tau;
 		return true;
 	}
@@ -344,6 +447,10 @@ namespace
 		if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
 		{
 			return waveform->getPower() * (fmcw->getChirpDuration() / fmcw->getChirpPeriod());
+		}
+		if (waveform->isFmcwTriangle())
+		{
+			return waveform->getPower();
 		}
 		return waveform->getPower();
 	}

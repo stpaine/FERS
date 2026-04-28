@@ -63,7 +63,22 @@ namespace processing
 		/// Converts a cached streaming source to reusable FMCW waveform metadata.
 		core::FmcwMetadata buildFmcwMetadata(const core::ActiveStreamingSource& source)
 		{
+			if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+			{
+				return core::FmcwMetadata{
+					.waveform_shape = "triangle",
+					.chirp_bandwidth = source.triangle != nullptr ? source.triangle->getChirpBandwidth() : 0.0,
+					.chirp_duration = source.chirp_duration,
+					.chirp_rate = source.chirp_rate,
+					.start_frequency_offset = source.start_freq_off,
+					.triangle_period = source.triangle_period,
+					.triangle_count = source.triangle_count.has_value()
+						? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*source.triangle_count))
+						: std::nullopt};
+			}
+
 			return core::FmcwMetadata{
+				.waveform_shape = "linear",
 				.chirp_bandwidth = source.fmcw != nullptr ? source.fmcw->getChirpBandwidth() : 0.0,
 				.chirp_duration = source.chirp_duration,
 				.chirp_period = source.chirp_period,
@@ -83,12 +98,17 @@ namespace processing
 		{
 			const RealType active_start = std::max(params::startTime(), source.segment_start);
 			const RealType active_end = std::min(params::endTime(), source.segment_end);
-			core::FmcwSourceSegmentMetadata segment{.start_time = source.segment_start,
-													.end_time = source.segment_end,
-													.first_chirp_start_time =
-														core::firstFmcwChirpStart(source, active_start, active_end)};
-			const auto emitted = core::countFmcwChirpStarts(source, active_start, active_end);
-			segment.emitted_chirp_count = emitted;
+			core::FmcwSourceSegmentMetadata segment{.start_time = source.segment_start, .end_time = source.segment_end};
+			if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+			{
+				segment.first_triangle_start_time = core::firstFmcwTriangleStart(source, active_start, active_end);
+				segment.emitted_triangle_count = core::countFmcwTriangleStarts(source, active_start, active_end);
+			}
+			else
+			{
+				segment.first_chirp_start_time = core::firstFmcwChirpStart(source, active_start, active_end);
+				segment.emitted_chirp_count = core::countFmcwChirpStarts(source, active_start, active_end);
+			}
 			return segment;
 		}
 
@@ -109,8 +129,7 @@ namespace processing
 			std::vector<core::FmcwSourceMetadata> fmcw_sources;
 			for (const auto& streaming_source : streaming_sources)
 			{
-				if (!streaming_source.is_fmcw || streaming_source.transmitter == nullptr ||
-					streaming_source.fmcw == nullptr)
+				if (!streaming_source.is_fmcw || streaming_source.transmitter == nullptr)
 				{
 					continue;
 				}
@@ -150,12 +169,25 @@ namespace processing
 			{
 				const RealType active_start = std::max(segment.start_time, source.segment_start);
 				const RealType active_end = std::min(segment.end_time, source.segment_end);
-				const auto first_chirp = core::firstFmcwChirpStart(source, active_start, active_end);
-				const auto emitted = core::countFmcwChirpStarts(source, active_start, active_end);
-				if (first_chirp.has_value() || emitted > 0)
+				if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
 				{
-					segment.first_chirp_start_time = first_chirp;
-					segment.emitted_chirp_count = emitted;
+					const auto first_triangle = core::firstFmcwTriangleStart(source, active_start, active_end);
+					const auto emitted = core::countFmcwTriangleStarts(source, active_start, active_end);
+					if (first_triangle.has_value() || emitted > 0)
+					{
+						segment.first_triangle_start_time = first_triangle;
+						segment.emitted_triangle_count = emitted;
+					}
+				}
+				else
+				{
+					const auto first_chirp = core::firstFmcwChirpStart(source, active_start, active_end);
+					const auto emitted = core::countFmcwChirpStarts(source, active_start, active_end);
+					if (first_chirp.has_value() || emitted > 0)
+					{
+						segment.first_chirp_start_time = first_chirp;
+						segment.emitted_chirp_count = emitted;
+					}
 				}
 			}
 		}

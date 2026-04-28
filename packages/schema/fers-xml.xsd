@@ -130,6 +130,23 @@
                             </xs:attribute>
                         </xs:complexType>
                     </xs:element>
+                    <xs:element name="fmcw_triangle">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="chirp_bandwidth" type="xs:string"/>
+                                <xs:element name="chirp_duration" type="xs:string"/>
+                                <xs:element minOccurs="0" name="start_frequency_offset" type="xs:string"/>
+                                <xs:element minOccurs="0" name="triangle_count" type="xs:string">
+                                    <xs:annotation>
+                                        <xs:documentation>
+                                            Per-schedule-segment maximum complete triangle count. If a transmitter has
+                                            multiple schedule periods, each period emits up to this many full triangles.
+                                        </xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
                 </xs:choice>
             </xs:sequence>
             <xs:attribute name="name" type="xs:string" use="required"/>

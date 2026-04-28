@@ -52,6 +52,9 @@ export function createWaveformForType(
     waveformType: 'fmcw_linear_chirp'
 ): WaveformDefaults<'fmcw_linear_chirp'>;
 export function createWaveformForType(
+    waveformType: 'fmcw_triangle'
+): WaveformDefaults<'fmcw_triangle'>;
+export function createWaveformForType(
     waveformType: WaveformType
 ): WaveformDefaults {
     const common = {
@@ -82,6 +85,15 @@ export function createWaveformForType(
                 chirp_period: 1e-3,
                 start_frequency_offset: 0,
                 chirp_count: null,
+            };
+        case 'fmcw_triangle':
+            return {
+                ...common,
+                waveformType,
+                chirp_bandwidth: 4e3,
+                chirp_duration: 1e-3,
+                start_frequency_offset: 0,
+                triangle_count: null,
             };
     }
 }

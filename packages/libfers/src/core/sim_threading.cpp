@@ -131,10 +131,16 @@ namespace core
 	{
 		for (const auto& transmitter_ptr : _world->getTransmitters())
 		{
-			if (const auto* fmcw = transmitter_ptr->getFmcwSignal(); fmcw != nullptr)
+			const auto* waveform = transmitter_ptr->getSignal();
+			if (waveform == nullptr || !waveform->isFmcwFamily())
+			{
+				continue;
+			}
+
+			if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
 			{
 				const RealType duty_cycle = fmcw->getChirpDuration() / fmcw->getChirpPeriod();
-				const RealType average_power = transmitter_ptr->getSignal()->getPower() * duty_cycle;
+				const RealType average_power = waveform->getPower() * duty_cycle;
 				const auto direction = fers_signal::fmcwChirpDirectionToken(fmcw->getDirection());
 				const auto configured_count = fmcw->getChirpCount().has_value()
 					? std::format("{}", *fmcw->getChirpCount())
@@ -145,7 +151,7 @@ namespace core
 					const auto source = makeActiveSource(transmitter_ptr.get(), active_start, params::endTime());
 					const auto total_chirp_count = countFmcwChirpStarts(source, active_start, source.segment_end);
 					LOG(Level::INFO,
-						"FMCW transmitter '{}' direction={} B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s "
+						"FMCW transmitter '{}' shape=linear {} B={} Hz T_c={} s T_rep={} s f_0={} Hz alpha={} Hz/s "
 						"duty_cycle={} chirp_count={} total_chirp_count={} average_power={} W",
 						transmitter_ptr->getName(), direction, fmcw->getChirpBandwidth(), fmcw->getChirpDuration(),
 						fmcw->getChirpPeriod(), fmcw->getStartFrequencyOffset(), fmcw->getChirpRate(), duty_cycle,
@@ -162,13 +168,53 @@ namespace core
 						const auto segment_chirp_count = countFmcwChirpStarts(source, active_start, source.segment_end);
 						total_chirp_count += segment_chirp_count;
 						LOG(Level::INFO,
-							"FMCW transmitter '{}' segment [{}, {}] direction={} B={} Hz T_c={} s T_rep={} s f_0={} "
+							"FMCW transmitter '{}' segment [{}, {}] shape=linear {} B={} Hz T_c={} s T_rep={} s f_0={} "
 							"Hz alpha={} Hz/s duty_cycle={} chirp_count={} segment_chirp_count={} total_chirp_count={} "
 							"average_power={} W",
 							transmitter_ptr->getName(), period.start, source.segment_end, direction,
 							fmcw->getChirpBandwidth(), fmcw->getChirpDuration(), fmcw->getChirpPeriod(),
 							fmcw->getStartFrequencyOffset(), fmcw->getChirpRate(), duty_cycle, configured_count,
 							segment_chirp_count, total_chirp_count, average_power);
+					}
+				}
+			}
+			else if (const auto* triangle = waveform->getFmcwTriangleSignal(); triangle != nullptr)
+			{
+				const RealType average_power = waveform->getPower();
+				const auto configured_count = triangle->getTriangleCount().has_value()
+					? std::format("{}", *triangle->getTriangleCount())
+					: std::string("unbounded");
+				if (transmitter_ptr->getSchedule().empty())
+				{
+					const RealType active_start = params::startTime();
+					const auto source = makeActiveSource(transmitter_ptr.get(), active_start, params::endTime());
+					const auto total_triangle_count = countFmcwTriangleStarts(source, active_start, source.segment_end);
+					LOG(Level::INFO,
+						"FMCW transmitter '{}' shape=triangle B={} Hz T_c={} s T_tri={} s f_0={} Hz alpha={} Hz/s "
+						"duty_cycle=1 triangle_count={} total_triangle_count={} average_power={} W",
+						transmitter_ptr->getName(), triangle->getChirpBandwidth(), triangle->getChirpDuration(),
+						triangle->getTrianglePeriod(), triangle->getStartFrequencyOffset(), triangle->getChirpRate(),
+						configured_count, total_triangle_count, average_power);
+				}
+				else
+				{
+					std::uint64_t total_triangle_count = 0;
+					for (const auto& period : transmitter_ptr->getSchedule())
+					{
+						const RealType active_start = std::max(params::startTime(), period.start);
+						const auto source = makeActiveSource(transmitter_ptr.get(), period.start,
+															 std::min(params::endTime(), period.end));
+						const auto segment_triangle_count =
+							countFmcwTriangleStarts(source, active_start, source.segment_end);
+						total_triangle_count += segment_triangle_count;
+						LOG(Level::INFO,
+							"FMCW transmitter '{}' segment [{}, {}] shape=triangle B={} Hz T_c={} s T_tri={} s f_0={} "
+							"Hz alpha={} Hz/s duty_cycle=1 triangle_count={} segment_triangle_count={} "
+							"total_triangle_count={} average_power={} W",
+							transmitter_ptr->getName(), period.start, source.segment_end, triangle->getChirpBandwidth(),
+							triangle->getChirpDuration(), triangle->getTrianglePeriod(),
+							triangle->getStartFrequencyOffset(), triangle->getChirpRate(), configured_count,
+							segment_triangle_count, total_triangle_count, average_power);
 					}
 				}
 			}

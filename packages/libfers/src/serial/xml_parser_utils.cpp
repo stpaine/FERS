@@ -92,9 +92,9 @@ namespace serial::xml_parser_utils
 
 		/// Validates an FMCW schedule while adapting validation errors to XmlException.
 		void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
-									const fers_signal::FmcwChirpSignal& fmcw, const std::string& owner)
+									const fers_signal::RadarSignal& wave, const std::string& owner)
 		{
-			serial::fmcw_validation::validateSchedule(schedule, fmcw, owner, throw_xml_validation_error);
+			serial::fmcw_validation::validateSchedule(schedule, wave, owner, throw_xml_validation_error);
 		}
 
 		/// Draws the next unsigned seed from the master random generator.
@@ -480,6 +480,38 @@ namespace serial::xml_parser_utils
 			validate_fmcw_waveform(*wave, "Waveform '" + name + "'");
 			ctx.world->add(std::move(wave));
 		}
+		else if (const XmlElement fmcw_triangle_element = waveform.childElement("fmcw_triangle", 0);
+				 fmcw_triangle_element.isValid())
+		{
+			const RealType chirp_bandwidth = get_child_real_type(fmcw_triangle_element, "chirp_bandwidth");
+			const RealType chirp_duration = get_child_real_type(fmcw_triangle_element, "chirp_duration");
+
+			RealType start_frequency_offset = 0.0;
+			if (const auto start_offset = fmcw_triangle_element.childElement("start_frequency_offset", 0);
+				start_offset.isValid())
+			{
+				start_frequency_offset = get_child_real_type(fmcw_triangle_element, "start_frequency_offset");
+			}
+
+			std::optional<std::size_t> triangle_count;
+			if (const auto triangle_count_element = fmcw_triangle_element.childElement("triangle_count", 0);
+				triangle_count_element.isValid())
+			{
+				const RealType raw_count = get_child_real_type(fmcw_triangle_element, "triangle_count");
+				if (raw_count <= 0.0 || std::floor(raw_count) != raw_count)
+				{
+					throw XmlException("Waveform '" + name + "' has an invalid triangle_count.");
+				}
+				triangle_count = static_cast<std::size_t>(raw_count);
+			}
+
+			auto fmcw_signal = std::make_unique<fers_signal::FmcwTriangleSignal>(
+				chirp_bandwidth, chirp_duration, start_frequency_offset, triangle_count);
+			auto wave = std::make_unique<fers_signal::RadarSignal>(
+				name, power, carrier, fmcw_signal->getTrianglePeriod(), std::move(fmcw_signal), id);
+			validate_fmcw_waveform(*wave, "Waveform '" + name + "'");
+			ctx.world->add(std::move(wave));
+		}
 		else
 		{
 			LOG(logging::Level::FATAL, "Unsupported waveform type for '{}'", name);
@@ -817,9 +849,9 @@ namespace serial::xml_parser_utils
 
 		RealType pri = is_pulsed ? (1.0 / transmitter_obj->getPrf()) : 0.0;
 		auto schedule = parseSchedule(transmitter, name, is_pulsed, pri);
-		if (const auto* fmcw = wave->getFmcwChirpSignal(); fmcw != nullptr)
+		if (wave->isFmcwFamily())
 		{
-			validate_fmcw_schedule(schedule, *fmcw, "Transmitter '" + name + "'");
+			validate_fmcw_schedule(schedule, *wave, "Transmitter '" + name + "'");
 		}
 		if (!schedule.empty())
 		{

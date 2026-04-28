@@ -109,6 +109,67 @@ namespace fers_signal
 		return {};
 	}
 
+	FmcwTriangleSignal::FmcwTriangleSignal(const RealType chirp_bandwidth, const RealType chirp_duration,
+										   const RealType start_frequency_offset,
+										   std::optional<std::size_t> triangle_count) :
+		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration),
+		_start_frequency_offset(start_frequency_offset), _triangle_count(std::move(triangle_count)),
+		_chirp_rate(chirp_bandwidth / chirp_duration), _triangle_period(2.0 * chirp_duration),
+		_delta_phi_up(2.0 * PI * start_frequency_offset * chirp_duration +
+					  PI * _chirp_rate * chirp_duration * chirp_duration)
+	{
+	}
+
+	RealType FmcwTriangleSignal::basebandPhaseForTriangleTime(const RealType triangle_time) const noexcept
+	{
+		if (triangle_time <= 0.0)
+		{
+			return 0.0;
+		}
+
+		const auto triangle_index = static_cast<std::size_t>(std::floor(triangle_time / _triangle_period));
+		const RealType local_triangle_time = triangle_time - static_cast<RealType>(triangle_index) * _triangle_period;
+		const bool down_leg = local_triangle_time >= _chirp_duration;
+		const RealType u = down_leg ? local_triangle_time - _chirp_duration : local_triangle_time;
+		const RealType phi_base =
+			static_cast<RealType>(triangle_index) * 2.0 * _delta_phi_up + (down_leg ? _delta_phi_up : 0.0);
+		if (!down_leg)
+		{
+			return phi_base + 2.0 * PI * _start_frequency_offset * u + PI * _chirp_rate * u * u;
+		}
+		return phi_base + 2.0 * PI * (_start_frequency_offset + _chirp_bandwidth) * u - PI * _chirp_rate * u * u;
+	}
+
+	std::optional<RealType>
+	FmcwTriangleSignal::instantaneousBasebandPhase(const RealType time_since_segment_start) const noexcept
+	{
+		if (time_since_segment_start < 0.0)
+		{
+			return std::nullopt;
+		}
+
+		const auto triangle_index = static_cast<std::size_t>(std::floor(time_since_segment_start / _triangle_period));
+		if (_triangle_count.has_value() && triangle_index >= *_triangle_count)
+		{
+			return std::nullopt;
+		}
+
+		const RealType local_triangle_time =
+			time_since_segment_start - static_cast<RealType>(triangle_index) * _triangle_period;
+		if (local_triangle_time < 0.0 || local_triangle_time >= _triangle_period)
+		{
+			return std::nullopt;
+		}
+		return basebandPhaseForTriangleTime(time_since_segment_start);
+	}
+
+	std::vector<ComplexType> FmcwTriangleSignal::render(const std::vector<interp::InterpPoint>& /*points*/,
+														unsigned& size, const RealType /*fracWinDelay*/) const
+	{
+		size = 0;
+		return {};
+	}
+
 	RadarSignal::RadarSignal(std::string name, const RealType power, const RealType carrierfreq, const RealType length,
 							 std::unique_ptr<Signal> signal, const SimId id) :
 		_name(std::move(name)), _id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Waveform) : id),
@@ -138,9 +199,21 @@ namespace fers_signal
 		return dynamic_cast<const FmcwChirpSignal*>(_signal.get()) != nullptr;
 	}
 
+	bool RadarSignal::isFmcwTriangle() const noexcept
+	{
+		return dynamic_cast<const FmcwTriangleSignal*>(_signal.get()) != nullptr;
+	}
+
+	bool RadarSignal::isFmcwFamily() const noexcept { return _signal->isFmcwFamily(); }
+
 	const FmcwChirpSignal* RadarSignal::getFmcwChirpSignal() const noexcept
 	{
 		return dynamic_cast<const FmcwChirpSignal*>(_signal.get());
+	}
+
+	const FmcwTriangleSignal* RadarSignal::getFmcwTriangleSignal() const noexcept
+	{
+		return dynamic_cast<const FmcwTriangleSignal*>(_signal.get());
 	}
 
 	void Signal::clear() noexcept

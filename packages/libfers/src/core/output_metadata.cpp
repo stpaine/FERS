@@ -43,6 +43,14 @@ namespace core
 			{
 				result["emitted_chirp_count"] = *segment.emitted_chirp_count;
 			}
+			if (segment.first_triangle_start_time.has_value())
+			{
+				result["first_triangle_start_time"] = *segment.first_triangle_start_time;
+			}
+			if (segment.emitted_triangle_count.has_value())
+			{
+				result["emitted_triangle_count"] = *segment.emitted_triangle_count;
+			}
 			return result;
 		}
 
@@ -51,14 +59,29 @@ namespace core
 		{
 			nlohmann::json result = {{"chirp_bandwidth", fmcw.chirp_bandwidth},
 									 {"chirp_duration", fmcw.chirp_duration},
-									 {"chirp_period", fmcw.chirp_period},
+									 {"waveform_shape", fmcw.waveform_shape},
 									 {"chirp_rate", fmcw.chirp_rate},
-									 {"chirp_rate_signed", fmcw.chirp_rate_signed},
-									 {"chirp_direction", fmcw.chirp_direction},
 									 {"start_frequency_offset", fmcw.start_frequency_offset}};
-			if (fmcw.chirp_count.has_value())
+			if (fmcw.waveform_shape == "linear")
 			{
-				result["chirp_count"] = *fmcw.chirp_count;
+				result["chirp_period"] = fmcw.chirp_period;
+				result["chirp_rate_signed"] = fmcw.chirp_rate_signed;
+				result["chirp_direction"] = fmcw.chirp_direction;
+				if (fmcw.chirp_count.has_value())
+				{
+					result["chirp_count"] = *fmcw.chirp_count;
+				}
+			}
+			else if (fmcw.waveform_shape == "triangle")
+			{
+				if (fmcw.triangle_period.has_value())
+				{
+					result["triangle_period"] = *fmcw.triangle_period;
+				}
+				if (fmcw.triangle_count.has_value())
+				{
+					result["triangle_count"] = *fmcw.triangle_count;
+				}
 			}
 			return result;
 		}
@@ -74,6 +97,14 @@ namespace core
 			if (segment.emitted_chirp_count.has_value())
 			{
 				result["emitted_chirp_count"] = *segment.emitted_chirp_count;
+			}
+			if (segment.first_triangle_start_time.has_value())
+			{
+				result["first_triangle_start_time"] = *segment.first_triangle_start_time;
+			}
+			if (segment.emitted_triangle_count.has_value())
+			{
+				result["emitted_triangle_count"] = *segment.emitted_triangle_count;
 			}
 			return result;
 		}

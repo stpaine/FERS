@@ -46,17 +46,19 @@ export const RADAR_MODE_OPTIONS: ReadonlyArray<{
     { value: 'fmcw', label: 'FMCW' },
 ];
 
-const WAVEFORM_TYPE_BY_RADAR_TYPE: Record<RadarType, string> = {
-    pulsed: 'pulsed_from_file',
-    cw: 'cw',
-    fmcw: 'fmcw_linear_chirp',
+const WAVEFORM_TYPE_BY_RADAR_TYPE: Record<RadarType, string[]> = {
+    pulsed: ['pulsed_from_file'],
+    cw: ['cw'],
+    fmcw: ['fmcw_linear_chirp', 'fmcw_triangle'],
 };
 
 export function isWaveformCompatibleWithRadarType(
     waveform: CompatibleWaveform | undefined,
     radarType: RadarType
 ): boolean {
-    return waveform?.waveformType === WAVEFORM_TYPE_BY_RADAR_TYPE[radarType];
+    return waveform
+        ? WAVEFORM_TYPE_BY_RADAR_TYPE[radarType].includes(waveform.waveformType)
+        : false;
 }
 
 export function getCompatibleWaveforms(

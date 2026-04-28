@@ -6,7 +6,11 @@ import { useScenarioStore, Waveform } from '@/stores/scenarioStore';
 import { createWaveformForType as createWaveformDefaultsForType } from '@/stores/scenarioStore/defaults';
 import { BufferedTextField, FileInput, NumberField } from './InspectorControls';
 
-export type WaveformType = 'pulsed_from_file' | 'cw' | 'fmcw_linear_chirp';
+export type WaveformType =
+    | 'pulsed_from_file'
+    | 'cw'
+    | 'fmcw_linear_chirp'
+    | 'fmcw_triangle';
 
 type FmcwLinearChirpFields = {
     direction: 'up' | 'down';
@@ -17,8 +21,16 @@ type FmcwLinearChirpFields = {
     chirp_count: number | null;
 };
 
+type FmcwTriangleFields = {
+    chirp_bandwidth: number;
+    chirp_duration: number;
+    start_frequency_offset: number | null;
+    triangle_count: number | null;
+};
+
 type AuthorableWaveform = Omit<Waveform, 'waveformType'> &
-    Partial<FmcwLinearChirpFields> & {
+    Partial<FmcwLinearChirpFields> &
+    Partial<FmcwTriangleFields> & {
         waveformType: WaveformType;
         filename?: string;
     };
@@ -30,10 +42,13 @@ export const WAVEFORM_TYPE_OPTIONS: ReadonlyArray<{
     { value: 'pulsed_from_file', label: 'Pulse File' },
     { value: 'cw', label: 'CW' },
     { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
+    { value: 'fmcw_triangle', label: 'FMCW Triangle' },
 ];
 
 const DEFAULT_FMCW_LINEAR_CHIRP_FIELDS =
     createWaveformDefaultsForType('fmcw_linear_chirp');
+const DEFAULT_FMCW_TRIANGLE_FIELDS =
+    createWaveformDefaultsForType('fmcw_triangle');
 
 interface WaveformInspectorProps {
     item: Waveform;
@@ -97,6 +112,25 @@ export function createWaveformForType(
         };
     }
 
+    if (waveformType === 'fmcw_triangle') {
+        return {
+            ...nextWaveform,
+            chirp_bandwidth: asNumberOrDefault(
+                waveform.chirp_bandwidth,
+                DEFAULT_FMCW_TRIANGLE_FIELDS.chirp_bandwidth
+            ),
+            chirp_duration: asNumberOrDefault(
+                waveform.chirp_duration,
+                DEFAULT_FMCW_TRIANGLE_FIELDS.chirp_duration
+            ),
+            start_frequency_offset: asNullableNumberOrDefault(
+                waveform.start_frequency_offset,
+                DEFAULT_FMCW_TRIANGLE_FIELDS.start_frequency_offset
+            ),
+            triangle_count: asNullableInteger(waveform.triangle_count),
+        };
+    }
+
     return nextWaveform;
 }
 
@@ -115,6 +149,15 @@ export function getVisibleWaveformFieldLabels(
             'Chirp Period (s)',
             'Start Frequency Offset (Hz)',
             'Chirp Count',
+        ];
+    }
+
+    if (waveformType === 'fmcw_triangle') {
+        return [
+            'Chirp Bandwidth (Hz)',
+            'Chirp Duration (s)',
+            'Start Frequency Offset (Hz)',
+            'Triangle Count',
         ];
     }
 
@@ -255,6 +298,49 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                         onChange={(v) =>
                             handleChange(
                                 'chirp_count',
+                                v === null ? null : Math.trunc(v)
+                            )
+                        }
+                    />
+                </>
+            )}
+            {waveform.waveformType === 'fmcw_triangle' && (
+                <>
+                    <NumberField
+                        label="Chirp Bandwidth (Hz)"
+                        value={asNumberOrDefault(
+                            waveform.chirp_bandwidth,
+                            DEFAULT_FMCW_TRIANGLE_FIELDS.chirp_bandwidth
+                        )}
+                        emptyBehavior="revert"
+                        onChange={(v) => handleChange('chirp_bandwidth', v)}
+                    />
+                    <NumberField
+                        label="Chirp Duration (s)"
+                        value={asNumberOrDefault(
+                            waveform.chirp_duration,
+                            DEFAULT_FMCW_TRIANGLE_FIELDS.chirp_duration
+                        )}
+                        emptyBehavior="revert"
+                        onChange={(v) => handleChange('chirp_duration', v)}
+                    />
+                    <NumberField
+                        label="Start Frequency Offset (Hz)"
+                        value={asNullableNumber(
+                            waveform.start_frequency_offset
+                        )}
+                        emptyBehavior="null"
+                        onChange={(v) =>
+                            handleChange('start_frequency_offset', v)
+                        }
+                    />
+                    <NumberField
+                        label="Triangle Count"
+                        value={asNullableInteger(waveform.triangle_count)}
+                        emptyBehavior="null"
+                        onChange={(v) =>
+                            handleChange(
+                                'triangle_count',
                                 v === null ? null : Math.trunc(v)
                             )
                         }

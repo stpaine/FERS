@@ -94,6 +94,9 @@ namespace fers_signal
 		virtual std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 												double fracWinDelay) const;
 
+		/// Returns true when this signal belongs to the FMCW waveform family.
+		[[nodiscard]] virtual bool isFmcwFamily() const noexcept { return false; }
+
 	private:
 		std::vector<ComplexType> _data; ///< The complex signal data.
 		unsigned _size{0}; ///< The size of the signal data.
@@ -224,8 +227,17 @@ namespace fers_signal
 		/// Returns true when this signal is an FMCW linear chirp signal.
 		[[nodiscard]] bool isFmcwChirp() const noexcept;
 
+		/// Returns true when this signal is an FMCW triangular modulation signal.
+		[[nodiscard]] bool isFmcwTriangle() const noexcept;
+
+		/// Returns true when this signal belongs to the FMCW waveform family.
+		[[nodiscard]] bool isFmcwFamily() const noexcept;
+
 		/// Gets the FMCW chirp implementation, if this signal owns one.
 		[[nodiscard]] const class FmcwChirpSignal* getFmcwChirpSignal() const noexcept;
+
+		/// Gets the FMCW triangle implementation, if this signal owns one.
+		[[nodiscard]] const class FmcwTriangleSignal* getFmcwTriangleSignal() const noexcept;
 
 		/**
 		 * @brief Renders the radar signal.
@@ -321,6 +333,9 @@ namespace fers_signal
 		/// Returns true when this chirp sweeps downward.
 		[[nodiscard]] bool isDownChirp() const noexcept { return _direction == FmcwChirpDirection::Down; }
 
+		/// Returns false for linear chirps; triangles override this shape predicate.
+		[[nodiscard]] bool isTriangle() const noexcept { return false; }
+
 		/// Returns the active chirp index for a time since the segment start.
 		[[nodiscard]] std::optional<std::size_t> activeChirpIndexAt(RealType time_since_segment_start) const noexcept;
 
@@ -341,6 +356,8 @@ namespace fers_signal
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const override;
 
+		[[nodiscard]] bool isFmcwFamily() const noexcept override { return true; }
+
 	private:
 		RealType _chirp_bandwidth{}; ///< Chirp bandwidth in hertz.
 		RealType _chirp_duration{}; ///< Active chirp duration in seconds.
@@ -349,5 +366,70 @@ namespace fers_signal
 		std::optional<std::size_t> _chirp_count; ///< Optional finite chirp count.
 		RealType _chirp_rate{}; ///< Frequency sweep rate in hertz per second.
 		FmcwChirpDirection _direction{FmcwChirpDirection::Up}; ///< Frequency sweep direction.
+	};
+
+	/// FMCW symmetric triangular modulation signal implementation.
+	class FmcwTriangleSignal final : public Signal
+	{
+	public:
+		/// Constructs an FMCW triangular modulation signal.
+		FmcwTriangleSignal(RealType chirp_bandwidth, RealType chirp_duration, RealType start_frequency_offset = 0.0,
+						   std::optional<std::size_t> triangle_count = std::nullopt);
+
+		~FmcwTriangleSignal() override = default;
+
+		FmcwTriangleSignal(const FmcwTriangleSignal&) noexcept = delete;
+
+		FmcwTriangleSignal& operator=(const FmcwTriangleSignal&) noexcept = delete;
+
+		FmcwTriangleSignal(FmcwTriangleSignal&&) noexcept = delete;
+
+		FmcwTriangleSignal& operator=(FmcwTriangleSignal&&) noexcept = delete;
+
+		/// Gets the chirp bandwidth in hertz.
+		[[nodiscard]] RealType getChirpBandwidth() const noexcept { return _chirp_bandwidth; }
+
+		/// Gets the per-leg chirp duration in seconds.
+		[[nodiscard]] RealType getChirpDuration() const noexcept { return _chirp_duration; }
+
+		/// Gets the start frequency offset relative to carrier in hertz.
+		[[nodiscard]] RealType getStartFrequencyOffset() const noexcept { return _start_frequency_offset; }
+
+		/// Gets the optional finite triangle count.
+		[[nodiscard]] const std::optional<std::size_t>& getTriangleCount() const noexcept { return _triangle_count; }
+
+		/// Gets the chirp rate magnitude in hertz per second.
+		[[nodiscard]] RealType getChirpRate() const noexcept { return _chirp_rate; }
+
+		/// Gets the full up/down triangle period in seconds.
+		[[nodiscard]] RealType getTrianglePeriod() const noexcept { return _triangle_period; }
+
+		/// Gets the full, unreduced phase accumulated by one leg.
+		[[nodiscard]] RealType getDeltaPhiUp() const noexcept { return _delta_phi_up; }
+
+		/// Returns true for triangular FMCW waveforms.
+		[[nodiscard]] bool isTriangle() const noexcept { return true; }
+
+		/// Computes baseband phase at a time since the triangle train start.
+		[[nodiscard]] RealType basebandPhaseForTriangleTime(RealType triangle_time) const noexcept;
+
+		/// Computes instantaneous baseband phase at a time since segment start.
+		[[nodiscard]] std::optional<RealType>
+		instantaneousBasebandPhase(RealType time_since_segment_start) const noexcept;
+
+		/// Renders an FMCW waveform from interpolation points.
+		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+										RealType fracWinDelay) const override;
+
+		[[nodiscard]] bool isFmcwFamily() const noexcept override { return true; }
+
+	private:
+		RealType _chirp_bandwidth{}; ///< Chirp bandwidth in hertz.
+		RealType _chirp_duration{}; ///< Per-leg chirp duration in seconds.
+		RealType _start_frequency_offset{}; ///< Start frequency offset relative to carrier in hertz.
+		std::optional<std::size_t> _triangle_count; ///< Optional finite triangle count.
+		RealType _chirp_rate{}; ///< Frequency sweep rate magnitude in hertz per second.
+		RealType _triangle_period{}; ///< Full triangle period in seconds.
+		RealType _delta_phi_up{}; ///< Full, unreduced phase accumulated by one leg.
 	};
 }

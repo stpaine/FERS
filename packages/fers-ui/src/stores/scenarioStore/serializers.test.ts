@@ -84,6 +84,13 @@ describe('FMCW schema', () => {
 
     test('accepts valid FMCW waveform fields', () => {
         expect(WaveformSchema.safeParse(validWaveform).success).toBe(true);
+        expect(
+            WaveformSchema.safeParse({
+                ...createWaveformForType('fmcw_triangle'),
+                id: '11',
+                name: 'Triangle',
+            }).success
+        ).toBe(true);
     });
 
     test('keeps generated FMCW defaults within the backend aliasing limit', () => {
@@ -118,6 +125,24 @@ describe('FMCW schema', () => {
         ];
 
         for (const waveform of invalidWaveforms) {
+            expect(WaveformSchema.safeParse(waveform).success).toBe(false);
+        }
+
+        const invalidTriangles = [
+            {
+                ...createWaveformForType('fmcw_triangle'),
+                id: '12',
+                name: 'Bad Triangle',
+                chirp_bandwidth: 0,
+            },
+            {
+                ...createWaveformForType('fmcw_triangle'),
+                id: '13',
+                name: 'Bad Triangle Count',
+                triangle_count: 1.5,
+            },
+        ];
+        for (const waveform of invalidTriangles) {
             expect(WaveformSchema.safeParse(waveform).success).toBe(false);
         }
     });
@@ -175,6 +200,29 @@ describe('serializeWaveform', () => {
                 direction: 'up',
                 start_frequency_offset: -1000,
                 chirp_count: 4,
+            },
+        });
+    });
+
+    test('serializes FMCW triangle waveform payload', () => {
+        const waveform: Waveform = {
+            ...createWaveformForType('fmcw_triangle'),
+            id: '32',
+            name: 'Triangle',
+            start_frequency_offset: -1000,
+            triangle_count: 4,
+        };
+
+        expect(serializeWaveform(waveform)).toEqual({
+            id: '32',
+            name: 'Triangle',
+            power: 1000,
+            carrier_frequency: 1e9,
+            fmcw_triangle: {
+                chirp_bandwidth: 4e3,
+                chirp_duration: 1e-3,
+                start_frequency_offset: -1000,
+                triangle_count: 4,
             },
         });
     });

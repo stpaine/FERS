@@ -39,11 +39,14 @@ namespace core
 		std::uint64_t sample_end_exclusive = 0; ///< Exclusive global sample index for the segment end.
 		std::optional<RealType> first_chirp_start_time = std::nullopt; ///< First emitted FMCW chirp start time.
 		std::optional<std::uint64_t> emitted_chirp_count = std::nullopt; ///< Number of FMCW chirps emitted.
+		std::optional<RealType> first_triangle_start_time = std::nullopt; ///< First emitted FMCW triangle start time.
+		std::optional<std::uint64_t> emitted_triangle_count = std::nullopt; ///< Number of FMCW triangles emitted.
 	};
 
 	/// FMCW waveform metadata captured for a streaming output file.
 	struct FmcwMetadata
 	{
+		std::string waveform_shape = "linear"; ///< FMCW waveform shape token: linear or triangle.
 		RealType chirp_bandwidth = 0.0; ///< Chirp bandwidth in hertz.
 		RealType chirp_duration = 0.0; ///< Active chirp duration in seconds.
 		RealType chirp_period = 0.0; ///< Chirp repetition period in seconds.
@@ -52,6 +55,8 @@ namespace core
 		std::string chirp_direction = "up"; ///< Frequency sweep direction token.
 		RealType start_frequency_offset = 0.0; ///< Start frequency offset relative to carrier in hertz.
 		std::optional<std::uint64_t> chirp_count = std::nullopt; ///< Optional finite chirp count.
+		std::optional<RealType> triangle_period = std::nullopt; ///< Full triangle period in seconds.
+		std::optional<std::uint64_t> triangle_count = std::nullopt; ///< Optional finite triangle count.
 	};
 
 	/// Metadata for one active FMCW transmitter schedule segment.
@@ -61,6 +66,9 @@ namespace core
 		RealType end_time = 0.0; ///< Transmitter segment end time in seconds.
 		std::optional<RealType> first_chirp_start_time = std::nullopt; ///< First emitted chirp start in the segment.
 		std::optional<std::uint64_t> emitted_chirp_count = std::nullopt; ///< Number of chirps emitted in the segment.
+		std::optional<RealType> first_triangle_start_time =
+			std::nullopt; ///< First emitted triangle start in the segment.
+		std::optional<std::uint64_t> emitted_triangle_count = std::nullopt; ///< Number of triangles emitted.
 	};
 
 	/// Metadata for one FMCW illuminator represented in a streaming output file.

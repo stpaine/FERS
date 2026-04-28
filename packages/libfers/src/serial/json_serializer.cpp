@@ -132,9 +132,9 @@ namespace
 
 	/// Validates an FMCW schedule while adapting validation errors to std::runtime_error.
 	void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
-								const fers_signal::FmcwChirpSignal& fmcw, const std::string& owner)
+								const fers_signal::RadarSignal& wave, const std::string& owner)
 	{
-		serial::fmcw_validation::validateSchedule(schedule, fmcw, owner, throw_json_validation_error);
+		serial::fmcw_validation::validateSchedule(schedule, wave, owner, throw_json_validation_error);
 	}
 }
 
@@ -363,6 +363,19 @@ namespace fers_signal
 				j["fmcw_linear_chirp"]["chirp_count"] = *fmcw->getChirpCount();
 			}
 		}
+		else if (const auto* triangle = rs.getFmcwTriangleSignal(); triangle != nullptr)
+		{
+			j["fmcw_triangle"] = {{"chirp_bandwidth", triangle->getChirpBandwidth()},
+								  {"chirp_duration", triangle->getChirpDuration()}};
+			if (std::abs(triangle->getStartFrequencyOffset()) > EPSILON)
+			{
+				j["fmcw_triangle"]["start_frequency_offset"] = triangle->getStartFrequencyOffset();
+			}
+			if (triangle->getTriangleCount().has_value())
+			{
+				j["fmcw_triangle"]["triangle_count"] = *triangle->getTriangleCount();
+			}
+		}
 		else
 		{
 			if (const auto& filename = rs.getFilename(); filename.has_value())
@@ -410,6 +423,32 @@ namespace fers_signal
 				fmcw_json.at("chirp_period").get<RealType>(), fmcw_json.value("start_frequency_offset", 0.0),
 				chirp_count, direction);
 			rs = std::make_unique<RadarSignal>(name, power, carrier, fmcw_signal->getChirpDuration(),
+											   std::move(fmcw_signal), id);
+			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");
+		}
+		else if (j.contains("fmcw_triangle"))
+		{
+			const auto& fmcw_json = j.at("fmcw_triangle");
+			std::optional<std::size_t> triangle_count;
+			if (fmcw_json.contains("triangle_count"))
+			{
+				const auto& count_json = fmcw_json.at("triangle_count");
+				if (!count_json.is_number_integer() && !count_json.is_number_unsigned())
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid triangle_count.");
+				}
+				const auto parsed_count = count_json.get<long long>();
+				if (parsed_count <= 0)
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid triangle_count.");
+				}
+				triangle_count = static_cast<std::size_t>(parsed_count);
+			}
+
+			auto fmcw_signal = std::make_unique<FmcwTriangleSignal>(
+				fmcw_json.at("chirp_bandwidth").get<RealType>(), fmcw_json.at("chirp_duration").get<RealType>(),
+				fmcw_json.value("start_frequency_offset", 0.0), triangle_count);
+			rs = std::make_unique<RadarSignal>(name, power, carrier, fmcw_signal->getTrianglePeriod(),
 											   std::move(fmcw_signal), id);
 			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");
 		}
@@ -950,11 +989,15 @@ namespace
 			}
 			auto schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
 													  mode == radar::OperationMode::PULSED_MODE, pri);
-			if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
+			if (waveform->isFmcwFamily())
 			{
-				validate_fmcw_schedule(schedule, *fmcw, "Transmitter component '" + trans->getName() + "'");
+				validate_fmcw_schedule(schedule, *waveform, "Transmitter component '" + trans->getName() + "'");
 			}
 			trans->setSchedule(std::move(schedule));
+		}
+		else if (waveform->isFmcwFamily())
+		{
+			validate_fmcw_schedule(trans->getSchedule(), *waveform, "Transmitter component '" + trans->getName() + "'");
 		}
 
 		world.add(std::move(trans));
@@ -1178,14 +1221,19 @@ namespace
 			// Process once, apply to both
 			auto processed_schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
 																mode == radar::OperationMode::PULSED_MODE, pri);
-			if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
+			if (waveform->isFmcwFamily())
 			{
-				validate_fmcw_schedule(processed_schedule, *fmcw,
+				validate_fmcw_schedule(processed_schedule, *waveform,
 									   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 			}
 
 			trans->setSchedule(processed_schedule);
 			recv->setSchedule(processed_schedule);
+		}
+		else if (waveform->isFmcwFamily())
+		{
+			validate_fmcw_schedule(trans->getSchedule(), *waveform,
+								   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 		}
 
 		// Link them and add to world
@@ -1474,9 +1522,9 @@ namespace serial
 				pri = 1.0 / tx->getPrf();
 			auto schedule = radar::processRawSchedule(std::move(raw), tx->getName(),
 													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
-			if (const auto* fmcw = tx->getFmcwSignal(); fmcw != nullptr)
+			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
 			{
-				validate_fmcw_schedule(schedule, *fmcw, "Transmitter '" + tx->getName() + "'");
+				validate_fmcw_schedule(schedule, *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
 			}
 			tx->setSchedule(std::move(schedule));
 		}
@@ -1484,6 +1532,10 @@ namespace serial
 		{
 			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
 			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Transmitter '" + tx->getName() + "'");
+			if (tx->getSignal()->isFmcwFamily())
+			{
+				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
+			}
 		}
 	}
 
@@ -1619,9 +1671,9 @@ namespace serial
 				pri = 1.0 / tx->getPrf();
 			auto processed_schedule = radar::processRawSchedule(
 				std::move(raw), tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
-			if (const auto* fmcw = tx->getFmcwSignal(); fmcw != nullptr)
+			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
 			{
-				validate_fmcw_schedule(processed_schedule, *fmcw, "Monostatic '" + tx->getName() + "'");
+				validate_fmcw_schedule(processed_schedule, *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
 			}
 			tx->setSchedule(processed_schedule);
 			rx->setSchedule(processed_schedule);
@@ -1630,6 +1682,10 @@ namespace serial
 		{
 			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
 			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Monostatic '" + tx->getName() + "'");
+			if (tx->getSignal()->isFmcwFamily())
+			{
+				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
+			}
 		}
 	}
 

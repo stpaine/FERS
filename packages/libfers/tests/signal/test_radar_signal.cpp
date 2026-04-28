@@ -79,6 +79,36 @@ TEST_CASE("FmcwChirpSignal applies sweep direction to phase only", "[signal][rad
 	REQUIRE_THAT(down.basebandPhaseForChirpTime(u), WithinAbs(2.0 * PI * offset * u - PI * alpha * u * u, 1e-9));
 }
 
+TEST_CASE("FmcwTriangleSignal keeps phase continuous at leg and period boundaries", "[signal][radar][fmcw]")
+{
+	const RealType bandwidth = 2.0e6;
+	const RealType duration = 1.0e-3;
+	const RealType offset = 1.0e5;
+	const RealType alpha = bandwidth / duration;
+	const RealType eps = 1.0e-10;
+
+	fers_signal::FmcwTriangleSignal triangle(bandwidth, duration, offset, 4);
+
+	REQUIRE(triangle.isFmcwFamily());
+	REQUIRE(triangle.isTriangle());
+	REQUIRE_THAT(triangle.getChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(triangle.getTrianglePeriod(), WithinAbs(2.0 * duration, 1e-15));
+	REQUIRE_THAT(triangle.getDeltaPhiUp(),
+				 WithinAbs(2.0 * PI * offset * duration + PI * alpha * duration * duration, 1e-6));
+
+	const RealType apex_left = triangle.basebandPhaseForTriangleTime(duration - eps);
+	const RealType apex = triangle.basebandPhaseForTriangleTime(duration);
+	const RealType apex_right = triangle.basebandPhaseForTriangleTime(duration + eps);
+	REQUIRE_THAT(apex, WithinAbs(triangle.getDeltaPhiUp(), 1e-6));
+	REQUIRE(std::abs(apex - apex_left) < 2.0);
+	REQUIRE(std::abs(apex_right - apex) < 2.0);
+
+	const RealType period_phase = triangle.basebandPhaseForTriangleTime(triangle.getTrianglePeriod());
+	REQUIRE_THAT(period_phase, WithinAbs(2.0 * triangle.getDeltaPhiUp(), 1e-6));
+	REQUIRE(triangle.instantaneousBasebandPhase(3.5 * triangle.getTrianglePeriod()).has_value());
+	REQUIRE_FALSE(triangle.instantaneousBasebandPhase(4.0 * triangle.getTrianglePeriod()).has_value());
+}
+
 TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 {
 	ParamGuard guard;

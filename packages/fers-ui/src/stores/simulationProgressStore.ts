@@ -39,17 +39,22 @@ export type SimulationOutputStreamingSegmentMetadata = {
     sample_end_exclusive: number;
     first_chirp_start_time?: number;
     emitted_chirp_count?: number;
+    first_triangle_start_time?: number;
+    emitted_triangle_count?: number;
 };
 
 export type SimulationOutputFmcwMetadata = {
+    waveform_shape?: 'linear' | 'triangle';
     chirp_bandwidth: number;
     chirp_duration: number;
-    chirp_period: number;
     chirp_rate: number;
-    chirp_rate_signed: number;
-    chirp_direction: 'up' | 'down';
     start_frequency_offset: number;
+    chirp_period?: number;
+    chirp_rate_signed?: number;
+    chirp_direction?: 'up' | 'down';
     chirp_count?: number;
+    triangle_period?: number;
+    triangle_count?: number;
 };
 
 export type SimulationOutputFmcwSourceSegmentMetadata = {
@@ -57,6 +62,8 @@ export type SimulationOutputFmcwSourceSegmentMetadata = {
     end_time: number;
     first_chirp_start_time?: number;
     emitted_chirp_count?: number;
+    first_triangle_start_time?: number;
+    emitted_triangle_count?: number;
 };
 
 export type SimulationOutputFmcwSourceMetadata =

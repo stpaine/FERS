@@ -164,6 +164,18 @@ describe('parseScenarioData FMCW hydration', () => {
                         chirp_count: 8,
                     },
                 },
+                {
+                    id: 4,
+                    name: 'FMCW Triangle',
+                    power: 50,
+                    carrier_frequency: 10e9,
+                    fmcw_triangle: {
+                        chirp_bandwidth: 20e6,
+                        chirp_duration: 250e-6,
+                        start_frequency_offset: -10e6,
+                        triangle_count: 8,
+                    },
+                },
             ],
             timings: [],
             antennas: [],
@@ -207,6 +219,14 @@ describe('parseScenarioData FMCW hydration', () => {
             chirp_period: 300e-6,
             start_frequency_offset: -10e6,
             chirp_count: 8,
+        });
+        expect(scenario?.waveforms[1]).toMatchObject({
+            id: '4',
+            waveformType: 'fmcw_triangle',
+            chirp_bandwidth: 20e6,
+            chirp_duration: 250e-6,
+            start_frequency_offset: -10e6,
+            triangle_count: 8,
         });
         expect(scenario?.platforms[0].components[0]).toMatchObject({
             id: '3',

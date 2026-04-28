@@ -219,6 +219,22 @@ export const serializeWaveform = (w: Waveform) => {
                             : {}),
                     },
                 };
+            case 'fmcw_triangle':
+                return {
+                    fmcw_triangle: {
+                        chirp_bandwidth: w.chirp_bandwidth,
+                        chirp_duration: w.chirp_duration,
+                        ...(w.start_frequency_offset
+                            ? {
+                                  start_frequency_offset:
+                                      w.start_frequency_offset,
+                              }
+                            : {}),
+                        ...(w.triangle_count !== null
+                            ? { triangle_count: w.triangle_count }
+                            : {}),
+                    },
+                };
         }
     })();
 

@@ -394,11 +394,19 @@ export const SimulationView = React.memo(function SimulationView() {
             return segmentSummary;
         }
 
-        return `${segmentSummary}, ${file.fmcw.chirp_direction}, B=${formatMetric(
+        if (file.fmcw.waveform_shape === 'triangle') {
+            return `${segmentSummary}, triangle, B=${formatMetric(
+                file.fmcw.chirp_bandwidth
+            )}, T_c=${formatMetric(
+                file.fmcw.chirp_duration
+            )}, T_tri=${formatMetric(file.fmcw.triangle_period ?? 0)}`;
+        }
+
+        return `${segmentSummary}, ${file.fmcw.chirp_direction ?? 'up'}, B=${formatMetric(
             file.fmcw.chirp_bandwidth
         )}, T_c=${formatMetric(
             file.fmcw.chirp_duration
-        )}, T_rep=${formatMetric(file.fmcw.chirp_period)}`;
+        )}, T_rep=${formatMetric(file.fmcw.chirp_period ?? 0)}`;
     };
 
     return (

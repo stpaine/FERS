@@ -44,19 +44,38 @@ namespace serial
 		file.createAttribute("fmcw_source_count", static_cast<unsigned long long>(metadata.fmcw_sources.size()));
 		if (metadata.fmcw.has_value())
 		{
+			file.createAttribute("fmcw_waveform_shape", metadata.fmcw->waveform_shape);
 			file.createAttribute("fmcw_chirp_bandwidth", metadata.fmcw->chirp_bandwidth);
 			file.createAttribute("fmcw_chirp_duration", metadata.fmcw->chirp_duration);
-			file.createAttribute("fmcw_chirp_period", metadata.fmcw->chirp_period);
 			file.createAttribute("fmcw_chirp_rate", metadata.fmcw->chirp_rate);
-			file.createAttribute("fmcw_chirp_rate_signed", metadata.fmcw->chirp_rate_signed);
-			file.createAttribute("fmcw_chirp_direction", metadata.fmcw->chirp_direction);
 			file.createAttribute("fmcw_start_frequency_offset", metadata.fmcw->start_frequency_offset);
-			if (metadata.fmcw->chirp_count.has_value())
+			if (metadata.fmcw->waveform_shape == "linear")
 			{
-				file.createAttribute("fmcw_chirp_count", static_cast<unsigned long long>(*metadata.fmcw->chirp_count));
+				file.createAttribute("fmcw_chirp_period", metadata.fmcw->chirp_period);
+				file.createAttribute("fmcw_chirp_rate_signed", metadata.fmcw->chirp_rate_signed);
+				file.createAttribute("fmcw_chirp_direction", metadata.fmcw->chirp_direction);
+				if (metadata.fmcw->chirp_count.has_value())
+				{
+					file.createAttribute("fmcw_chirp_count",
+										 static_cast<unsigned long long>(*metadata.fmcw->chirp_count));
+				}
+			}
+			else if (metadata.fmcw->waveform_shape == "triangle")
+			{
+				if (metadata.fmcw->triangle_period.has_value())
+				{
+					file.createAttribute("fmcw_triangle_period", *metadata.fmcw->triangle_period);
+				}
+				if (metadata.fmcw->triangle_count.has_value())
+				{
+					file.createAttribute("fmcw_triangle_count",
+										 static_cast<unsigned long long>(*metadata.fmcw->triangle_count));
+				}
 			}
 			std::vector<RealType> streaming_first_chirp_starts;
 			std::vector<unsigned long long> streaming_emitted_chirp_counts;
+			std::vector<RealType> streaming_first_triangle_starts;
+			std::vector<unsigned long long> streaming_emitted_triangle_counts;
 			for (const auto& segment : metadata.streaming_segments)
 			{
 				if (segment.first_chirp_start_time.has_value())
@@ -67,6 +86,15 @@ namespace serial
 				{
 					streaming_emitted_chirp_counts.push_back(
 						static_cast<unsigned long long>(*segment.emitted_chirp_count));
+				}
+				if (segment.first_triangle_start_time.has_value())
+				{
+					streaming_first_triangle_starts.push_back(*segment.first_triangle_start_time);
+				}
+				if (segment.emitted_triangle_count.has_value())
+				{
+					streaming_emitted_triangle_counts.push_back(
+						static_cast<unsigned long long>(*segment.emitted_triangle_count));
 				}
 			}
 			// Per-segment vectors use the streaming_ prefix; scalar fmcw_ attributes describe the waveform.
@@ -81,6 +109,18 @@ namespace serial
 				auto attr = file.createAttribute<unsigned long long>(
 					"streaming_emitted_chirp_count", HighFive::DataSpace::From(streaming_emitted_chirp_counts));
 				attr.write(streaming_emitted_chirp_counts);
+			}
+			if (!streaming_first_triangle_starts.empty())
+			{
+				auto attr = file.createAttribute<RealType>("streaming_first_triangle_start_time",
+														   HighFive::DataSpace::From(streaming_first_triangle_starts));
+				attr.write(streaming_first_triangle_starts);
+			}
+			if (!streaming_emitted_triangle_counts.empty())
+			{
+				auto attr = file.createAttribute<unsigned long long>(
+					"streaming_emitted_triangle_count", HighFive::DataSpace::From(streaming_emitted_triangle_counts));
+				attr.write(streaming_emitted_triangle_counts);
 			}
 		}
 	}

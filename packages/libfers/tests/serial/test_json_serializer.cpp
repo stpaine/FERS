@@ -161,6 +161,59 @@ TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]
 	}
 }
 
+TEST_CASE("JSON: FMCW triangle round trips", "[serial][json][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	json wf_json = {{"id", 458},
+					{"name", "Tri"},
+					{"power", 500.0},
+					{"carrier_frequency", 2.4e9},
+					{"fmcw_triangle",
+					 {{"chirp_bandwidth", 1.0e6},
+					  {"chirp_duration", 1.0e-3},
+					  {"start_frequency_offset", 1.0e3},
+					  {"triangle_count", 3}}}};
+
+	auto wf = serial::parse_waveform_from_json(wf_json);
+	REQUIRE(wf != nullptr);
+	REQUIRE(wf->isFmcwFamily());
+	REQUIRE(wf->isFmcwTriangle());
+	REQUIRE(wf->getFmcwTriangleSignal() != nullptr);
+	REQUIRE(wf->getFmcwTriangleSignal()->getTriangleCount().value() == 3);
+
+	json serialized;
+	fers_signal::to_json(serialized, *wf);
+	REQUIRE(serialized.contains("fmcw_triangle"));
+	REQUIRE_FALSE(serialized.contains("fmcw_linear_chirp"));
+	REQUIRE(serialized.at("fmcw_triangle").at("triangle_count") == 3);
+
+	auto reparsed = serial::parse_waveform_from_json(serialized);
+	REQUIRE(reparsed != nullptr);
+	REQUIRE(reparsed->getFmcwTriangleSignal() != nullptr);
+	REQUIRE(reparsed->getFmcwTriangleSignal()->getTriangleCount().value() == 3);
+}
+
+TEST_CASE("JSON: FMCW triangle rejects fractional triangle count", "[serial][json][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	json wf_json = {
+		{"id", 459},
+		{"name", "TriFractional"},
+		{"power", 500.0},
+		{"carrier_frequency", 2.4e9},
+		{"fmcw_triangle", {{"chirp_bandwidth", 1.0e6}, {"chirp_duration", 1.0e-3}, {"triangle_count", 1.5}}}};
+
+	REQUIRE_THROWS_WITH(serial::parse_waveform_from_json(wf_json), ContainsSubstring("invalid triangle_count"));
+}
+
 TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 {
 	ParamGuard guard;

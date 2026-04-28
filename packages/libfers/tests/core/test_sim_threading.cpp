@@ -738,7 +738,7 @@ TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][
 		engine.run();
 
 		const std::string output = capture.str();
-		REQUIRE_THAT(output, ContainsSubstring("direction=up"));
+		REQUIRE_THAT(output, ContainsSubstring("shape=linear up"));
 		REQUIRE_THAT(output, ContainsSubstring("chirp_count=unbounded"));
 		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=3"));
 	}
@@ -755,7 +755,7 @@ TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][
 		engine.run();
 
 		const std::string output = capture.str();
-		REQUIRE_THAT(output, ContainsSubstring("direction=up"));
+		REQUIRE_THAT(output, ContainsSubstring("shape=linear up"));
 		REQUIRE_THAT(output, ContainsSubstring("chirp_count=3"));
 		REQUIRE_THAT(output, ContainsSubstring("segment_chirp_count=2"));
 		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=2"));

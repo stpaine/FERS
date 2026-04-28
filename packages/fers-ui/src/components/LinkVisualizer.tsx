@@ -408,17 +408,27 @@ export default function LinkVisualizer() {
                 const waveform = c.waveformId
                     ? waveformById.get(c.waveformId)
                     : undefined;
-                if (
-                    waveform?.waveformType !== 'fmcw_linear_chirp' ||
-                    waveform.chirp_period <= 0
-                ) {
+                if (!waveform) {
                     return;
                 }
 
-                const dutyCycle = Math.min(
-                    1,
-                    Math.max(0, waveform.chirp_duration / waveform.chirp_period)
-                );
+                const dutyCycle =
+                    waveform.waveformType === 'fmcw_triangle'
+                        ? 1
+                        : waveform.waveformType === 'fmcw_linear_chirp' &&
+                            waveform.chirp_period > 0
+                          ? Math.min(
+                                1,
+                                Math.max(
+                                    0,
+                                    waveform.chirp_duration /
+                                        waveform.chirp_period
+                                )
+                            )
+                          : null;
+                if (dutyCycle === null) {
+                    return;
+                }
                 const txId = c.type === 'monostatic' ? c.txId : c.id;
                 dutyCycleByTx.set(txId, dutyCycle);
             });

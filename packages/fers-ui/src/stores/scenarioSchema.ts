@@ -90,6 +90,21 @@ export const WaveformSchema = z
                 z.number().int().positive().nullable()
             ),
         }),
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('fmcw_triangle'),
+            chirp_bandwidth: z
+                .number()
+                .positive('Chirp bandwidth must be positive.'),
+            chirp_duration: z
+                .number()
+                .positive('Chirp duration must be positive.'),
+            start_frequency_offset: nullableNumber.pipe(
+                z.number().finite().nullable()
+            ),
+            triangle_count: nullableNumber.pipe(
+                z.number().int().positive().nullable()
+            ),
+        }),
     ])
     .superRefine((data, ctx) => {
         if (

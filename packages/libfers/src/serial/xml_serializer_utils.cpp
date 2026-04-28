@@ -131,6 +131,20 @@ namespace serial::xml_serializer_utils
 				addChildWithNumber(fmcw_elem, "chirp_count", static_cast<RealType>(*fmcw->getChirpCount()));
 			}
 		}
+		else if (const auto* triangle = waveform.getFmcwTriangleSignal(); triangle != nullptr)
+		{
+			const XmlElement fmcw_elem = parent.addChild("fmcw_triangle");
+			addChildWithNumber(fmcw_elem, "chirp_bandwidth", triangle->getChirpBandwidth());
+			addChildWithNumber(fmcw_elem, "chirp_duration", triangle->getChirpDuration());
+			if (std::abs(triangle->getStartFrequencyOffset()) > EPSILON)
+			{
+				addChildWithNumber(fmcw_elem, "start_frequency_offset", triangle->getStartFrequencyOffset());
+			}
+			if (triangle->getTriangleCount().has_value())
+			{
+				addChildWithNumber(fmcw_elem, "triangle_count", static_cast<RealType>(*triangle->getTriangleCount()));
+			}
+		}
 		else
 		{
 			const XmlElement pulsed_file = parent.addChild("pulsed_from_file");

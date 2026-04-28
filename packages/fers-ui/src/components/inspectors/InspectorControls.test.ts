@@ -89,11 +89,12 @@ describe('InspectorControls blur resolution', () => {
 });
 
 describe('Waveform inspector authoring options', () => {
-    test('offers pulse file, CW, and FMCW linear chirp waveform types', () => {
+    test('offers pulse file, CW, and FMCW waveform types', () => {
         expect(WAVEFORM_TYPE_OPTIONS).toEqual([
             { value: 'pulsed_from_file', label: 'Pulse File' },
             { value: 'cw', label: 'CW' },
             { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
+            { value: 'fmcw_triangle', label: 'FMCW Triangle' },
         ]);
     });
 
@@ -136,6 +137,12 @@ describe('Waveform inspector authoring options', () => {
             'Chirp Period (s)',
             'Start Frequency Offset (Hz)',
             'Chirp Count',
+        ]);
+        expect(getVisibleWaveformFieldLabels('fmcw_triangle')).toEqual([
+            'Chirp Bandwidth (Hz)',
+            'Chirp Duration (s)',
+            'Start Frequency Offset (Hz)',
+            'Triangle Count',
         ]);
         expect(getVisibleWaveformFieldLabels('cw')).toEqual([]);
     });
@@ -194,6 +201,7 @@ describe('Platform component inspector waveform compatibility', () => {
         { id: '1', name: 'Pulse', waveformType: 'pulsed_from_file' },
         { id: '2', name: 'Tone', waveformType: 'cw' },
         { id: '3', name: 'Chirp', waveformType: 'fmcw_linear_chirp' },
+        { id: '4', name: 'Triangle', waveformType: 'fmcw_triangle' },
     ];
 
     test('offers FMCW radar mode and hides pulsed-only fields for FMCW/CW', () => {
@@ -219,6 +227,7 @@ describe('Platform component inspector waveform compatibility', () => {
         expect(getCompatibleWaveforms(waveforms, 'cw')).toEqual([waveforms[1]]);
         expect(getCompatibleWaveforms(waveforms, 'fmcw')).toEqual([
             waveforms[2],
+            waveforms[3],
         ]);
     });
 
@@ -229,7 +238,11 @@ describe('Platform component inspector waveform compatibility', () => {
         expect(shouldClearWaveformForRadarType('3', waveforms, 'fmcw')).toBe(
             false
         );
+        expect(shouldClearWaveformForRadarType('4', waveforms, 'fmcw')).toBe(
+            false
+        );
         expect(resolveWaveformSelectValue('1', waveforms, 'fmcw')).toBe('');
         expect(resolveWaveformSelectValue('3', waveforms, 'fmcw')).toBe('3');
+        expect(resolveWaveformSelectValue('4', waveforms, 'fmcw')).toBe('4');
     });
 });
