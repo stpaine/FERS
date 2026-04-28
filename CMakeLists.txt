@@ -97,6 +97,16 @@ project(FERS
 		LANGUAGES CXX)
 
 if (NOT FERS_DOCS_ONLY)
+	if (WIN32 AND (MINGW OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
+		message(FATAL_ERROR
+				"Unsupported Windows toolchain detected: MinGW/GCC.\n"
+				"FERS requires native MSVC on Windows. Run CMake from the Visual Studio "
+				"Developer PowerShell with the x64 MSVC toolchain active, delete the "
+				"existing build directory so CMake can forget the cached compiler, then "
+				"configure again.\n"
+				"Detected compiler: ${CMAKE_CXX_COMPILER}")
+	endif ()
+
 	# --- Project-wide Settings ---
 	set(CMAKE_CXX_STANDARD 23)
 	set(CMAKE_CXX_STANDARD_REQUIRED ON)
