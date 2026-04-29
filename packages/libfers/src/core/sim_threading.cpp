@@ -51,6 +51,69 @@ namespace core
 {
 	namespace
 	{
+		void includeStreamingIntervalStart(std::optional<RealType>& earliest, const RealType segment_start,
+										   const RealType segment_end, const bool allow_pre_start)
+		{
+			const RealType sim_start = params::startTime();
+			const RealType sim_end = params::endTime();
+			if (segment_end <= sim_start || segment_start >= sim_end)
+			{
+				return;
+			}
+
+			const RealType required_start =
+				allow_pre_start && segment_start < sim_start ? segment_start : std::max(sim_start, segment_start);
+			earliest = earliest.has_value() ? std::min(*earliest, required_start) : required_start;
+		}
+
+		RealType earliestPhaseNoiseLookupStart(const World& world)
+		{
+			std::optional<RealType> earliest;
+			for (const auto& transmitter_ptr : world.getTransmitters())
+			{
+				if (transmitter_ptr == nullptr || !transmitter_ptr->isStreamingMode())
+				{
+					continue;
+				}
+
+				const auto& schedule = transmitter_ptr->getSchedule();
+				if (schedule.empty())
+				{
+					includeStreamingIntervalStart(earliest, params::startTime(), params::endTime(), false);
+					continue;
+				}
+
+				for (const auto& period : schedule)
+				{
+					includeStreamingIntervalStart(earliest, period.start, period.end, true);
+				}
+			}
+
+			for (const auto& receiver_ptr : world.getReceivers())
+			{
+				if (receiver_ptr == nullptr ||
+					(receiver_ptr->getMode() != OperationMode::CW_MODE &&
+					 receiver_ptr->getMode() != OperationMode::FMCW_MODE))
+				{
+					continue;
+				}
+
+				const auto& schedule = receiver_ptr->getSchedule();
+				if (schedule.empty())
+				{
+					includeStreamingIntervalStart(earliest, params::startTime(), params::endTime(), false);
+					continue;
+				}
+
+				for (const auto& period : schedule)
+				{
+					includeStreamingIntervalStart(earliest, period.start, period.end, false);
+				}
+			}
+
+			return earliest.value_or(params::startTime());
+		}
+
 		/// Builds an active streaming source for a transmitter at an event timestamp.
 		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
 																	const RealType timestamp)
@@ -245,7 +308,7 @@ namespace core
 		}
 
 		const auto timings = collectCwPhaseNoiseTimings(*_world);
-		RealType lookup_start = params::startTime();
+		RealType lookup_start = earliestPhaseNoiseLookupStart(*_world);
 		for (const auto& source : _world->getSimulationState().active_streaming_transmitters)
 		{
 			lookup_start = std::min(lookup_start, source.segment_start);
@@ -311,19 +374,28 @@ namespace core
 				tracker_cache.dechirp_reference.resize(dechirp_sources.size());
 			}
 
+			if (!tracker_cache.last_dechirp_time.has_value() || t_step < *tracker_cache.last_dechirp_time)
+			{
+				tracker_cache.active_dechirp_source_index = 0;
+				std::fill(tracker_cache.dechirp_reference.begin(), tracker_cache.dechirp_reference.end(),
+						  FmcwChirpBoundaryTracker{});
+			}
+			tracker_cache.last_dechirp_time = t_step;
+
 			bool reference_active = false;
-			for (std::size_t source_index = 0; source_index < dechirp_sources.size(); ++source_index)
+			auto& source_index = tracker_cache.active_dechirp_source_index;
+			while (source_index < dechirp_sources.size() && t_step >= dechirp_sources[source_index].segment_end)
+			{
+				++source_index;
+			}
+			if (source_index < dechirp_sources.size())
 			{
 				const auto& reference_source = dechirp_sources[source_index];
-				if (t_step < reference_source.segment_start || t_step >= reference_source.segment_end)
-				{
-					continue;
-				}
-				if (simulation::calculateStreamingReferencePhase(
+				if (t_step >= reference_source.segment_start && t_step < reference_source.segment_end &&
+					simulation::calculateStreamingReferencePhase(
 						reference_source, t_step, &tracker_cache.dechirp_reference[source_index], reference_phase))
 				{
 					reference_active = true;
-					break;
 				}
 			}
 

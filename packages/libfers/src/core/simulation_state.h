@@ -128,6 +128,8 @@ namespace core
 		std::vector<FmcwChirpBoundaryTracker> direct; ///< Trackers for direct paths by source index.
 		std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected; ///< Trackers for reflected paths.
 		std::vector<FmcwChirpBoundaryTracker> dechirp_reference; ///< Trackers for receiver LO source segments.
+		std::size_t active_dechirp_source_index = 0; ///< Monotonic cursor for receiver LO source segments.
+		std::optional<RealType> last_dechirp_time = std::nullopt; ///< Last sample time used by the LO cursor.
 	};
 
 	/**

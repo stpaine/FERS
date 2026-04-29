@@ -166,6 +166,24 @@ TEST_CASE("Simulation memory projection counts dechirped streaming output at RF 
 	REQUIRE(projection.rendered_hdf5_payload.bytes == 36 * 2 * sizeof(RealType));
 }
 
+TEST_CASE("Simulation memory projection starts phase-noise lookup at earliest streaming receiver",
+		  "[core][memory_projection]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 2.0);
+	params::setRate(10.0);
+	params::setOversampleRatio(1);
+
+	auto world = makeProjectionWorld();
+	world->getTransmitters().front()->setSchedule({{1.0, 2.0}});
+	world->getReceivers().front()->setSchedule({{0.5, 2.0}});
+
+	const auto projection = core::projectSimulationMemory(*world);
+
+	REQUIRE(projection.phase_noise_sample_count == 16);
+	REQUIRE(projection.phase_noise_lookup.bytes == 16 * sizeof(RealType));
+}
+
 TEST_CASE("Simulation memory projection log names required categories", "[core][memory_projection][logging]")
 {
 	ParamGuard guard;
