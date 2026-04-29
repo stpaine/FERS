@@ -18,8 +18,11 @@
 #include <algorithm>
 #include <cmath>
 #include <format>
+#include <initializer_list>
 #include <nlohmann/json.hpp>
 #include <random>
+#include <stdexcept>
+#include <string_view>
 #include <unordered_map>
 
 #include "antenna/antenna_factory.h"
@@ -149,6 +152,149 @@ namespace
 								const fers_signal::RadarSignal& wave, const std::string& owner)
 	{
 		serial::fmcw_validation::validateSchedule(schedule, wave, owner, throw_json_validation_error);
+	}
+
+	/// Throws if a JSON object contains keys outside a strict whitelist.
+	void reject_unknown_keys(const nlohmann::json& object, const std::string& owner, const std::string_view object_name,
+							 const std::initializer_list<std::string_view> allowed_keys)
+	{
+		for (const auto& [key, value] : object.items())
+		{
+			(void)value;
+			bool allowed = false;
+			for (const auto allowed_key : allowed_keys)
+			{
+				if (key == allowed_key)
+				{
+					allowed = true;
+					break;
+				}
+			}
+			if (!allowed)
+			{
+				throw std::runtime_error(owner + " " + std::string(object_name) + " contains unsupported key '" + key +
+										 "'.");
+			}
+		}
+	}
+
+	/// Returns true when a JSON FMCW mode object carries receiver-side dechirp fields.
+	bool has_dechirp_fields(const nlohmann::json& mode_json)
+	{
+		return mode_json.contains("dechirp_mode") || mode_json.contains("dechirp_reference");
+	}
+
+	/// Parses receiver-side dechirp settings from a JSON component.
+	void parse_receiver_dechirp_config(const nlohmann::json& comp_json, radar::Receiver& receiver,
+									   const std::string& owner)
+	{
+		if (receiver.getMode() != radar::OperationMode::FMCW_MODE)
+		{
+			receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
+			return;
+		}
+
+		const auto& mode_json = comp_json.contains("fmcw_mode") ? comp_json.at("fmcw_mode") : nlohmann::json::object();
+		if (!mode_json.is_object())
+		{
+			throw std::runtime_error(owner + " fmcw_mode must be an object.");
+		}
+		reject_unknown_keys(mode_json, owner, "fmcw_mode", {"dechirp_mode", "dechirp_reference"});
+
+		radar::Receiver::DechirpMode mode = radar::Receiver::DechirpMode::None;
+		if (mode_json.contains("dechirp_mode"))
+		{
+			mode = radar::parseDechirpModeToken(mode_json.at("dechirp_mode").get<std::string>());
+		}
+
+		if (mode == radar::Receiver::DechirpMode::None)
+		{
+			if (mode_json.contains("dechirp_reference"))
+			{
+				throw std::runtime_error(owner + " declares dechirp_reference while dechirp_mode is 'none'.");
+			}
+			receiver.setDechirpMode(mode);
+			return;
+		}
+
+		if (!mode_json.contains("dechirp_reference") || !mode_json.at("dechirp_reference").is_object())
+		{
+			throw std::runtime_error(owner + " enables dechirping but does not declare dechirp_reference.");
+		}
+
+		const auto& ref_json = mode_json.at("dechirp_reference");
+		reject_unknown_keys(ref_json, owner, "dechirp_reference", {"source", "transmitter_name", "waveform_name"});
+		if (!ref_json.contains("source"))
+		{
+			throw std::runtime_error(owner + " dechirp_reference requires source.");
+		}
+		radar::Receiver::DechirpReference reference;
+		reference.source = radar::parseDechirpReferenceSourceToken(ref_json.at("source").get<std::string>());
+
+		const bool has_transmitter_name = ref_json.contains("transmitter_name");
+		const bool has_waveform_name = ref_json.contains("waveform_name");
+		switch (reference.source)
+		{
+		case radar::Receiver::DechirpReferenceSource::Attached:
+			if (has_transmitter_name || has_waveform_name)
+			{
+				throw std::runtime_error(owner +
+										 " attached dechirp_reference must not set transmitter_name or waveform_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::Transmitter:
+			if (!has_transmitter_name || has_waveform_name)
+			{
+				throw std::runtime_error(owner + " transmitter dechirp_reference requires transmitter_name only.");
+			}
+			reference.name = ref_json.at("transmitter_name").get<std::string>();
+			if (reference.name.empty())
+			{
+				throw std::runtime_error(owner + " transmitter dechirp_reference has an empty transmitter_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::Custom:
+			if (!has_waveform_name || has_transmitter_name)
+			{
+				throw std::runtime_error(owner + " custom dechirp_reference requires waveform_name only.");
+			}
+			reference.name = ref_json.at("waveform_name").get<std::string>();
+			if (reference.name.empty())
+			{
+				throw std::runtime_error(owner + " custom dechirp_reference has an empty waveform_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::None:
+			throw std::runtime_error(owner + " dechirp_reference source must be attached, transmitter, or custom.");
+		}
+
+		receiver.setDechirpMode(mode);
+		receiver.setDechirpReference(std::move(reference));
+	}
+
+	/// Serializes receiver-side FMCW mode settings.
+	nlohmann::json receiver_fmcw_mode_to_json(const radar::Receiver& receiver)
+	{
+		nlohmann::json mode_json = nlohmann::json::object();
+		if (!receiver.isDechirpEnabled())
+		{
+			return mode_json;
+		}
+
+		const auto& reference = receiver.getDechirpReference();
+		mode_json["dechirp_mode"] = std::string(radar::dechirpModeToken(receiver.getDechirpMode()));
+		nlohmann::json ref_json = {{"source", std::string(radar::dechirpReferenceSourceToken(reference.source))}};
+		if (reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
+		{
+			ref_json["transmitter_name"] =
+				!reference.transmitter_name.empty() ? reference.transmitter_name : reference.name;
+		}
+		else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
+		{
+			ref_json["waveform_name"] = !reference.waveform_name.empty() ? reference.waveform_name : reference.name;
+		}
+		mode_json["dechirp_reference"] = std::move(ref_json);
+		return mode_json;
 	}
 }
 
@@ -642,7 +788,7 @@ namespace radar
 		}
 		else if (r.getMode() == OperationMode::FMCW_MODE)
 		{
-			j["fmcw_mode"] = nlohmann::json::object();
+			j["fmcw_mode"] = receiver_fmcw_mode_to_json(r);
 		}
 		else
 		{
@@ -817,7 +963,7 @@ namespace
 						{
 							if (t->getMode() == radar::OperationMode::FMCW_MODE)
 							{
-								monostatic_comp["fmcw_mode"] = nlohmann::json::object();
+								monostatic_comp["fmcw_mode"] = receiver_fmcw_mode_to_json(*recv);
 							}
 							else
 							{
@@ -994,9 +1140,28 @@ namespace
 		}
 	}
 
+	/// Counts operation mode blocks on a component.
+	std::size_t mode_block_count(const nlohmann::json& comp_json)
+	{
+		return static_cast<std::size_t>(comp_json.contains("pulsed_mode")) +
+			static_cast<std::size_t>(comp_json.contains("fmcw_mode")) +
+			static_cast<std::size_t>(comp_json.contains("cw_mode"));
+	}
+
+	/// Throws when a partial update or full component declares conflicting modes.
+	void reject_conflicting_mode_blocks(const nlohmann::json& comp_json, const std::string& error_context)
+	{
+		if (mode_block_count(comp_json) > 1)
+		{
+			throw std::runtime_error(error_context +
+									 " must have at most one of 'pulsed_mode', 'cw_mode', or 'fmcw_mode'.");
+		}
+	}
+
 	/// Parses the mutually exclusive operation mode block for a component.
 	radar::OperationMode parse_mode(const nlohmann::json& comp_json, const std::string& error_context)
 	{
+		reject_conflicting_mode_blocks(comp_json, error_context);
 		if (comp_json.contains("pulsed_mode"))
 		{
 			return radar::OperationMode::PULSED_MODE;
@@ -1043,6 +1208,12 @@ namespace
 
 		radar::OperationMode mode =
 			parse_mode(comp_json, "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
+		if (mode == radar::OperationMode::FMCW_MODE && comp_json.contains("fmcw_mode") &&
+			has_dechirp_fields(comp_json.at("fmcw_mode")))
+		{
+			throw std::runtime_error("Transmitter component '" + comp_json.value("name", "Unnamed") +
+									 "' fmcw_mode must not contain dechirp configuration.");
+		}
 
 		const auto trans_id = parse_json_id(comp_json, "id", "Transmitter");
 		auto trans = std::make_unique<radar::Transmitter>(plat, comp_json.value("name", "Unnamed"), mode, trans_id);
@@ -1153,6 +1324,8 @@ namespace
 														mode == radar::OperationMode::PULSED_MODE, pri));
 		}
 
+		parse_receiver_dechirp_config(comp_json, *recv,
+									  "Receiver component '" + comp_json.value("name", "Unnamed") + "'");
 		world.add(std::move(recv));
 	}
 
@@ -1323,6 +1496,8 @@ namespace
 		// Link them and add to world
 		trans->setAttached(recv.get());
 		recv->setAttached(trans.get());
+		parse_receiver_dechirp_config(comp_json, *recv,
+									  "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 		world.add(std::move(trans));
 		world.add(std::move(recv));
 	}
@@ -1384,6 +1559,7 @@ namespace
 				parse_platform(plat_json, world, masterSeeder, timing_instances);
 			}
 		}
+		world.resolveReceiverDechirpReferences();
 
 		const RealType start_time = params::startTime();
 		const RealType end_time = params::endTime();
@@ -1585,6 +1761,7 @@ namespace serial
 		if (j.contains("name"))
 			tx->setName(j.at("name").get<std::string>());
 
+		reject_conflicting_mode_blocks(j, "Transmitter '" + tx->getName() + "'");
 		if (j.contains("pulsed_mode"))
 		{
 			tx->setMode(radar::OperationMode::PULSED_MODE);
@@ -1592,6 +1769,11 @@ namespace serial
 		}
 		else if (j.contains("fmcw_mode"))
 		{
+			if (has_dechirp_fields(j.at("fmcw_mode")))
+			{
+				throw std::runtime_error("Transmitter '" + tx->getName() +
+										 "' fmcw_mode must not contain dechirp configuration.");
+			}
 			tx->setMode(radar::OperationMode::FMCW_MODE);
 		}
 		else if (j.contains("cw_mode"))
@@ -1665,6 +1847,7 @@ namespace serial
 		if (j.contains("name"))
 			rx->setName(j.at("name").get<std::string>());
 
+		reject_conflicting_mode_blocks(j, "Receiver '" + rx->getName() + "'");
 		if (j.contains("pulsed_mode"))
 		{
 			rx->setMode(radar::OperationMode::PULSED_MODE);
@@ -1732,12 +1915,23 @@ namespace serial
 			rx->setSchedule(radar::processRawSchedule(std::move(raw), rx->getName(),
 													  rx->getMode() == radar::OperationMode::PULSED_MODE, pri));
 		}
+		if (j.contains("fmcw_mode"))
+		{
+			parse_receiver_dechirp_config(j, *rx, "Receiver '" + rx->getName() + "'");
+		}
+		world.resolveReceiverDechirpReferences();
 	}
 
 	void update_monostatic_from_json(const nlohmann::json& j, radar::Transmitter* tx, radar::Receiver* rx,
 									 core::World& world, std::mt19937& masterSeeder)
 	{
-		update_transmitter_from_json(j, tx, world, masterSeeder);
+		auto transmitter_json = j;
+		if (transmitter_json.contains("fmcw_mode") && transmitter_json.at("fmcw_mode").is_object())
+		{
+			transmitter_json["fmcw_mode"].erase("dechirp_mode");
+			transmitter_json["fmcw_mode"].erase("dechirp_reference");
+		}
+		update_transmitter_from_json(transmitter_json, tx, world, masterSeeder);
 
 		if (j.contains("name"))
 			rx->setName(j.at("name").get<std::string>());
@@ -1807,6 +2001,11 @@ namespace serial
 				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
 			}
 		}
+		if (j.contains("fmcw_mode"))
+		{
+			parse_receiver_dechirp_config(j, *rx, "Monostatic '" + tx->getName() + "'");
+		}
+		world.resolveReceiverDechirpReferences();
 	}
 
 	void update_target_from_json(const nlohmann::json& j, radar::Target* existing_tgt, core::World& world,

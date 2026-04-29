@@ -200,6 +200,145 @@ TEST_CASE("FMCW monostatic reflected path dechirps to expected stationary-target
 	REQUIRE_THAT(measured_beat_hz, WithinRel(expected_beat_hz, 1.0e-3));
 }
 
+TEST_CASE("FMCW native dechirp convention produces positive up-chirp beat frequency",
+		  "[simulation][channel_model][reflected][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e6);
+	params::setSimSamplingRate(1.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0e-3);
+
+	const RealType target_range = 150.0;
+	const RealType chirp_bandwidth = 1.0e6;
+	const RealType chirp_duration = 1.0e-3;
+	const RealType chirp_rate = chirp_bandwidth / chirp_duration;
+	const RealType tau = (2.0 * target_range) / params::c();
+
+	radar::Platform radar_platform("radar");
+	setupPlatform(radar_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform target_platform("target_platform");
+	setupPlatform(target_platform, math::Vec3{target_range, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&radar_platform, "tx", radar::OperationMode::FMCW_MODE, 101);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(chirp_bandwidth, chirp_duration, chirp_duration);
+	fers_signal::RadarSignal wave("fmcw", 1.0, 10.0e6, chirp_duration, std::move(fmcw_signal), 301);
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&radar_platform, "rx", 43, radar::OperationMode::FMCW_MODE, 201);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+	rx.setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+	tx.setAttached(&rx);
+	rx.setAttached(&tx);
+
+	auto target = radar::createIsoTarget(&target_platform, "target", 1.0, 7, 401);
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 0.0, chirp_duration);
+	core::FmcwChirpBoundaryTracker channel_tracker;
+	core::FmcwChirpBoundaryTracker reference_tracker;
+
+	const RealType dt = 1.0 / params::simSamplingRate();
+	const RealType first_time = 20.0e-6;
+	const std::size_t sample_count = 500;
+	std::vector<RealType> dechirped_phase;
+	dechirped_phase.reserve(sample_count);
+
+	for (std::size_t i = 0; i < sample_count; ++i)
+	{
+		const RealType t = first_time + static_cast<RealType>(i) * dt;
+		const ComplexType sample = simulation::calculateStreamingReflectedPathContribution(
+			source, &rx, target.get(), t, nullptr, &channel_tracker, simulation::StreamingTimingPhaseMode::None);
+		RealType reference_phase = 0.0;
+		REQUIRE(simulation::calculateStreamingReferencePhase(source, t, &reference_tracker, reference_phase));
+		const ComplexType dechirped = std::polar(1.0, reference_phase) * std::conj(sample);
+		dechirped_phase.push_back(std::arg(dechirped));
+	}
+
+	RealType unwrapped_span = 0.0;
+	for (std::size_t i = 1; i < dechirped_phase.size(); ++i)
+	{
+		unwrapped_span += unwrapDelta(dechirped_phase[i] - dechirped_phase[i - 1]);
+	}
+
+	const RealType measured_beat_hz =
+		unwrapped_span / (2.0 * PI * dt * static_cast<RealType>(dechirped_phase.size() - 1));
+	const RealType expected_beat_hz = chirp_rate * tau;
+	REQUIRE_THAT(measured_beat_hz, WithinRel(expected_beat_hz, 1.0e-3));
+}
+
+TEST_CASE("FMCW physical dechirp preserves timing decorrelation while ideal mode removes it",
+		  "[simulation][channel_model][reflected][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(2.0e6);
+	params::setSimSamplingRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0e-3);
+
+	const RealType target_range = 150.0;
+	const RealType chirp_bandwidth = 1.0e6;
+	const RealType chirp_duration = 1.0e-3;
+	const RealType tau = (2.0 * target_range) / params::c();
+	const RealType freq_offset = 250.0e3;
+	const RealType sample_time = 40.0e-6;
+
+	radar::Platform radar_platform("radar");
+	setupPlatform(radar_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform target_platform("target_platform");
+	setupPlatform(target_platform, math::Vec3{target_range, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	timing::PrototypeTiming prototype("clk");
+	prototype.setFrequency(10.0e6);
+	prototype.setFreqOffset(freq_offset);
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+	timing->initializeModel(&prototype);
+
+	radar::Transmitter tx(&radar_platform, "tx", radar::OperationMode::FMCW_MODE, 101);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(chirp_bandwidth, chirp_duration, chirp_duration);
+	fers_signal::RadarSignal wave("fmcw", 1.0, 10.0e6, chirp_duration, std::move(fmcw_signal), 301);
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&radar_platform, "rx", 43, radar::OperationMode::FMCW_MODE, 201);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+	rx.setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+	tx.setAttached(&rx);
+	rx.setAttached(&tx);
+
+	auto target = radar::createIsoTarget(&target_platform, "target", 1.0, 7, 401);
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 0.0, chirp_duration);
+	core::FmcwChirpBoundaryTracker physical_tracker;
+	core::FmcwChirpBoundaryTracker ideal_tracker;
+	core::FmcwChirpBoundaryTracker reference_tracker;
+
+	const ComplexType physical_channel = simulation::calculateStreamingReflectedPathContribution(
+		source, &rx, target.get(), sample_time, nullptr, &physical_tracker,
+		simulation::StreamingTimingPhaseMode::TransmitterOnly);
+	const ComplexType ideal_channel = simulation::calculateStreamingReflectedPathContribution(
+		source, &rx, target.get(), sample_time, nullptr, &ideal_tracker, simulation::StreamingTimingPhaseMode::None);
+
+	RealType reference_phase = 0.0;
+	REQUIRE(simulation::calculateStreamingReferencePhase(source, sample_time, &reference_tracker, reference_phase));
+
+	const RealType rx_phase = 2.0 * PI * freq_offset * sample_time;
+	const ComplexType physical_dechirped = std::polar(1.0, reference_phase + rx_phase) * std::conj(physical_channel);
+	const ComplexType ideal_dechirped = std::polar(1.0, reference_phase) * std::conj(ideal_channel);
+	const RealType measured_delta = std::arg(physical_dechirped * std::conj(ideal_dechirped));
+	const RealType expected_delta = 2.0 * PI * freq_offset * tau;
+
+	REQUIRE_THAT(measured_delta, WithinAbs(expected_delta, 1.0e-6));
+}
+
 TEST_CASE("FMCW down-chirp monostatic reflected path reverses stationary-target beat sign",
 		  "[simulation][channel_model][reflected][fmcw]")
 {

@@ -13,6 +13,7 @@
 #include "receiver.h"
 
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 #include "core/parameters.h"
@@ -20,6 +21,70 @@
 
 namespace radar
 {
+	std::string_view dechirpModeToken(const Receiver::DechirpMode mode) noexcept
+	{
+		switch (mode)
+		{
+		case Receiver::DechirpMode::Physical:
+			return "physical";
+		case Receiver::DechirpMode::Ideal:
+			return "ideal";
+		case Receiver::DechirpMode::None:
+			return "none";
+		}
+		return "none";
+	}
+
+	Receiver::DechirpMode parseDechirpModeToken(const std::string_view token)
+	{
+		if (token == "none")
+		{
+			return Receiver::DechirpMode::None;
+		}
+		if (token == "physical")
+		{
+			return Receiver::DechirpMode::Physical;
+		}
+		if (token == "ideal")
+		{
+			return Receiver::DechirpMode::Ideal;
+		}
+		throw std::runtime_error("Unsupported FMCW dechirp_mode '" + std::string(token) + "'.");
+	}
+
+	std::string_view dechirpReferenceSourceToken(const Receiver::DechirpReferenceSource source) noexcept
+	{
+		switch (source)
+		{
+		case Receiver::DechirpReferenceSource::Attached:
+			return "attached";
+		case Receiver::DechirpReferenceSource::Transmitter:
+			return "transmitter";
+		case Receiver::DechirpReferenceSource::Custom:
+			return "custom";
+		case Receiver::DechirpReferenceSource::None:
+			return "none";
+		}
+		return "none";
+	}
+
+	Receiver::DechirpReferenceSource parseDechirpReferenceSourceToken(const std::string_view token)
+	{
+		if (token == "attached")
+		{
+			return Receiver::DechirpReferenceSource::Attached;
+		}
+		if (token == "transmitter")
+		{
+			return Receiver::DechirpReferenceSource::Transmitter;
+		}
+		if (token == "custom")
+		{
+			return Receiver::DechirpReferenceSource::Custom;
+		}
+		throw std::runtime_error("Unsupported dechirp_reference source '" + std::string(token) + "'.");
+	}
+
 	Receiver::Receiver(Platform* platform, std::string name, const unsigned seed, const OperationMode mode,
 					   const SimId id) noexcept :
 		Radar(platform, std::move(name), id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Receiver) : id),
@@ -85,6 +150,36 @@ namespace radar
 			throw std::runtime_error("Noise temperature must be positive");
 		}
 		_noise_temperature = temp;
+	}
+
+	void Receiver::setMode(const OperationMode mode) noexcept
+	{
+		_mode = mode;
+		if (_mode != OperationMode::FMCW_MODE)
+		{
+			setDechirpMode(DechirpMode::None);
+		}
+	}
+
+	void Receiver::setDechirpMode(const DechirpMode mode) noexcept
+	{
+		_dechirp_mode = mode;
+		if (_dechirp_mode == DechirpMode::None)
+		{
+			_dechirp_reference = {};
+			_dechirp_sources.clear();
+		}
+	}
+
+	void Receiver::setDechirpReference(DechirpReference reference)
+	{
+		_dechirp_reference = std::move(reference);
+		_dechirp_sources.clear();
+	}
+
+	void Receiver::setResolvedDechirpSources(std::vector<core::ActiveStreamingSource> sources)
+	{
+		_dechirp_sources = std::move(sources);
 	}
 
 	void Receiver::setWindowProperties(const RealType length, const RealType prf, const RealType skip) noexcept

@@ -16,9 +16,12 @@
 #include <mutex>
 #include <queue>
 #include <random>
+#include <string>
+#include <string_view>
 
 #include "core/rendering_job.h"
 #include "core/sim_id.h"
+#include "core/simulation_state.h"
 #include "radar_obj.h"
 #include "serial/response.h"
 
@@ -46,13 +49,41 @@ namespace radar
 			FLAG_NOPROPLOSS = 2 ///< Disable propagation-loss scaling.
 		};
 
+		/// Receiver-side FMCW dechirping mode.
+		enum class DechirpMode
+		{
+			None, ///< Output raw pre-mix streaming IQ.
+			Physical, ///< Preserve timing phase-noise decorrelation in the IF output.
+			Ideal ///< Ignore timing phase noise during the dechirp mix.
+		};
+
+		/// Source used to construct the receiver LO reference.
+		enum class DechirpReferenceSource
+		{
+			None, ///< No reference configured.
+			Attached, ///< Use the attached transmitter.
+			Transmitter, ///< Use a named transmitter.
+			Custom ///< Use a named top-level waveform with the receiver schedule.
+		};
+
+		/// Parsed and resolved dechirp reference details.
+		struct DechirpReference
+		{
+			DechirpReferenceSource source = DechirpReferenceSource::None; ///< Reference source type.
+			std::string name; ///< Parsed transmitter or waveform name when applicable.
+			SimId transmitter_id = 0; ///< Resolved transmitter ID for attached/transmitter references.
+			std::string transmitter_name; ///< Resolved transmitter name for attached/transmitter references.
+			SimId waveform_id = 0; ///< Resolved waveform ID for custom references.
+			std::string waveform_name; ///< Resolved waveform name for custom references.
+		};
+
 		/**
 		 * @brief Constructs a Receiver object.
 		 *
 		 * @param platform The platform associated with this receiver.
 		 * @param name The name of the receiver.
 		 * @param seed The seed for the receiver's internal random number generator.
-		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
+		 * @param mode The operational mode (PULSED_MODE, CW_MODE, or FMCW_MODE).
 		 */
 		explicit Receiver(Platform* platform, std::string name, unsigned seed, OperationMode mode,
 						  const SimId id = 0) noexcept;
@@ -155,9 +186,24 @@ namespace radar
 		/**
 		 * @brief Gets the operational mode of the receiver.
 		 *
-		 * @return The operational mode (PULSED_MODE or CW_MODE).
+		 * @return The operational mode (PULSED_MODE, CW_MODE, or FMCW_MODE).
 		 */
 		[[nodiscard]] OperationMode getMode() const noexcept { return _mode; }
+
+		/// Gets the configured dechirp mode.
+		[[nodiscard]] DechirpMode getDechirpMode() const noexcept { return _dechirp_mode; }
+
+		/// Returns true when the receiver emits dechirped IF data.
+		[[nodiscard]] bool isDechirpEnabled() const noexcept { return _dechirp_mode != DechirpMode::None; }
+
+		/// Gets the configured dechirp reference.
+		[[nodiscard]] const DechirpReference& getDechirpReference() const noexcept { return _dechirp_reference; }
+
+		/// Gets resolved receive-time LO source segments.
+		[[nodiscard]] const std::vector<core::ActiveStreamingSource>& getDechirpSources() const noexcept
+		{
+			return _dechirp_sources;
+		}
 
 		/**
 		 * @brief Checks if the receiver is currently active (listening).
@@ -173,9 +219,21 @@ namespace radar
 
 		/**
 		 * @brief Sets the operational mode of the receiver.
-		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
+		 * @param mode The operational mode (PULSED_MODE, CW_MODE, or FMCW_MODE).
 		 */
-		void setMode(OperationMode mode) noexcept { _mode = mode; }
+		void setMode(OperationMode mode) noexcept;
+
+		/// Sets the receiver-side dechirp mode.
+		void setDechirpMode(DechirpMode mode) noexcept;
+
+		/// Stores the unresolved dechirp reference parsed from scenario input.
+		void setDechirpReference(DechirpReference reference);
+
+		/// Replaces resolved receive-time LO source segments.
+		void setResolvedDechirpSources(std::vector<core::ActiveStreamingSource> sources);
+
+		/// Clears resolved dechirp source segments.
+		void clearResolvedDechirpSources() noexcept { _dechirp_sources.clear(); }
 
 		/**
 		 * @brief Moves all responses from the inbox into a RenderingJob.
@@ -310,5 +368,20 @@ namespace radar
 		std::mutex _interference_log_mutex; ///< Mutex guarding the pulsed interference log.
 		std::vector<ComplexType> _streaming_iq_data; ///< Buffer for raw, simulation-long I/Q data.
 		std::mutex _cw_mutex; ///< Mutex for handling CW data.
+		DechirpMode _dechirp_mode{DechirpMode::None}; ///< FMCW dechirp mode.
+		DechirpReference _dechirp_reference{}; ///< Configured/resolved LO reference.
+		std::vector<core::ActiveStreamingSource> _dechirp_sources; ///< Resolved LO sources.
 	};
+
+	/// Converts a dechirp mode to its scenario token.
+	[[nodiscard]] std::string_view dechirpModeToken(Receiver::DechirpMode mode) noexcept;
+
+	/// Parses a dechirp mode scenario token.
+	[[nodiscard]] Receiver::DechirpMode parseDechirpModeToken(std::string_view token);
+
+	/// Converts a dechirp reference source to its scenario token.
+	[[nodiscard]] std::string_view dechirpReferenceSourceToken(Receiver::DechirpReferenceSource source) noexcept;
+
+	/// Parses a dechirp reference source scenario token.
+	[[nodiscard]] Receiver::DechirpReferenceSource parseDechirpReferenceSourceToken(std::string_view token);
 }

@@ -358,9 +358,31 @@ namespace core
 		bool sample_count_overflowed = false;
 		projection.streaming_sample_count = countSamplesForDuration(
 			projection.duration_seconds, projection.simulation_sample_rate_hz, sample_count_overflowed);
+
+		RealType phase_noise_lookup_start = params::startTime();
+		for (const auto& transmitter_ptr : world.getTransmitters())
+		{
+			if (transmitter_ptr == nullptr || !transmitter_ptr->isStreamingMode())
+			{
+				continue;
+			}
+			for (const auto& period : transmitter_ptr->getSchedule())
+			{
+				if (period.start < params::startTime() && period.end > params::startTime())
+				{
+					phase_noise_lookup_start = std::min(phase_noise_lookup_start, period.start);
+				}
+			}
+		}
+		bool phase_noise_count_overflowed = false;
 		projection.phase_noise_sample_count =
-			sample_count_overflowed ? max_uint64 : projection.streaming_sample_count + 1;
-		if (projection.streaming_sample_count == max_uint64)
+			countSamplesForDuration(std::max<RealType>(0.0, params::endTime() - phase_noise_lookup_start),
+									projection.simulation_sample_rate_hz, phase_noise_count_overflowed);
+		if (projection.phase_noise_sample_count != max_uint64)
+		{
+			++projection.phase_noise_sample_count;
+		}
+		if (phase_noise_count_overflowed)
 		{
 			projection.phase_noise_sample_count = max_uint64;
 		}
@@ -390,6 +412,13 @@ namespace core
 				projection.allocated_streaming_iq_buffers =
 					addBytes(projection.allocated_streaming_iq_buffers,
 							 multiplyBytes(capacity, static_cast<std::uint64_t>(sizeof(ComplexType))));
+				const auto rendered_samples = receiver.isDechirpEnabled()
+					? projection.streaming_sample_count
+					: downsampledSampleCount(projection.streaming_sample_count);
+				projection.rendered_hdf5_sample_count =
+					addBytes({.bytes = projection.rendered_hdf5_sample_count},
+							 {.bytes = rendered_samples, .overflowed = sample_count_overflowed})
+						.bytes;
 				continue;
 			}
 
@@ -418,11 +447,6 @@ namespace core
 						  projection.streaming_receiver_count * static_cast<std::uint64_t>(sizeof(ComplexType)),
 						  sample_count_overflowed);
 
-		const auto streaming_rendered_samples =
-			multiplyBytes(downsampledSampleCount(projection.streaming_sample_count),
-						  projection.streaming_receiver_count, sample_count_overflowed);
-		projection.rendered_hdf5_sample_count =
-			addBytes({.bytes = projection.rendered_hdf5_sample_count}, streaming_rendered_samples).bytes;
 		projection.rendered_hdf5_payload =
 			multiplyBytes(projection.rendered_hdf5_sample_count, 2ULL * static_cast<std::uint64_t>(sizeof(RealType)));
 
@@ -506,5 +530,31 @@ namespace core
 			projection.streaming_receiver_count, projection.streaming_sample_count,
 			formatByteSize(projection.rendered_hdf5_payload.bytes), projection.rendered_hdf5_sample_count,
 			resident_baseline, total);
+
+		constexpr std::uint64_t one_gib = 1024ULL * 1024ULL * 1024ULL;
+		for (const auto& receiver_ptr : world.getReceivers())
+		{
+			const auto& receiver = *receiver_ptr;
+			if (!receiver.isDechirpEnabled())
+			{
+				continue;
+			}
+			const auto sample_count = receiver.getStreamingData().empty()
+				? projection.streaming_sample_count
+				: static_cast<std::uint64_t>(receiver.getStreamingData().size());
+			const auto projected_payload =
+				multiplyBytes(sample_count, 2ULL * static_cast<std::uint64_t>(sizeof(RealType)));
+			if (projected_payload.bytes > one_gib || projected_payload.overflowed)
+			{
+				const auto gib = static_cast<long double>(projected_payload.bytes) / static_cast<long double>(one_gib);
+				// TODO: UI workflows should have disk+memory usage stats on the SimulationView page (shows before user
+				// runs the sim)
+				LOG(logging::Level::WARNING,
+					"Receiver {} is outputting RF-rate IF data. Projected file size is {:.2f} GiB. This is expected "
+					"for V1 native dechirping, but ensure you have sufficient disk space. Future versions will support "
+					"IF-rate decimation.",
+					receiver.getName(), static_cast<double>(gib));
+			}
+		}
 	}
 }

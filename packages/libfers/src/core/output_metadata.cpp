@@ -153,6 +153,7 @@ namespace core
 									 {"receiver_name", file.receiver_name},
 									 {"mode", file.mode},
 									 {"path", file.path},
+									 {"sampling_rate", file.sampling_rate},
 									 {"total_samples", file.total_samples},
 									 {"sample_start", file.sample_start},
 									 {"sample_end_exclusive", file.sample_end_exclusive},
@@ -162,10 +163,32 @@ namespace core
 									 {"uniform_pulse_length", file.uniform_pulse_length},
 									 {"chunks", chunks},
 									 {"streaming_segments", streaming_segments},
-									 {"fmcw_sources", fmcw_sources}};
+									 {"fmcw_sources", fmcw_sources},
+									 {"fmcw_dechirp_mode", file.fmcw_dechirp_mode},
+									 {"fmcw_dechirp_reference_source", file.fmcw_dechirp_reference_source}};
 			if (file.fmcw.has_value())
 			{
 				result["fmcw"] = fmcwToJson(*file.fmcw);
+			}
+			if (file.fmcw_dechirp_reference_transmitter_id.has_value())
+			{
+				result["fmcw_dechirp_reference_transmitter_id"] = *file.fmcw_dechirp_reference_transmitter_id;
+			}
+			if (file.fmcw_dechirp_reference_transmitter_name.has_value())
+			{
+				result["fmcw_dechirp_reference_transmitter_name"] = *file.fmcw_dechirp_reference_transmitter_name;
+			}
+			if (file.fmcw_dechirp_reference_waveform_id.has_value())
+			{
+				result["fmcw_dechirp_reference_waveform_id"] = *file.fmcw_dechirp_reference_waveform_id;
+			}
+			if (file.fmcw_dechirp_reference_waveform_name.has_value())
+			{
+				result["fmcw_dechirp_reference_waveform_name"] = *file.fmcw_dechirp_reference_waveform_name;
+			}
+			if (file.fmcw_dechirp_reference_waveform.has_value())
+			{
+				result["fmcw_dechirp_reference_waveform"] = fmcwToJson(*file.fmcw_dechirp_reference_waveform);
 			}
 			return result;
 		}
@@ -174,19 +197,46 @@ namespace core
 		nlohmann::json metadataToJson(const OutputMetadata& metadata)
 		{
 			nlohmann::json files = nlohmann::json::array();
+			std::vector<RealType> file_sampling_rates;
 			for (const auto& file : metadata.files)
 			{
 				files.push_back(fileToJson(file));
+				bool already_present = false;
+				for (const auto rate : file_sampling_rates)
+				{
+					if (rate == file.sampling_rate)
+					{
+						already_present = true;
+						break;
+					}
+				}
+				if (!already_present)
+				{
+					file_sampling_rates.push_back(file.sampling_rate);
+				}
 			}
 
-			return {{"schema_version", metadata.schema_version},
-					{"simulation_name", metadata.simulation_name},
-					{"output_directory", metadata.output_directory},
-					{"start_time", metadata.start_time},
-					{"end_time", metadata.end_time},
-					{"sampling_rate", metadata.sampling_rate},
-					{"oversample_ratio", metadata.oversample_ratio},
-					{"files", files}};
+			nlohmann::json result = {{"schema_version", metadata.schema_version},
+									 {"simulation_name", metadata.simulation_name},
+									 {"output_directory", metadata.output_directory},
+									 {"start_time", metadata.start_time},
+									 {"end_time", metadata.end_time},
+									 {"oversample_ratio", metadata.oversample_ratio},
+									 {"files", files}};
+			if (file_sampling_rates.empty())
+			{
+				result["sampling_rate"] = metadata.sampling_rate;
+			}
+			else if (file_sampling_rates.size() == 1)
+			{
+				result["sampling_rate"] = file_sampling_rates.front();
+			}
+			else
+			{
+				result["sampling_rate"] = nullptr;
+				result["sampling_rates"] = file_sampling_rates;
+			}
+			return result;
 		}
 	}
 

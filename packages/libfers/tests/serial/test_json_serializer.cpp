@@ -680,6 +680,90 @@ TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json]
 	}
 }
 
+TEST_CASE("JSON: FMCW dechirp configuration validates and round-trips", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	std::mt19937 seeder(42);
+
+	const auto make_scenario = [](json fmcw_mode)
+	{
+		json scenario;
+		scenario["simulation"]["parameters"] = {{"starttime", 0.0},
+												{"endtime", 1.0e-3},
+												{"rate", 4.0e6},
+												{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+												{"coordinatesystem", {{"frame", "ENU"}}}};
+		scenario["simulation"]["waveforms"] = json::array({{{"id", 10},
+															{"name", "fmcw_wave"},
+															{"power", 1.0},
+															{"carrier_frequency", 1.0e9},
+															{"fmcw_linear_chirp",
+															 {{"direction", "up"},
+															  {"chirp_bandwidth", 1.0e6},
+															  {"chirp_duration", 1.0e-4},
+															  {"chirp_period", 1.0e-4}}}}});
+		scenario["simulation"]["antennas"] = json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}});
+		scenario["simulation"]["timings"] = json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1.0e6}}});
+		scenario["simulation"]["platforms"] = json::array({{{"id", 100},
+															{"name", "p1"},
+															{"components",
+															 json::array({{{"monostatic",
+																			{{"name", "mono1"},
+																			 {"tx_id", 101},
+																			 {"rx_id", 102},
+																			 {"waveform", 10},
+																			 {"antenna", 20},
+																			 {"timing", 30},
+																			 {"fmcw_mode", fmcw_mode}}}}})}}});
+		return scenario;
+	};
+
+	SECTION("attached reference is resolved and serialized")
+	{
+		core::World world;
+		const auto scenario =
+			make_scenario({{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}});
+
+		REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+		REQUIRE(world.getReceivers().size() == 1);
+		const auto* rx = world.getReceivers().front().get();
+		REQUIRE(rx->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
+		REQUIRE(rx->getDechirpReference().source == radar::Receiver::DechirpReferenceSource::Attached);
+		REQUIRE_FALSE(rx->getDechirpSources().empty());
+
+		const json serialized = serial::world_to_json(world);
+		const auto& mode_json =
+			serialized.at("simulation").at("platforms").at(0).at("components").at(0).at("monostatic").at("fmcw_mode");
+		REQUIRE(mode_json.at("dechirp_mode") == "physical");
+		REQUIRE(mode_json.at("dechirp_reference").at("source") == "attached");
+	}
+
+	SECTION("orphan dechirp_reference is rejected")
+	{
+		core::World world;
+		const auto scenario = make_scenario({{"dechirp_reference", {{"source", "attached"}}}});
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("dechirp_reference"));
+	}
+
+	SECTION("conflicting mode blocks cannot hide dechirp configuration")
+	{
+		core::World world;
+		auto scenario = make_scenario({{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}});
+		auto& monostatic = scenario["simulation"]["platforms"][0]["components"][0]["monostatic"];
+		monostatic["cw_mode"] = json::object();
+
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("at most one"));
+	}
+
+	SECTION("unknown dechirp reference keys are rejected")
+	{
+		core::World world;
+		const auto scenario = make_scenario(
+			{{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}, {"bogus", true}}}});
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("unsupported key"));
+	}
+}
+
 TEST_CASE("JSON: Vec3 Serialization and Deserialization", "[serial][json]")
 {
 	math::Vec3 v_orig(1.2, 3.4, 5.6);

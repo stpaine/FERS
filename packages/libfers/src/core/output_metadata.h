@@ -90,6 +90,7 @@ namespace core
 		std::string receiver_name; ///< Receiver display name.
 		std::string mode; ///< Output mode label, such as pulsed or streaming.
 		std::string path; ///< Filesystem path to the generated output file.
+		RealType sampling_rate = 0.0; ///< Sample rate for this output file in hertz.
 		std::uint64_t total_samples = 0; ///< Total sample count written to the file.
 		std::uint64_t sample_start = 0; ///< Inclusive global sample index for the file start.
 		std::uint64_t sample_end_exclusive = 0; ///< Exclusive global sample index for the file end.
@@ -101,6 +102,13 @@ namespace core
 		std::vector<StreamingSegmentMetadata> streaming_segments = {}; ///< Streaming segments written to the file.
 		std::optional<FmcwMetadata> fmcw = std::nullopt; ///< Optional FMCW metadata for streaming outputs.
 		std::vector<FmcwSourceMetadata> fmcw_sources = {}; ///< FMCW illuminators represented in the output.
+		std::string fmcw_dechirp_mode = "none"; ///< Receiver dechirp mode for FMCW streaming outputs.
+		std::string fmcw_dechirp_reference_source = "none"; ///< Receiver dechirp reference source.
+		std::optional<SimId> fmcw_dechirp_reference_transmitter_id = std::nullopt; ///< Referenced LO transmitter ID.
+		std::optional<std::string> fmcw_dechirp_reference_transmitter_name = std::nullopt; ///< LO transmitter name.
+		std::optional<SimId> fmcw_dechirp_reference_waveform_id = std::nullopt; ///< Custom LO waveform ID.
+		std::optional<std::string> fmcw_dechirp_reference_waveform_name = std::nullopt; ///< Custom LO waveform name.
+		std::optional<FmcwMetadata> fmcw_dechirp_reference_waveform = std::nullopt; ///< Custom LO waveform parameters.
 	};
 
 	/// Metadata summary for the full simulation output set.

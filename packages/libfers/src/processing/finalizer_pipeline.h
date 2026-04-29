@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <span>
 #include <string>
@@ -51,6 +52,13 @@ namespace simulation
 
 namespace processing::pipeline
 {
+	/// Half-open sample span used for dechirped LO-active finalization ranges.
+	struct SampleSpan
+	{
+		std::size_t start = 0; ///< Inclusive first sample index in the span.
+		std::size_t end_exclusive = 0; ///< Exclusive sample index at the end of the span.
+	};
+
 	/**
 	 * @brief Advances the receiver's timing model to the start of the next processing window.
 	 *
@@ -120,6 +128,18 @@ namespace processing::pipeline
 								 const std::vector<std::unique_ptr<serial::Response>>& interference_log);
 
 	/**
+	 * @brief Renders and applies pulsed interference only inside active sample spans.
+	 *
+	 * @param iq_buffer The main, simulation-long IQ buffer for the streaming receiver.
+	 * @param interference_log A list of `Response` objects representing the pulsed interference.
+	 * @param active_spans Half-open sample spans where LO-active output should receive interference.
+	 * @param output_sample_rate The sample rate used by `iq_buffer`, in hertz.
+	 */
+	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
+								 const std::vector<std::unique_ptr<serial::Response>>& interference_log,
+								 std::span<const SampleSpan> active_spans, RealType output_sample_rate);
+
+	/**
 	 * @brief Applies a pre-generated sequence of phase noise samples to an I/Q buffer.
 	 *
 	 * This function performs the complex multiplication `IQ_out = IQ_in * e^(j*phase_noise)`
@@ -155,9 +175,11 @@ namespace processing::pipeline
 	 * @param iq_buffer The final, processed I/Q data to write.
 	 * @param fullscale The full-scale value from quantization, saved as metadata.
 	 * @param ref_freq The reference carrier frequency, saved as metadata.
+	 * @param metadata Optional structured output metadata to attach to the file.
+	 * @param sample_rate Output sample rate to store in the file, or `params::rate()` when unset.
 	 */
 	void exportStreamingToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
 							   RealType fullscale, RealType ref_freq,
-							   const core::OutputFileMetadata* metadata = nullptr);
+							   const core::OutputFileMetadata* metadata = nullptr, RealType sample_rate = 0.0);
 
 }

@@ -23,6 +23,7 @@ namespace fers_signal
 {
 	class FmcwChirpSignal;
 	class FmcwTriangleSignal;
+	class RadarSignal;
 }
 
 namespace core
@@ -70,6 +71,10 @@ namespace core
 	/// Builds an active-source cache from a streaming transmitter and segment bounds.
 	[[nodiscard]] ActiveStreamingSource makeActiveSource(const radar::Transmitter* tx, RealType segment_start,
 														 RealType segment_end);
+
+	/// Builds an active-source cache directly from a waveform for receiver-local LO references.
+	[[nodiscard]] ActiveStreamingSource makeActiveSourceFromWaveform(const fers_signal::RadarSignal* signal,
+																	 RealType segment_start, RealType segment_end);
 
 	/// Returns the first FMCW chirp start inside the absolute interval, if one exists.
 	[[nodiscard]] std::optional<RealType> firstFmcwChirpStart(const ActiveStreamingSource& source,
@@ -122,6 +127,7 @@ namespace core
 	{
 		std::vector<FmcwChirpBoundaryTracker> direct; ///< Trackers for direct paths by source index.
 		std::vector<std::vector<FmcwChirpBoundaryTracker>> reflected; ///< Trackers for reflected paths.
+		std::vector<FmcwChirpBoundaryTracker> dechirp_reference; ///< Trackers for receiver LO source segments.
 	};
 
 	/**

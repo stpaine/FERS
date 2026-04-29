@@ -9,6 +9,7 @@
 #include <GeographicLib/UTMUPS.hpp>
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <filesystem>
 #include <format>
 #include <limits>
@@ -72,6 +73,108 @@ namespace serial::xml_parser_utils
 								   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, or <fmcw_mode>).");
 			}
 			return *selected_mode;
+		}
+
+		/// Returns true when an FMCW mode block carries receiver-side dechirp fields.
+		bool has_dechirp_fields(const XmlElement& fmcw_mode)
+		{
+			return XmlElement::getOptionalAttribute(fmcw_mode, "dechirp_mode").has_value() ||
+				fmcw_mode.childElement("dechirp_reference", 0).isValid();
+		}
+
+		/// Parses receiver-side dechirp settings from an FMCW mode block.
+		void parse_receiver_dechirp_config(const XmlElement& parent, radar::Receiver& receiver,
+										   const std::string& owner)
+		{
+			if (receiver.getMode() != radar::OperationMode::FMCW_MODE)
+			{
+				receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
+				return;
+			}
+
+			const XmlElement fmcw_mode = parent.childElement("fmcw_mode", 0);
+			if (!fmcw_mode.isValid())
+			{
+				receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
+				return;
+			}
+
+			radar::Receiver::DechirpMode mode = radar::Receiver::DechirpMode::None;
+			if (const auto mode_attr = XmlElement::getOptionalAttribute(fmcw_mode, "dechirp_mode"))
+			{
+				try
+				{
+					mode = radar::parseDechirpModeToken(*mode_attr);
+				}
+				catch (const std::exception& e)
+				{
+					throw XmlException(owner + " has invalid dechirp_mode. " + e.what());
+				}
+			}
+
+			const XmlElement ref_element = fmcw_mode.childElement("dechirp_reference", 0);
+			if (mode == radar::Receiver::DechirpMode::None)
+			{
+				if (ref_element.isValid())
+				{
+					throw XmlException(owner + " declares <dechirp_reference> while dechirp_mode is 'none'.");
+				}
+				receiver.setDechirpMode(mode);
+				return;
+			}
+
+			if (!ref_element.isValid())
+			{
+				throw XmlException(owner + " enables dechirping but does not declare <dechirp_reference>.");
+			}
+			if (fmcw_mode.childElement("dechirp_reference", 1).isValid())
+			{
+				throw XmlException(owner + " must declare at most one <dechirp_reference>.");
+			}
+
+			radar::Receiver::DechirpReference reference;
+			try
+			{
+				reference.source =
+					radar::parseDechirpReferenceSourceToken(XmlElement::getSafeAttribute(ref_element, "source"));
+			}
+			catch (const std::exception& e)
+			{
+				throw XmlException(owner + " has invalid dechirp_reference. " + e.what());
+			}
+
+			const auto transmitter_name = XmlElement::getOptionalAttribute(ref_element, "transmitter_name");
+			const auto waveform_name = XmlElement::getOptionalAttribute(ref_element, "waveform_name");
+			switch (reference.source)
+			{
+			case radar::Receiver::DechirpReferenceSource::Attached:
+				if (transmitter_name.has_value() || waveform_name.has_value())
+				{
+					throw XmlException(owner +
+									   " attached dechirp_reference must not set transmitter_name or "
+									   "waveform_name.");
+				}
+				break;
+			case radar::Receiver::DechirpReferenceSource::Transmitter:
+				if (!transmitter_name.has_value() || transmitter_name->empty() || waveform_name.has_value())
+				{
+					throw XmlException(owner + " transmitter dechirp_reference requires transmitter_name only.");
+				}
+				reference.name = *transmitter_name;
+				break;
+			case radar::Receiver::DechirpReferenceSource::Custom:
+				if (!waveform_name.has_value() || waveform_name->empty() || transmitter_name.has_value())
+				{
+					throw XmlException(owner + " custom dechirp_reference requires waveform_name only.");
+				}
+				reference.name = *waveform_name;
+				break;
+			case radar::Receiver::DechirpReferenceSource::None:
+				throw XmlException(owner + " dechirp_reference source must be attached, transmitter, or custom.");
+			}
+
+			receiver.setDechirpMode(mode);
+			receiver.setDechirpReference(std::move(reference));
 		}
 
 		/// Throws an XML validation exception with the provided message.
@@ -867,6 +970,11 @@ namespace serial::xml_parser_utils
 	{
 		const std::string name = XmlElement::getSafeAttribute(transmitter, "name");
 		const radar::OperationMode mode = parse_mode_elements(transmitter, "Transmitter '" + name + "'");
+		if (const XmlElement fmcw_mode = transmitter.childElement("fmcw_mode", 0);
+			fmcw_mode.isValid() && has_dechirp_fields(fmcw_mode))
+		{
+			throw XmlException("Transmitter '" + name + "' fmcw_mode must not contain dechirp configuration.");
+		}
 		return parseTransmitterWithMode(transmitter, platform, ctx, refs, mode);
 	}
 
@@ -950,6 +1058,8 @@ namespace serial::xml_parser_utils
 		{
 			receiver_obj->setSchedule(std::move(schedule));
 		}
+
+		parse_receiver_dechirp_config(receiver, *receiver_obj, "Receiver '" + name + "'");
 
 		ctx.world->add(std::move(receiver_obj));
 		return ctx.world->getReceivers().back().get();
@@ -1272,6 +1382,8 @@ namespace serial::xml_parser_utils
 						  register_name(p, "platform");
 						  parsePlatform(p, c, register_name, refs);
 					  });
+
+		ctx.world->resolveReceiverDechirpReferences();
 
 		const RealType start_time = ctx.parameters.start;
 		const RealType end_time = ctx.parameters.end;

@@ -143,12 +143,28 @@ namespace core
 		[[nodiscard]] radar::Transmitter* findTransmitter(const SimId id);
 
 		/**
+		 * @brief Finds a transmitter by name.
+		 *
+		 * @param name The transmitter name to find.
+		 * @return A pointer to the Transmitter if found, or nullptr if not found.
+		 */
+		[[nodiscard]] radar::Transmitter* findTransmitterByName(const std::string& name);
+
+		/**
 		 * @brief Finds a receiver by ID.
 		 *
 		 * @param id The ID of the receiver to find.
 		 * @return A pointer to the Receiver if found, or nullptr if not found.
 		 */
 		[[nodiscard]] radar::Receiver* findReceiver(const SimId id);
+
+		/**
+		 * @brief Finds a waveform by name.
+		 *
+		 * @param name The waveform name to find.
+		 * @return A pointer to the RadarSignal if found, or nullptr if not found.
+		 */
+		[[nodiscard]] fers_signal::RadarSignal* findWaveformByName(const std::string& name);
 
 		/**
 		 * @brief Finds a target by ID.
@@ -266,6 +282,13 @@ namespace core
 		 * This method should be called after all simulation objects have been parsed and added to the world.
 		 */
 		void scheduleInitialEvents();
+
+		/**
+		 * @brief Resolves and validates receiver FMCW dechirp references after all components are loaded.
+		 *
+		 * @throws std::runtime_error if a dechirped receiver has an invalid or inactive LO reference.
+		 */
+		void resolveReceiverDechirpReferences();
 
 		/**
 		 * @brief Dumps the current state of the event queue to a string for debugging.

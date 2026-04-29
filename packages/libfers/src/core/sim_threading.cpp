@@ -20,6 +20,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <complex>
 #include <cstddef>
 #include <cstdint>
 #include <format>
@@ -244,8 +245,13 @@ namespace core
 		}
 
 		const auto timings = collectCwPhaseNoiseTimings(*_world);
+		RealType lookup_start = params::startTime();
+		for (const auto& source : _world->getSimulationState().active_streaming_transmitters)
+		{
+			lookup_start = std::min(lookup_start, source.segment_start);
+		}
 		_cw_phase_noise_lookup = std::make_unique<simulation::CwPhaseNoiseLookup>(
-			simulation::CwPhaseNoiseLookup::build(timings, params::startTime(), params::endTime()));
+			simulation::CwPhaseNoiseLookup::build(timings, lookup_start, params::endTime()));
 	}
 
 	void SimulationEngine::processStreamingPhysics(const RealType t_event)
@@ -295,6 +301,43 @@ namespace core
 														   const std::vector<ActiveStreamingSource>& streaming_sources,
 														   ReceiverTrackerCache& tracker_cache) const
 	{
+		const bool dechirping = rx->isDechirpEnabled();
+		RealType reference_phase = 0.0;
+		if (dechirping)
+		{
+			const auto& dechirp_sources = rx->getDechirpSources();
+			if (tracker_cache.dechirp_reference.size() < dechirp_sources.size())
+			{
+				tracker_cache.dechirp_reference.resize(dechirp_sources.size());
+			}
+
+			bool reference_active = false;
+			for (std::size_t source_index = 0; source_index < dechirp_sources.size(); ++source_index)
+			{
+				const auto& reference_source = dechirp_sources[source_index];
+				if (t_step < reference_source.segment_start || t_step >= reference_source.segment_end)
+				{
+					continue;
+				}
+				if (simulation::calculateStreamingReferencePhase(
+						reference_source, t_step, &tracker_cache.dechirp_reference[source_index], reference_phase))
+				{
+					reference_active = true;
+					break;
+				}
+			}
+
+			if (!reference_active)
+			{
+				return {0.0, 0.0};
+			}
+		}
+
+		const auto timing_phase_mode = !dechirping ? simulation::StreamingTimingPhaseMode::ReceiverRelative
+												   : (rx->getDechirpMode() == Receiver::DechirpMode::Ideal
+														  ? simulation::StreamingTimingPhaseMode::None
+														  : simulation::StreamingTimingPhaseMode::TransmitterOnly);
+
 		ComplexType total_sample{0.0, 0.0};
 		for (std::size_t source_index = 0; source_index < streaming_sources.size(); ++source_index)
 		{
@@ -302,17 +345,37 @@ namespace core
 			if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
 			{
 				total_sample += simulation::calculateStreamingDirectPathContribution(
-					streaming_source, rx, t_step, _cw_phase_noise_lookup.get(), &tracker_cache.direct[source_index]);
+					streaming_source, rx, t_step, _cw_phase_noise_lookup.get(), &tracker_cache.direct[source_index],
+					timing_phase_mode);
 			}
 			for (std::size_t target_index = 0; target_index < _world->getTargets().size(); ++target_index)
 			{
 				const auto& target_ptr = _world->getTargets()[target_index];
 				total_sample += simulation::calculateStreamingReflectedPathContribution(
 					streaming_source, rx, target_ptr.get(), t_step, _cw_phase_noise_lookup.get(),
-					&tracker_cache.reflected[source_index][target_index]);
+					&tracker_cache.reflected[source_index][target_index], timing_phase_mode);
 			}
 		}
-		return total_sample;
+
+		if (!dechirping)
+		{
+			return total_sample;
+		}
+
+		RealType receiver_phase = 0.0;
+		if (rx->getDechirpMode() == Receiver::DechirpMode::Physical && _cw_phase_noise_lookup)
+		{
+			receiver_phase = _cw_phase_noise_lookup->sample(rx->getTiming().get(), t_step);
+		}
+
+		// Mixing Convention: s_IF = s_ref * conj(s_rx)
+		// This convention is chosen to ensure that:
+		// 1. Stationary targets (positive delay tau) result in a POSITIVE beat frequency (f_b = alpha * tau).
+		// 2. In physical dechirp mode, phase noise from the same LO source partially cancels
+		//    at short ranges (Range Correlation Effect).
+		// 3. For an up-chirp, a receding target (negative RF Doppler) results in a
+		//    higher IF frequency (f_IF = f_b + |f_d|).
+		return std::polar(1.0, reference_phase + receiver_phase) * std::conj(total_sample);
 	}
 
 	void SimulationEngine::appendStreamingTrackerSource()

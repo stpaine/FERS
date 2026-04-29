@@ -7,7 +7,9 @@
 #include "finalizer_pipeline.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <highfive/highfive.hpp>
 #include <limits>
 #include <optional>
@@ -170,20 +172,50 @@ namespace processing::pipeline
 	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
 								 const std::vector<std::unique_ptr<serial::Response>>& interference_log)
 	{
+		const std::array active_spans{SampleSpan{.start = 0, .end_exclusive = iq_buffer.size()}};
+		applyPulsedInterference(iq_buffer, interference_log, active_spans, params::rate());
+	}
+
+	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
+								 const std::vector<std::unique_ptr<serial::Response>>& interference_log,
+								 const std::span<const SampleSpan> active_spans, const RealType output_sample_rate)
+	{
 		for (const auto& response : interference_log)
 		{
 			unsigned psize;
 			RealType prate;
 			const auto rendered_pulse = response->renderBinary(prate, psize, 0.0);
 
-			const RealType dt_sim = 1.0 / prate;
-			const auto start_index = static_cast<size_t>((response->startTime() - params::startTime()) / dt_sim);
+			const RealType pulse_end_time = response->startTime() + static_cast<RealType>(psize) / prate;
+			const auto pulse_start_index =
+				static_cast<long long>(std::floor((response->startTime() - params::startTime()) * output_sample_rate));
+			const auto pulse_end_index =
+				static_cast<long long>(std::ceil((pulse_end_time - params::startTime()) * output_sample_rate));
+			const auto buffer_end_index = static_cast<long long>(iq_buffer.size());
 
-			for (size_t i = 0; i < psize; ++i)
+			for (const auto& span : active_spans)
 			{
-				if (start_index + i < iq_buffer.size())
+				const auto span_start = static_cast<long long>(std::min(span.start, iq_buffer.size()));
+				const auto span_end = static_cast<long long>(std::min(span.end_exclusive, iq_buffer.size()));
+				const auto dest_begin = std::max({span_start, pulse_start_index, 0LL});
+				const auto dest_end = std::min({span_end, pulse_end_index, buffer_end_index});
+				if (dest_begin >= dest_end)
 				{
-					iq_buffer[start_index + i] += rendered_pulse[i];
+					continue;
+				}
+
+				const auto copy_count = static_cast<std::size_t>(dest_end - dest_begin);
+				for (std::size_t i = 0; i < copy_count; ++i)
+				{
+					const auto dest_index = static_cast<std::size_t>(dest_begin) + i;
+					const RealType dest_time =
+						params::startTime() + static_cast<RealType>(dest_index) / output_sample_rate;
+					const auto source_index =
+						static_cast<long long>(std::floor((dest_time - response->startTime()) * prate));
+					if (source_index >= 0 && source_index < static_cast<long long>(rendered_pulse.size()))
+					{
+						iq_buffer[dest_index] += rendered_pulse[static_cast<std::size_t>(source_index)];
+					}
 				}
 			}
 		}
@@ -208,7 +240,7 @@ namespace processing::pipeline
 
 	void exportStreamingToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
 							   const RealType fullscale, const RealType ref_freq,
-							   const core::OutputFileMetadata* metadata)
+							   const core::OutputFileMetadata* metadata, const RealType sample_rate)
 	{
 		std::scoped_lock lock(serial::hdf5_global_mutex);
 		try
@@ -225,7 +257,7 @@ namespace processing::pipeline
 			HighFive::DataSet q_dataset = file.createDataSet<RealType>("Q_data", HighFive::DataSpace::From(q_data));
 			q_dataset.write(q_data);
 
-			file.createAttribute("sampling_rate", params::rate());
+			file.createAttribute("sampling_rate", sample_rate > 0.0 ? sample_rate : params::rate());
 			file.createAttribute("start_time", params::startTime());
 			file.createAttribute("fullscale", fullscale);
 			file.createAttribute("reference_carrier_frequency", ref_freq);

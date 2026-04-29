@@ -311,6 +311,35 @@
         </xs:complexType>
     </xs:element>
 
+    <xs:complexType name="receiverFmcwModeType">
+        <xs:sequence>
+            <xs:element name="dechirp_reference" minOccurs="0" maxOccurs="1">
+                <xs:complexType>
+                    <xs:attribute name="source" use="required">
+                        <xs:simpleType>
+                            <xs:restriction base="xs:string">
+                                <xs:enumeration value="attached"/>
+                                <xs:enumeration value="transmitter"/>
+                                <xs:enumeration value="custom"/>
+                            </xs:restriction>
+                        </xs:simpleType>
+                    </xs:attribute>
+                    <xs:attribute name="transmitter_name" type="xs:string"/>
+                    <xs:attribute name="waveform_name" type="xs:string"/>
+                </xs:complexType>
+            </xs:element>
+        </xs:sequence>
+        <xs:attribute name="dechirp_mode" default="none">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="none"/>
+                    <xs:enumeration value="physical"/>
+                    <xs:enumeration value="ideal"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+    </xs:complexType>
+
     <!-- Monostatic radar installations -->
     <xs:element name="monostatic">
         <xs:complexType>
@@ -328,9 +357,7 @@
                     <xs:element name="cw_mode">
                         <xs:complexType/>
                     </xs:element>
-                    <xs:element name="fmcw_mode">
-                        <xs:complexType/>
-                    </xs:element>
+                    <xs:element name="fmcw_mode" type="receiverFmcwModeType"/>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>
@@ -389,9 +416,7 @@
                     <xs:element name="cw_mode">
                         <xs:complexType/>
                     </xs:element>
-                    <xs:element name="fmcw_mode">
-                        <xs:complexType/>
-                    </xs:element>
+                    <xs:element name="fmcw_mode" type="receiverFmcwModeType"/>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>

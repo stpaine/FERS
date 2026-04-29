@@ -179,6 +179,44 @@ TEST_CASE("applyStreamingInterference respects FLAG_NODIRECT and keeps only phys
 	}
 }
 
+TEST_CASE("applyPulsedInterference clips rendered pulses to LO-active sample spans",
+		  "[processing][finalizer][interference][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(10.0);
+	params::setTime(0.0, 1.0);
+
+	radar::Platform tx_platform("TxPlatform");
+	setupPlatform(tx_platform, math::Vec3{0.0, 0.0, 0.0});
+	antenna::Isotropic antenna("iso");
+	auto timing_model = makeQuietTiming("clk", 17);
+
+	radar::Transmitter transmitter(&tx_platform, "PulseTx", radar::OperationMode::PULSED_MODE, 101);
+	transmitter.setAntenna(&antenna);
+	transmitter.setTiming(timing_model);
+
+	std::vector<ComplexType> iq_buffer(16, ComplexType{0.0, 0.0});
+	std::vector<std::unique_ptr<fers_signal::RadarSignal>> wave_store;
+	std::vector<std::unique_ptr<serial::Response>> interference_log;
+	interference_log.push_back(makeFixedResponse(&transmitter, wave_store,
+												 {ComplexType{1.0, 0.0}, ComplexType{2.0, 0.0}, ComplexType{3.0, 0.0},
+												  ComplexType{4.0, 0.0}, ComplexType{5.0, 0.0}},
+												 params::rate(), 0.2));
+
+	const std::vector<processing::pipeline::SampleSpan> active_spans = {
+		processing::pipeline::SampleSpan{.start = 4, .end_exclusive = 5},
+		processing::pipeline::SampleSpan{.start = 13, .end_exclusive = 14}};
+
+	processing::pipeline::applyPulsedInterference(iq_buffer, interference_log, active_spans, 2.0 * params::rate());
+
+	for (std::size_t i = 0; i < iq_buffer.size(); ++i)
+	{
+		const RealType expected = i == 4 ? 1.0 : (i == 13 ? 5.0 : 0.0);
+		REQUIRE_THAT(iq_buffer[i].real(), WithinAbs(expected, 1e-12));
+	}
+}
+
 TEST_CASE("applyStreamingInterference adds FMCW energy to pulsed receiver windows",
 		  "[processing][finalizer][interference][fmcw]")
 {
@@ -395,6 +433,7 @@ TEST_CASE("applyPulsedInterference maps pulse start times to simulation sample i
 {
 	ParamGuard guard;
 	params::setTime(10.0, 11.0);
+	params::setRate(4.0);
 
 	radar::Platform tx_platform("TxPlatform");
 	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 401);

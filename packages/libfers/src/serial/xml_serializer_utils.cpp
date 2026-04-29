@@ -341,6 +341,29 @@ namespace serial::xml_serializer_utils
 		serializeSchedule(tx.getSchedule(), tx_elem);
 	}
 
+	void serializeReceiverFmcwMode(const radar::Receiver& rx, const XmlElement& mode_elem)
+	{
+		if (!rx.isDechirpEnabled())
+		{
+			return;
+		}
+
+		const auto& reference = rx.getDechirpReference();
+		mode_elem.setAttribute("dechirp_mode", radar::dechirpModeToken(rx.getDechirpMode()));
+		const XmlElement ref_elem = mode_elem.addChild("dechirp_reference");
+		ref_elem.setAttribute("source", radar::dechirpReferenceSourceToken(reference.source));
+		if (reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
+		{
+			ref_elem.setAttribute("transmitter_name",
+								  !reference.transmitter_name.empty() ? reference.transmitter_name : reference.name);
+		}
+		else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
+		{
+			ref_elem.setAttribute("waveform_name",
+								  !reference.waveform_name.empty() ? reference.waveform_name : reference.name);
+		}
+	}
+
 	void serializeReceiver(const radar::Receiver& rx, const XmlElement& parent)
 	{
 		const XmlElement rx_elem = parent.addChild("receiver");
@@ -359,7 +382,7 @@ namespace serial::xml_serializer_utils
 		}
 		else if (rx.getMode() == radar::OperationMode::FMCW_MODE)
 		{
-			(void)rx_elem.addChild("fmcw_mode");
+			serializeReceiverFmcwMode(rx, rx_elem.addChild("fmcw_mode"));
 		}
 		else
 		{
@@ -393,7 +416,7 @@ namespace serial::xml_serializer_utils
 		}
 		else if (tx.getMode() == radar::OperationMode::FMCW_MODE)
 		{
-			(void)mono_elem.addChild("fmcw_mode");
+			serializeReceiverFmcwMode(rx, mono_elem.addChild("fmcw_mode"));
 		}
 		else
 		{

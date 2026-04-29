@@ -212,10 +212,33 @@ namespace
 		return 2 * PI * delta_f * time + delta_phi;
 	}
 
-	/// Computes timing phase with an optional precomputed CW phase-noise lookup.
-	RealType computeTimingPhase(const Transmitter* tx, const Receiver* rx, const RealType rx_time,
-								const RealType tx_time, const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
+	/// Computes deterministic timing phase for one timing source when no lookup is available.
+	RealType computeSingleTimingPhase(const timing::Timing* const timing, const RealType time)
 	{
+		if (timing == nullptr)
+		{
+			return 0.0;
+		}
+		return 2.0 * PI * timing->getFreqOffset() * time + timing->getPhaseOffset();
+	}
+
+	/// Computes timing phase with an optional lookup and streaming phase-application mode.
+	RealType computeTimingPhase(const Transmitter* tx, const Receiver* rx, const RealType rx_time,
+								const RealType tx_time, const simulation::CwPhaseNoiseLookup* phase_noise_lookup,
+								const simulation::StreamingTimingPhaseMode mode)
+	{
+		if (mode == simulation::StreamingTimingPhaseMode::None)
+		{
+			return 0.0;
+		}
+		if (mode == simulation::StreamingTimingPhaseMode::TransmitterOnly)
+		{
+			if (phase_noise_lookup == nullptr)
+			{
+				return computeSingleTimingPhase(tx->getTiming().get(), tx_time);
+			}
+			return phase_noise_lookup->sample(tx->getTiming().get(), tx_time);
+		}
 		if (phase_noise_lookup == nullptr)
 		{
 			return computeTimingPhase(tx, rx, rx_time);
@@ -665,7 +688,8 @@ namespace simulation
 	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
 														 const Receiver* recv, const RealType timeK,
 														 const CwPhaseNoiseLookup* const phase_noise_lookup,
-														 core::FmcwChirpBoundaryTracker* const chirp_tracker)
+														 core::FmcwChirpBoundaryTracker* const chirp_tracker,
+														 const StreamingTimingPhaseMode timing_phase_mode)
 	{
 		const auto* const trans = source.transmitter;
 		if (trans == nullptr)
@@ -720,10 +744,17 @@ namespace simulation
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
-		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup);
+		const RealType non_coherent_phase =
+			computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup, timing_phase_mode);
 		contribution *= std::polar(1.0, non_coherent_phase);
 
 		return contribution;
+	}
+
+	bool calculateStreamingReferencePhase(const core::ActiveStreamingSource& source, const RealType timeK,
+										  core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
+	{
+		return computeStreamingPhase(source, timeK, 0.0, chirp_tracker, phase_out);
 	}
 
 	ComplexType calculateReflectedPathContribution(const Transmitter* trans, const Receiver* recv, const Target* targ,
@@ -738,7 +769,8 @@ namespace simulation
 															const Receiver* recv, const Target* targ,
 															const RealType timeK,
 															const CwPhaseNoiseLookup* const phase_noise_lookup,
-															core::FmcwChirpBoundaryTracker* const chirp_tracker)
+															core::FmcwChirpBoundaryTracker* const chirp_tracker,
+															const StreamingTimingPhaseMode timing_phase_mode)
 	{
 		const auto* const trans = source.transmitter;
 		if (trans == nullptr)
@@ -801,7 +833,8 @@ namespace simulation
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
-		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup);
+		const RealType non_coherent_phase =
+			computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup, timing_phase_mode);
 		contribution *= std::polar(1.0, non_coherent_phase);
 
 		return contribution;

@@ -874,6 +874,14 @@ TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial
 								 "</transmitter>");
 	REQUIRE_THROWS_AS(serial::xml_parser_utils::parseTransmitter(ambiguous_doc.getRootElement(), &platform, ctx, refs),
 					  XmlException);
+
+	auto transmitter_dechirp_doc =
+		loadXml("<transmitter name=\"tx3\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+				"  <fmcw_mode dechirp_mode=\"physical\"><dechirp_reference source=\"attached\"/></fmcw_mode>"
+				"</transmitter>");
+	REQUIRE_THROWS_WITH(
+		serial::xml_parser_utils::parseTransmitter(transmitter_dechirp_doc.getRootElement(), &platform, ctx, refs),
+		ContainsSubstring("must not contain dechirp configuration"));
 }
 
 TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timing", "[serial][xml_parser_utils][fmcw]")
@@ -994,6 +1002,33 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 		REQUIRE_FALSE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		REQUIRE_FALSE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 		REQUIRE(capture.str().empty());
+	}
+
+	SECTION("FMCW receiver accepts attached dechirp reference")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode dechirp_mode=\"physical\">"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+
+		REQUIRE(rx->getMode() == radar::OperationMode::FMCW_MODE);
+		REQUIRE(rx->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
+		REQUIRE(rx->getDechirpReference().source == radar::Receiver::DechirpReferenceSource::Attached);
+	}
+
+	SECTION("FMCW receiver rejects orphan dechirp reference")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode>"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("dechirp_reference"));
 	}
 
 	SECTION("Invalid pulsed parameters throw")

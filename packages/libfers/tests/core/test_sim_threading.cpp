@@ -32,6 +32,7 @@
 
 using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 
 namespace
 {
@@ -60,6 +61,29 @@ namespace
 		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
 		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
+
+	/// Initializes a platform with constant position and zero rotation.
+	void setupStaticPlatform(radar::Platform& platform, const math::Vec3& position)
+	{
+		platform.getMotionPath()->addCoord(math::Coord{position, 0.0});
+		platform.getMotionPath()->finalize();
+		platform.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+		platform.getRotationPath()->finalize();
+	}
+
+	/// Wraps a phase delta into the [-pi, pi] interval.
+	RealType unwrapDelta(RealType delta)
+	{
+		while (delta > PI)
+		{
+			delta -= 2.0 * PI;
+		}
+		while (delta < -PI)
+		{
+			delta += 2.0 * PI;
+		}
+		return delta;
+	}
 
 	/**
 	 * @brief Helper to create a fully configured World with basic physics objects.
@@ -649,6 +673,230 @@ TEST_CASE("SimulationEngine processStreamingPhysics uses buffered shared timing 
 
 	REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1e-6));
 	REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1e-6));
+}
+
+TEST_CASE("SimulationEngine phase-noise lookup covers pre-start retarded streaming emissions", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(10.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+	params::setC(10.0);
+
+	auto world = std::make_unique<core::World>();
+	auto tx_plat = std::make_unique<radar::Platform>("TxPlat", 10);
+	setupStaticPlatform(*tx_plat, math::Vec3{0.0, 0.0, 0.0});
+	auto rx_plat = std::make_unique<radar::Platform>("RxPlat", 11);
+	setupStaticPlatform(*rx_plat, math::Vec3{1.5, 0.0, 0.0});
+
+	auto proto_timing = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+	proto_timing->setFrequency(1.0);
+	proto_timing->setFreqOffset(1.0);
+	auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+	timing->initializeModel(proto_timing.get());
+	const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
+	const auto expected_lookup = simulation::CwPhaseNoiseLookup::build(timings, -0.2, params::endTime());
+
+	auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+	auto signal = std::make_unique<fers_signal::RadarSignal>("CWWave", 1.0, 1.0, 1.0,
+															 std::make_unique<fers_signal::CwSignal>(), 3);
+	auto tx = std::make_unique<radar::Transmitter>(tx_plat.get(), "Tx", radar::OperationMode::CW_MODE, 4);
+	tx->setTiming(timing);
+	tx->setAntenna(antenna.get());
+	tx->setSignal(signal.get());
+	auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 5);
+	rx->setTiming(timing);
+	rx->setAntenna(antenna.get());
+	rx->prepareStreamingData(10);
+	rx->setActive(true);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	world->add(std::move(tx_plat));
+	world->add(std::move(rx_plat));
+	world->add(std::move(proto_timing));
+	world->add(std::move(antenna));
+	world->add(std::move(signal));
+	world->add(std::move(tx));
+	world->add(std::move(rx));
+	world->getSimulationState().t_current = 0.0;
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, -0.2, params::endTime()));
+	engine.processStreamingPhysics(0.2);
+
+	const ComplexType expected = simulation::calculateDirectPathContribution(tx_ptr, rx_ptr, 0.1, &expected_lookup);
+	const ComplexType actual = rx_ptr->getStreamingData()[1];
+	REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1.0e-6));
+	REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1.0e-6));
+}
+
+TEST_CASE("SimulationEngine native FMCW dechirp produces positive stationary-target beat",
+		  "[core][threading][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e6);
+	params::setOversampleRatio(1);
+	params::setSimSamplingRate(1.0e6);
+	params::setTime(0.0, 1.0e-3);
+
+	const RealType target_range = 150.0;
+	const RealType chirp_bandwidth = 1.0e6;
+	const RealType chirp_duration = 1.0e-3;
+	const RealType chirp_rate = chirp_bandwidth / chirp_duration;
+	const RealType tau = (2.0 * target_range) / params::c();
+
+	auto world = std::make_unique<core::World>();
+	auto radar_platform = std::make_unique<radar::Platform>("RadarPlatform", 10);
+	setupStaticPlatform(*radar_platform, math::Vec3{0.0, 0.0, 0.0});
+	auto target_platform = std::make_unique<radar::Platform>("TargetPlatform", 11);
+	setupStaticPlatform(*target_platform, math::Vec3{target_range, 0.0, 0.0});
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+	timing_proto->setFrequency(10.0e6);
+	auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+	timing->initializeModel(timing_proto.get());
+	auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+	auto fmcw = std::make_unique<fers_signal::FmcwChirpSignal>(chirp_bandwidth, chirp_duration, chirp_duration);
+	auto signal =
+		std::make_unique<fers_signal::RadarSignal>("FmcwWave", 1.0, 10.0e6, chirp_duration, std::move(fmcw), 3);
+
+	auto tx = std::make_unique<radar::Transmitter>(radar_platform.get(), "Tx", radar::OperationMode::FMCW_MODE, 4);
+	tx->setTiming(timing);
+	tx->setAntenna(antenna.get());
+	tx->setSignal(signal.get());
+
+	auto rx = std::make_unique<radar::Receiver>(radar_platform.get(), "Rx", 42, radar::OperationMode::FMCW_MODE, 5);
+	rx->setTiming(timing);
+	rx->setAntenna(antenna.get());
+	rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+	rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+	rx->setDechirpMode(radar::Receiver::DechirpMode::Ideal);
+	radar::Receiver::DechirpReference reference;
+	reference.source = radar::Receiver::DechirpReferenceSource::Attached;
+	rx->setDechirpReference(reference);
+	rx->prepareStreamingData(1000);
+	rx->setActive(true);
+
+	auto target = radar::createIsoTarget(target_platform.get(), "Target", 1.0, 7, 6);
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	tx->setAttached(rx_ptr);
+	rx->setAttached(tx_ptr);
+
+	world->add(std::move(radar_platform));
+	world->add(std::move(target_platform));
+	world->add(std::move(timing_proto));
+	world->add(std::move(antenna));
+	world->add(std::move(signal));
+	world->add(std::move(tx));
+	world->add(std::move(rx));
+	world->add(std::move(target));
+	world->resolveReceiverDechirpReferences();
+	world->getSimulationState().t_current = 0.0;
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, params::startTime(), params::endTime()));
+	engine.processStreamingPhysics(0.0007);
+
+	const RealType dt = 1.0 / params::simSamplingRate();
+	const std::size_t first_index = 20;
+	const std::size_t sample_count = 500;
+	RealType unwrapped_span = 0.0;
+	RealType previous_phase = std::arg(rx_ptr->getStreamingData()[first_index]);
+	for (std::size_t i = 1; i < sample_count; ++i)
+	{
+		const RealType phase = std::arg(rx_ptr->getStreamingData()[first_index + i]);
+		unwrapped_span += unwrapDelta(phase - previous_phase);
+		previous_phase = phase;
+	}
+
+	const RealType measured_beat_hz = unwrapped_span / (2.0 * PI * dt * static_cast<RealType>(sample_count - 1));
+	REQUIRE_THAT(measured_beat_hz, WithinRel(chirp_rate * tau, 1.0e-3));
+}
+
+TEST_CASE("SimulationEngine physical FMCW dechirp keeps timing decorrelation absent from ideal mode",
+		  "[core][threading][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setSimSamplingRate(2.0e6);
+	params::setTime(0.0, 1.0e-3);
+
+	const RealType target_range = 150.0;
+	const RealType chirp_duration = 1.0e-3;
+	const RealType freq_offset = 250.0e3;
+	const RealType tau = (2.0 * target_range) / params::c();
+	const std::size_t sample_index = 80;
+	const RealType sample_time = static_cast<RealType>(sample_index) / params::simSamplingRate();
+
+	const auto run_sample = [&](const radar::Receiver::DechirpMode mode)
+	{
+		auto world = std::make_unique<core::World>();
+		auto radar_platform = std::make_unique<radar::Platform>("RadarPlatform", 10);
+		setupStaticPlatform(*radar_platform, math::Vec3{0.0, 0.0, 0.0});
+		auto target_platform = std::make_unique<radar::Platform>("TargetPlatform", 11);
+		setupStaticPlatform(*target_platform, math::Vec3{target_range, 0.0, 0.0});
+		auto timing_proto = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+		timing_proto->setFrequency(10.0e6);
+		timing_proto->setFreqOffset(freq_offset);
+		auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+		timing->initializeModel(timing_proto.get());
+		auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+		auto fmcw = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, chirp_duration, chirp_duration);
+		auto signal =
+			std::make_unique<fers_signal::RadarSignal>("FmcwWave", 1.0, 10.0e6, chirp_duration, std::move(fmcw), 3);
+
+		auto tx = std::make_unique<radar::Transmitter>(radar_platform.get(), "Tx", radar::OperationMode::FMCW_MODE, 4);
+		tx->setTiming(timing);
+		tx->setAntenna(antenna.get());
+		tx->setSignal(signal.get());
+		auto rx = std::make_unique<radar::Receiver>(radar_platform.get(), "Rx", 42, radar::OperationMode::FMCW_MODE, 5);
+		rx->setTiming(timing);
+		rx->setAntenna(antenna.get());
+		rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+		rx->setDechirpMode(mode);
+		radar::Receiver::DechirpReference reference;
+		reference.source = radar::Receiver::DechirpReferenceSource::Attached;
+		rx->setDechirpReference(reference);
+		rx->prepareStreamingData(sample_index + 2);
+		rx->setActive(true);
+
+		auto target = radar::createIsoTarget(target_platform.get(), "Target", 1.0, 7, 6);
+		auto* tx_ptr = tx.get();
+		auto* rx_ptr = rx.get();
+		tx->setAttached(rx_ptr);
+		rx->setAttached(tx_ptr);
+
+		world->add(std::move(radar_platform));
+		world->add(std::move(target_platform));
+		world->add(std::move(timing_proto));
+		world->add(std::move(antenna));
+		world->add(std::move(signal));
+		world->add(std::move(tx));
+		world->add(std::move(rx));
+		world->add(std::move(target));
+		world->resolveReceiverDechirpReferences();
+		world->getSimulationState().t_current = 0.0;
+
+		pool::ThreadPool pool(1);
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, params::startTime(), params::endTime()));
+		engine.processStreamingPhysics(sample_time + 1.0 / params::simSamplingRate());
+		return rx_ptr->getStreamingData()[sample_index];
+	};
+
+	const ComplexType physical = run_sample(radar::Receiver::DechirpMode::Physical);
+	const ComplexType ideal = run_sample(radar::Receiver::DechirpMode::Ideal);
+	const RealType measured_delta = std::arg(physical * std::conj(ideal));
+	const RealType expected_delta = 2.0 * PI * freq_offset * tau;
+
+	REQUIRE_THAT(measured_delta, WithinAbs(expected_delta, 1.0e-6));
 }
 
 TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threading]")

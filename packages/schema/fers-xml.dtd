@@ -160,7 +160,14 @@
         <!-- Elements for defining radar operational modes -->
         <!ELEMENT pulsed_mode (prf, window_skip?, window_length?)>
         <!ELEMENT cw_mode EMPTY>
-        <!ELEMENT fmcw_mode EMPTY>
+        <!ELEMENT fmcw_mode (dechirp_reference?)>
+        <!ATTLIST fmcw_mode dechirp_mode (none|physical|ideal) "none">
+        <!ELEMENT dechirp_reference EMPTY>
+        <!ATTLIST dechirp_reference
+                source (attached|transmitter|custom) #REQUIRED
+                transmitter_name CDATA #IMPLIED
+                waveform_name CDATA #IMPLIED
+                >
 
         <!ELEMENT schedule (period+)>
         <!ELEMENT period EMPTY>

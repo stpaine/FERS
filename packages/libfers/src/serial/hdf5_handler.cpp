@@ -36,12 +36,63 @@ namespace serial
 		file.createAttribute("receiver_id", static_cast<unsigned long long>(metadata.receiver_id));
 		file.createAttribute("receiver_name", metadata.receiver_name);
 		file.createAttribute("data_mode", metadata.mode);
+		if (metadata.sampling_rate > 0.0)
+		{
+			file.createAttribute("output_sampling_rate", metadata.sampling_rate);
+		}
 		file.createAttribute("total_samples", static_cast<unsigned long long>(metadata.total_samples));
 		file.createAttribute("sample_start", static_cast<unsigned long long>(metadata.sample_start));
 		file.createAttribute("sample_end_exclusive", static_cast<unsigned long long>(metadata.sample_end_exclusive));
 		file.createAttribute("streaming_segment_count",
 							 static_cast<unsigned long long>(metadata.streaming_segments.size()));
 		file.createAttribute("fmcw_source_count", static_cast<unsigned long long>(metadata.fmcw_sources.size()));
+		file.createAttribute("fmcw_dechirp_mode", metadata.fmcw_dechirp_mode);
+		file.createAttribute("fmcw_dechirp_reference_source", metadata.fmcw_dechirp_reference_source);
+		if (metadata.fmcw_dechirp_reference_transmitter_id.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_transmitter_id",
+								 static_cast<unsigned long long>(*metadata.fmcw_dechirp_reference_transmitter_id));
+		}
+		if (metadata.fmcw_dechirp_reference_transmitter_name.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_transmitter_name",
+								 *metadata.fmcw_dechirp_reference_transmitter_name);
+		}
+		if (metadata.fmcw_dechirp_reference_waveform_id.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_waveform_id",
+								 static_cast<unsigned long long>(*metadata.fmcw_dechirp_reference_waveform_id));
+		}
+		if (metadata.fmcw_dechirp_reference_waveform_name.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_waveform_name",
+								 *metadata.fmcw_dechirp_reference_waveform_name);
+		}
+		if (metadata.fmcw_dechirp_reference_waveform.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_waveform_shape",
+								 metadata.fmcw_dechirp_reference_waveform->waveform_shape);
+			file.createAttribute("fmcw_dechirp_reference_chirp_bandwidth",
+								 metadata.fmcw_dechirp_reference_waveform->chirp_bandwidth);
+			file.createAttribute("fmcw_dechirp_reference_chirp_duration",
+								 metadata.fmcw_dechirp_reference_waveform->chirp_duration);
+			file.createAttribute("fmcw_dechirp_reference_chirp_rate",
+								 metadata.fmcw_dechirp_reference_waveform->chirp_rate);
+			file.createAttribute("fmcw_dechirp_reference_start_frequency_offset",
+								 metadata.fmcw_dechirp_reference_waveform->start_frequency_offset);
+			if (metadata.fmcw_dechirp_reference_waveform->waveform_shape == "linear")
+			{
+				file.createAttribute("fmcw_dechirp_reference_chirp_period",
+									 metadata.fmcw_dechirp_reference_waveform->chirp_period);
+				file.createAttribute("fmcw_dechirp_reference_chirp_direction",
+									 metadata.fmcw_dechirp_reference_waveform->chirp_direction);
+			}
+			else if (metadata.fmcw_dechirp_reference_waveform->triangle_period.has_value())
+			{
+				file.createAttribute("fmcw_dechirp_reference_triangle_period",
+									 *metadata.fmcw_dechirp_reference_waveform->triangle_period);
+			}
+		}
 		if (metadata.fmcw.has_value())
 		{
 			file.createAttribute("fmcw_waveform_shape", metadata.fmcw->waveform_shape);

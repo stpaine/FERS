@@ -3,10 +3,12 @@
 #include <chrono>
 #include <filesystem>
 #include <highfive/highfive.hpp>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
 #include "core/config.h"
+#include "core/output_metadata.h"
 #include "core/parameters.h"
 #include "serial/hdf5_handler.h"
 
@@ -222,6 +224,28 @@ TEST_CASE("HDF5 writer adds backward-compatible output metadata attributes", "[s
 	}
 
 	removeIfExists(path);
+}
+
+TEST_CASE("Output metadata uses per-file sampling rates when outputs differ", "[serial][metadata]")
+{
+	core::OutputMetadata metadata{.simulation_name = "mixed-rates",
+								  .output_directory = "/tmp/fers",
+								  .start_time = 0.0,
+								  .end_time = 1.0,
+								  .sampling_rate = 1'000.0,
+								  .oversample_ratio = 4,
+								  .files = {}};
+	metadata.files.push_back(core::OutputFileMetadata{
+		.receiver_id = 1, .receiver_name = "RawRx", .mode = "fmcw", .path = "raw.h5", .sampling_rate = 1'000.0});
+	metadata.files.push_back(core::OutputFileMetadata{
+		.receiver_id = 2, .receiver_name = "DechirpedRx", .mode = "fmcw", .path = "if.h5", .sampling_rate = 4'000.0});
+
+	const auto json = nlohmann::json::parse(core::outputMetadataToJsonString(metadata));
+
+	REQUIRE(json.at("sampling_rate").is_null());
+	REQUIRE(json.at("sampling_rates").size() == 2);
+	REQUIRE(json.at("files").at(0).at("sampling_rate") == 1'000.0);
+	REQUIRE(json.at("files").at(1).at("sampling_rate") == 4'000.0);
 }
 
 TEST_CASE("HDF5 writer exposes FMCW segment metadata without cw_segments JSON alias", "[serial][hdf5]")

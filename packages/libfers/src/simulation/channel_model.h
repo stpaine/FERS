@@ -90,6 +90,14 @@ namespace simulation
 											   const timing::Timing* tx_timing, RealType tx_time) const noexcept;
 	};
 
+	/// Selects how timing phase noise is applied to streaming channel contributions.
+	enum class StreamingTimingPhaseMode
+	{
+		ReceiverRelative, ///< Existing raw streaming convention: transmitter phase minus receiver LO phase.
+		TransmitterOnly, ///< Incoming RF/baseband signal before receiver LO subtraction.
+		None ///< Ignore timing phase noise entirely.
+	};
+
 	/**
 	 * @struct ReResults
 	 * @brief Stores the intermediate results of a radar equation calculation for a single time point.
@@ -165,11 +173,34 @@ namespace simulation
 	ComplexType calculateDirectPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
 												RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
-	/// Calculates a direct-path contribution from a cached streaming source.
-	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
-														 const radar::Receiver* recv, RealType timeK,
-														 const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
-														 core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr);
+	/**
+	 * @brief Calculates a direct-path contribution from a cached streaming source.
+	 *
+	 * @param source Cached active streaming source to evaluate.
+	 * @param recv Receiver observing the source.
+	 * @param timeK Current receiver time in seconds.
+	 * @param phase_noise_lookup Optional lookup for timing phase noise samples.
+	 * @param chirp_tracker Optional caller-owned FMCW boundary tracker for this path.
+	 * @param timing_phase_mode Selects how timing phase noise is applied.
+	 * @return The complex I/Q sample contribution for this path.
+	 */
+	ComplexType calculateStreamingDirectPathContribution(
+		const core::ActiveStreamingSource& source, const radar::Receiver* recv, RealType timeK,
+		const CwPhaseNoiseLookup* phase_noise_lookup = nullptr, core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr,
+		StreamingTimingPhaseMode timing_phase_mode = StreamingTimingPhaseMode::ReceiverRelative);
+
+	/**
+	 * @brief Evaluates a receive-time streaming waveform phase for receiver LO/dechirp references.
+	 *
+	 * @param source Cached active streaming source to evaluate.
+	 * @param timeK Receiver time in seconds.
+	 * @param chirp_tracker Optional caller-owned FMCW boundary tracker for this source.
+	 * @param phase_out Receives the waveform phase in radians when evaluation succeeds.
+	 * @return True when the source is active and a phase was produced.
+	 */
+	[[nodiscard]] bool calculateStreamingReferencePhase(const core::ActiveStreamingSource& source, RealType timeK,
+														core::FmcwChirpBoundaryTracker* chirp_tracker,
+														RealType& phase_out);
 
 	/**
 	 * @brief Calculates the complex envelope contribution for a reflected path (Tx -> Tgt -> Rx) at a specific time.
@@ -185,12 +216,23 @@ namespace simulation
 												   const radar::Target* targ, RealType timeK,
 												   const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
-	/// Calculates a reflected-path contribution from a cached streaming source.
-	ComplexType calculateStreamingReflectedPathContribution(const core::ActiveStreamingSource& source,
-															const radar::Receiver* recv, const radar::Target* targ,
-															RealType timeK,
-															const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
-															core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr);
+	/**
+	 * @brief Calculates a reflected-path contribution from a cached streaming source.
+	 *
+	 * @param source Cached active streaming source to evaluate.
+	 * @param recv Receiver observing the reflected signal.
+	 * @param targ Reflecting target.
+	 * @param timeK Current receiver time in seconds.
+	 * @param phase_noise_lookup Optional lookup for timing phase noise samples.
+	 * @param chirp_tracker Optional caller-owned FMCW boundary tracker for this path.
+	 * @param timing_phase_mode Selects how timing phase noise is applied.
+	 * @return The complex I/Q sample contribution for this reflected path.
+	 */
+	ComplexType calculateStreamingReflectedPathContribution(
+		const core::ActiveStreamingSource& source, const radar::Receiver* recv, const radar::Target* targ,
+		RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
+		core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr,
+		StreamingTimingPhaseMode timing_phase_mode = StreamingTimingPhaseMode::ReceiverRelative);
 
 	/**
 	 * @brief Creates a Response object by simulating a signal's interaction over its duration.

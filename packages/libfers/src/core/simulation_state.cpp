@@ -115,6 +115,81 @@ namespace core
 			}
 			return reduced;
 		}
+
+		/// Populates waveform-dependent fields in an active streaming source.
+		void populateWaveformCache(ActiveStreamingSource& source, const fers_signal::RadarSignal* const signal,
+								   const RealType segment_start)
+		{
+			if (signal == nullptr)
+			{
+				return;
+			}
+
+			source.carrier_freq = signal->getCarrier();
+			source.amplitude = std::sqrt(signal->getPower());
+			if (const auto* const fmcw = signal->getFmcwChirpSignal(); fmcw != nullptr)
+			{
+				source.kind = StreamingWaveformKind::FmcwLinear;
+				source.is_fmcw = true;
+				source.fmcw = fmcw;
+				source.chirp_duration = source.fmcw->getChirpDuration();
+				source.chirp_period = source.fmcw->getChirpPeriod();
+				source.chirp_rate = source.fmcw->getChirpRate();
+				source.signed_chirp_rate = source.fmcw->getSignedChirpRate();
+				source.start_freq_off = source.fmcw->getStartFrequencyOffset();
+				source.two_pi_f0 = 2.0 * PI * source.start_freq_off;
+				source.s_pi_alpha = PI * source.signed_chirp_rate;
+				source.chirp_count = source.fmcw->getChirpCount();
+				if (source.chirp_count.has_value())
+				{
+					source.segment_end =
+						std::min(source.segment_end,
+								 segment_start + static_cast<RealType>(*source.chirp_count) * source.chirp_period);
+				}
+				return;
+			}
+
+			if (const auto* const triangle = signal->getFmcwTriangleSignal(); triangle != nullptr)
+			{
+				source.kind = StreamingWaveformKind::FmcwTriangle;
+				source.is_fmcw = true;
+				source.triangle = triangle;
+				source.chirp_duration = triangle->getChirpDuration();
+				source.chirp_rate = triangle->getChirpRate();
+				source.start_freq_off = triangle->getStartFrequencyOffset();
+				source.triangle_period = triangle->getTrianglePeriod();
+				source.chirp_period = source.triangle_period;
+				source.two_pi_f0 = 2.0 * PI * source.start_freq_off;
+				source.two_pi_f0_plus_B = 2.0 * PI * (source.start_freq_off + triangle->getChirpBandwidth());
+				source.pi_alpha = PI * source.chirp_rate;
+				source.neg_pi_alpha = -source.pi_alpha;
+				source.mod_phi_up = positiveModuloTwoPi(triangle->getDeltaPhiUp());
+				source.mod_phi_tri = positiveModuloTwoPi(2.0 * source.mod_phi_up);
+				source.triangle_count = triangle->getTriangleCount();
+
+				const RealType raw_end = source.segment_end;
+				const RealType raw_duration = std::max<RealType>(0.0, raw_end - segment_start);
+				if (!std::isfinite(raw_duration))
+				{
+					if (source.triangle_count.has_value())
+					{
+						source.segment_end =
+							segment_start + static_cast<RealType>(*source.triangle_count) * source.triangle_period;
+					}
+					return;
+				}
+
+				const auto full_by_duration = static_cast<std::size_t>(
+					std::floor(raw_duration / source.triangle_period + kWaveformBoundaryIndexTolerance));
+				std::size_t emitted_triangles = full_by_duration;
+				if (source.triangle_count.has_value())
+				{
+					emitted_triangles = std::min(emitted_triangles, *source.triangle_count);
+				}
+				source.segment_end = segment_start + static_cast<RealType>(emitted_triangles) * source.triangle_period;
+				return;
+			}
+		}
 	}
 
 	ActiveStreamingSource makeActiveSource(const radar::Transmitter* const tx, const RealType segment_start,
@@ -135,78 +210,28 @@ namespace core
 			return source;
 		}
 
-		source.carrier_freq = signal->getCarrier();
-		source.amplitude = std::sqrt(signal->getPower());
-		if (const auto* const fmcw = signal->getFmcwChirpSignal(); fmcw != nullptr)
+		const RealType raw_segment_end = segment_end;
+		populateWaveformCache(source, signal, segment_start);
+		if (source.kind == StreamingWaveformKind::FmcwTriangle &&
+			source.segment_end + kWaveformBoundaryTimeToleranceSeconds < raw_segment_end)
 		{
-			source.kind = StreamingWaveformKind::FmcwLinear;
-			source.is_fmcw = true;
-			source.fmcw = fmcw;
-			source.chirp_duration = source.fmcw->getChirpDuration();
-			source.chirp_period = source.fmcw->getChirpPeriod();
-			source.chirp_rate = source.fmcw->getChirpRate();
-			source.signed_chirp_rate = source.fmcw->getSignedChirpRate();
-			source.start_freq_off = source.fmcw->getStartFrequencyOffset();
-			source.two_pi_f0 = 2.0 * PI * source.start_freq_off;
-			source.s_pi_alpha = PI * source.signed_chirp_rate;
-			source.chirp_count = source.fmcw->getChirpCount();
-			if (source.chirp_count.has_value())
-			{
-				source.segment_end =
-					std::min(source.segment_end,
-							 segment_start + static_cast<RealType>(*source.chirp_count) * source.chirp_period);
-			}
-			return source;
+			const auto emitted_triangles = static_cast<std::uint64_t>(
+				std::max<RealType>(0.0, (source.segment_end - segment_start) / source.triangle_period));
+			LOG(logging::Level::WARNING,
+				"FMCW triangle transmitter '{}' segment [{}, {}] emits {} complete triangles and drops {} s of "
+				"leftover active time.",
+				tx->getName(), segment_start, raw_segment_end, emitted_triangles, raw_segment_end - source.segment_end);
 		}
+		return source;
+	}
 
-		if (const auto* const triangle = signal->getFmcwTriangleSignal(); triangle != nullptr)
-		{
-			source.kind = StreamingWaveformKind::FmcwTriangle;
-			source.is_fmcw = true;
-			source.triangle = triangle;
-			source.chirp_duration = triangle->getChirpDuration();
-			source.chirp_rate = triangle->getChirpRate();
-			source.start_freq_off = triangle->getStartFrequencyOffset();
-			source.triangle_period = triangle->getTrianglePeriod();
-			source.chirp_period = source.triangle_period;
-			source.two_pi_f0 = 2.0 * PI * source.start_freq_off;
-			source.two_pi_f0_plus_B = 2.0 * PI * (source.start_freq_off + triangle->getChirpBandwidth());
-			source.pi_alpha = PI * source.chirp_rate;
-			source.neg_pi_alpha = -source.pi_alpha;
-			source.mod_phi_up = positiveModuloTwoPi(triangle->getDeltaPhiUp());
-			source.mod_phi_tri = positiveModuloTwoPi(2.0 * source.mod_phi_up);
-			source.triangle_count = triangle->getTriangleCount();
-
-			const RealType raw_end = source.segment_end;
-			const RealType raw_duration = std::max<RealType>(0.0, raw_end - segment_start);
-			if (!std::isfinite(raw_duration))
-			{
-				if (source.triangle_count.has_value())
-				{
-					source.segment_end =
-						segment_start + static_cast<RealType>(*source.triangle_count) * source.triangle_period;
-				}
-				return source;
-			}
-
-			const auto full_by_duration = static_cast<std::size_t>(
-				std::floor(raw_duration / source.triangle_period + kWaveformBoundaryIndexTolerance));
-			std::size_t emitted_triangles = full_by_duration;
-			if (source.triangle_count.has_value())
-			{
-				emitted_triangles = std::min(emitted_triangles, *source.triangle_count);
-			}
-			source.segment_end = segment_start + static_cast<RealType>(emitted_triangles) * source.triangle_period;
-			if (source.segment_end + kWaveformBoundaryTimeToleranceSeconds < raw_end)
-			{
-				LOG(logging::Level::WARNING,
-					"FMCW triangle transmitter '{}' segment [{}, {}] emits {} complete triangles and drops {} s of "
-					"leftover active time.",
-					tx->getName(), segment_start, raw_end, emitted_triangles, raw_end - source.segment_end);
-			}
-			return source;
-		}
-
+	ActiveStreamingSource makeActiveSourceFromWaveform(const fers_signal::RadarSignal* const signal,
+													   const RealType segment_start, const RealType segment_end)
+	{
+		ActiveStreamingSource source{};
+		source.segment_start = segment_start;
+		source.segment_end = segment_end;
+		populateWaveformCache(source, signal, segment_start);
 		return source;
 	}
 

@@ -139,6 +139,33 @@ TEST_CASE("Simulation memory projection totals core categories", "[core][memory_
 	REQUIRE(json["resident_baseline"].contains("bytes"));
 }
 
+TEST_CASE("Simulation memory projection counts dechirped streaming output at RF rate", "[core][memory_projection]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 1.0);
+	params::setRate(10.0);
+	params::setOversampleRatio(2);
+
+	auto world = makeProjectionWorld();
+	auto* platform = world->getPlatforms().front().get();
+	auto* antenna = world->findAntenna(300);
+	const auto timing = world->getReceivers().front()->getTiming();
+
+	auto dechirped_rx =
+		std::make_unique<radar::Receiver>(platform, "DechirpedRx", 13, radar::OperationMode::FMCW_MODE, 800);
+	dechirped_rx->setTiming(timing);
+	dechirped_rx->setAntenna(antenna);
+	dechirped_rx->setDechirpMode(radar::Receiver::DechirpMode::Physical);
+	world->add(std::move(dechirped_rx));
+
+	const auto projection = core::projectSimulationMemory(*world);
+
+	REQUIRE(projection.streaming_sample_count == 20);
+	REQUIRE(projection.streaming_receiver_count == 2);
+	REQUIRE(projection.rendered_hdf5_sample_count == 36);
+	REQUIRE(projection.rendered_hdf5_payload.bytes == 36 * 2 * sizeof(RealType));
+}
+
 TEST_CASE("Simulation memory projection log names required categories", "[core][memory_projection][logging]")
 {
 	ParamGuard guard;
