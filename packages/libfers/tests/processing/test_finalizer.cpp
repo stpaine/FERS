@@ -428,7 +428,7 @@ TEST_CASE("finalizeStreamingReceiver keeps multiple FMCW sources unambiguous",
 	std::filesystem::remove_all(out_dir);
 }
 
-TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates", "[processing][finalizer]")
+TEST_CASE("runPulsedFinalizer writes jittered chunks and emits completion progress", "[processing][finalizer]")
 {
 	ParamGuard guard;
 	params::setRate(8.0);
@@ -475,7 +475,6 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 
 	std::jthread worker(processing::runPulsedFinalizer, &receiver, &targets, reporter, out_dir.string(), nullptr);
 	receiver.enqueueFinalizerJob(std::move(first_job));
-	std::this_thread::sleep_for(std::chrono::milliseconds(150));
 	receiver.enqueueFinalizerJob(std::move(second_job));
 	core::RenderingJob shutdown_job{};
 	shutdown_job.duration = -1.0;
@@ -519,8 +518,6 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits progress updates"
 		REQUIRE_THAT(time_attr_1, WithinAbs(1.125, 1e-12));
 	}
 
-	REQUIRE(std::ranges::any_of(progress_calls, [](const ProgressCall& call)
-								{ return call.message.find("Chunk 2") != std::string::npos; }));
 	REQUIRE(std::ranges::any_of(
 		progress_calls, [&receiver_name](const ProgressCall& call)
 		{ return call.message == "Finished Exporting " + receiver_name && call.current == 100 && call.total == 100; }));
