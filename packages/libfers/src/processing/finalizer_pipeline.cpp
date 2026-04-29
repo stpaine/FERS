@@ -14,6 +14,7 @@
 #include <limits>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <unordered_map>
 
 #include "core/logging.h"
@@ -185,6 +186,13 @@ namespace processing::pipeline
 			unsigned psize;
 			RealType prate;
 			const auto rendered_pulse = response->renderBinary(prate, psize, 0.0);
+			const RealType rate_tolerance = std::numeric_limits<RealType>::epsilon() *
+				std::max(std::abs(prate), std::abs(output_sample_rate)) * 16.0;
+			if (std::abs(prate - output_sample_rate) > rate_tolerance)
+			{
+				throw std::runtime_error(
+					"Pulsed interference sample rate must match the streaming output sample rate.");
+			}
 
 			const RealType pulse_end_time = response->startTime() + static_cast<RealType>(psize) / prate;
 			const auto pulse_start_index =
@@ -205,31 +213,9 @@ namespace processing::pipeline
 				}
 
 				const auto copy_count = static_cast<std::size_t>(dest_end - dest_begin);
-				const RealType source_start =
-					(params::startTime() + static_cast<RealType>(dest_begin) / output_sample_rate -
-					 response->startTime()) *
-					prate;
-				const RealType rate_tolerance = std::numeric_limits<RealType>::epsilon() *
-					std::max(std::abs(prate), std::abs(output_sample_rate)) * 16.0;
-				if (std::abs(prate - output_sample_rate) <= rate_tolerance)
+				auto source_index = dest_begin - pulse_start_index;
+				for (std::size_t i = 0; i < copy_count; ++i, ++source_index)
 				{
-					auto source_index = static_cast<long long>(std::floor(source_start));
-					for (std::size_t i = 0; i < copy_count; ++i, ++source_index)
-					{
-						if (source_index >= 0 && source_index < static_cast<long long>(rendered_pulse.size()))
-						{
-							iq_buffer[static_cast<std::size_t>(dest_begin) + i] +=
-								rendered_pulse[static_cast<std::size_t>(source_index)];
-						}
-					}
-					continue;
-				}
-
-				const RealType source_step = prate / output_sample_rate;
-				RealType source_position = source_start;
-				for (std::size_t i = 0; i < copy_count; ++i, source_position += source_step)
-				{
-					const auto source_index = static_cast<long long>(std::floor(source_position));
 					if (source_index >= 0 && source_index < static_cast<long long>(rendered_pulse.size()))
 					{
 						iq_buffer[static_cast<std::size_t>(dest_begin) + i] +=

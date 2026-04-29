@@ -51,69 +51,6 @@ namespace core
 {
 	namespace
 	{
-		void includeStreamingIntervalStart(std::optional<RealType>& earliest, const RealType segment_start,
-										   const RealType segment_end, const bool allow_pre_start)
-		{
-			const RealType sim_start = params::startTime();
-			const RealType sim_end = params::endTime();
-			if (segment_end <= sim_start || segment_start >= sim_end)
-			{
-				return;
-			}
-
-			const RealType required_start =
-				allow_pre_start && segment_start < sim_start ? segment_start : std::max(sim_start, segment_start);
-			earliest = earliest.has_value() ? std::min(*earliest, required_start) : required_start;
-		}
-
-		RealType earliestPhaseNoiseLookupStart(const World& world)
-		{
-			std::optional<RealType> earliest;
-			for (const auto& transmitter_ptr : world.getTransmitters())
-			{
-				if (transmitter_ptr == nullptr || !transmitter_ptr->isStreamingMode())
-				{
-					continue;
-				}
-
-				const auto& schedule = transmitter_ptr->getSchedule();
-				if (schedule.empty())
-				{
-					includeStreamingIntervalStart(earliest, params::startTime(), params::endTime(), false);
-					continue;
-				}
-
-				for (const auto& period : schedule)
-				{
-					includeStreamingIntervalStart(earliest, period.start, period.end, true);
-				}
-			}
-
-			for (const auto& receiver_ptr : world.getReceivers())
-			{
-				if (receiver_ptr == nullptr ||
-					(receiver_ptr->getMode() != OperationMode::CW_MODE &&
-					 receiver_ptr->getMode() != OperationMode::FMCW_MODE))
-				{
-					continue;
-				}
-
-				const auto& schedule = receiver_ptr->getSchedule();
-				if (schedule.empty())
-				{
-					includeStreamingIntervalStart(earliest, params::startTime(), params::endTime(), false);
-					continue;
-				}
-
-				for (const auto& period : schedule)
-				{
-					includeStreamingIntervalStart(earliest, period.start, period.end, false);
-				}
-			}
-
-			return earliest.value_or(params::startTime());
-		}
-
 		/// Builds an active streaming source for a transmitter at an event timestamp.
 		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
 																	const RealType timestamp)
@@ -308,7 +245,7 @@ namespace core
 		}
 
 		const auto timings = collectCwPhaseNoiseTimings(*_world);
-		RealType lookup_start = earliestPhaseNoiseLookupStart(*_world);
+		RealType lookup_start = _world->earliestPhaseNoiseLookupStart();
 		for (const auto& source : _world->getSimulationState().active_streaming_transmitters)
 		{
 			lookup_start = std::min(lookup_start, source.segment_start);

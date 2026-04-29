@@ -50,65 +50,6 @@ namespace core
 			return receiver.getMode() == OperationMode::CW_MODE || receiver.getMode() == OperationMode::FMCW_MODE;
 		}
 
-		void includeStreamingIntervalStart(std::optional<RealType>& earliest, const RealType segment_start,
-										   const RealType segment_end, const bool allow_pre_start)
-		{
-			const RealType sim_start = params::startTime();
-			const RealType sim_end = params::endTime();
-			if (segment_end <= sim_start || segment_start >= sim_end)
-			{
-				return;
-			}
-
-			const RealType required_start =
-				allow_pre_start && segment_start < sim_start ? segment_start : std::max(sim_start, segment_start);
-			earliest = earliest.has_value() ? std::min(*earliest, required_start) : required_start;
-		}
-
-		[[nodiscard]] RealType earliestPhaseNoiseLookupStart(const World& world)
-		{
-			std::optional<RealType> earliest;
-			for (const auto& transmitter_ptr : world.getTransmitters())
-			{
-				if (transmitter_ptr == nullptr || !transmitter_ptr->isStreamingMode())
-				{
-					continue;
-				}
-
-				const auto& schedule = transmitter_ptr->getSchedule();
-				if (schedule.empty())
-				{
-					includeStreamingIntervalStart(earliest, params::startTime(), params::endTime(), false);
-					continue;
-				}
-				for (const auto& period : schedule)
-				{
-					includeStreamingIntervalStart(earliest, period.start, period.end, true);
-				}
-			}
-
-			for (const auto& receiver_ptr : world.getReceivers())
-			{
-				if (receiver_ptr == nullptr || !isStreamingReceiver(*receiver_ptr))
-				{
-					continue;
-				}
-
-				const auto& schedule = receiver_ptr->getSchedule();
-				if (schedule.empty())
-				{
-					includeStreamingIntervalStart(earliest, params::startTime(), params::endTime(), false);
-					continue;
-				}
-				for (const auto& period : schedule)
-				{
-					includeStreamingIntervalStart(earliest, period.start, period.end, false);
-				}
-			}
-
-			return earliest.value_or(params::startTime());
-		}
-
 		/**
 		 * @brief Converts a finite floating-point count to an integer by rounding up.
 		 * @param value The floating-point count to convert.
@@ -418,7 +359,7 @@ namespace core
 		projection.streaming_sample_count = countSamplesForDuration(
 			projection.duration_seconds, projection.simulation_sample_rate_hz, sample_count_overflowed);
 
-		const RealType phase_noise_lookup_start = earliestPhaseNoiseLookupStart(world);
+		const RealType phase_noise_lookup_start = world.earliestPhaseNoiseLookupStart();
 		bool phase_noise_count_overflowed = false;
 		projection.phase_noise_sample_count =
 			countSamplesForDuration(std::max<RealType>(0.0, params::endTime() - phase_noise_lookup_start),

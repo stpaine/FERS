@@ -167,6 +167,16 @@ namespace core
 		[[nodiscard]] fers_signal::RadarSignal* findWaveformByName(const std::string& name);
 
 		/**
+		 * @brief Finds the earliest simulation time that can require CW phase-noise samples.
+		 *
+		 * Includes active streaming transmitters and receivers. Pre-start transmitter periods that cross the
+		 * simulation start are included so retarded emissions can sample transmitter phase noise before t_start.
+		 *
+		 * @return Earliest required lookup time, or params::startTime() if no streaming component overlaps.
+		 */
+		[[nodiscard]] RealType earliestPhaseNoiseLookupStart() const;
+
+		/**
 		 * @brief Finds a target by ID.
 		 *
 		 * @param id The ID of the target to find.
@@ -321,6 +331,10 @@ namespace core
 		std::vector<std::unique_ptr<radar::Target>> _targets; ///< Owned targets.
 
 		std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>> _waveforms; ///< Owned waveform assets.
+
+		std::unordered_map<std::string, SimId> _waveform_ids_by_name; ///< Waveform name to ID lookup.
+
+		std::unordered_map<std::string, radar::Transmitter*> _transmitters_by_name; ///< Transmitter name lookup.
 
 		std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>> _antennas; ///< Owned antenna assets.
 

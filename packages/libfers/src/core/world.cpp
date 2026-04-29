@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -41,7 +42,11 @@ namespace core
 {
 	void World::add(std::unique_ptr<Platform> plat) noexcept { _platforms.push_back(std::move(plat)); }
 
-	void World::add(std::unique_ptr<Transmitter> trans) noexcept { _transmitters.push_back(std::move(trans)); }
+	void World::add(std::unique_ptr<Transmitter> trans) noexcept
+	{
+		_transmitters_by_name[trans->getName()] = trans.get();
+		_transmitters.push_back(std::move(trans));
+	}
 
 	void World::add(std::unique_ptr<Receiver> recv) noexcept { _receivers.push_back(std::move(recv)); }
 
@@ -54,6 +59,7 @@ namespace core
 		{
 			throw std::runtime_error("A waveform with the ID " + std::to_string(id) + " already exists.");
 		}
+		_waveform_ids_by_name[waveform->getName()] = id;
 		_waveforms[id] = std::move(waveform);
 	}
 
@@ -115,14 +121,8 @@ namespace core
 
 	Transmitter* World::findTransmitterByName(const std::string& name)
 	{
-		for (auto& tx : _transmitters)
-		{
-			if (tx->getName() == name)
-			{
-				return tx.get();
-			}
-		}
-		return nullptr;
+		const auto it = _transmitters_by_name.find(name);
+		return it != _transmitters_by_name.end() ? it->second : nullptr;
 	}
 
 	Receiver* World::findReceiver(const SimId id)
@@ -135,14 +135,72 @@ namespace core
 
 	RadarSignal* World::findWaveformByName(const std::string& name)
 	{
-		for (auto& waveform : _waveforms)
+		const auto it = _waveform_ids_by_name.find(name);
+		return it != _waveform_ids_by_name.end() ? findWaveform(it->second) : nullptr;
+	}
+
+	RealType World::earliestPhaseNoiseLookupStart() const
+	{
+		const auto include_streaming_interval_start = [](std::optional<RealType>& earliest,
+														 const RealType segment_start, const RealType segment_end,
+														 const bool allow_pre_start)
 		{
-			if (waveform.second->getName() == name)
+			const RealType sim_start = params::startTime();
+			const RealType sim_end = params::endTime();
+			if (segment_end <= sim_start || segment_start >= sim_end)
 			{
-				return waveform.second.get();
+				return;
+			}
+
+			const RealType required_start =
+				allow_pre_start && segment_start < sim_start ? segment_start : std::max(sim_start, segment_start);
+			earliest = earliest.has_value() ? std::min(*earliest, required_start) : required_start;
+		};
+
+		std::optional<RealType> earliest;
+		for (const auto& transmitter_ptr : _transmitters)
+		{
+			if (transmitter_ptr == nullptr || !transmitter_ptr->isStreamingMode())
+			{
+				continue;
+			}
+
+			const auto& schedule = transmitter_ptr->getSchedule();
+			if (schedule.empty())
+			{
+				include_streaming_interval_start(earliest, params::startTime(), params::endTime(), false);
+				continue;
+			}
+
+			for (const auto& period : schedule)
+			{
+				include_streaming_interval_start(earliest, period.start, period.end, true);
 			}
 		}
-		return nullptr;
+
+		for (const auto& receiver_ptr : _receivers)
+		{
+			if (receiver_ptr == nullptr ||
+				(receiver_ptr->getMode() != radar::OperationMode::CW_MODE &&
+				 receiver_ptr->getMode() != radar::OperationMode::FMCW_MODE))
+			{
+				continue;
+			}
+
+			const auto& schedule = receiver_ptr->getSchedule();
+			if (schedule.empty())
+			{
+				include_streaming_interval_start(earliest, params::startTime(), params::endTime(), false);
+				continue;
+			}
+
+			for (const auto& period : schedule)
+			{
+				include_streaming_interval_start(earliest, period.start, period.end, false);
+			}
+		}
+
+		return earliest.value_or(params::startTime());
 	}
 
 	Target* World::findTarget(const SimId id)
@@ -202,6 +260,7 @@ namespace core
 	{
 		const SimId id = waveform->getId();
 		RadarSignal* new_ptr = waveform.get();
+		const std::string new_name = waveform->getName();
 
 		std::unique_ptr<RadarSignal> old_owned;
 		const RadarSignal* old_ptr = nullptr;
@@ -210,10 +269,13 @@ namespace core
 		{
 			old_owned = std::move(it->second);
 			old_ptr = old_owned.get();
+			_waveform_ids_by_name.erase(old_owned->getName());
+			_waveform_ids_by_name[new_name] = id;
 			it->second = std::move(waveform);
 		}
 		else
 		{
+			_waveform_ids_by_name[new_name] = id;
 			_waveforms[id] = std::move(waveform);
 		}
 
@@ -279,9 +341,11 @@ namespace core
 	{
 		_platforms.clear();
 		_transmitters.clear();
+		_transmitters_by_name.clear();
 		_receivers.clear();
 		_targets.clear();
 		_waveforms.clear();
+		_waveform_ids_by_name.clear();
 		_antennas.clear();
 		_timings.clear();
 		_event_queue = {};
@@ -297,6 +361,8 @@ namespace core
 		_receivers.swap(other._receivers);
 		_targets.swap(other._targets);
 		_waveforms.swap(other._waveforms);
+		_waveform_ids_by_name.swap(other._waveform_ids_by_name);
+		_transmitters_by_name.swap(other._transmitters_by_name);
 		_antennas.swap(other._antennas);
 		_timings.swap(other._timings);
 		_event_queue.swap(other._event_queue);

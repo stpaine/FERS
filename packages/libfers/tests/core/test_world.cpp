@@ -104,10 +104,14 @@ TEST_CASE("World stores and retrieves added objects", "[core][world]")
 	REQUIRE(world.findWaveform(301) != nullptr);
 	REQUIRE(world.findAntenna(401) != nullptr);
 	REQUIRE(world.findTiming(501) != nullptr);
+	REQUIRE(world.findTransmitterByName("Tx-A") == world.getTransmitters().front().get());
+	REQUIRE(world.findWaveformByName("Wave-A") == world.findWaveform(301));
 
 	REQUIRE(world.findWaveform(9999) == nullptr);
 	REQUIRE(world.findAntenna(9999) == nullptr);
 	REQUIRE(world.findTiming(9999) == nullptr);
+	REQUIRE(world.findTransmitterByName("missing") == nullptr);
+	REQUIRE(world.findWaveformByName("missing") == nullptr);
 }
 
 TEST_CASE("World finds platform by ID", "[core][world]")
@@ -251,6 +255,8 @@ TEST_CASE("World replaces waveform and updates dependent components", "[core][wo
 	// 4. Verify replacement and pointer updates
 	REQUIRE(world.findWaveform(200) == new_wf_ptr);
 	REQUIRE(world.findWaveform(200)->getName() == "NewWf");
+	REQUIRE(world.findWaveformByName("OldWf") == nullptr);
+	REQUIRE(world.findWaveformByName("NewWf") == new_wf_ptr);
 	REQUIRE(tx_ptr->getSignal() == new_wf_ptr);
 }
 
@@ -404,6 +410,8 @@ TEST_CASE("World clear resets storage and state", "[core][world]")
 	REQUIRE(world.getAntennas().empty());
 	REQUIRE(world.getTimings().empty());
 	REQUIRE(world.getEventQueue().empty());
+	REQUIRE(world.findTransmitterByName("Tx-A") == nullptr);
+	REQUIRE(world.findWaveformByName("Wave-A") == nullptr);
 	REQUIRE(world.getSimulationState().t_current == 0.0);
 	REQUIRE(world.getSimulationState().active_streaming_transmitters.empty());
 }
