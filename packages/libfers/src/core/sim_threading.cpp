@@ -17,6 +17,7 @@
 #include "sim_threading.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -29,6 +30,7 @@
 #include <utility>
 
 #include "logging.h"
+#include "math/path_utils.h"
 #include "memory_projection.h"
 #include "parameters.h"
 #include "processing/finalizer.h"
@@ -66,62 +68,427 @@ namespace core
 			return static_cast<std::size_t>(std::ceil((time - params::startTime()) / dt_sim));
 		}
 
-		[[nodiscard]] bool sourceRetardedTimeIsActive(const ActiveStreamingSource& source, const RealType receive_time,
-													  const RealType delay)
+		struct PositionBounds
 		{
-			if (source.carrier_freq <= 0.0)
-			{
-				return false;
-			}
-			const RealType retarded_time = receive_time - delay;
-			return retarded_time >= source.segment_start && retarded_time < source.segment_end;
+			math::Vec3 min{};
+			math::Vec3 max{};
+			bool valid{false};
+			bool unbounded{false};
+		};
+
+		[[nodiscard]] bool isFinite(const math::Vec3& point) noexcept
+		{
+			return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
 		}
 
-		[[nodiscard]] bool directPathCanCarrySourceAtReceiveTime(const ActiveStreamingSource& source,
-																 const Receiver* const rx, const RealType receive_time)
+		void includePoint(PositionBounds& bounds, const math::Vec3& point) noexcept
+		{
+			if (!isFinite(point))
+			{
+				bounds.unbounded = true;
+				return;
+			}
+			if (!bounds.valid)
+			{
+				bounds.min = point;
+				bounds.max = point;
+				bounds.valid = true;
+				return;
+			}
+			bounds.min.x = std::min(bounds.min.x, point.x);
+			bounds.min.y = std::min(bounds.min.y, point.y);
+			bounds.min.z = std::min(bounds.min.z, point.z);
+			bounds.max.x = std::max(bounds.max.x, point.x);
+			bounds.max.y = std::max(bounds.max.y, point.y);
+			bounds.max.z = std::max(bounds.max.z, point.z);
+		}
+
+		[[nodiscard]] RealType axisValue(const math::Vec3& point, const std::size_t axis) noexcept
+		{
+			switch (axis)
+			{
+			case 0:
+				return point.x;
+			case 1:
+				return point.y;
+			default:
+				return point.z;
+			}
+		}
+
+		[[nodiscard]] RealType axisDistanceBound(const PositionBounds& lhs, const PositionBounds& rhs,
+												 const std::size_t axis) noexcept
+		{
+			const RealType lhs_min = axisValue(lhs.min, axis);
+			const RealType lhs_max = axisValue(lhs.max, axis);
+			const RealType rhs_min = axisValue(rhs.min, axis);
+			const RealType rhs_max = axisValue(rhs.max, axis);
+			return std::max(std::abs(lhs_max - rhs_min), std::abs(rhs_max - lhs_min));
+		}
+
+		[[nodiscard]] RealType maxDistanceBetweenBounds(const PositionBounds& lhs, const PositionBounds& rhs) noexcept
+		{
+			if (lhs.unbounded || rhs.unbounded || !lhs.valid || !rhs.valid)
+			{
+				return std::numeric_limits<RealType>::infinity();
+			}
+			const RealType dx = axisDistanceBound(lhs, rhs, 0);
+			const RealType dy = axisDistanceBound(lhs, rhs, 1);
+			const RealType dz = axisDistanceBound(lhs, rhs, 2);
+			return std::sqrt(dx * dx + dy * dy + dz * dz);
+		}
+
+		[[nodiscard]] std::array<RealType, 3> coordinateAxes(const math::Coord& coord) noexcept
+		{
+			return {coord.pos.x, coord.pos.y, coord.pos.z};
+		}
+
+		void includeCubicVelocityRoot(PositionBounds& bounds, const math::Path& path, const RealType segment_start,
+									  const RealType segment_length, const RealType root_u, const RealType lower_u,
+									  const RealType upper_u)
+		{
+			if (root_u < lower_u || root_u > upper_u)
+			{
+				return;
+			}
+			includePoint(bounds, path.getPosition(segment_start + root_u * segment_length));
+		}
+
+		void includeCubicPositionExtrema(PositionBounds& bounds, const math::Path& path,
+										 const std::vector<math::Coord>& coords,
+										 const std::vector<math::Coord>& second_derivatives, const std::size_t index,
+										 const RealType lower_u, const RealType upper_u)
+		{
+			const RealType segment_length = coords[index + 1].t - coords[index].t;
+			if (segment_length <= EPSILON)
+			{
+				return;
+			}
+			const auto left = coordinateAxes(coords[index]);
+			const auto right = coordinateAxes(coords[index + 1]);
+			const auto dd_left = coordinateAxes(second_derivatives[index]);
+			const auto dd_right = coordinateAxes(second_derivatives[index + 1]);
+			const RealType h2 = segment_length * segment_length;
+
+			for (std::size_t axis = 0; axis < 3; ++axis)
+			{
+				const RealType a = 0.5 * h2 * (dd_right[axis] - dd_left[axis]);
+				const RealType b = h2 * dd_left[axis];
+				const RealType c = (right[axis] - left[axis]) + (h2 / 6.0) * (-2.0 * dd_left[axis] - dd_right[axis]);
+
+				if (std::abs(a) <= EPSILON)
+				{
+					if (std::abs(b) > EPSILON)
+					{
+						includeCubicVelocityRoot(bounds, path, coords[index].t, segment_length, -c / b, lower_u,
+												 upper_u);
+					}
+					continue;
+				}
+
+				const RealType discriminant = b * b - 4.0 * a * c;
+				if (discriminant < -EPSILON)
+				{
+					continue;
+				}
+				const RealType sqrt_discriminant = std::sqrt(std::max(0.0, discriminant));
+				includeCubicVelocityRoot(bounds, path, coords[index].t, segment_length,
+										 (-b - sqrt_discriminant) / (2.0 * a), lower_u, upper_u);
+				includeCubicVelocityRoot(bounds, path, coords[index].t, segment_length,
+										 (-b + sqrt_discriminant) / (2.0 * a), lower_u, upper_u);
+			}
+		}
+
+		[[nodiscard]] PositionBounds pathPositionBounds(const math::Path& path, const RealType start,
+														const RealType end)
+		{
+			PositionBounds bounds;
+			if (start >= end)
+			{
+				return bounds;
+			}
+
+			try
+			{
+				includePoint(bounds, path.getPosition(start));
+				includePoint(bounds, path.getPosition(end));
+			}
+			catch (const math::PathException&)
+			{
+				bounds.unbounded = true;
+				return bounds;
+			}
+
+			const auto& coords = path.getCoords();
+			if (coords.empty() || path.getType() == math::Path::InterpType::INTERP_STATIC)
+			{
+				return bounds;
+			}
+
+			for (const auto& coord : coords)
+			{
+				if (coord.t >= start && coord.t <= end)
+				{
+					includePoint(bounds, coord.pos);
+				}
+			}
+
+			if (path.getType() != math::Path::InterpType::INTERP_CUBIC || coords.size() < 2)
+			{
+				return bounds;
+			}
+
+			std::vector<math::Coord> second_derivatives;
+			try
+			{
+				finalizeCubic<math::Coord>(coords, second_derivatives);
+			}
+			catch (const math::PathException&)
+			{
+				bounds.unbounded = true;
+				return bounds;
+			}
+
+			for (std::size_t index = 0; index + 1 < coords.size(); ++index)
+			{
+				const RealType segment_start = coords[index].t;
+				const RealType segment_end = coords[index + 1].t;
+				const RealType segment_length = segment_end - segment_start;
+				if (segment_length <= EPSILON || end < segment_start || start > segment_end)
+				{
+					continue;
+				}
+
+				const RealType lower_u =
+					std::clamp((std::max(start, segment_start) - segment_start) / segment_length, 0.0, 1.0);
+				const RealType upper_u =
+					std::clamp((std::min(end, segment_end) - segment_start) / segment_length, 0.0, 1.0);
+				if (lower_u <= upper_u)
+				{
+					includeCubicPositionExtrema(bounds, path, coords, second_derivatives, index, lower_u, upper_u);
+				}
+			}
+			return bounds;
+		}
+
+		void includeQuadraticVelocityExtremum(std::array<RealType, 3>& max_abs_velocity, const std::size_t axis,
+											  const RealType a, const RealType b, const RealType c,
+											  const RealType segment_length, const RealType root_u,
+											  const RealType lower_u, const RealType upper_u) noexcept
+		{
+			if (root_u < lower_u || root_u > upper_u || segment_length <= EPSILON)
+			{
+				return;
+			}
+			const RealType velocity = (a * root_u * root_u + b * root_u + c) / segment_length;
+			if (std::isfinite(velocity))
+			{
+				max_abs_velocity[axis] = std::max(max_abs_velocity[axis], std::abs(velocity));
+			}
+			else
+			{
+				max_abs_velocity[axis] = std::numeric_limits<RealType>::infinity();
+			}
+		}
+
+		void includeCubicVelocityBounds(std::array<RealType, 3>& max_abs_velocity,
+										const std::vector<math::Coord>& coords,
+										const std::vector<math::Coord>& second_derivatives, const std::size_t index,
+										const RealType lower_u, const RealType upper_u)
+		{
+			const RealType segment_length = coords[index + 1].t - coords[index].t;
+			if (segment_length <= EPSILON)
+			{
+				return;
+			}
+			const auto left = coordinateAxes(coords[index]);
+			const auto right = coordinateAxes(coords[index + 1]);
+			const auto dd_left = coordinateAxes(second_derivatives[index]);
+			const auto dd_right = coordinateAxes(second_derivatives[index + 1]);
+			const RealType h2 = segment_length * segment_length;
+
+			for (std::size_t axis = 0; axis < 3; ++axis)
+			{
+				const RealType a = 0.5 * h2 * (dd_right[axis] - dd_left[axis]);
+				const RealType b = h2 * dd_left[axis];
+				const RealType c = (right[axis] - left[axis]) + (h2 / 6.0) * (-2.0 * dd_left[axis] - dd_right[axis]);
+				includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, lower_u, lower_u,
+												 upper_u);
+				includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, upper_u, lower_u,
+												 upper_u);
+
+				if (std::abs(a) > EPSILON)
+				{
+					includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, -b / (2.0 * a),
+													 lower_u, upper_u);
+				}
+			}
+		}
+
+		[[nodiscard]] RealType pathSpeedBound(const math::Path& path, const RealType start, const RealType end)
+		{
+			if (start >= end)
+			{
+				return 0.0;
+			}
+
+			const auto& coords = path.getCoords();
+			if (coords.empty() || path.getType() == math::Path::InterpType::INTERP_STATIC || coords.size() < 2)
+			{
+				return 0.0;
+			}
+
+			if (path.getType() == math::Path::InterpType::INTERP_LINEAR)
+			{
+				RealType max_speed = 0.0;
+				for (std::size_t index = 0; index + 1 < coords.size(); ++index)
+				{
+					const RealType segment_start = coords[index].t;
+					const RealType segment_end = coords[index + 1].t;
+					const RealType segment_length = segment_end - segment_start;
+					if (segment_length <= EPSILON || end < segment_start || start > segment_end)
+					{
+						continue;
+					}
+					max_speed =
+						std::max(max_speed, (coords[index + 1].pos - coords[index].pos).length() / segment_length);
+				}
+				return max_speed;
+			}
+
+			std::vector<math::Coord> second_derivatives;
+			try
+			{
+				finalizeCubic<math::Coord>(coords, second_derivatives);
+			}
+			catch (const math::PathException&)
+			{
+				return std::numeric_limits<RealType>::infinity();
+			}
+
+			std::array<RealType, 3> max_abs_velocity{0.0, 0.0, 0.0};
+			for (std::size_t index = 0; index + 1 < coords.size(); ++index)
+			{
+				const RealType segment_start = coords[index].t;
+				const RealType segment_end = coords[index + 1].t;
+				const RealType segment_length = segment_end - segment_start;
+				if (segment_length <= EPSILON || end < segment_start || start > segment_end)
+				{
+					continue;
+				}
+				const RealType lower_u =
+					std::clamp((std::max(start, segment_start) - segment_start) / segment_length, 0.0, 1.0);
+				const RealType upper_u =
+					std::clamp((std::min(end, segment_end) - segment_start) / segment_length, 0.0, 1.0);
+				if (lower_u <= upper_u)
+				{
+					includeCubicVelocityBounds(max_abs_velocity, coords, second_derivatives, index, lower_u, upper_u);
+				}
+			}
+			return std::sqrt(max_abs_velocity[0] * max_abs_velocity[0] + max_abs_velocity[1] * max_abs_velocity[1] +
+							 max_abs_velocity[2] * max_abs_velocity[2]);
+		}
+
+		[[nodiscard]] std::optional<RealType>
+		deadlineFromTailKinematics(const RealType tail_end, const RealType interval_start, const RealType interval_end,
+								   const RealType delay_at_start, const RealType distance_rate_bound,
+								   const RealType max_delay_bound)
+		{
+			const RealType propagation_speed = params::c();
+			if (propagation_speed <= 0.0 || interval_start >= interval_end)
+			{
+				return std::nullopt;
+			}
+
+			if (std::isfinite(distance_rate_bound) && distance_rate_bound < propagation_speed)
+			{
+				const RealType retarded_start = interval_start - delay_at_start;
+				if (retarded_start >= tail_end)
+				{
+					return std::nullopt;
+				}
+
+				const RealType min_retarded_slope = 1.0 - distance_rate_bound / propagation_speed;
+				const RealType deadline = interval_start + (tail_end - retarded_start) / min_retarded_slope;
+				if (deadline <= interval_start)
+				{
+					return std::nullopt;
+				}
+				return std::min(interval_end, deadline);
+			}
+
+			if (!std::isfinite(max_delay_bound))
+			{
+				return interval_end;
+			}
+			const RealType deadline = std::min(interval_end, tail_end + max_delay_bound);
+			if (deadline <= interval_start)
+			{
+				return std::nullopt;
+			}
+			return deadline;
+		}
+
+		[[nodiscard]] std::optional<RealType> directPathCleanupDeadline(const ActiveStreamingSource& source,
+																		const Receiver* const rx,
+																		const RealType interval_start,
+																		const RealType interval_end)
 		{
 			const auto* const tx = source.transmitter;
 			if (tx == nullptr || rx == nullptr || tx->getPlatform() == rx->getPlatform() || params::c() <= 0.0)
 			{
-				return false;
+				return std::nullopt;
 			}
 
-			const auto p_tx = tx->getPlatform()->getPosition(receive_time);
-			const auto p_rx = rx->getPlatform()->getPosition(receive_time);
-			const RealType distance = (p_rx - p_tx).length();
-			if (distance <= EPSILON)
-			{
-				return false;
-			}
-			return sourceRetardedTimeIsActive(source, receive_time, distance / params::c());
+			const auto* const tx_path = tx->getPlatform()->getMotionPath();
+			const auto* const rx_path = rx->getPlatform()->getMotionPath();
+			const RealType distance_at_start =
+				(rx_path->getPosition(interval_start) - tx_path->getPosition(interval_start)).length();
+			const RealType max_delay_bound =
+				maxDistanceBetweenBounds(pathPositionBounds(*tx_path, interval_start, interval_end),
+										 pathPositionBounds(*rx_path, interval_start, interval_end)) /
+				params::c();
+			const RealType distance_rate_bound = pathSpeedBound(*tx_path, interval_start, interval_end) +
+				pathSpeedBound(*rx_path, interval_start, interval_end);
+			return deadlineFromTailKinematics(source.segment_end, interval_start, interval_end,
+											  distance_at_start / params::c(), distance_rate_bound, max_delay_bound);
 		}
 
-		[[nodiscard]] bool reflectedPathCanCarrySourceAtReceiveTime(const ActiveStreamingSource& source,
-																	const Receiver* const rx,
-																	const radar::Target* const target,
-																	const RealType receive_time)
+		[[nodiscard]] std::optional<RealType> reflectedPathCleanupDeadline(const ActiveStreamingSource& source,
+																		   const Receiver* const rx,
+																		   const radar::Target* const target,
+																		   const RealType interval_start,
+																		   const RealType interval_end)
 		{
 			const auto* const tx = source.transmitter;
-			if (tx == nullptr || rx == nullptr || target == nullptr || params::c() <= 0.0)
+			if (tx == nullptr || rx == nullptr || target == nullptr || params::c() <= 0.0 ||
+				tx->getPlatform() == target->getPlatform() || rx->getPlatform() == target->getPlatform())
 			{
-				return false;
-			}
-			if (tx->getPlatform() == target->getPlatform() || rx->getPlatform() == target->getPlatform())
-			{
-				return false;
+				return std::nullopt;
 			}
 
-			const auto p_tx = tx->getPlatform()->getPosition(receive_time);
-			const auto p_rx = rx->getPlatform()->getPosition(receive_time);
-			const auto p_target = target->getPlatform()->getPosition(receive_time);
-			const RealType tx_target_distance = (p_target - p_tx).length();
-			const RealType target_rx_distance = (p_rx - p_target).length();
-			if (tx_target_distance <= EPSILON || target_rx_distance <= EPSILON)
-			{
-				return false;
-			}
-			return sourceRetardedTimeIsActive(source, receive_time,
-											  (tx_target_distance + target_rx_distance) / params::c());
+			const auto* const tx_path = tx->getPlatform()->getMotionPath();
+			const auto* const rx_path = rx->getPlatform()->getMotionPath();
+			const auto* const target_path = target->getPlatform()->getMotionPath();
+			const auto tx_position = tx_path->getPosition(interval_start);
+			const auto rx_position = rx_path->getPosition(interval_start);
+			const auto target_position = target_path->getPosition(interval_start);
+			const RealType distance_at_start =
+				(target_position - tx_position).length() + (rx_position - target_position).length();
+
+			const PositionBounds tx_bounds = pathPositionBounds(*tx_path, interval_start, interval_end);
+			const PositionBounds rx_bounds = pathPositionBounds(*rx_path, interval_start, interval_end);
+			const PositionBounds target_bounds = pathPositionBounds(*target_path, interval_start, interval_end);
+			const RealType max_delay_bound = (maxDistanceBetweenBounds(tx_bounds, target_bounds) +
+											  maxDistanceBetweenBounds(target_bounds, rx_bounds)) /
+				params::c();
+			const RealType tx_speed = pathSpeedBound(*tx_path, interval_start, interval_end);
+			const RealType rx_speed = pathSpeedBound(*rx_path, interval_start, interval_end);
+			const RealType target_speed = pathSpeedBound(*target_path, interval_start, interval_end);
+			const RealType distance_rate_bound = tx_speed + rx_speed + 2.0 * target_speed;
+
+			return deadlineFromTailKinematics(source.segment_end, interval_start, interval_end,
+											  distance_at_start / params::c(), distance_rate_bound, max_delay_bound);
 		}
 
 		/// Builds an active streaming source for a transmitter at an event timestamp.
@@ -339,37 +706,75 @@ namespace core
 		}
 
 		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
-		const auto start_index = streamingSampleIndexAtOrAfter(t_current, dt_sim);
-		const auto end_index = streamingSampleIndexAtOrAfter(t_event, dt_sim);
-		const auto sample_count = end_index - start_index;
+		const auto first_index = streamingSampleIndexAtOrAfter(t_current, dt_sim);
+		const auto final_index = streamingSampleIndexAtOrAfter(t_event, dt_sim);
+		const auto sample_count = final_index - first_index;
 		const auto progress_report_stride = std::max<std::size_t>(1, sample_count / 1000);
 
 		ensureCwPhaseNoiseLookup();
 
-		for (size_t sample_index = start_index; sample_index < end_index; ++sample_index)
+		const auto next_cleanup_deadline = [&](const RealType from_time) -> std::optional<RealType>
 		{
-			const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
-
-			for (std::size_t receiver_index = 0; receiver_index < _world->getReceivers().size(); ++receiver_index)
+			std::optional<RealType> next_deadline;
+			for (const auto& source : active_streaming_transmitters)
 			{
-				const auto& receiver_ptr = _world->getReceivers()[receiver_index];
-				if ((receiver_ptr->getMode() == OperationMode::CW_MODE ||
-					 receiver_ptr->getMode() == OperationMode::FMCW_MODE) &&
-					receiver_ptr->isActive())
+				if (source.segment_end > from_time)
 				{
-					ComplexType sample =
-						calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
-												 _streaming_tracker_caches[receiver_index]);
-					receiver_ptr->setStreamingSample(sample_index, sample);
+					continue;
+				}
+				const auto cleanup_deadline = streamingSourceCleanupDeadline(source, from_time);
+				if (cleanup_deadline.has_value() && *cleanup_deadline > from_time &&
+					(!next_deadline.has_value() || *cleanup_deadline < *next_deadline))
+				{
+					next_deadline = cleanup_deadline;
 				}
 			}
-			if (((sample_index - start_index) % progress_report_stride) == 0 || sample_index + 1 == end_index)
-			{
-				reportSimulationProgress(t_step);
-			}
-		}
+			return next_deadline;
+		};
 
-		cleanupInactiveStreamingSources(t_event);
+		while (t_current < t_event)
+		{
+			cleanupInactiveStreamingSources(t_current);
+
+			RealType chunk_end = t_event;
+			if (const auto cleanup_deadline = next_cleanup_deadline(t_current);
+				cleanup_deadline.has_value() && *cleanup_deadline < chunk_end)
+			{
+				chunk_end = *cleanup_deadline;
+			}
+			if (chunk_end <= t_current)
+			{
+				break;
+			}
+
+			const auto start_index = streamingSampleIndexAtOrAfter(t_current, dt_sim);
+			const auto end_index = streamingSampleIndexAtOrAfter(chunk_end, dt_sim);
+			for (size_t sample_index = start_index; sample_index < end_index; ++sample_index)
+			{
+				const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
+
+				for (std::size_t receiver_index = 0; receiver_index < _world->getReceivers().size(); ++receiver_index)
+				{
+					const auto& receiver_ptr = _world->getReceivers()[receiver_index];
+					if ((receiver_ptr->getMode() == OperationMode::CW_MODE ||
+						 receiver_ptr->getMode() == OperationMode::FMCW_MODE) &&
+						receiver_ptr->isActive())
+					{
+						ComplexType sample =
+							calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
+													 _streaming_tracker_caches[receiver_index]);
+						receiver_ptr->setStreamingSample(sample_index, sample);
+					}
+				}
+				if (((sample_index - first_index) % progress_report_stride) == 0 || sample_index + 1 == final_index)
+				{
+					reportSimulationProgress(t_step);
+				}
+			}
+
+			t_current = chunk_end;
+		}
+		cleanupInactiveStreamingSources(t_current);
 	}
 
 	ComplexType SimulationEngine::calculateStreamingSample(Receiver* rx, const RealType t_step,
@@ -498,7 +903,8 @@ namespace core
 			{
 				continue;
 			}
-			if (streamingSourceHasFutureContribution(sources[index], from_time))
+			const auto cleanup_deadline = streamingSourceCleanupDeadline(sources[index], from_time);
+			if (cleanup_deadline.has_value() && from_time < *cleanup_deadline)
 			{
 				continue;
 			}
@@ -508,82 +914,79 @@ namespace core
 		}
 	}
 
-	bool SimulationEngine::streamingSourceHasFutureContribution(const ActiveStreamingSource& source,
-																const RealType from_time) const
+	std::optional<RealType> SimulationEngine::streamingSourceCleanupDeadline(const ActiveStreamingSource& source,
+																			 const RealType from_time) const
 	{
 		if (source.transmitter == nullptr || source.carrier_freq <= 0.0)
 		{
-			return false;
+			return std::nullopt;
 		}
 
-		return std::ranges::any_of(_world->getReceivers(), [&](const auto& receiver_ptr)
-								   { return receiverCanObserveFutureSource(source, receiver_ptr.get(), from_time); });
+		std::optional<RealType> latest_deadline;
+		for (const auto& receiver_ptr : _world->getReceivers())
+		{
+			const auto receiver_deadline = receiverCleanupDeadline(source, receiver_ptr.get(), from_time);
+			if (receiver_deadline.has_value() &&
+				(!latest_deadline.has_value() || *receiver_deadline > *latest_deadline))
+			{
+				latest_deadline = receiver_deadline;
+			}
+		}
+		return latest_deadline;
 	}
 
-	bool SimulationEngine::receiverCanObserveFutureSource(const ActiveStreamingSource& source, const Receiver* const rx,
-														  const RealType from_time) const
+	std::optional<RealType> SimulationEngine::receiverCleanupDeadline(const ActiveStreamingSource& source,
+																	  const Receiver* const rx,
+																	  const RealType from_time) const
 	{
 		if (!isStreamingReceiver(rx))
 		{
-			return false;
+			return std::nullopt;
 		}
 
-		const RealType sample_rate = params::rate() * params::oversampleRatio();
-		if (sample_rate <= 0.0)
+		const auto update_latest = [](std::optional<RealType>& latest, const std::optional<RealType> candidate)
 		{
-			return false;
-		}
-		const RealType dt_sim = 1.0 / sample_rate;
+			if (candidate.has_value() && (!latest.has_value() || *candidate > *latest))
+			{
+				latest = candidate;
+			}
+		};
 
-		const auto can_observe_interval = [&](const RealType interval_start, const RealType interval_end)
+		const auto interval_deadline = [&](const RealType interval_start,
+										   const RealType interval_end) -> std::optional<RealType>
 		{
 			const RealType start = std::max({params::startTime(), from_time, interval_start});
 			const RealType end = std::min(params::endTime(), interval_end);
 			if (start >= end)
 			{
-				return false;
+				return std::nullopt;
 			}
 
-			const auto first_index = streamingSampleIndexAtOrAfter(start, dt_sim);
-			const auto end_index = streamingSampleIndexAtOrAfter(end, dt_sim);
-			for (std::size_t sample_index = first_index; sample_index < end_index; ++sample_index)
+			std::optional<RealType> latest;
+			if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
 			{
-				const RealType receive_time = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
-				if (streamingSourceCanContributeAtReceiveTime(source, rx, receive_time))
-				{
-					return true;
-				}
+				update_latest(latest, directPathCleanupDeadline(source, rx, start, end));
 			}
-			return false;
+			for (const auto& target_ptr : _world->getTargets())
+			{
+				update_latest(latest, reflectedPathCleanupDeadline(source, rx, target_ptr.get(), start, end));
+			}
+			return latest;
 		};
 
+		std::optional<RealType> latest_deadline;
 		const auto& schedule = rx->getSchedule();
 		if (schedule.empty())
 		{
-			return can_observe_interval(params::startTime(), params::endTime());
+			update_latest(latest_deadline, interval_deadline(params::startTime(), params::endTime()));
+			return latest_deadline;
 		}
 
-		return std::ranges::any_of(schedule,
-								   [&](const auto& period) { return can_observe_interval(period.start, period.end); });
-	}
-
-	bool SimulationEngine::streamingSourceCanContributeAtReceiveTime(const ActiveStreamingSource& source,
-																	 const Receiver* const rx,
-																	 const RealType receive_time) const
-	{
-		if (rx == nullptr)
+		for (const auto& period : schedule)
 		{
-			return false;
+			update_latest(latest_deadline, interval_deadline(period.start, period.end));
 		}
-		if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT) &&
-			directPathCanCarrySourceAtReceiveTime(source, rx, receive_time))
-		{
-			return true;
-		}
-
-		return std::ranges::any_of(
-			_world->getTargets(), [&](const auto& target_ptr)
-			{ return reflectedPathCanCarrySourceAtReceiveTime(source, rx, target_ptr.get(), receive_time); });
+		return latest_deadline;
 	}
 
 	void SimulationEngine::processEvent(const Event& event)

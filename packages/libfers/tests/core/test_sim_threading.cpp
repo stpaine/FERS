@@ -646,7 +646,7 @@ TEST_CASE("SimulationEngine keeps streaming source through propagation tail afte
 	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 
 	world->getSimulationState().t_current = 0.2;
-	engine.processStreamingPhysics(0.205);
+	engine.processStreamingPhysics(0.315);
 
 	bool saw_tail_energy = false;
 	for (std::size_t index = 200; index < 205; ++index)
@@ -654,9 +654,6 @@ TEST_CASE("SimulationEngine keeps streaming source through propagation tail afte
 		saw_tail_energy = saw_tail_energy || std::abs(rx->getStreamingData()[index]) > 0.0;
 	}
 	REQUIRE(saw_tail_energy);
-
-	world->getSimulationState().t_current = 0.31;
-	engine.processStreamingPhysics(0.315);
 
 	for (std::size_t index = 310; index < 315; ++index)
 	{
@@ -810,6 +807,30 @@ TEST_CASE("SimulationEngine cleanup removes an old segment before a same-time ne
 	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
 	REQUIRE_THAT(fixture.world->getSimulationState().active_streaming_transmitters.front().segment_start,
 				 WithinAbs(0.375, 1.0e-12));
+}
+
+TEST_CASE("SimulationEngine cleanup skips long future sample-grid scans", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e9);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+	params::setC(1000.0);
+
+	auto fixture =
+		createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+								 math::Path::InterpType::INTERP_STATIC, {{math::Vec3{100.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->setSchedule({{9.0, 10.0}});
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+	fixture.world->getSimulationState().t_current = 0.2;
+
+	REQUIRE_NOTHROW(engine.handleTxStreamingEnd(fixture.tx));
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
 }
 
 TEST_CASE("SimulationEngine processStreamingPhysics handles active streaming receiver without streaming transmitters",
