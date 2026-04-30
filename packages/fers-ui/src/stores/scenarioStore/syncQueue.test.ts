@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
     enqueueFullSync,
+    enqueueFullSyncDetached,
     enqueueGranularSync,
     type GranularSyncFailure,
     registerGranularSyncFailureHandler,
@@ -93,6 +94,31 @@ describe('syncQueue granular recovery', () => {
             enqueueFullSync(() => '{"simulation":{"name":"bad"}}')
         ).rejects.toThrow('backend rejected scenario');
         await waitForSyncIdle();
+    });
+
+    test('detached full sync consumes backend rejection and leaves queue usable', async () => {
+        const invocations: string[] = [];
+
+        setSyncQueueInvokerForTests((async (
+            command: string,
+            args?: Record<string, unknown>
+        ) => {
+            invocations.push(`${command}:${String(args?.itemId ?? '')}`);
+            if (command === 'update_scenario_from_json') {
+                throw new Error('backend rejected scenario');
+            }
+        }) as InvokeFn);
+
+        enqueueFullSyncDetached(() => '{"simulation":{"name":"bad"}}');
+        await waitForSyncIdle();
+
+        await enqueueGranularSync('Waveform', '10', '{"id":"10"}');
+        await waitForSyncIdle();
+
+        expect(invocations).toEqual([
+            'update_scenario_from_json:',
+            'update_item_from_json:10',
+        ]);
     });
 
     test('recovers once and discards stale queued granular flushes after a failure', async () => {

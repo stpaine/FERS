@@ -261,6 +261,10 @@ export function enqueueFullSync(buildSnapshot: () => string): Promise<void> {
     return task;
 }
 
+export function enqueueFullSyncDetached(buildSnapshot: () => string): void {
+    void enqueueFullSync(buildSnapshot).catch(() => undefined);
+}
+
 /** Resolves once every currently-queued sync task has settled. */
 export function waitForSyncIdle(): Promise<void> {
     return Promise.all([

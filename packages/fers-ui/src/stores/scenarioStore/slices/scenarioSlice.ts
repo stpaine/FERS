@@ -16,7 +16,10 @@ import {
     serializePlatform,
     serializeTiming,
 } from '../serializers';
-import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
+import {
+    enqueueFullSyncDetached,
+    enqueueGranularSyncDetached,
+} from '../syncQueue';
 import {
     Antenna,
     GlobalParameters,
@@ -230,7 +233,7 @@ export const createScenarioSlice: StateCreator<
         });
 
         if (requiresFullSync) {
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         } else if (jsonPayload) {
             enqueueGranularSyncDetached(
                 targetItemType,
@@ -294,7 +297,7 @@ export const createScenarioSlice: StateCreator<
             state.isDirty = true;
         });
 
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
         for (const platform of get().platforms) {
             void get().fetchPlatformPath(platform.id);
         }
@@ -332,7 +335,7 @@ export const createScenarioSlice: StateCreator<
         });
         if (removed) {
             // libfers has no granular remove API — full sync is required.
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         }
     },
     resetScenario: () => {
@@ -350,7 +353,7 @@ export const createScenarioSlice: StateCreator<
         });
         useSimulationProgressStore.getState().clearSimulationProgress();
         useSimulationProgressStore.setState({ isSimulating: false });
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
     },
     loadScenario: (backendData: unknown) => {
         const scenarioData = parseScenarioData(backendData);
@@ -381,7 +384,7 @@ export const createScenarioSlice: StateCreator<
         // future options; nested component-only templates are intentionally out
         // of scope until whole-platform reuse proves insufficient.
         result.warnings.forEach((warning) => get().showWarning(warning));
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
 
         return result;
     },

@@ -43,6 +43,8 @@ should rely on it for important results.
 
 | Feature | Stability | Verification |
 | ------- | --------- | ------------ |
+| fers-cli | Stable | N/A |
+| fers-ui | Beta | N/A |
 | Pulsed radar | Stable | Verified |
 | CW radar | Beta | Unverified |
 | FMCW radar | Alpha | Unverified |

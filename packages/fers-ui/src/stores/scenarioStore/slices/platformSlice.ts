@@ -11,7 +11,10 @@ import {
     serializeComponentInner,
     serializePlatform,
 } from '../serializers';
-import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
+import {
+    enqueueFullSyncDetached,
+    enqueueGranularSyncDetached,
+} from '../syncQueue';
 import {
     Platform,
     PlatformActions,
@@ -69,7 +72,7 @@ export const createPlatformSlice: StateCreator<
             state.isDirty = true;
         });
         // libfers has no granular add API for Platforms — full sync is required.
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
     },
     addPositionWaypoint: (platformId) => {
         let touched = false;
@@ -238,7 +241,7 @@ export const createPlatformSlice: StateCreator<
         if (added) {
             // Components (Transmitter/Receiver/Target/Monostatic) are independent
             // backend objects with their own IDs; there is no granular add API.
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         }
     },
     removePlatformComponent: (platformId, componentId) => {
@@ -261,7 +264,7 @@ export const createPlatformSlice: StateCreator<
         });
         if (removed) {
             // libfers has no granular remove API — full sync is required.
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         }
     },
     setPlatformRcsModel: (platformId, componentId, newModel) => {
