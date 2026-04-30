@@ -8,7 +8,14 @@ import {
     resolveTextFieldBlur,
 } from './InspectorControls';
 import {
+    createDechirpReference,
+    createFmcwModeConfig,
+    DECHIRP_MODE_OPTIONS,
+    DECHIRP_REFERENCE_SOURCE_OPTIONS,
+    getAvailableDechirpReferenceSourceOptions,
     getCompatibleWaveforms,
+    getFmcwEmitterNames,
+    getFmcwWaveformNames,
     getPulsedRadarFieldLabels,
     RADAR_MODE_OPTIONS,
     resolveWaveformSelectValue,
@@ -244,5 +251,154 @@ describe('Platform component inspector waveform compatibility', () => {
         expect(resolveWaveformSelectValue('1', waveforms, 'fmcw')).toBe('');
         expect(resolveWaveformSelectValue('3', waveforms, 'fmcw')).toBe('3');
         expect(resolveWaveformSelectValue('4', waveforms, 'fmcw')).toBe('4');
+    });
+
+    test('offers dechirp modes and source options for receiver FMCW mode', () => {
+        expect(DECHIRP_MODE_OPTIONS).toEqual([
+            { value: 'none', label: 'None' },
+            { value: 'physical', label: 'Physical' },
+            { value: 'ideal', label: 'Ideal' },
+        ]);
+        expect(DECHIRP_REFERENCE_SOURCE_OPTIONS).toEqual([
+            { value: 'attached', label: 'Attached' },
+            { value: 'transmitter', label: 'Transmitter' },
+            { value: 'custom', label: 'Custom Waveform' },
+        ]);
+        expect(getAvailableDechirpReferenceSourceOptions('monostatic')).toEqual(
+            [...DECHIRP_REFERENCE_SOURCE_OPTIONS]
+        );
+        expect(getAvailableDechirpReferenceSourceOptions('receiver')).toEqual([
+            { value: 'transmitter', label: 'Transmitter' },
+            { value: 'custom', label: 'Custom Waveform' },
+        ]);
+        expect(
+            getAvailableDechirpReferenceSourceOptions('receiver', 'attached')
+        ).toEqual([...DECHIRP_REFERENCE_SOURCE_OPTIONS]);
+    });
+
+    test('builds backend-valid dechirp config shapes', () => {
+        expect(createFmcwModeConfig('none')).toEqual({});
+        expect(createFmcwModeConfig('physical')).toEqual({
+            dechirp_mode: 'physical',
+            dechirp_reference: { source: 'attached' },
+        });
+        expect(
+            createFmcwModeConfig('ideal', {
+                dechirp_mode: 'physical',
+                dechirp_reference: {
+                    source: 'transmitter',
+                    transmitter_name: 'TX A',
+                },
+            })
+        ).toEqual({
+            dechirp_mode: 'ideal',
+            dechirp_reference: {
+                source: 'transmitter',
+                transmitter_name: 'TX A',
+            },
+        });
+        expect(
+            createDechirpReference('transmitter', {
+                source: 'custom',
+                waveform_name: 'Bad carryover',
+                transmitter_name: 'TX B',
+            })
+        ).toEqual({
+            source: 'transmitter',
+            transmitter_name: 'TX B',
+        });
+        expect(
+            createDechirpReference('custom', {
+                source: 'transmitter',
+                transmitter_name: 'Bad carryover',
+                waveform_name: 'LO Waveform',
+            })
+        ).toEqual({
+            source: 'custom',
+            waveform_name: 'LO Waveform',
+        });
+    });
+
+    test('lists only FMCW waveforms and FMCW emitters for dechirp references', () => {
+        const fullWaveforms = [
+            {
+                id: '1',
+                type: 'Waveform' as const,
+                name: 'Pulse',
+                waveformType: 'pulsed_from_file' as const,
+                power: 1,
+                carrier_frequency: 1,
+                filename: 'pulse.h5',
+            },
+            {
+                id: '2',
+                type: 'Waveform' as const,
+                name: 'FMCW LO',
+                waveformType: 'fmcw_linear_chirp' as const,
+                direction: 'up' as const,
+                power: 1,
+                carrier_frequency: 1,
+                chirp_bandwidth: 10,
+                chirp_duration: 1,
+                chirp_period: 1,
+                start_frequency_offset: 0,
+                chirp_count: null,
+            },
+        ];
+        const platforms = [
+            {
+                id: 'p1',
+                type: 'Platform' as const,
+                name: 'Platform',
+                motionPath: {
+                    interpolation: 'static' as const,
+                    waypoints: [
+                        {
+                            id: 'wp1',
+                            x: 0,
+                            y: 0,
+                            altitude: 0,
+                            time: 0,
+                        },
+                    ],
+                },
+                rotation: {
+                    type: 'fixed' as const,
+                    startAzimuth: 0,
+                    startElevation: 0,
+                    azimuthRate: 0,
+                    elevationRate: 0,
+                },
+                components: [
+                    {
+                        id: 'tx1',
+                        type: 'transmitter' as const,
+                        name: 'FMCW TX',
+                        radarType: 'fmcw' as const,
+                        prf: null,
+                        antennaId: null,
+                        waveformId: '2',
+                        timingId: null,
+                        schedule: [],
+                    },
+                    {
+                        id: 'tx2',
+                        type: 'transmitter' as const,
+                        name: 'Pulse TX',
+                        radarType: 'pulsed' as const,
+                        prf: 1000,
+                        antennaId: null,
+                        waveformId: '1',
+                        timingId: null,
+                        schedule: [],
+                    },
+                ],
+            },
+        ];
+
+        expect(getFmcwWaveformNames(fullWaveforms)).toEqual(['FMCW LO']);
+        expect(getFmcwEmitterNames(platforms, fullWaveforms)).toEqual([
+            'FMCW TX',
+        ]);
     });
 });

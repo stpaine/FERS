@@ -91,6 +91,12 @@ export const serializeComponentInner = (component: PlatformComponent) => {
             case 'cw':
                 return { cw_mode: {} };
             case 'fmcw':
+                if (
+                    component.type === 'receiver' ||
+                    component.type === 'monostatic'
+                ) {
+                    return { fmcw_mode: component.fmcwModeConfig ?? {} };
+                }
                 return { fmcw_mode: {} };
         }
     })();

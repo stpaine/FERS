@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
+import {
+    Alert,
+    Box,
+    FormControl,
+    InputLabel,
+    MenuItem,
+    Select,
+} from '@mui/material';
 import { useScenarioStore, Waveform } from '@/stores/scenarioStore';
 import { createWaveformForType as createWaveformDefaultsForType } from '@/stores/scenarioStore/defaults';
+import { validateFmcwWaveform } from '@/stores/scenarioStore/fmcwValidation';
 import { BufferedTextField, FileInput, NumberField } from './InspectorControls';
 
 export type WaveformType =
@@ -165,8 +173,12 @@ export function getVisibleWaveformFieldLabels(
 }
 
 export function WaveformInspector({ item }: WaveformInspectorProps) {
-    const { updateItem } = useScenarioStore.getState();
+    const { updateItem, globalParameters } = useScenarioStore.getState();
     const waveform = item as AuthorableWaveform;
+    const fmcwIssues = validateFmcwWaveform(item, globalParameters);
+    const getFieldIssue = (field: string) =>
+        fmcwIssues.find((issue) => issue.field === field);
+    const globalFmcwIssues = fmcwIssues.filter((issue) => !issue.field);
     const handleChange = (path: string, value: unknown) =>
         updateItem(item.id, path, value);
     const handleTypeChange = (waveformType: WaveformType) => {
@@ -228,6 +240,15 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                 emptyBehavior="revert"
                 onChange={(v) => handleChange('carrier_frequency', v)}
             />
+            {globalFmcwIssues.map((issue) => (
+                <Alert
+                    key={issue.message}
+                    severity={issue.severity}
+                    variant="outlined"
+                >
+                    {issue.message}
+                </Alert>
+            ))}
             {waveform.waveformType === 'pulsed_from_file' && (
                 <FileInput
                     label="Waveform File (.csv, .h5)"
@@ -279,6 +300,10 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                             DEFAULT_FMCW_LINEAR_CHIRP_FIELDS.chirp_period
                         )}
                         emptyBehavior="revert"
+                        helperText={getFieldIssue('chirp_period')?.message}
+                        externalError={
+                            getFieldIssue('chirp_period')?.severity === 'error'
+                        }
                         onChange={(v) => handleChange('chirp_period', v)}
                     />
                     <NumberField

@@ -3,6 +3,7 @@
 
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
+    Alert,
     Box,
     Button,
     Checkbox,
@@ -16,13 +17,28 @@ import {
 } from '@mui/material';
 import {
     MonostaticComponent,
+    Platform,
     PlatformComponent,
     ReceiverComponent,
     SchedulePeriod,
     TargetComponent,
     TransmitterComponent,
     useScenarioStore,
+    Waveform,
 } from '@/stores/scenarioStore';
+import {
+    createDechirpReference,
+    createFmcwModeConfig,
+    DECHIRP_MODE_OPTIONS,
+    DECHIRP_REFERENCE_SOURCE_OPTIONS,
+    DechirpMode,
+    DechirpReferenceSource,
+    getDechirpMode,
+    getDechirpReferenceSource,
+    isFmcwWaveformType,
+    ReceiverFmcwModeConfig,
+} from '@/stores/scenarioStore/fmcwModeConfig';
+import { validateFmcwScenario } from '@/stores/scenarioStore/fmcwValidation';
 import {
     BufferedTextField,
     FileInput,
@@ -101,6 +117,72 @@ export function getPulsedRadarFieldLabels(radarType: RadarType): string[] {
         : [];
 }
 
+export {
+    createDechirpReference,
+    createFmcwModeConfig,
+    DECHIRP_MODE_OPTIONS,
+    DECHIRP_REFERENCE_SOURCE_OPTIONS,
+};
+
+const uniqueNames = (names: string[]): string[] =>
+    Array.from(new Set(names.filter((name) => name.trim().length > 0)));
+
+const includeCurrentName = (names: string[], currentName?: string): string[] =>
+    currentName && !names.includes(currentName)
+        ? [currentName, ...names]
+        : names;
+
+export function getFmcwWaveformNames(waveforms: Waveform[]): string[] {
+    return uniqueNames(
+        waveforms
+            .filter((waveform) => isFmcwWaveformType(waveform.waveformType))
+            .map((waveform) => waveform.name)
+    );
+}
+
+export function getFmcwEmitterNames(
+    platforms: Platform[],
+    waveforms: Waveform[]
+): string[] {
+    const waveformsById = new Map(
+        waveforms.map((waveform) => [waveform.id, waveform])
+    );
+    return uniqueNames(
+        platforms.flatMap((platform) =>
+            platform.components.flatMap((component) => {
+                if (
+                    component.type !== 'transmitter' &&
+                    component.type !== 'monostatic'
+                ) {
+                    return [];
+                }
+                if (
+                    component.radarType !== 'fmcw' ||
+                    !component.waveformId ||
+                    !isFmcwWaveformType(
+                        waveformsById.get(component.waveformId)?.waveformType
+                    )
+                ) {
+                    return [];
+                }
+                return [component.name];
+            })
+        )
+    );
+}
+
+export function getAvailableDechirpReferenceSourceOptions(
+    componentType: MonostaticComponent['type'] | ReceiverComponent['type'],
+    currentSource?: DechirpReferenceSource
+) {
+    return DECHIRP_REFERENCE_SOURCE_OPTIONS.filter(
+        (option) =>
+            option.value !== 'attached' ||
+            componentType === 'monostatic' ||
+            currentSource === 'attached'
+    );
+}
+
 interface PlatformComponentInspectorProps {
     component: PlatformComponent;
     platformId: string;
@@ -112,8 +194,22 @@ export function PlatformComponentInspector({
     platformId,
     index,
 }: PlatformComponentInspectorProps) {
-    const { updateItem, waveforms, timings, antennas, setPlatformRcsModel } =
-        useScenarioStore.getState();
+    const {
+        updateItem,
+        waveforms,
+        timings,
+        antennas,
+        platforms,
+        globalParameters,
+        setPlatformRcsModel,
+    } = useScenarioStore.getState();
+    const fmcwIssues = validateFmcwScenario({
+        globalParameters,
+        waveforms,
+        platforms,
+    });
+    const fmcwEmitterNames = getFmcwEmitterNames(platforms, waveforms);
+    const fmcwWaveformNames = getFmcwWaveformNames(waveforms);
 
     // Updates are targeted using the array index in the path string
     const handleChange = (path: string, value: unknown) =>
@@ -125,6 +221,9 @@ export function PlatformComponentInspector({
         c: MonostaticComponent | TransmitterComponent | ReceiverComponent
     ) => {
         const schedule = c.schedule || [];
+        const scheduleIssues = fmcwIssues.filter(
+            (issue) => issue.componentId === c.id && issue.field === 'schedule'
+        );
 
         const handleAddPeriod = () => {
             handleChange('schedule', [...schedule, { start: 0, end: 0 }]);
@@ -148,6 +247,15 @@ export function PlatformComponentInspector({
 
         return (
             <Section title="Operating Schedule">
+                {scheduleIssues.map((issue) => (
+                    <Alert
+                        key={issue.message}
+                        severity={issue.severity}
+                        variant="outlined"
+                    >
+                        {issue.message}
+                    </Alert>
+                ))}
                 {schedule.length === 0 && (
                     <Typography variant="body2" color="text.secondary">
                         No specific schedule defined (always active).
@@ -208,6 +316,42 @@ export function PlatformComponentInspector({
             radarType
         );
         const handleRadarTypeChange = (nextRadarType: RadarType) => {
+            const prepareModeChange = <
+                T extends
+                    | MonostaticComponent
+                    | TransmitterComponent
+                    | ReceiverComponent,
+            >(
+                component: T,
+                waveformId?: string | null
+            ): T => {
+                const nextComponent = {
+                    ...component,
+                    radarType: nextRadarType,
+                    ...(waveformId !== undefined ? { waveformId } : {}),
+                } as T;
+
+                if (
+                    nextComponent.type === 'receiver' ||
+                    nextComponent.type === 'monostatic'
+                ) {
+                    if (nextRadarType === 'fmcw') {
+                        return {
+                            ...nextComponent,
+                            fmcwModeConfig: nextComponent.fmcwModeConfig ?? {},
+                        } as T;
+                    }
+
+                    const {
+                        fmcwModeConfig: _fmcwModeConfig,
+                        ...withoutFmcwMode
+                    } = nextComponent;
+                    return withoutFmcwMode as T;
+                }
+
+                return nextComponent;
+            };
+
             if ('waveformId' in c) {
                 const waveformId = shouldClearWaveformForRadarType(
                     c.waveformId,
@@ -217,18 +361,11 @@ export function PlatformComponentInspector({
                     ? null
                     : c.waveformId;
 
-                handleComponentChange({
-                    ...c,
-                    radarType: nextRadarType,
-                    waveformId,
-                });
+                handleComponentChange(prepareModeChange(c, waveformId));
                 return;
             }
 
-            handleComponentChange({
-                ...c,
-                radarType: nextRadarType,
-            });
+            handleComponentChange(prepareModeChange(c));
         };
 
         return (
@@ -338,6 +475,221 @@ export function PlatformComponentInspector({
         );
     };
 
+    const renderFmcwReceiverFields = (
+        c: MonostaticComponent | ReceiverComponent
+    ) => {
+        const config = c.fmcwModeConfig ?? {};
+        const dechirpMode = getDechirpMode(config);
+        const reference = config.dechirp_reference;
+        const referenceSource = getDechirpReferenceSource(reference);
+        const transmitterName =
+            reference?.source === 'transmitter'
+                ? reference.transmitter_name
+                : undefined;
+        const waveformName =
+            reference?.source === 'custom'
+                ? reference.waveform_name
+                : undefined;
+        const referenceIssues = fmcwIssues.filter(
+            (issue) =>
+                issue.componentId === c.id && issue.field === 'fmcwModeConfig'
+        );
+        const referenceSourceOptions =
+            getAvailableDechirpReferenceSourceOptions(c.type, referenceSource);
+
+        const createDefaultReference = () => {
+            if (c.type === 'monostatic') {
+                return createDechirpReference('attached');
+            }
+            const transmitterName = fmcwEmitterNames[0];
+            if (transmitterName) {
+                return {
+                    source: 'transmitter' as const,
+                    transmitter_name: transmitterName,
+                };
+            }
+            const waveformName = fmcwWaveformNames[0];
+            if (waveformName) {
+                return {
+                    source: 'custom' as const,
+                    waveform_name: waveformName,
+                };
+            }
+            return createDechirpReference('transmitter');
+        };
+
+        const commitConfig = (nextConfig: ReceiverFmcwModeConfig) => {
+            handleChange('fmcwModeConfig', nextConfig);
+        };
+
+        const handleModeChange = (nextMode: DechirpMode) => {
+            const nextConfig = createFmcwModeConfig(nextMode, config);
+            if (
+                nextMode !== 'none' &&
+                (!nextConfig.dechirp_reference ||
+                    (c.type === 'receiver' &&
+                        nextConfig.dechirp_reference.source === 'attached'))
+            ) {
+                nextConfig.dechirp_reference = createDefaultReference();
+            }
+            commitConfig(nextConfig);
+        };
+
+        const handleReferenceSourceChange = (
+            nextSource: DechirpReferenceSource
+        ) => {
+            const nextReference = createDechirpReference(nextSource, reference);
+            if (
+                nextReference.source === 'transmitter' &&
+                !nextReference.transmitter_name &&
+                fmcwEmitterNames[0]
+            ) {
+                nextReference.transmitter_name = fmcwEmitterNames[0];
+            }
+            if (
+                nextReference.source === 'custom' &&
+                !nextReference.waveform_name &&
+                fmcwWaveformNames[0]
+            ) {
+                nextReference.waveform_name = fmcwWaveformNames[0];
+            }
+            commitConfig({
+                dechirp_mode: dechirpMode,
+                dechirp_reference: nextReference,
+            });
+        };
+
+        const handleTransmitterReferenceChange = (name: string) => {
+            commitConfig({
+                dechirp_mode: dechirpMode,
+                dechirp_reference: {
+                    source: 'transmitter',
+                    ...(name ? { transmitter_name: name } : {}),
+                },
+            });
+        };
+
+        const handleCustomWaveformReferenceChange = (name: string) => {
+            commitConfig({
+                dechirp_mode: dechirpMode,
+                dechirp_reference: {
+                    source: 'custom',
+                    ...(name ? { waveform_name: name } : {}),
+                },
+            });
+        };
+
+        return (
+            <Section title="FMCW Receiver">
+                {referenceIssues.map((issue) => (
+                    <Alert
+                        key={issue.message}
+                        severity={issue.severity}
+                        variant="outlined"
+                    >
+                        {issue.message}
+                    </Alert>
+                ))}
+                <FormControl fullWidth size="small">
+                    <InputLabel>Dechirp Mode</InputLabel>
+                    <Select
+                        label="Dechirp Mode"
+                        value={dechirpMode}
+                        onChange={(e) =>
+                            handleModeChange(e.target.value as DechirpMode)
+                        }
+                    >
+                        {DECHIRP_MODE_OPTIONS.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+
+                {dechirpMode !== 'none' && (
+                    <>
+                        <FormControl fullWidth size="small">
+                            <InputLabel>Dechirp Reference</InputLabel>
+                            <Select
+                                label="Dechirp Reference"
+                                value={referenceSource}
+                                onChange={(e) =>
+                                    handleReferenceSourceChange(
+                                        e.target.value as DechirpReferenceSource
+                                    )
+                                }
+                            >
+                                {referenceSourceOptions.map((option) => (
+                                    <MenuItem
+                                        key={option.value}
+                                        value={option.value}
+                                    >
+                                        {option.label}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                        </FormControl>
+
+                        {referenceSource === 'transmitter' && (
+                            <FormControl fullWidth size="small">
+                                <InputLabel>Reference Transmitter</InputLabel>
+                                <Select
+                                    label="Reference Transmitter"
+                                    value={transmitterName ?? ''}
+                                    onChange={(e) =>
+                                        handleTransmitterReferenceChange(
+                                            e.target.value
+                                        )
+                                    }
+                                >
+                                    <MenuItem value="">
+                                        <em>None</em>
+                                    </MenuItem>
+                                    {includeCurrentName(
+                                        fmcwEmitterNames,
+                                        transmitterName
+                                    ).map((name) => (
+                                        <MenuItem key={name} value={name}>
+                                            {name}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        )}
+
+                        {referenceSource === 'custom' && (
+                            <FormControl fullWidth size="small">
+                                <InputLabel>Reference Waveform</InputLabel>
+                                <Select
+                                    label="Reference Waveform"
+                                    value={waveformName ?? ''}
+                                    onChange={(e) =>
+                                        handleCustomWaveformReferenceChange(
+                                            e.target.value
+                                        )
+                                    }
+                                >
+                                    <MenuItem value="">
+                                        <em>None</em>
+                                    </MenuItem>
+                                    {includeCurrentName(
+                                        fmcwWaveformNames,
+                                        waveformName
+                                    ).map((name) => (
+                                        <MenuItem key={name} value={name}>
+                                            {name}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+                        )}
+                    </>
+                )}
+            </Section>
+        );
+    };
+
     const renderReceiverFields = (
         c: MonostaticComponent | ReceiverComponent
     ) => (
@@ -386,6 +738,8 @@ export function PlatformComponentInspector({
                 }
                 label="Ignore Propagation Loss"
             />
+            {(c.radarType as RadarType) === 'fmcw' &&
+                renderFmcwReceiverFields(c)}
         </>
     );
 

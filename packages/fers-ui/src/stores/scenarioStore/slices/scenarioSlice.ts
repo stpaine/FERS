@@ -15,7 +15,6 @@ import {
     serializeGlobalParameters,
     serializePlatform,
     serializeTiming,
-    serializeWaveform,
 } from '../serializers';
 import { enqueueFullSync, enqueueGranularSyncDetached } from '../syncQueue';
 import {
@@ -25,7 +24,6 @@ import {
     ScenarioActions,
     ScenarioStore,
     Timing,
-    Waveform,
 } from '../types';
 import { setPropertyByPath } from '../utils';
 import { buildScenarioJson } from './backendSlice';
@@ -127,6 +125,15 @@ export const createScenarioSlice: StateCreator<
 
                 state.isDirty = true;
 
+                if (
+                    ['start', 'end', 'rate', 'oversample_ratio'].includes(
+                        propertyPath
+                    )
+                ) {
+                    requiresFullSync = true;
+                    return;
+                }
+
                 targetItemType = 'GlobalParameters';
                 targetItemId = itemId;
                 jsonPayload = JSON.stringify(
@@ -178,10 +185,14 @@ export const createScenarioSlice: StateCreator<
                     delete state.antennaPreviewErrors[item.id];
                 }
 
+                if (item.type === 'Waveform') {
+                    requiresFullSync = true;
+                    return;
+                }
+
                 if (
                     item.type !== 'Platform' &&
                     item.type !== 'Antenna' &&
-                    item.type !== 'Waveform' &&
                     item.type !== 'Timing'
                 ) {
                     return;
@@ -208,10 +219,6 @@ export const createScenarioSlice: StateCreator<
                 } else if (item.type === 'Antenna') {
                     jsonPayload = JSON.stringify(
                         serializeAntenna(item as Antenna)
-                    );
-                } else if (item.type === 'Waveform') {
-                    jsonPayload = JSON.stringify(
-                        serializeWaveform(item as Waveform)
                     );
                 } else if (item.type === 'Timing') {
                     jsonPayload = JSON.stringify(

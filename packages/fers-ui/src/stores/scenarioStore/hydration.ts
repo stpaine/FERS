@@ -52,7 +52,7 @@ interface BackendPlatformComponentData {
     nopropagationloss?: boolean;
     pulsed_mode?: BackendPulsedMode;
     cw_mode?: object;
-    fmcw_mode?: object;
+    fmcw_mode?: Record<string, unknown>;
     schedule?: BackendSchedulePeriod[];
     rcs?: { type: 'isotropic' | 'file'; value?: number; filename?: string };
     model?: { type: 'constant' | 'chisquare' | 'gamma'; k?: number };
@@ -466,6 +466,10 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                             ? 'fmcw'
                             : 'pulsed';
                     const pulsed = cData.pulsed_mode;
+                    const fmcwModeConfig =
+                        radarType === 'fmcw' && cData.fmcw_mode
+                            ? cData.fmcw_mode
+                            : undefined;
 
                     const antennaId =
                         normalizeRefId(cData.antenna) ??
@@ -506,6 +510,7 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                                 window_length: pulsed?.window_length ?? null,
                                 prf: pulsed?.prf ?? null,
                                 waveformId,
+                                fmcwModeConfig,
                                 ...commonRadar,
                                 ...commonReceiver,
                             };
@@ -530,6 +535,7 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                                 window_skip: pulsed?.window_skip ?? null,
                                 window_length: pulsed?.window_length ?? null,
                                 prf: pulsed?.prf ?? null,
+                                fmcwModeConfig,
                                 ...commonRadar,
                                 ...commonReceiver,
                             };

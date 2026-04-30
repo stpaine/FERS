@@ -284,6 +284,108 @@ describe('serializeComponentInner', () => {
         });
     });
 
+    test('preserves receiver FMCW attached dechirp mode fields', () => {
+        const component: PlatformComponent = {
+            id: '42',
+            type: 'receiver',
+            name: 'FMCW Rx',
+            radarType: 'fmcw',
+            window_skip: null,
+            window_length: null,
+            prf: null,
+            antennaId: null,
+            timingId: null,
+            noiseTemperature: null,
+            noDirectPaths: false,
+            noPropagationLoss: false,
+            fmcwModeConfig: {
+                dechirp_mode: 'physical',
+                dechirp_reference: { source: 'attached' },
+            },
+            schedule: [],
+        };
+
+        expect(serializeComponentInner(component)).toMatchObject({
+            fmcw_mode: {
+                dechirp_mode: 'physical',
+                dechirp_reference: { source: 'attached' },
+            },
+        });
+    });
+
+    test('preserves receiver FMCW transmitter dechirp reference name', () => {
+        const component: PlatformComponent = {
+            id: '43',
+            type: 'receiver',
+            name: 'FMCW Rx',
+            radarType: 'fmcw',
+            window_skip: null,
+            window_length: null,
+            prf: null,
+            antennaId: null,
+            timingId: null,
+            noiseTemperature: null,
+            noDirectPaths: false,
+            noPropagationLoss: false,
+            fmcwModeConfig: {
+                dechirp_mode: 'ideal',
+                dechirp_reference: {
+                    source: 'transmitter',
+                    transmitter_name: 'Reference TX',
+                },
+            },
+            schedule: [],
+        };
+
+        expect(serializeComponentInner(component)).toMatchObject({
+            fmcw_mode: {
+                dechirp_mode: 'ideal',
+                dechirp_reference: {
+                    source: 'transmitter',
+                    transmitter_name: 'Reference TX',
+                },
+            },
+        });
+    });
+
+    test('preserves monostatic FMCW custom dechirp reference waveform name', () => {
+        const component: PlatformComponent = {
+            id: '44',
+            type: 'monostatic',
+            name: 'FMCW Mono',
+            txId: '45',
+            rxId: '46',
+            radarType: 'fmcw',
+            window_skip: null,
+            window_length: null,
+            prf: null,
+            antennaId: null,
+            waveformId: null,
+            timingId: null,
+            noiseTemperature: null,
+            noDirectPaths: false,
+            noPropagationLoss: false,
+            fmcwModeConfig: {
+                dechirp_mode: 'physical',
+                dechirp_reference: {
+                    source: 'custom',
+                    waveform_name: 'Reference Waveform',
+                },
+            },
+            schedule: [],
+        };
+
+        expect(serializeComponentInner(component)).toMatchObject({
+            fmcw_mode: {
+                dechirp_mode: 'physical',
+                dechirp_reference: {
+                    source: 'custom',
+                    waveform_name: 'Reference Waveform',
+                },
+            },
+        });
+    });
+
     test('uses an isotropic backend placeholder while a file target has no filename', () => {
         const component: PlatformComponent = {
             id: '50',

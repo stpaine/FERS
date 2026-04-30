@@ -82,6 +82,19 @@ describe('syncQueue granular recovery', () => {
         ]);
     });
 
+    test('rejects failed full syncs', async () => {
+        setSyncQueueInvokerForTests((async (command: string) => {
+            if (command === 'update_scenario_from_json') {
+                throw new Error('backend rejected scenario');
+            }
+        }) as InvokeFn);
+
+        await expect(
+            enqueueFullSync(() => '{"simulation":{"name":"bad"}}')
+        ).rejects.toThrow('backend rejected scenario');
+        await waitForSyncIdle();
+    });
+
     test('recovers once and discards stale queued granular flushes after a failure', async () => {
         const invocations: string[] = [];
         const failures: GranularSyncFailure[] = [];

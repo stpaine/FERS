@@ -81,6 +81,7 @@ export type SimulationOutputFileMetadata = {
     receiver_name: string;
     mode: SimulationOutputMode;
     path: string;
+    sampling_rate: number;
     total_samples: number;
     sample_start: number;
     sample_end_exclusive: number;
@@ -92,6 +93,17 @@ export type SimulationOutputFileMetadata = {
     streaming_segments: SimulationOutputStreamingSegmentMetadata[];
     fmcw?: SimulationOutputFmcwMetadata;
     fmcw_sources: SimulationOutputFmcwSourceMetadata[];
+    fmcw_dechirp_mode?: 'none' | 'physical' | 'ideal';
+    fmcw_dechirp_reference_source?:
+        | 'none'
+        | 'attached'
+        | 'transmitter'
+        | 'custom';
+    fmcw_dechirp_reference_transmitter_id?: number;
+    fmcw_dechirp_reference_transmitter_name?: string;
+    fmcw_dechirp_reference_waveform_id?: number;
+    fmcw_dechirp_reference_waveform_name?: string;
+    fmcw_dechirp_reference_waveform?: SimulationOutputFmcwMetadata;
 };
 
 export type SimulationOutputMetadata = {
@@ -100,15 +112,17 @@ export type SimulationOutputMetadata = {
     output_directory: string;
     start_time: number;
     end_time: number;
-    sampling_rate: number;
+    sampling_rate: number | null;
+    sampling_rates?: number[];
     oversample_ratio: number;
     files: SimulationOutputFileMetadata[];
 };
 
 export type RawSimulationOutputFileMetadata = Omit<
     SimulationOutputFileMetadata,
-    'streaming_segments' | 'fmcw_sources'
+    'sampling_rate' | 'streaming_segments' | 'fmcw_sources'
 > & {
+    sampling_rate?: number;
     streaming_segments?: SimulationOutputStreamingSegmentMetadata[];
     cw_segments?: SimulationOutputStreamingSegmentMetadata[];
     fmcw_sources?: SimulationOutputFmcwSourceMetadata[];
@@ -130,10 +144,16 @@ export const normalizeSimulationOutputMetadata = (
             cw_segments,
             streaming_segments,
             fmcw_sources,
+            sampling_rate,
             ...normalizedFile
         } = file;
         return {
             ...normalizedFile,
+            sampling_rate:
+                sampling_rate ??
+                metadata.sampling_rate ??
+                metadata.sampling_rates?.[0] ??
+                0,
             streaming_segments: streaming_segments ?? cw_segments ?? [],
             fmcw_sources: fmcw_sources ?? [],
         };

@@ -197,11 +197,16 @@ describe('parseScenarioData FMCW hydration', () => {
                     },
                     components: [
                         {
-                            transmitter: {
+                            receiver: {
                                 id: 3,
-                                name: 'FMCW TX',
-                                fmcw_mode: {},
-                                waveform: 1,
+                                name: 'FMCW RX',
+                                fmcw_mode: {
+                                    dechirp_mode: 'ideal',
+                                    dechirp_reference: {
+                                        source: 'custom',
+                                        waveform_name: 'FMCW Down Chirp',
+                                    },
+                                },
                             },
                         },
                     ],
@@ -230,9 +235,121 @@ describe('parseScenarioData FMCW hydration', () => {
         });
         expect(scenario?.platforms[0].components[0]).toMatchObject({
             id: '3',
-            type: 'transmitter',
+            type: 'receiver',
             radarType: 'fmcw',
-            waveformId: '1',
+            fmcwModeConfig: {
+                dechirp_mode: 'ideal',
+                dechirp_reference: {
+                    source: 'custom',
+                    waveform_name: 'FMCW Down Chirp',
+                },
+            },
+        });
+    });
+
+    test('hydrates receiver and monostatic dechirp references by backend names', () => {
+        const scenario = parseScenarioData({
+            name: 'FMCW Dechirp Scenario',
+            parameters: {},
+            waveforms: [
+                {
+                    id: 10,
+                    name: 'FMCW LO',
+                    power: 50,
+                    carrier_frequency: 10e9,
+                    fmcw_linear_chirp: {
+                        direction: 'up',
+                        chirp_bandwidth: 20e6,
+                        chirp_duration: 250e-6,
+                        chirp_period: 300e-6,
+                    },
+                },
+            ],
+            timings: [],
+            antennas: [],
+            platforms: [
+                {
+                    id: 20,
+                    name: 'Radar Platform',
+                    motionpath: {
+                        interpolation: 'static',
+                        positionwaypoints: [
+                            { x: 0, y: 0, altitude: 0, time: 0 },
+                        ],
+                    },
+                    fixedrotation: {
+                        startazimuth: 0,
+                        startelevation: 0,
+                        azimuthrate: 0,
+                        elevationrate: 0,
+                    },
+                    components: [
+                        {
+                            transmitter: {
+                                id: 21,
+                                name: 'Reference TX',
+                                waveform: 10,
+                                fmcw_mode: {},
+                            },
+                        },
+                        {
+                            receiver: {
+                                id: 22,
+                                name: 'FMCW RX',
+                                fmcw_mode: {
+                                    dechirp_mode: 'physical',
+                                    dechirp_reference: {
+                                        source: 'transmitter',
+                                        transmitter_name: 'Reference TX',
+                                    },
+                                },
+                            },
+                        },
+                        {
+                            monostatic: {
+                                id: 23,
+                                tx_id: 24,
+                                rx_id: 25,
+                                name: 'FMCW Mono',
+                                waveform: 10,
+                                fmcw_mode: {
+                                    dechirp_mode: 'ideal',
+                                    dechirp_reference: {
+                                        source: 'attached',
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        expect(scenario).not.toBeNull();
+        expect(scenario?.platforms[0].components[1]).toMatchObject({
+            id: '22',
+            type: 'receiver',
+            radarType: 'fmcw',
+            fmcwModeConfig: {
+                dechirp_mode: 'physical',
+                dechirp_reference: {
+                    source: 'transmitter',
+                    transmitter_name: 'Reference TX',
+                },
+            },
+        });
+        expect(scenario?.platforms[0].components[2]).toMatchObject({
+            id: '23',
+            type: 'monostatic',
+            txId: '24',
+            rxId: '25',
+            radarType: 'fmcw',
+            fmcwModeConfig: {
+                dechirp_mode: 'ideal',
+                dechirp_reference: {
+                    source: 'attached',
+                },
+            },
         });
     });
 });

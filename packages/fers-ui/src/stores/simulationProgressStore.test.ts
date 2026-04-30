@@ -28,6 +28,7 @@ describe('simulation output metadata', () => {
                     receiver_name: 'FMCW Rx',
                     mode: 'fmcw',
                     path: '/tmp/fers/fmcw.h5',
+                    sampling_rate: 1e6,
                     total_samples: 128,
                     sample_start: 0,
                     sample_end_exclusive: 128,
@@ -126,6 +127,7 @@ describe('simulation output metadata', () => {
                     receiver_name: 'CW Rx',
                     mode: 'cw',
                     path: '/tmp/fers/cw.h5',
+                    sampling_rate: 1e6,
                     total_samples: 64,
                     sample_start: 0,
                     sample_end_exclusive: 64,
@@ -153,5 +155,57 @@ describe('simulation output metadata', () => {
         expect(normalizedFile.streaming_segments).toHaveLength(1);
         expect(normalizedFile.fmcw_sources).toEqual([]);
         expect('cw_segments' in normalizedFile).toBe(false);
+    });
+
+    test('normalizes mixed sampling-rate metadata', () => {
+        const metadata = {
+            ...baseMetadata,
+            sampling_rate: null,
+            sampling_rates: [1e6, 2e6],
+            files: [
+                {
+                    receiver_id: 30,
+                    receiver_name: 'Rx 1',
+                    mode: 'cw',
+                    path: '/tmp/fers/rx1.h5',
+                    sampling_rate: 1e6,
+                    total_samples: 64,
+                    sample_start: 0,
+                    sample_end_exclusive: 64,
+                    pulse_count: 0,
+                    min_pulse_length_samples: 0,
+                    max_pulse_length_samples: 0,
+                    uniform_pulse_length: true,
+                    chunks: [],
+                    streaming_segments: [],
+                },
+                {
+                    receiver_id: 31,
+                    receiver_name: 'Rx 2',
+                    mode: 'fmcw',
+                    path: '/tmp/fers/rx2.h5',
+                    sampling_rate: 2e6,
+                    total_samples: 128,
+                    sample_start: 0,
+                    sample_end_exclusive: 128,
+                    pulse_count: 0,
+                    min_pulse_length_samples: 0,
+                    max_pulse_length_samples: 0,
+                    uniform_pulse_length: true,
+                    chunks: [],
+                    streaming_segments: [],
+                    fmcw_dechirp_mode: 'none',
+                    fmcw_dechirp_reference_source: 'none',
+                },
+            ],
+        } satisfies RawSimulationOutputMetadata;
+
+        const normalized = normalizeSimulationOutputMetadata(metadata);
+
+        expect(normalized.sampling_rate).toBeNull();
+        expect(normalized.sampling_rates).toEqual([1e6, 2e6]);
+        expect(normalized.files.map((file) => file.sampling_rate)).toEqual([
+            1e6, 2e6,
+        ]);
     });
 });

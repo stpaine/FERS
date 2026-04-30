@@ -229,6 +229,19 @@ export const SchedulePeriodSchema = z.object({
     end: z.number().min(0, 'End time cannot be negative.'),
 });
 
+const DechirpReferenceSchema = z.object({
+    source: z.enum(['attached', 'transmitter', 'custom']),
+    transmitter_name: z.string().optional(),
+    waveform_name: z.string().optional(),
+});
+
+const FmcwModeConfigSchema = z
+    .object({
+        dechirp_mode: z.enum(['none', 'physical', 'ideal']).optional(),
+        dechirp_reference: DechirpReferenceSchema.optional(),
+    })
+    .optional();
+
 const MonostaticComponentSchema = z.object({
     id: SimIdSchema,
     type: z.literal('monostatic'),
@@ -245,6 +258,7 @@ const MonostaticComponentSchema = z.object({
     noiseTemperature: nullableNumber.pipe(z.number().min(0).nullable()),
     noDirectPaths: z.boolean(),
     noPropagationLoss: z.boolean(),
+    fmcwModeConfig: FmcwModeConfigSchema,
     schedule: z.array(SchedulePeriodSchema).default([]),
 });
 
@@ -273,6 +287,7 @@ const ReceiverComponentSchema = z.object({
     noiseTemperature: nullableNumber.pipe(z.number().min(0).nullable()),
     noDirectPaths: z.boolean(),
     noPropagationLoss: z.boolean(),
+    fmcwModeConfig: FmcwModeConfigSchema,
     schedule: z.array(SchedulePeriodSchema).default([]),
 });
 

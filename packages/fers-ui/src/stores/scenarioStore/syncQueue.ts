@@ -252,6 +252,7 @@ export function enqueueFullSync(buildSnapshot: () => string): Promise<void> {
             await handleSyncWarnings(warnings);
         } catch (e) {
             console.error('Full sync failed:', e);
+            throw e;
         }
     });
     pendingFullSync = task;
