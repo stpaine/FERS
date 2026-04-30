@@ -130,6 +130,54 @@ TEST_CASE("solveRe computes correct bistatic power for isotropic antennas", "[si
 	REQUIRE_THAT(results.phase, WithinRel(expected_phase, 1e-9));
 }
 
+TEST_CASE("CW streaming reflected path gates schedules by retarded transmit time",
+		  "[simulation][channel_model][reflected]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setC(100.0);
+
+	const RealType tx_target_dist = 5.0;
+	const RealType target_rx_dist = 5.0;
+	const RealType tau = (tx_target_dist + target_rx_dist) / params::c();
+	const RealType segment_start = 0.2;
+	const RealType segment_end = 0.5;
+	const RealType eps = 1.0e-6;
+
+	radar::Platform tx_plat("tx_plat");
+	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform target_plat("target_plat");
+	setupPlatform(target_plat, math::Vec3{tx_target_dist, 0.0, 0.0});
+	radar::Platform rx_plat("rx_plat");
+	setupPlatform(rx_plat, math::Vec3{tx_target_dist + target_rx_dist, 0.0, 0.0});
+
+	antenna::Isotropic iso_ant("iso");
+	auto timing = std::make_shared<timing::Timing>("clk", 42);
+
+	radar::Transmitter tx(&tx_plat, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&iso_ant);
+	tx.setTiming(timing);
+	auto sig = std::make_unique<fers_signal::CwSignal>();
+	fers_signal::RadarSignal wave("cw", 1.0, 1.0e6, 1.0, std::move(sig));
+	tx.setSignal(&wave);
+
+	radar::Receiver rx(&rx_plat, "rx", 42, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&iso_ant);
+	rx.setTiming(timing);
+
+	radar::IsoTarget target(&target_plat, "target", 1.0, 7);
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, segment_start, segment_end);
+
+	REQUIRE(std::abs(simulation::calculateStreamingReflectedPathContribution(source, &rx, &target,
+																			 segment_start + tau - eps)) == 0.0);
+	REQUIRE(std::abs(simulation::calculateStreamingReflectedPathContribution(source, &rx, &target,
+																			 segment_start + tau + eps)) > 0.0);
+	REQUIRE(std::abs(simulation::calculateStreamingReflectedPathContribution(source, &rx, &target,
+																			 segment_end + 0.5 * tau)) > 0.0);
+	REQUIRE(std::abs(simulation::calculateStreamingReflectedPathContribution(source, &rx, &target,
+																			 segment_end + tau + eps)) == 0.0);
+}
+
 TEST_CASE("FMCW monostatic reflected path dechirps to expected stationary-target beat frequency",
 		  "[simulation][channel_model][reflected][fmcw]")
 {

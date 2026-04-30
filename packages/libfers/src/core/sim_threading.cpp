@@ -51,6 +51,79 @@ namespace core
 {
 	namespace
 	{
+		[[nodiscard]] bool isStreamingReceiver(const Receiver* const receiver) noexcept
+		{
+			return receiver != nullptr &&
+				(receiver->getMode() == OperationMode::CW_MODE || receiver->getMode() == OperationMode::FMCW_MODE);
+		}
+
+		[[nodiscard]] std::size_t streamingSampleIndexAtOrAfter(const RealType time, const RealType dt_sim)
+		{
+			if (dt_sim <= 0.0 || time <= params::startTime())
+			{
+				return 0;
+			}
+			return static_cast<std::size_t>(std::ceil((time - params::startTime()) / dt_sim));
+		}
+
+		[[nodiscard]] bool sourceRetardedTimeIsActive(const ActiveStreamingSource& source, const RealType receive_time,
+													  const RealType delay)
+		{
+			if (source.carrier_freq <= 0.0)
+			{
+				return false;
+			}
+			const RealType retarded_time = receive_time - delay;
+			return retarded_time >= source.segment_start && retarded_time < source.segment_end;
+		}
+
+		[[nodiscard]] bool directPathCanCarrySourceAtReceiveTime(const ActiveStreamingSource& source,
+																 const Receiver* const rx, const RealType receive_time)
+		{
+			const auto* const tx = source.transmitter;
+			if (tx == nullptr || rx == nullptr || tx->getPlatform() == rx->getPlatform() || params::c() <= 0.0)
+			{
+				return false;
+			}
+
+			const auto p_tx = tx->getPlatform()->getPosition(receive_time);
+			const auto p_rx = rx->getPlatform()->getPosition(receive_time);
+			const RealType distance = (p_rx - p_tx).length();
+			if (distance <= EPSILON)
+			{
+				return false;
+			}
+			return sourceRetardedTimeIsActive(source, receive_time, distance / params::c());
+		}
+
+		[[nodiscard]] bool reflectedPathCanCarrySourceAtReceiveTime(const ActiveStreamingSource& source,
+																	const Receiver* const rx,
+																	const radar::Target* const target,
+																	const RealType receive_time)
+		{
+			const auto* const tx = source.transmitter;
+			if (tx == nullptr || rx == nullptr || target == nullptr || params::c() <= 0.0)
+			{
+				return false;
+			}
+			if (tx->getPlatform() == target->getPlatform() || rx->getPlatform() == target->getPlatform())
+			{
+				return false;
+			}
+
+			const auto p_tx = tx->getPlatform()->getPosition(receive_time);
+			const auto p_rx = rx->getPlatform()->getPosition(receive_time);
+			const auto p_target = target->getPlatform()->getPosition(receive_time);
+			const RealType tx_target_distance = (p_target - p_tx).length();
+			const RealType target_rx_distance = (p_rx - p_target).length();
+			if (tx_target_distance <= EPSILON || target_rx_distance <= EPSILON)
+			{
+				return false;
+			}
+			return sourceRetardedTimeIsActive(source, receive_time,
+											  (tx_target_distance + target_rx_distance) / params::c());
+		}
+
 		/// Builds an active streaming source for a transmitter at an event timestamp.
 		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
 																	const RealType timestamp)
@@ -266,8 +339,8 @@ namespace core
 		}
 
 		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
-		const auto start_index = static_cast<size_t>(std::ceil((t_current - params::startTime()) / dt_sim));
-		const auto end_index = static_cast<size_t>(std::ceil((t_event - params::startTime()) / dt_sim));
+		const auto start_index = streamingSampleIndexAtOrAfter(t_current, dt_sim);
+		const auto end_index = streamingSampleIndexAtOrAfter(t_event, dt_sim);
 		const auto sample_count = end_index - start_index;
 		const auto progress_report_stride = std::max<std::size_t>(1, sample_count / 1000);
 
@@ -295,6 +368,8 @@ namespace core
 				reportSimulationProgress(t_step);
 			}
 		}
+
+		cleanupInactiveStreamingSources(t_event);
 	}
 
 	ComplexType SimulationEngine::calculateStreamingSample(Receiver* rx, const RealType t_step,
@@ -413,6 +488,104 @@ namespace core
 		}
 	}
 
+	void SimulationEngine::cleanupInactiveStreamingSources(const RealType from_time)
+	{
+		auto& sources = _world->getSimulationState().active_streaming_transmitters;
+		for (std::size_t source_index = sources.size(); source_index > 0; --source_index)
+		{
+			const std::size_t index = source_index - 1;
+			if (sources[index].segment_end > from_time)
+			{
+				continue;
+			}
+			if (streamingSourceHasFutureContribution(sources[index], from_time))
+			{
+				continue;
+			}
+
+			sources.erase(sources.begin() + static_cast<std::ptrdiff_t>(index));
+			eraseStreamingTrackerSource(index);
+		}
+	}
+
+	bool SimulationEngine::streamingSourceHasFutureContribution(const ActiveStreamingSource& source,
+																const RealType from_time) const
+	{
+		if (source.transmitter == nullptr || source.carrier_freq <= 0.0)
+		{
+			return false;
+		}
+
+		return std::ranges::any_of(_world->getReceivers(), [&](const auto& receiver_ptr)
+								   { return receiverCanObserveFutureSource(source, receiver_ptr.get(), from_time); });
+	}
+
+	bool SimulationEngine::receiverCanObserveFutureSource(const ActiveStreamingSource& source, const Receiver* const rx,
+														  const RealType from_time) const
+	{
+		if (!isStreamingReceiver(rx))
+		{
+			return false;
+		}
+
+		const RealType sample_rate = params::rate() * params::oversampleRatio();
+		if (sample_rate <= 0.0)
+		{
+			return false;
+		}
+		const RealType dt_sim = 1.0 / sample_rate;
+
+		const auto can_observe_interval = [&](const RealType interval_start, const RealType interval_end)
+		{
+			const RealType start = std::max({params::startTime(), from_time, interval_start});
+			const RealType end = std::min(params::endTime(), interval_end);
+			if (start >= end)
+			{
+				return false;
+			}
+
+			const auto first_index = streamingSampleIndexAtOrAfter(start, dt_sim);
+			const auto end_index = streamingSampleIndexAtOrAfter(end, dt_sim);
+			for (std::size_t sample_index = first_index; sample_index < end_index; ++sample_index)
+			{
+				const RealType receive_time = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
+				if (streamingSourceCanContributeAtReceiveTime(source, rx, receive_time))
+				{
+					return true;
+				}
+			}
+			return false;
+		};
+
+		const auto& schedule = rx->getSchedule();
+		if (schedule.empty())
+		{
+			return can_observe_interval(params::startTime(), params::endTime());
+		}
+
+		return std::ranges::any_of(schedule,
+								   [&](const auto& period) { return can_observe_interval(period.start, period.end); });
+	}
+
+	bool SimulationEngine::streamingSourceCanContributeAtReceiveTime(const ActiveStreamingSource& source,
+																	 const Receiver* const rx,
+																	 const RealType receive_time) const
+	{
+		if (rx == nullptr)
+		{
+			return false;
+		}
+		if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT) &&
+			directPathCanCarrySourceAtReceiveTime(source, rx, receive_time))
+		{
+			return true;
+		}
+
+		return std::ranges::any_of(
+			_world->getTargets(), [&](const auto& target_ptr)
+			{ return reflectedPathCanCarrySourceAtReceiveTime(source, rx, target_ptr.get(), receive_time); });
+	}
+
 	void SimulationEngine::processEvent(const Event& event)
 	{
 		// NOLINTBEGIN(cppcoreguidelines-pro-type-static-cast-downcast)
@@ -525,9 +698,8 @@ namespace core
 	{
 		(void)tx;
 		// A transmitter stop is a transmit-time boundary, not an instantaneous receive-time cutoff.
-		// Keep the source as an in-flight candidate; per-path retarded-time gating zeros it once
-		// rx_time - tau reaches segment_end.
-		// TODO(perf): tx source now remains in active_streaming_transmitters forever. Find a clean solution for this.
+		// Ended sources are removed only after all future receive-time samples fail the retarded-time gate.
+		cleanupInactiveStreamingSources(_world->getSimulationState().t_current);
 	}
 
 	void SimulationEngine::handleRxStreamingStart(Receiver* rx) { rx->setActive(true); }

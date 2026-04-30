@@ -71,6 +71,92 @@ namespace
 		platform.getRotationPath()->finalize();
 	}
 
+	void setupPathPlatform(radar::Platform& platform, const math::Path::InterpType interpolation,
+						   const std::vector<math::Coord>& coords)
+	{
+		platform.getMotionPath()->setInterp(interpolation);
+		for (const auto& coord : coords)
+		{
+			platform.getMotionPath()->addCoord(coord);
+		}
+		platform.getMotionPath()->finalize();
+		platform.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+		platform.getRotationPath()->finalize();
+	}
+
+	struct StreamingPathWorld
+	{
+		std::unique_ptr<core::World> world;
+		radar::Transmitter* tx = nullptr;
+		radar::Receiver* rx = nullptr;
+		radar::Target* target = nullptr;
+	};
+
+	StreamingPathWorld
+	createStreamingPathWorld(const math::Path::InterpType tx_interpolation, const std::vector<math::Coord>& tx_coords,
+							 const math::Path::InterpType rx_interpolation, const std::vector<math::Coord>& rx_coords,
+							 const std::optional<std::vector<math::Coord>>& target_coords = std::nullopt,
+							 const math::Path::InterpType target_interpolation = math::Path::InterpType::INTERP_STATIC)
+	{
+		auto world = std::make_unique<core::World>();
+
+		auto tx_plat = std::make_unique<radar::Platform>("TxPlat", 210);
+		setupPathPlatform(*tx_plat, tx_interpolation, tx_coords);
+		auto rx_plat = std::make_unique<radar::Platform>("RxPlat", 211);
+		setupPathPlatform(*rx_plat, rx_interpolation, rx_coords);
+
+		radar::Platform* target_platform_ptr = nullptr;
+		std::unique_ptr<radar::Platform> target_plat;
+		if (target_coords.has_value())
+		{
+			target_plat = std::make_unique<radar::Platform>("TargetPlat", 212);
+			setupPathPlatform(*target_plat, target_interpolation, *target_coords);
+			target_platform_ptr = target_plat.get();
+		}
+
+		auto proto_timing = std::make_unique<timing::PrototypeTiming>("Clock", 213);
+		proto_timing->setFrequency(1.0e6);
+		auto timing = std::make_shared<timing::Timing>("ClockInstance", 214);
+		timing->initializeModel(proto_timing.get());
+		auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 215);
+		auto signal = std::make_unique<fers_signal::RadarSignal>("CWWave", 1.0, 1.0e6, 1.0,
+																 std::make_unique<fers_signal::CwSignal>(), 216);
+
+		auto tx = std::make_unique<radar::Transmitter>(tx_plat.get(), "Tx", radar::OperationMode::CW_MODE, 217);
+		tx->setTiming(timing);
+		tx->setAntenna(antenna.get());
+		tx->setSignal(signal.get());
+
+		auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 218);
+		rx->setTiming(timing);
+		rx->setAntenna(antenna.get());
+
+		auto* tx_ptr = tx.get();
+		auto* rx_ptr = rx.get();
+
+		world->add(std::move(tx_plat));
+		world->add(std::move(rx_plat));
+		if (target_plat)
+		{
+			world->add(std::move(target_plat));
+		}
+		world->add(std::move(proto_timing));
+		world->add(std::move(antenna));
+		world->add(std::move(signal));
+		world->add(std::move(tx));
+		world->add(std::move(rx));
+
+		radar::Target* target_ptr = nullptr;
+		if (target_platform_ptr != nullptr)
+		{
+			auto target = radar::createIsoTarget(target_platform_ptr, "Target", 1.0, 219, 220);
+			target_ptr = target.get();
+			world->add(std::move(target));
+		}
+
+		return {.world = std::move(world), .tx = tx_ptr, .rx = rx_ptr, .target = target_ptr};
+	}
+
 	/// Wraps a phase delta into the [-pi, pi] interval.
 	RealType unwrapDelta(RealType delta)
 	{
@@ -296,6 +382,7 @@ TEST_CASE("makeActiveSource caches signed FMCW down-chirp coefficient", "[core][
 TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]")
 {
 	ParamGuard guard;
+	params::setTime(0.0, 10.0);
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
@@ -575,6 +662,154 @@ TEST_CASE("SimulationEngine keeps streaming source through propagation tail afte
 	{
 		REQUIRE(std::abs(rx->getStreamingData()[index]) == 0.0);
 	}
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine cleanup preserves moving direct streaming tails", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.6);
+	params::setC(1000.0);
+
+	const auto run_case = [](const math::Path::InterpType interpolation, const std::vector<math::Coord>& tx_path,
+							 const RealType active_sample_time, const RealType cleanup_time)
+	{
+		auto fixture = createStreamingPathWorld(interpolation, tx_path, math::Path::InterpType::INTERP_STATIC,
+												{{math::Vec3{0.0, 0.0, 0.0}, 0.0}, {math::Vec3{0.0, 0.0, 0.0}, 0.6}});
+		pool::ThreadPool pool(1);
+		core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+
+		fixture.rx->prepareStreamingData(600);
+		fixture.rx->setActive(true);
+		engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+		fixture.world->getSimulationState().t_current = 0.2;
+		engine.handleTxStreamingEnd(fixture.tx);
+
+		engine.processStreamingPhysics(active_sample_time + 0.001);
+		const auto active_index = static_cast<std::size_t>(std::llround(active_sample_time * params::rate()));
+		REQUIRE(std::abs(fixture.rx->getStreamingData()[active_index]) > 0.0);
+		REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+		fixture.world->getSimulationState().t_current = active_sample_time + 0.001;
+		engine.processStreamingPhysics(cleanup_time);
+		REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+	};
+
+	SECTION("linear receding transmitter")
+	{
+		run_case(math::Path::InterpType::INTERP_LINEAR,
+				 {{math::Vec3{-100.0, 0.0, 0.0}, 0.0}, {math::Vec3{-200.0, 0.0, 0.0}, 1.0}}, 0.325, 0.34);
+	}
+
+	SECTION("cubic nonmonotone transmitter")
+	{
+		run_case(math::Path::InterpType::INTERP_CUBIC,
+				 {{math::Vec3{-100.0, 0.0, 0.0}, 0.0},
+				  {math::Vec3{-80.0, 0.0, 0.0}, 0.2},
+				  {math::Vec3{-200.0, 0.0, 0.0}, 0.4},
+				  {math::Vec3{-100.0, 0.0, 0.0}, 0.9}},
+				 0.35, 0.401);
+	}
+}
+
+TEST_CASE("SimulationEngine cleanup preserves reflected-only streaming tails", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.8);
+	params::setC(1000.0);
+
+	auto fixture = createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+											math::Path::InterpType::INTERP_STATIC, {{math::Vec3{500.0, 0.0, 0.0}, 0.0}},
+											std::vector<math::Coord>{{math::Vec3{250.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+	fixture.rx->prepareStreamingData(800);
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+	fixture.world->getSimulationState().t_current = 0.2;
+	engine.handleTxStreamingEnd(fixture.tx);
+
+	engine.processStreamingPhysics(0.601);
+	REQUIRE(std::abs(fixture.rx->getStreamingData()[600]) > 0.0);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+	fixture.world->getSimulationState().t_current = 0.601;
+	engine.processStreamingPhysics(0.701);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine cleanup keeps sources through receiver gaps when tails resume", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.5);
+	params::setC(1000.0);
+
+	auto fixture =
+		createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+								 math::Path::InterpType::INTERP_STATIC, {{math::Vec3{100.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->setSchedule({{0.0, 0.15}, {0.25, 0.5}});
+	fixture.rx->prepareStreamingData(500);
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+
+	engine.processStreamingPhysics(0.15);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+	engine.handleRxStreamingEnd(fixture.rx);
+
+	fixture.world->getSimulationState().t_current = 0.15;
+	engine.processStreamingPhysics(0.25);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+	engine.handleRxStreamingStart(fixture.rx);
+
+	fixture.world->getSimulationState().t_current = 0.25;
+	engine.processStreamingPhysics(0.301);
+	REQUIRE(std::abs(fixture.rx->getStreamingData()[250]) > 0.0);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine cleanup removes an old segment before a same-time next segment", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1024.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.75);
+	params::setC(1000.0);
+
+	auto fixture =
+		createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+								 math::Path::InterpType::INTERP_STATIC, {{math::Vec3{125.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->prepareStreamingData(768);
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.25));
+	fixture.world->getSimulationState().t_current = 0.25;
+	engine.handleTxStreamingEnd(fixture.tx);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+	engine.processStreamingPhysics(0.375);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.375, 0.625));
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+	REQUIRE_THAT(fixture.world->getSimulationState().active_streaming_transmitters.front().segment_start,
+				 WithinAbs(0.375, 1.0e-12));
 }
 
 TEST_CASE("SimulationEngine processStreamingPhysics handles active streaming receiver without streaming transmitters",

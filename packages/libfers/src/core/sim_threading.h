@@ -186,6 +186,22 @@ namespace core
 		/// Removes tracker storage for a streaming source that has ended.
 		void eraseStreamingTrackerSource(std::size_t source_index);
 
+		/// Removes ended streaming sources once no future receiver sample can observe their in-flight energy.
+		void cleanupInactiveStreamingSources(RealType from_time);
+
+		/// Returns true when an ended source can still contribute to any future streaming receiver sample.
+		[[nodiscard]] bool streamingSourceHasFutureContribution(const ActiveStreamingSource& source,
+																RealType from_time) const;
+
+		/// Returns true when one receiver can still observe a source at or after the specified time.
+		[[nodiscard]] bool receiverCanObserveFutureSource(const ActiveStreamingSource& source,
+														  const radar::Receiver* rx, RealType from_time) const;
+
+		/// Returns true when any enabled path can carry this source to the receiver at receive time.
+		[[nodiscard]] bool streamingSourceCanContributeAtReceiveTime(const ActiveStreamingSource& source,
+																	 const radar::Receiver* rx,
+																	 RealType receive_time) const;
+
 		/// Creates the CW phase-noise lookup if any active timing source needs it.
 		void ensureCwPhaseNoiseLookup();
 
