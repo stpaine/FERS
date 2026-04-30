@@ -466,6 +466,7 @@ TEST_CASE("applyPulsedInterference maps pulse start times to simulation sample i
 	ParamGuard guard;
 	params::setTime(10.0, 11.0);
 	params::setRate(4.0);
+	params::setOversampleRatio(1);
 
 	radar::Platform tx_platform("TxPlatform");
 	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 401);
@@ -485,6 +486,40 @@ TEST_CASE("applyPulsedInterference maps pulse start times to simulation sample i
 	const std::vector<ComplexType> expected = {
 		ComplexType{0.0, 0.0},	ComplexType{1.0, 0.5},	ComplexType{2.0, -0.5},
 		ComplexType{13.0, 1.0}, ComplexType{20.0, 1.0},
+	};
+
+	REQUIRE(iq_buffer.size() == expected.size());
+	for (size_t i = 0; i < expected.size(); ++i)
+	{
+		REQUIRE_THAT(iq_buffer[i].real(), WithinAbs(expected[i].real(), 1e-12));
+		REQUIRE_THAT(iq_buffer[i].imag(), WithinAbs(expected[i].imag(), 1e-12));
+	}
+}
+
+TEST_CASE("applyPulsedInterference uses RF simulation rate for oversampled full-buffer path",
+		  "[processing][finalizer][interference]")
+{
+	ParamGuard guard;
+	params::setTime(10.0, 11.0);
+	params::setRate(4.0);
+	params::setOversampleRatio(2);
+
+	radar::Platform tx_platform("TxPlatform");
+	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 402);
+
+	std::vector<std::unique_ptr<fers_signal::RadarSignal>> wave_store;
+	std::vector<std::unique_ptr<serial::Response>> interference_log;
+	interference_log.push_back(makeFixedResponse(&transmitter, wave_store,
+												 {ComplexType{1.0, 0.5}, ComplexType{2.0, -0.5}, ComplexType{3.0, 1.0}},
+												 params::rate(), 10.25));
+
+	std::vector<ComplexType> iq_buffer(8, ComplexType{});
+
+	processing::pipeline::applyPulsedInterference(iq_buffer, interference_log);
+
+	const std::vector<ComplexType> expected = {
+		ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0}, ComplexType{1.0, 0.5}, ComplexType{2.0, -0.5},
+		ComplexType{3.0, 1.0}, ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0},
 	};
 
 	REQUIRE(iq_buffer.size() == expected.size());

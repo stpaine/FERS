@@ -274,6 +274,61 @@ TEST_CASE("finalizeStreamingReceiver adds logged pulsed interference without rot
 	std::filesystem::remove_all(out_dir);
 }
 
+TEST_CASE("finalizeStreamingReceiver accepts oversampled pulsed interference for non-dechirped CW receivers",
+		  "[processing][finalizer][interference]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 1.0);
+	params::setRate(4.0);
+	params::setOversampleRatio(2);
+	params::setAdcBits(0);
+	params::params.filter_length = 8;
+
+	const std::string receiver_name = uniqueName("cw_finalize_oversampled");
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("cw_finalize_oversampled_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
+	removeIfExists(output_path);
+
+	radar::Platform rx_platform("RxPlatform");
+	radar::Receiver receiver(&rx_platform, receiver_name, 59, radar::OperationMode::CW_MODE);
+	auto timing_owner = makeQuietTiming("oversampled_clk", 25, 77.0);
+	receiver.setTiming(timing_owner.timing);
+	receiver.setNoiseTemperature(0.0);
+	receiver.prepareStreamingData(8);
+
+	radar::Platform tx_platform("TxPlatform");
+	radar::Transmitter transmitter(&tx_platform, "TxOversampled", radar::OperationMode::PULSED_MODE, 602);
+
+	std::vector<std::unique_ptr<fers_signal::RadarSignal>> wave_store;
+	receiver.addInterferenceToLog(
+		makeFixedResponse(&transmitter, wave_store,
+						  {ComplexType{1.0, 0.0}, ComplexType{1.0, 0.0}, ComplexType{1.0, 0.0}, ComplexType{1.0, 0.0}},
+						  params::rate(), 0.25));
+
+	processing::finalizeStreamingReceiver(&receiver, nullptr, nullptr, out_dir.string());
+
+	{
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		const auto i_data = readDataset(file, "I_data");
+		const auto q_data = readDataset(file, "Q_data");
+
+		RealType sampling_rate = 0.0;
+		RealType fullscale = 0.0;
+		file.getAttribute("sampling_rate").read(sampling_rate);
+		file.getAttribute("fullscale").read(fullscale);
+
+		REQUIRE(i_data.size() == 4u);
+		REQUIRE(q_data.size() == 4u);
+		REQUIRE_THAT(sampling_rate, WithinAbs(params::rate(), 1e-12));
+		REQUIRE(fullscale > 0.0);
+		REQUIRE(
+			std::any_of(i_data.begin(), i_data.end(), [](const RealType value) { return std::abs(value) > 1e-12; }));
+	}
+
+	std::filesystem::remove_all(out_dir);
+}
+
 TEST_CASE("finalizeStreamingReceiver labels FMCW receiver progress distinctly", "[processing][finalizer][fmcw]")
 {
 	ParamGuard guard;

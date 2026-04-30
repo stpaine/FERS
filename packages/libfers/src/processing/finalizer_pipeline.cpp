@@ -174,7 +174,8 @@ namespace processing::pipeline
 								 const std::vector<std::unique_ptr<serial::Response>>& interference_log)
 	{
 		const std::array active_spans{SampleSpan{.start = 0, .end_exclusive = iq_buffer.size()}};
-		applyPulsedInterference(iq_buffer, interference_log, active_spans, params::rate());
+		applyPulsedInterference(iq_buffer, interference_log, active_spans,
+								params::rate() * static_cast<RealType>(params::oversampleRatio()));
 	}
 
 	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
