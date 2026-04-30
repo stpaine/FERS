@@ -32,6 +32,23 @@ semi-independent packages.
 - **Unified Schema:** A central XML schema ensures consistency and serves as the single source of truth for scenarios
   across the simulator and the UI.
 
+## Feature Stability
+
+Last reviewed: 2026-04-30.
+
+These labels describe the current state of the `master` branch and should be read alongside
+the [development status disclaimer](#disclaimer--development-status). "Verified" means the feature has been checked
+against the current project expectations; "unverified" means it is available but still needs validation before users
+should rely on it for important results.
+
+| Feature | Stability | Verification |
+| ------- | --------- | ------------ |
+| Pulsed radar | Stable | Verified |
+| CW radar | Beta | Unverified |
+| FMCW radar | Alpha | Unverified |
+| Multimodal | Alpha | Unverified |
+| KML generation | Stable | Verified |
+
 ## Repository Structure
 
 This monorepo contains the following packages:
