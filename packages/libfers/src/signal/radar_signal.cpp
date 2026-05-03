@@ -192,6 +192,18 @@ namespace fers_signal
 		return data;
 	}
 
+	std::vector<ComplexType> RadarSignal::renderSlice(const std::vector<interp::InterpPoint>& points,
+													  const RealType outputStartTime, const RealType outputSampleRate,
+													  const std::size_t sampleCount, const RealType fracWinDelay) const
+	{
+		auto data = _signal->renderSlice(points, outputStartTime, outputSampleRate, sampleCount, fracWinDelay);
+		const RealType scale = std::sqrt(_power);
+
+		std::ranges::for_each(data, [scale](auto& value) { value *= scale; });
+
+		return data;
+	}
+
 	bool RadarSignal::isCw() const noexcept { return dynamic_cast<const CwSignal*>(_signal.get()) != nullptr; }
 
 	bool RadarSignal::isFmcwChirp() const noexcept
@@ -243,34 +255,54 @@ namespace fers_signal
 	std::vector<ComplexType> Signal::render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 											const double fracWinDelay) const
 	{
-		auto out = std::vector<ComplexType>(_size);
 		size = _size;
+		if (points.empty())
+		{
+			return std::vector<ComplexType>(_size);
+		}
+		return renderSlice(points, points.front().time, _rate, _size, fracWinDelay);
+	}
 
-		const RealType timestep = 1.0 / _rate;
+	std::vector<ComplexType> Signal::renderSlice(const std::vector<interp::InterpPoint>& points,
+												 const RealType outputStartTime, const RealType outputSampleRate,
+												 const std::size_t sampleCount, const RealType fracWinDelay) const
+	{
+		auto out = std::vector<ComplexType>(sampleCount);
+		if (_size == 0 || _rate <= 0.0 || outputSampleRate <= 0.0 || points.empty())
+		{
+			return out;
+		}
+
+		const RealType timestep = 1.0 / outputSampleRate;
 		const int filt_length = static_cast<int>(params::renderFilterLength());
 		const auto& interp = interp::InterpFilter::getInstance();
 
 		auto iter = points.begin();
 		auto next = points.size() > 1 ? std::next(iter) : iter;
 		const RealType idelay = std::round(_rate * iter->delay);
-		RealType sample_time = iter->time;
+		RealType sample_time = outputStartTime;
 
-		for (int i = 0; i < static_cast<int>(_size); ++i)
+		for (std::size_t i = 0; i < sampleCount; ++i)
 		{
-			if (sample_time > next->time && next != iter)
+			while (sample_time > next->time && next != iter)
 			{
 				iter = next;
 				if (std::next(next) != points.end())
 				{
 					++next;
 				}
+				else
+				{
+					break;
+				}
 			}
 
 			auto [amplitude, phase, fdelay, i_sample_unwrap] =
 				calculateWeightsAndDelays(iter, next, sample_time, idelay, fracWinDelay);
 			const auto& filt = interp.getFilter(fdelay);
-			ComplexType accum = performConvolution(i, filt.data(), filt_length, amplitude, i_sample_unwrap);
-			out[static_cast<std::size_t>(i)] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
+			const auto source_index = static_cast<int>(std::llround((sample_time - points.front().time) * _rate));
+			ComplexType accum = performConvolution(source_index, filt.data(), filt_length, amplitude, i_sample_unwrap);
+			out[i] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
 
 			sample_time += timestep;
 		}

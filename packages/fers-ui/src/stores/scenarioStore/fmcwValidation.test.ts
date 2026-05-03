@@ -206,9 +206,9 @@ describe('FMCW validation', () => {
                     source: 'transmitter',
                     transmitter_name: 'FMCW Tx',
                 },
-                if_sample_rate: 1e6,
-                if_filter_bandwidth: 4e5,
-                if_filter_transition_width: 1e5,
+                if_sample_rate: 4e3,
+                if_filter_bandwidth: 1e3,
+                if_filter_transition_width: 500,
             },
             schedule: [],
         });
@@ -226,7 +226,7 @@ describe('FMCW validation', () => {
 
         receiver.fmcwModeConfig = {
             dechirp_mode: 'none',
-            if_sample_rate: 1e6,
+            if_sample_rate: 4e3,
         };
         expect(
             validateFmcwScenario(scenario).some((issue) =>
@@ -254,12 +254,29 @@ describe('FMCW validation', () => {
                 source: 'transmitter',
                 transmitter_name: 'FMCW Tx',
             },
-            if_sample_rate: 1e6,
-            if_filter_bandwidth: 5e5,
+            if_sample_rate: 4e3,
+            if_filter_bandwidth: 2e3,
         };
         expect(
             validateFmcwScenario(scenario).some((issue) =>
                 issue.message.includes('less than half')
+            )
+        ).toBe(true);
+
+        receiver.fmcwModeConfig = {
+            dechirp_mode: 'physical',
+            dechirp_reference: {
+                source: 'transmitter',
+                transmitter_name: 'FMCW Tx',
+            },
+            if_sample_rate:
+                defaultGlobalParameters.rate *
+                    defaultGlobalParameters.oversample_ratio +
+                1,
+        };
+        expect(
+            validateFmcwScenario(scenario).some((issue) =>
+                issue.message.includes('effective simulation sample rate')
             )
         ).toBe(true);
     });

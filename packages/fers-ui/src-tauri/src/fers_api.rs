@@ -267,7 +267,7 @@ impl LogLevel {
     }
 
     fn from_ffi(level: ffi::fers_log_level_t) -> Self {
-        match level as u32 {
+        match level {
             0 => Self::Trace,
             1 => Self::Debug,
             2 => Self::Info,
@@ -281,7 +281,7 @@ impl LogLevel {
 }
 
 fn log_level_label(level: ffi::fers_log_level_t) -> &'static str {
-    match level as u32 {
+    match level {
         0 => "TRACE",
         1 => "DEBUG",
         2 => "INFO",

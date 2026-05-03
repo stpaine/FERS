@@ -252,7 +252,8 @@ function validateFmcwEmitterSchedule(
 function validateFmcwReceiverDechirpConfig(
     component: Extract<PlatformComponent, { type: 'monostatic' | 'receiver' }>,
     fmcwEmitterNames: ReadonlySet<string>,
-    fmcwWaveformNames: ReadonlySet<string>
+    fmcwWaveformNames: ReadonlySet<string>,
+    globalParameters: GlobalParameters
 ): FmcwValidationIssue[] {
     const issues: FmcwValidationIssue[] = [];
 
@@ -335,6 +336,18 @@ function validateFmcwReceiverDechirpConfig(
             componentId: component.id,
             field: 'fmcwModeConfig',
             message: `${component.name} IF filter bandwidth must be less than half the IF sample rate.`,
+        });
+    }
+    if (
+        ifSampleRate !== undefined &&
+        ifSampleRate > globalParameters.rate * globalParameters.oversample_ratio
+    ) {
+        pushIssue(issues, {
+            severity: 'error',
+            itemId: component.id,
+            componentId: component.id,
+            field: 'fmcwModeConfig',
+            message: `${component.name} IF sample rate must be less than or equal to the effective simulation sample rate.`,
         });
     }
 
@@ -503,7 +516,8 @@ export function validateFmcwScenario(
                     ...validateFmcwReceiverDechirpConfig(
                         component,
                         fmcwEmitterNames,
-                        fmcwWaveformNames
+                        fmcwWaveformNames,
+                        scenario.globalParameters
                     )
                 );
             }

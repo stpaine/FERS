@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <span>
@@ -83,6 +84,9 @@ namespace fers_signal
 		 */
 		[[nodiscard]] RealType getRate() const noexcept { return _rate; }
 
+		/// Gets the number of native samples held by this signal.
+		[[nodiscard]] unsigned getSampleCount() const noexcept { return _size; }
+
 		/**
 		 * @brief Renders the signal data based on interpolation points.
 		 *
@@ -93,6 +97,12 @@ namespace fers_signal
 		 */
 		virtual std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 												double fracWinDelay) const;
+
+		/// Renders a bounded absolute-time slice on the requested output grid.
+		[[nodiscard]] virtual std::vector<ComplexType> renderSlice(const std::vector<interp::InterpPoint>& points,
+																   RealType outputStartTime, RealType outputSampleRate,
+																   std::size_t sampleCount,
+																   RealType fracWinDelay) const;
 
 		/// Returns true when this signal belongs to the FMCW waveform family.
 		[[nodiscard]] virtual bool isFmcwFamily() const noexcept { return false; }
@@ -208,6 +218,9 @@ namespace fers_signal
 		 */
 		[[nodiscard]] RealType getRate() const noexcept { return _signal->getRate(); }
 
+		/// Gets the number of native samples in the underlying signal.
+		[[nodiscard]] unsigned getSampleCount() const noexcept { return _signal->getSampleCount(); }
+
 		/**
 		 * @brief Gets the length of the radar signal.
 		 *
@@ -249,6 +262,11 @@ namespace fers_signal
 		 */
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const;
+
+		/// Renders a bounded absolute-time slice on the requested output grid.
+		[[nodiscard]] std::vector<ComplexType> renderSlice(const std::vector<interp::InterpPoint>& points,
+														   RealType outputStartTime, RealType outputSampleRate,
+														   std::size_t sampleCount, RealType fracWinDelay) const;
 
 	private:
 		std::string _name; ///< The name of the radar signal.

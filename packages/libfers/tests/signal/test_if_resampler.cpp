@@ -113,3 +113,57 @@ TEST_CASE("FMCW IF streaming sink resamples a complex tone by blocks", "[signal]
 	REQUIRE(gain > 0.95);
 	REQUIRE(gain < 1.05);
 }
+
+TEST_CASE("FMCW IF resampler applies fractional delay phase state", "[signal][if_resampler][stream]")
+{
+	constexpr RealType input_rate_hz = 1024.0;
+	constexpr RealType output_rate_hz = 320.0;
+	constexpr RealType tone_hz = 16.0;
+	constexpr std::size_t input_count = 8192;
+
+	const fers_signal::FmcwIfResamplerRequest request{.input_sample_rate_hz = input_rate_hz,
+													  .output_sample_rate_hz = output_rate_hz,
+													  .filter_bandwidth_hz = 48.0,
+													  .filter_transition_width_hz = 80.0,
+													  .stopband_attenuation_db = 30.0};
+	const auto plan = fers_signal::planFmcwIfResampler(request);
+	REQUIRE(plan.fractional_output_delay_samples > 1.0e-6);
+	REQUIRE(plan.stages.back().applies_fractional_delay);
+	REQUIRE(plan.stages.back().phase_refinement > 1);
+
+	const auto input = complexTone(input_rate_hz, tone_hz, input_count);
+	fers_signal::FmcwIfResamplingSink measured_sink(plan);
+	std::vector<ComplexType> output;
+	for (std::size_t offset = 0; offset < input.size(); offset += 311)
+	{
+		const auto count = std::min<std::size_t>(311, input.size() - offset);
+		measured_sink.consume(std::span<const ComplexType>{input.data() + offset, count});
+		auto chunk = measured_sink.takeOutput();
+		output.insert(output.end(), chunk.begin(), chunk.end());
+	}
+	auto tail = measured_sink.finish();
+	output.insert(output.end(), tail.begin(), tail.end());
+
+	ComplexType shifted_correlation{0.0, 0.0};
+	ComplexType unshifted_correlation{0.0, 0.0};
+	RealType output_energy = 0.0;
+	RealType reference_energy = 0.0;
+	for (std::size_t i = 300; i < output.size() - 300; ++i)
+	{
+		const RealType shifted_time =
+			(static_cast<RealType>(i) + plan.fractional_output_delay_samples) / output_rate_hz;
+		const RealType shifted_phase = 2.0 * PI * tone_hz * shifted_time;
+		const ComplexType shifted_expected{std::cos(shifted_phase), std::sin(shifted_phase)};
+		const RealType unshifted_phase = 2.0 * PI * tone_hz * static_cast<RealType>(i) / output_rate_hz;
+		const ComplexType unshifted_expected{std::cos(unshifted_phase), std::sin(unshifted_phase)};
+		shifted_correlation += output[i] * std::conj(shifted_expected);
+		unshifted_correlation += output[i] * std::conj(unshifted_expected);
+		output_energy += std::norm(output[i]);
+		reference_energy += std::norm(shifted_expected);
+	}
+
+	const RealType shifted_normalized = std::abs(shifted_correlation) / std::sqrt(output_energy * reference_energy);
+	REQUIRE(shifted_normalized > 0.995);
+	REQUIRE(std::abs(std::arg(shifted_correlation)) < 0.03);
+	REQUIRE(std::abs(std::arg(unshifted_correlation)) > 0.03);
+}

@@ -276,3 +276,37 @@ TEST_CASE("Signal render responds to fractional delay", "[signal][radar]")
 	REQUIRE_THAT(data[sample_index].real(), WithinAbs(expected.real(), 1e-6));
 	REQUIRE_THAT(data[sample_index].imag(), WithinAbs(expected.imag(), 1e-6));
 }
+
+TEST_CASE("Signal renderSlice matches cropped full response with padding", "[signal][radar]")
+{
+	ParamGuard guard;
+	params::setOversampleRatio(1);
+
+	const unsigned sample_count = params::renderFilterLength() * 6;
+	std::vector<ComplexType> input(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * static_cast<RealType>(i) / 17.0;
+		input[i] = {std::cos(phase), std::sin(phase)};
+	}
+
+	fers_signal::Signal signal;
+	signal.load(input, sample_count, 100.0);
+	const std::vector<interp::InterpPoint> points = {{1.0, 10.0, 0.0, 0.0}, {0.25, 12.0, 0.0, PI / 3.0}};
+
+	unsigned full_size = 0;
+	const auto full = signal.render(points, full_size, 0.0);
+	constexpr unsigned crop_start = 31;
+	constexpr unsigned crop_count = 47;
+	constexpr unsigned pad = 20;
+	const RealType slice_start = points.front().time + static_cast<RealType>(crop_start - pad) / 100.0;
+	const auto slice = signal.renderSlice(points, slice_start, 100.0, crop_count + 2 * pad, 0.0);
+
+	REQUIRE(full_size == sample_count);
+	REQUIRE(slice.size() == crop_count + 2 * pad);
+	for (unsigned i = 0; i < crop_count; ++i)
+	{
+		REQUIRE_THAT(slice[pad + i].real(), WithinAbs(full[crop_start + i].real(), 1e-9));
+		REQUIRE_THAT(slice[pad + i].imag(), WithinAbs(full[crop_start + i].imag(), 1e-9));
+	}
+}

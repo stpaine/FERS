@@ -216,6 +216,77 @@ namespace
 			static_cast<long double>(down_factor);
 		return static_cast<std::size_t>(std::ceil(scaled - 1.0e-12L));
 	}
+
+	[[nodiscard]] RealType fractionalStageMacs(const fers_signal::FmcwIfResamplerStagePlan& stage,
+											   const std::size_t refinement) noexcept
+	{
+		return static_cast<RealType>(ceilBranchMacs(stage.tap_count, stage.up_factor, refinement > 0));
+	}
+
+	void recomputePlanCost(fers_signal::FmcwIfResamplerPlan& plan)
+	{
+		plan.estimated_macs_per_output_sample = 0.0;
+		plan.phase_refinement = 1;
+		for (const auto& stage : plan.stages)
+		{
+			plan.estimated_macs_per_output_sample += stage.estimated_macs_per_stage_output;
+			plan.phase_refinement = std::max(plan.phase_refinement, stage.phase_refinement);
+		}
+	}
+
+	void configureFractionalDelay(fers_signal::FmcwIfResamplerPlan& plan)
+	{
+		constexpr RealType kFractionalEpsilon = 1.0e-12;
+		if (plan.stages.empty() || plan.fractional_output_delay_samples <= kFractionalEpsilon)
+		{
+			return;
+		}
+
+		auto& stage = plan.stages.back();
+		const RealType base_cost = plan.estimated_macs_per_output_sample - stage.estimated_macs_per_stage_output;
+		std::size_t selected_refinement = 1;
+		for (std::size_t refinement = plan.limits.max_phase_refinement; refinement >= 1; --refinement)
+		{
+			const RealType candidate_cost = base_cost + fractionalStageMacs(stage, refinement);
+			if (candidate_cost <= plan.limits.max_macs_per_output_sample)
+			{
+				selected_refinement = refinement;
+				break;
+			}
+			if (refinement == 1)
+			{
+				break;
+			}
+		}
+
+		stage.phase_refinement = selected_refinement;
+		stage.phase_count = static_cast<std::size_t>(stage.up_factor) * selected_refinement;
+		stage.estimated_macs_per_stage_output = fractionalStageMacs(stage, selected_refinement);
+
+		const RealType u0 = plan.fractional_output_delay_samples * static_cast<RealType>(stage.down_factor) *
+			static_cast<RealType>(selected_refinement);
+		const auto modulus = static_cast<RealType>(stage.phase_count);
+		stage.initial_input_advance = static_cast<std::int64_t>(std::floor(u0 / modulus));
+		const RealType residual = u0 - static_cast<RealType>(stage.initial_input_advance) * modulus;
+		stage.initial_phase_accumulator = static_cast<std::size_t>(std::floor(residual));
+		stage.initial_branch_interpolation_fraction = residual - static_cast<RealType>(stage.initial_phase_accumulator);
+		stage.applies_fractional_delay = true;
+
+		plan.fractional_phase_offset = plan.fractional_output_delay_samples * static_cast<RealType>(stage.down_factor);
+		plan.branch_interpolation_fraction = stage.initial_branch_interpolation_fraction;
+		plan.phase_refinement = selected_refinement;
+		plan.estimated_timing_error_seconds =
+			0.5 / (plan.actual_output_sample_rate_hz * static_cast<RealType>(selected_refinement));
+		plan.estimated_phase_error_radians = 2.0 * PI * plan.filter_bandwidth_hz * plan.estimated_timing_error_seconds;
+
+		recomputePlanCost(plan);
+		if (plan.estimated_macs_per_output_sample > plan.limits.max_macs_per_output_sample)
+		{
+			throw std::runtime_error("IF resampler fractional-delay MAC cost " +
+									 std::to_string(plan.estimated_macs_per_output_sample) + " exceeds maximum " +
+									 std::to_string(plan.limits.max_macs_per_output_sample));
+		}
+	}
 }
 
 namespace fers_signal
@@ -338,9 +409,8 @@ namespace fers_signal
 		for (const auto& stage : plan.stages)
 		{
 			plan.group_delay_seconds += stage.group_delay_seconds;
-			plan.estimated_macs_per_output_sample += stage.estimated_macs_per_stage_output;
-			plan.phase_refinement = std::max(plan.phase_refinement, stage.phase_refinement);
 		}
+		recomputePlanCost(plan);
 
 		if (plan.estimated_macs_per_output_sample > request.limits.max_macs_per_output_sample)
 		{
@@ -362,6 +432,7 @@ namespace fers_signal
 			0.5 / (plan.actual_output_sample_rate_hz * static_cast<RealType>(plan.phase_refinement));
 		plan.estimated_phase_error_radians =
 			2.0 * PI * request.filter_bandwidth_hz * plan.estimated_timing_error_seconds;
+		configureFractionalDelay(plan);
 
 		return plan;
 	}
@@ -369,7 +440,7 @@ namespace fers_signal
 	class FmcwIfResamplingSink::Stage
 	{
 	public:
-		explicit Stage(FmcwIfResamplerStagePlan plan) : _plan(std::move(plan)) { buildPhaseTable(); }
+		explicit Stage(FmcwIfResamplerStagePlan plan) : _plan(plan) { buildPhaseTable(); }
 
 		struct ZeroInputResult
 		{
@@ -530,24 +601,72 @@ namespace fers_signal
 			return result;
 		}
 
-		[[nodiscard]] bool outputHasSamplesForTotal(const std::size_t output_index,
-													const std::size_t input_total) const noexcept
+		[[nodiscard]] long double stagePosition(const std::size_t output_index) const noexcept
 		{
 			const std::size_t phase_count = std::max<std::size_t>(1, _plan.phase_count);
-			const long double position = static_cast<long double>(output_index) *
+			const long double base = static_cast<long double>(output_index) *
 				static_cast<long double>(_plan.down_factor) / static_cast<long double>(_plan.up_factor);
+			if (!_plan.applies_fractional_delay)
+			{
+				return base;
+			}
+
+			const long double initial_phase = (static_cast<long double>(_plan.initial_phase_accumulator) +
+											   static_cast<long double>(_plan.initial_branch_interpolation_fraction)) /
+				static_cast<long double>(phase_count);
+			return base + static_cast<long double>(_plan.initial_input_advance) + initial_phase;
+		}
+
+		struct BranchPosition
+		{
+			std::int64_t base_index = 0;
+			std::size_t lower_phase = 0;
+			std::size_t upper_phase = 0;
+			std::int64_t upper_offset = 0;
+			RealType mu = 0.0;
+		};
+
+		[[nodiscard]] BranchPosition branchPosition(const std::size_t output_index) const noexcept
+		{
+			const std::size_t phase_count = std::max<std::size_t>(1, _plan.phase_count);
+			const long double position = stagePosition(output_index);
 			const auto base_index = static_cast<std::int64_t>(std::floor(position + 1.0e-12L));
-			const long double frac = position - static_cast<long double>(base_index);
+			long double frac = position - static_cast<long double>(base_index);
+			if (frac < 0.0L && frac > -1.0e-12L)
+			{
+				frac = 0.0L;
+			}
+
 			const long double phase_position = frac * static_cast<long double>(phase_count);
 			auto lower_phase = static_cast<std::size_t>(std::floor(phase_position + 1.0e-12L));
+			auto mu = static_cast<RealType>(phase_position - static_cast<long double>(lower_phase));
 			if (lower_phase >= phase_count)
 			{
 				lower_phase = 0;
+				mu = 0.0;
 			}
 
-			const std::int64_t upper_offset = lower_phase + 1 == phase_count ? 1 : 0;
+			std::size_t upper_phase = lower_phase + 1;
+			std::int64_t upper_offset = 0;
+			if (upper_phase == phase_count)
+			{
+				upper_phase = 0;
+				upper_offset = 1;
+			}
+
+			return {.base_index = base_index,
+					.lower_phase = lower_phase,
+					.upper_phase = upper_phase,
+					.upper_offset = upper_offset,
+					.mu = mu};
+		}
+
+		[[nodiscard]] bool outputHasSamplesForTotal(const std::size_t output_index,
+													const std::size_t input_total) const noexcept
+		{
+			const auto branch = branchPosition(output_index);
 			const auto half = static_cast<std::int64_t>((_plan.tap_count - 1) / 2);
-			const std::int64_t last_needed = base_index + upper_offset + half;
+			const std::int64_t last_needed = branch.base_index + branch.upper_offset + half;
 			return last_needed < static_cast<std::int64_t>(input_total);
 		}
 
@@ -574,44 +693,19 @@ namespace fers_signal
 		{
 			const std::size_t final_output_count =
 				final ? ceilOutputCount(_input_total, _plan.up_factor, _plan.down_factor) : 0;
-			const std::size_t phase_count = std::max<std::size_t>(1, _plan.phase_count);
 
 			while (!final || _next_output_index < final_output_count)
 			{
-				const long double position = static_cast<long double>(_next_output_index) *
-					static_cast<long double>(_plan.down_factor) / static_cast<long double>(_plan.up_factor);
-				const auto base_index = static_cast<std::int64_t>(std::floor(position + 1.0e-12L));
-				long double frac = position - static_cast<long double>(base_index);
-				if (frac < 0.0L && frac > -1.0e-12L)
-				{
-					frac = 0.0L;
-				}
-
-				const long double phase_position = frac * static_cast<long double>(phase_count);
-				auto lower_phase = static_cast<std::size_t>(std::floor(phase_position + 1.0e-12L));
-				RealType mu = static_cast<RealType>(phase_position - static_cast<long double>(lower_phase));
-				if (lower_phase >= phase_count)
-				{
-					lower_phase = 0;
-					mu = 0.0;
-				}
-
-				std::size_t upper_phase = lower_phase + 1;
-				std::int64_t upper_offset = 0;
-				if (upper_phase == phase_count)
-				{
-					upper_phase = 0;
-					upper_offset = 1;
-				}
-
-				if (!hasSamplesFor(base_index, 0, final) || !hasSamplesFor(base_index, upper_offset, final))
+				const auto branch = branchPosition(_next_output_index);
+				if (!hasSamplesFor(branch.base_index, 0, final) ||
+					!hasSamplesFor(branch.base_index, branch.upper_offset, final))
 				{
 					break;
 				}
 
-				const ComplexType lower = evaluateBranch(lower_phase, base_index);
-				const ComplexType upper = evaluateBranch(upper_phase, base_index + upper_offset);
-				_pending.push_back((1.0 - mu) * lower + mu * upper);
+				const ComplexType lower = evaluateBranch(branch.lower_phase, branch.base_index);
+				const ComplexType upper = evaluateBranch(branch.upper_phase, branch.base_index + branch.upper_offset);
+				_pending.push_back((1.0 - branch.mu) * lower + branch.mu * upper);
 				++_next_output_index;
 			}
 
@@ -625,8 +719,7 @@ namespace fers_signal
 				return;
 			}
 
-			const long double next_position = static_cast<long double>(_next_output_index) *
-				static_cast<long double>(_plan.down_factor) / static_cast<long double>(_plan.up_factor);
+			const long double next_position = stagePosition(_next_output_index);
 			const auto half = static_cast<std::int64_t>((_plan.tap_count - 1) / 2);
 			const auto first_needed = static_cast<std::int64_t>(std::floor(next_position + 1.0e-12L)) - half;
 			const auto new_start = std::max<std::int64_t>(_input_start_index, first_needed);

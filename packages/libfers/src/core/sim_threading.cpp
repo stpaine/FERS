@@ -954,34 +954,44 @@ namespace core
 
 		for (const auto& response : receiver->getPulsedInterferenceLog())
 		{
-			if (response->endTime() <= block_start_time || response->startTime() >= block_end_time)
+			const RealType pulse_rate = response->sampleRate();
+			const unsigned pulse_size = response->sampleCount();
+			if (pulse_rate <= 0.0 || pulse_size == 0)
 			{
 				continue;
 			}
 
-			unsigned pulse_size = 0;
-			RealType pulse_rate = 0.0;
-			const auto rendered_pulse = response->renderBinary(pulse_rate, pulse_size, 0.0);
-			const RealType rate_tolerance =
-				std::numeric_limits<RealType>::epsilon() * std::max(std::abs(pulse_rate), std::abs(sample_rate)) * 16.0;
-			if (std::abs(pulse_rate - sample_rate) > rate_tolerance)
+			const RealType pulse_start_time = response->startTime();
+			const RealType pulse_end_time = pulse_start_time + static_cast<RealType>(pulse_size) / pulse_rate;
+			if (pulse_end_time <= block_start_time || pulse_start_time >= block_end_time)
 			{
-				throw std::runtime_error(
-					"Pulsed interference sample rate must match the FMCW IF resampler input sample rate.");
+				continue;
 			}
 
-			const RealType pulse_end_time = response->startTime() + static_cast<RealType>(pulse_size) / pulse_rate;
+			const RealType overlap_start = std::max(pulse_start_time, block_start_time);
+			const RealType overlap_end = std::min(pulse_end_time, block_end_time);
 			const auto dest_begin = static_cast<long long>(
-				std::max<RealType>(0.0, std::ceil((response->startTime() - block_start_time) * sample_rate)));
+				std::max<RealType>(0.0, std::ceil((overlap_start - block_start_time) * sample_rate)));
 			const auto dest_end = static_cast<long long>(std::min<RealType>(
-				static_cast<RealType>(block.size()), std::ceil((pulse_end_time - block_start_time) * sample_rate)));
+				static_cast<RealType>(block.size()), std::ceil((overlap_end - block_start_time) * sample_rate)));
+			if (dest_begin >= dest_end)
+			{
+				continue;
+			}
+
+			const auto interp_padding = static_cast<long long>(params::renderFilterLength()) / 2 + 1;
+			const long long padded_begin = dest_begin - interp_padding;
+			const long long padded_end = dest_end + interp_padding;
+			const RealType render_start = block_start_time + static_cast<RealType>(padded_begin) / sample_rate;
+			const auto render_count = static_cast<std::size_t>(padded_end - padded_begin);
+			const auto rendered_pulse = response->renderSlice(sample_rate, render_start, render_count, 0.0);
+			const auto crop_offset = static_cast<std::size_t>(dest_begin - padded_begin);
 
 			for (long long dest = dest_begin; dest < dest_end; ++dest)
 			{
 				const RealType t_sample = block_start_time + static_cast<RealType>(dest) / sample_rate;
-				const auto source_index =
-					static_cast<long long>(std::llround((t_sample - response->startTime()) * pulse_rate));
-				if (source_index < 0 || source_index >= static_cast<long long>(rendered_pulse.size()))
+				const auto source_index = crop_offset + static_cast<std::size_t>(dest - dest_begin);
+				if (source_index >= rendered_pulse.size())
 				{
 					continue;
 				}

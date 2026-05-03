@@ -66,6 +66,10 @@ namespace fers_signal
 		std::size_t tap_count = 0;
 		std::size_t phase_refinement = 1;
 		std::size_t phase_count = 1;
+		std::int64_t initial_input_advance = 0;
+		std::size_t initial_phase_accumulator = 0;
+		RealType initial_branch_interpolation_fraction = 0.0;
+		bool applies_fractional_delay = false;
 		RealType filter_bandwidth_hz = 0.0;
 		RealType transition_width_hz = 0.0;
 		RealType cutoff_hz = 0.0;

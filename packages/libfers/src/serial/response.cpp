@@ -31,4 +31,14 @@ namespace serial
 		rate = _wave->getRate();
 		return _wave->render(_points, size, fracWinDelay);
 	}
+
+	std::vector<ComplexType> Response::renderSlice(const RealType outputRate, const RealType outputStartTime,
+												   const std::size_t sampleCount, const RealType fracWinDelay) const
+	{
+		return _wave->renderSlice(_points, outputStartTime, outputRate, sampleCount, fracWinDelay);
+	}
+
+	RealType Response::sampleRate() const noexcept { return _wave->getRate(); }
+
+	unsigned Response::sampleCount() const noexcept { return _wave->getSampleCount(); }
 }

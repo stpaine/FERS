@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -88,6 +89,16 @@ namespace serial
 		 * @return A vector of `ComplexType` representing the binary data.
 		 */
 		std::vector<ComplexType> renderBinary(RealType& rate, unsigned& size, RealType fracWinDelay) const;
+
+		/// Renders a bounded absolute-time response slice on the requested output grid.
+		[[nodiscard]] std::vector<ComplexType> renderSlice(RealType outputRate, RealType outputStartTime,
+														   std::size_t sampleCount, RealType fracWinDelay) const;
+
+		/// Returns the waveform native sample rate.
+		[[nodiscard]] RealType sampleRate() const noexcept;
+
+		/// Returns the waveform native sample count.
+		[[nodiscard]] unsigned sampleCount() const noexcept;
 
 		/**
 		 * @brief Retrieves the length of the response.
