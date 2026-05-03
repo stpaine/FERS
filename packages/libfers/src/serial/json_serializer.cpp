@@ -1996,6 +1996,9 @@ namespace serial
 		{
 			transmitter_json["fmcw_mode"].erase("dechirp_mode");
 			transmitter_json["fmcw_mode"].erase("dechirp_reference");
+			transmitter_json["fmcw_mode"].erase("if_sample_rate");
+			transmitter_json["fmcw_mode"].erase("if_filter_bandwidth");
+			transmitter_json["fmcw_mode"].erase("if_filter_transition_width");
 		}
 		update_transmitter_from_json(transmitter_json, tx, world, masterSeeder);
 

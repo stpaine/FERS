@@ -934,7 +934,7 @@ namespace core
 		}
 
 		applyPulsedInterferenceToFmcwIfBlock(receiver_index, block, _fmcw_if_block_start_times[receiver_index]);
-		receiver->consumeFmcwIfBlock(block);
+		receiver->consumeFmcwIfBlock(block, _fmcw_if_block_start_times[receiver_index]);
 		block.clear();
 	}
 
@@ -1336,7 +1336,14 @@ namespace core
 		cleanupInactiveStreamingSources(_world->getSimulationState().t_current);
 	}
 
-	void SimulationEngine::handleRxStreamingStart(Receiver* rx) { rx->setActive(true); }
+	void SimulationEngine::handleRxStreamingStart(Receiver* rx)
+	{
+		rx->setActive(true);
+		if (rx->hasFmcwIfResamplingSink())
+		{
+			rx->beginFmcwIfResamplingSegment(_world->getSimulationState().t_current);
+		}
+	}
 
 	void SimulationEngine::handleRxStreamingEnd(Receiver* rx)
 	{
@@ -1350,6 +1357,10 @@ namespace core
 			_world->getSimulationState().t_current < _internal_stop_time && activePastUserEnd(rx))
 		{
 			return;
+		}
+		if (rx->hasFmcwIfResamplingSink())
+		{
+			rx->endFmcwIfResamplingSegment();
 		}
 		rx->setActive(false);
 	}

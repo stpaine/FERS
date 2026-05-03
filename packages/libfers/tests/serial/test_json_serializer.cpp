@@ -1153,6 +1153,9 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	auto wf = std::make_unique<fers_signal::RadarSignal>("wf1", 10.0, 1e9, 1.0,
 														 std::make_unique<fers_signal::CwSignal>(), 10);
 	w.add(std::move(wf));
+	auto fmcw_wf = std::make_unique<fers_signal::RadarSignal>(
+		"wf_fmcw", 10.0, 1e9, 0.1, std::make_unique<fers_signal::FmcwChirpSignal>(100.0, 0.1, 0.2), 11);
+	w.add(std::move(fmcw_wf));
 
 	auto p = std::make_unique<radar::Platform>("p1", 100);
 	auto tx = std::make_unique<radar::Transmitter>(p.get(), "mono_tx", radar::OperationMode::CW_MODE, 101);
@@ -1189,4 +1192,25 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	REQUIRE(tx_ptr->getTiming()->getSeed() == 12345);
 	REQUIRE(rx_ptr->getTiming()->getSeed() == 12345);
 	REQUIRE(tx_ptr->getTiming().get() == rx_ptr->getTiming().get());
+
+	json fmcw_update = {{"name", "mono_fmcw"},
+						{"tx_id", 101},
+						{"rx_id", 102},
+						{"waveform", 11},
+						{"antenna", 20},
+						{"fmcw_mode",
+						 {{"dechirp_mode", "physical"},
+						  {"dechirp_reference", {{"source", "attached"}}},
+						  {"if_sample_rate", 100.0},
+						  {"if_filter_bandwidth", 40.0},
+						  {"if_filter_transition_width", 10.0}}},
+						{"timing", 30}};
+
+	REQUIRE_NOTHROW(serial::update_monostatic_from_json(fmcw_update, tx_ptr, rx_ptr, w, seeder));
+	REQUIRE(tx_ptr->getMode() == radar::OperationMode::FMCW_MODE);
+	REQUIRE(rx_ptr->getMode() == radar::OperationMode::FMCW_MODE);
+	REQUIRE(rx_ptr->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
+	REQUIRE_THAT(*rx_ptr->getIfSampleRate(), WithinAbs(100.0, 1e-12));
+	REQUIRE_THAT(*rx_ptr->getIfFilterBandwidth(), WithinAbs(40.0, 1e-12));
+	REQUIRE_THAT(*rx_ptr->getIfFilterTransitionWidth(), WithinAbs(10.0, 1e-12));
 }

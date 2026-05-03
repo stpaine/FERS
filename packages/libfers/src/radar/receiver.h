@@ -22,6 +22,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "core/rendering_job.h"
 #include "core/sim_id.h"
@@ -279,8 +280,14 @@ namespace radar
 		/// Creates the online FMCW IF resampling sink and clears the output buffer.
 		void initializeFmcwIfResampling(fers_signal::FmcwIfResamplerPlan plan);
 
+		/// Advances the continuous IF resampling timeline to the next active segment start.
+		void beginFmcwIfResamplingSegment(RealType segment_start_time);
+
 		/// Feeds one completed high-rate dechirped block into the online IF sink.
-		void consumeFmcwIfBlock(std::span<const ComplexType> block);
+		void consumeFmcwIfBlock(std::span<const ComplexType> block, RealType block_start_time);
+
+		/// Marks the current scheduled IF segment inactive.
+		void endFmcwIfResamplingSegment();
 
 		/// Flushes remaining samples from the online IF sink into the output buffer.
 		void flushFmcwIfResampling();
@@ -399,6 +406,15 @@ namespace radar
 		[[nodiscard]] std::optional<RealType> getNextWindowTime(RealType time) const;
 
 	private:
+		/// Appends IF resampler output at the current absolute output cursor.
+		void appendFmcwIfOutput(std::vector<ComplexType> emitted);
+
+		/// Advances the IF output cursor over known zero samples.
+		void advanceFmcwIfOutputZeros(std::size_t sample_count);
+
+		/// Feeds zero-valued high-rate samples until the absolute input cursor reaches the target.
+		void consumeFmcwIfZerosUntil(std::size_t target_input_cursor);
+
 		// --- Common Members ---
 		bool _is_active = false; ///< True while the receiver is active.
 		RealType _noise_temperature = 0; ///< The noise temperature of the receiver.
@@ -431,6 +447,9 @@ namespace radar
 		std::optional<fers_signal::FmcwIfResamplerPlan> _fmcw_if_plan; ///< Active IF resampling plan.
 		std::unique_ptr<fers_signal::FmcwIfResamplingSink> _fmcw_if_sink; ///< Online IF resampling state.
 		std::uint64_t _fmcw_if_samples_to_discard = 0; ///< Remaining startup IF samples to suppress.
+		std::size_t _fmcw_if_input_cursor = 0; ///< Absolute high-rate input samples consumed by the IF sink.
+		std::size_t _fmcw_if_output_cursor = 0; ///< Absolute output-sample cursor for IF insertion.
+		bool _fmcw_if_segment_active = false; ///< True while one scheduled IF segment is open.
 	};
 
 	/// Converts a dechirp mode to its scenario token.

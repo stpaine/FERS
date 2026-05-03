@@ -104,6 +104,12 @@ namespace fers_signal
 
 	[[nodiscard]] FmcwIfResamplerPlan planFmcwIfResampler(const FmcwIfResamplerRequest& request);
 
+	struct FmcwIfZeroInputResult
+	{
+		std::vector<ComplexType> emitted;
+		std::size_t skipped_output_samples = 0;
+	};
+
 	class FmcwIfResamplingSink
 	{
 	public:
@@ -116,6 +122,7 @@ namespace fers_signal
 		FmcwIfResamplingSink& operator=(FmcwIfResamplingSink&&) noexcept;
 
 		void consume(std::span<const ComplexType> block);
+		[[nodiscard]] FmcwIfZeroInputResult consumeZeroInput(std::size_t input_count);
 		[[nodiscard]] std::vector<ComplexType> takeOutput();
 		[[nodiscard]] std::vector<ComplexType> finish();
 		void reset();

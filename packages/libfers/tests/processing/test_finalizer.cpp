@@ -473,7 +473,7 @@ TEST_CASE("finalizeStreamingReceiver writes IF-rate FMCW metadata", "[processing
 	const auto plan = fers_signal::planFmcwIfResampler(request);
 	receiver.initializeFmcwIfResampling(plan);
 	const std::vector<ComplexType> high_rate_iq(4096, ComplexType{1.0, 0.0});
-	receiver.consumeFmcwIfBlock(high_rate_iq);
+	receiver.consumeFmcwIfBlock(high_rate_iq, params::startTime());
 
 	processing::finalizeStreamingReceiver(&receiver, nullptr, nullptr, out_dir.string(), nullptr, {source});
 

@@ -371,6 +371,12 @@ namespace fers_signal
 	public:
 		explicit Stage(FmcwIfResamplerStagePlan plan) : _plan(std::move(plan)) { buildPhaseTable(); }
 
+		struct ZeroInputResult
+		{
+			std::vector<ComplexType> emitted;
+			std::size_t skipped_output_samples = 0;
+		};
+
 		void consume(std::span<const ComplexType> block)
 		{
 			if (_finished)
@@ -380,6 +386,45 @@ namespace fers_signal
 			_input.insert(_input.end(), block.begin(), block.end());
 			_input_total += block.size();
 			process(false);
+		}
+
+		[[nodiscard]] ZeroInputResult consumeZeroInput(std::size_t input_count)
+		{
+			if (_finished)
+			{
+				throw std::logic_error("Cannot consume IF resampler input after finish");
+			}
+
+			ZeroInputResult result;
+			if (input_count == 0)
+			{
+				return result;
+			}
+
+			const auto drained = std::min(input_count, zeroDrainInputCount());
+			if (drained > 0)
+			{
+				_input.resize(_input.size() + drained, ComplexType{0.0, 0.0});
+				_input_total += drained;
+				input_count -= drained;
+				process(false);
+				result.emitted = take();
+			}
+
+			if (input_count == 0)
+			{
+				return result;
+			}
+
+			_input_total += input_count;
+			const auto available_outputs = availableOutputCount(_input_total);
+			if (available_outputs > _next_output_index)
+			{
+				result.skipped_output_samples = available_outputs - _next_output_index;
+				_next_output_index = available_outputs;
+			}
+			keepTrailingZeroHistory();
+			return result;
 		}
 
 		[[nodiscard]] std::vector<ComplexType> take()
@@ -411,6 +456,10 @@ namespace fers_signal
 		}
 
 	private:
+		[[nodiscard]] std::size_t zeroDrainInputCount() const noexcept { return _plan.tap_count + 2; }
+
+		[[nodiscard]] std::size_t zeroHistoryKeepCount() const noexcept { return _plan.tap_count + 2; }
+
 		void buildPhaseTable()
 		{
 			const std::size_t taps = _plan.tap_count;
@@ -479,6 +528,46 @@ namespace fers_signal
 				result += sampleAt(sample_index) * coeffs[i];
 			}
 			return result;
+		}
+
+		[[nodiscard]] bool outputHasSamplesForTotal(const std::size_t output_index,
+													const std::size_t input_total) const noexcept
+		{
+			const std::size_t phase_count = std::max<std::size_t>(1, _plan.phase_count);
+			const long double position = static_cast<long double>(output_index) *
+				static_cast<long double>(_plan.down_factor) / static_cast<long double>(_plan.up_factor);
+			const auto base_index = static_cast<std::int64_t>(std::floor(position + 1.0e-12L));
+			const long double frac = position - static_cast<long double>(base_index);
+			const long double phase_position = frac * static_cast<long double>(phase_count);
+			auto lower_phase = static_cast<std::size_t>(std::floor(phase_position + 1.0e-12L));
+			if (lower_phase >= phase_count)
+			{
+				lower_phase = 0;
+			}
+
+			const std::int64_t upper_offset = lower_phase + 1 == phase_count ? 1 : 0;
+			const auto half = static_cast<std::int64_t>((_plan.tap_count - 1) / 2);
+			const std::int64_t last_needed = base_index + upper_offset + half;
+			return last_needed < static_cast<std::int64_t>(input_total);
+		}
+
+		[[nodiscard]] std::size_t availableOutputCount(const std::size_t input_total) const noexcept
+		{
+			std::size_t low = 0;
+			std::size_t high = ceilOutputCount(input_total, _plan.up_factor, _plan.down_factor);
+			while (low < high)
+			{
+				const auto mid = low + (high - low) / 2;
+				if (outputHasSamplesForTotal(mid, input_total))
+				{
+					low = mid + 1;
+				}
+				else
+				{
+					high = mid;
+				}
+			}
+			return low;
 		}
 
 		void process(const bool final)
@@ -552,6 +641,13 @@ namespace fers_signal
 			_input_start_index += static_cast<std::int64_t>(count);
 		}
 
+		void keepTrailingZeroHistory()
+		{
+			const auto keep = std::min<std::size_t>(zeroHistoryKeepCount(), _input_total);
+			_input.assign(keep, ComplexType{0.0, 0.0});
+			_input_start_index = static_cast<std::int64_t>(_input_total - keep);
+		}
+
 		FmcwIfResamplerStagePlan _plan;
 		std::vector<RealType> _phase_table;
 		std::vector<ComplexType> _input;
@@ -594,6 +690,51 @@ namespace fers_signal
 			current = stage->take();
 		}
 		_output.insert(_output.end(), current.begin(), current.end());
+	}
+
+	FmcwIfZeroInputResult FmcwIfResamplingSink::consumeZeroInput(const std::size_t input_count)
+	{
+		if (_finished)
+		{
+			throw std::logic_error("Cannot consume IF resampler input after finish");
+		}
+
+		FmcwIfZeroInputResult result;
+		if (input_count == 0)
+		{
+			return result;
+		}
+
+		if (_stages.empty())
+		{
+			result.emitted = takeOutput();
+			result.skipped_output_samples = input_count;
+			return result;
+		}
+
+		std::vector<ComplexType> current;
+		std::size_t zero_count = input_count;
+		for (auto& stage : _stages)
+		{
+			if (!current.empty())
+			{
+				stage->consume(current);
+				current = stage->take();
+			}
+			if (zero_count == 0)
+			{
+				continue;
+			}
+
+			auto zero_result = stage->consumeZeroInput(zero_count);
+			current.insert(current.end(), zero_result.emitted.begin(), zero_result.emitted.end());
+			zero_count = zero_result.skipped_output_samples;
+		}
+
+		_output.insert(_output.end(), current.begin(), current.end());
+		result.emitted = takeOutput();
+		result.skipped_output_samples = zero_count;
+		return result;
 	}
 
 	std::vector<ComplexType> FmcwIfResamplingSink::takeOutput()

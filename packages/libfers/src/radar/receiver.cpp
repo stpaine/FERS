@@ -23,6 +23,25 @@
 
 namespace radar
 {
+	namespace
+	{
+		[[nodiscard]] std::size_t ceilSampleIndexAtOrAfter(const RealType time, const RealType sample_rate)
+		{
+			if (sample_rate <= 0.0 || time <= params::startTime())
+			{
+				return 0;
+			}
+			const RealType raw_index = (time - params::startTime()) * sample_rate;
+			const RealType nearest = std::round(raw_index);
+			const RealType tolerance = 1.0e-12 * std::max<RealType>(1.0, std::abs(nearest));
+			if (std::abs(raw_index - nearest) <= tolerance)
+			{
+				return static_cast<std::size_t>(nearest);
+			}
+			return static_cast<std::size_t>(std::ceil(raw_index));
+		}
+	}
+
 	std::string_view dechirpModeToken(const Receiver::DechirpMode mode) noexcept
 	{
 		switch (mode)
@@ -175,6 +194,9 @@ namespace radar
 			_fmcw_if_plan.reset();
 			_fmcw_if_sink.reset();
 			_fmcw_if_samples_to_discard = 0;
+			_fmcw_if_input_cursor = 0;
+			_fmcw_if_output_cursor = 0;
+			_fmcw_if_segment_active = false;
 		}
 	}
 
@@ -190,6 +212,9 @@ namespace radar
 		_fmcw_if_plan.reset();
 		_fmcw_if_sink.reset();
 		_fmcw_if_samples_to_discard = 0;
+		_fmcw_if_input_cursor = 0;
+		_fmcw_if_output_cursor = 0;
+		_fmcw_if_segment_active = false;
 	}
 
 	void Receiver::initializeFmcwIfResampling(fers_signal::FmcwIfResamplerPlan plan)
@@ -202,23 +227,96 @@ namespace radar
 		_streaming_iq_data.reserve(expected_samples);
 		_fmcw_if_samples_to_discard = _fmcw_if_plan->warmup_discard_samples;
 		_fmcw_if_sink = std::make_unique<fers_signal::FmcwIfResamplingSink>(*_fmcw_if_plan);
+		_fmcw_if_input_cursor = 0;
+		_fmcw_if_output_cursor = 0;
+		_fmcw_if_segment_active = false;
 	}
 
-	void Receiver::consumeFmcwIfBlock(const std::span<const ComplexType> block)
+	void Receiver::beginFmcwIfResamplingSegment(const RealType segment_start_time)
 	{
-		if (_fmcw_if_sink == nullptr)
+		if (_fmcw_if_sink == nullptr || !_fmcw_if_plan.has_value())
+		{
+			return;
+		}
+		consumeFmcwIfZerosUntil(ceilSampleIndexAtOrAfter(segment_start_time, _fmcw_if_plan->input_sample_rate_hz));
+		_fmcw_if_segment_active = true;
+	}
+
+	void Receiver::consumeFmcwIfBlock(const std::span<const ComplexType> block, const RealType block_start_time)
+	{
+		if (_fmcw_if_sink == nullptr || !_fmcw_if_plan.has_value())
 		{
 			throw std::logic_error("FMCW IF resampling sink has not been initialized.");
 		}
+		if (!_fmcw_if_segment_active)
+		{
+			beginFmcwIfResamplingSegment(block_start_time);
+		}
+		const auto block_start_index = ceilSampleIndexAtOrAfter(block_start_time, _fmcw_if_plan->input_sample_rate_hz);
+		if (block_start_index < _fmcw_if_input_cursor)
+		{
+			throw std::logic_error("FMCW IF resampling input blocks must be supplied in chronological order.");
+		}
+		consumeFmcwIfZerosUntil(block_start_index);
 		_fmcw_if_sink->consume(block);
+		_fmcw_if_input_cursor += block.size();
 		auto emitted = _fmcw_if_sink->takeOutput();
+		appendFmcwIfOutput(std::move(emitted));
+	}
+
+	void Receiver::appendFmcwIfOutput(std::vector<ComplexType> emitted)
+	{
 		if (_fmcw_if_samples_to_discard > 0)
 		{
 			const auto discard = std::min<std::uint64_t>(_fmcw_if_samples_to_discard, emitted.size());
 			emitted.erase(emitted.begin(), emitted.begin() + static_cast<std::ptrdiff_t>(discard));
 			_fmcw_if_samples_to_discard -= discard;
 		}
-		_streaming_iq_data.insert(_streaming_iq_data.end(), emitted.begin(), emitted.end());
+		if (emitted.empty())
+		{
+			return;
+		}
+		if (_streaming_iq_data.size() < _fmcw_if_output_cursor)
+		{
+			_streaming_iq_data.resize(_fmcw_if_output_cursor);
+		}
+		if (_streaming_iq_data.size() < _fmcw_if_output_cursor + emitted.size())
+		{
+			_streaming_iq_data.resize(_fmcw_if_output_cursor + emitted.size());
+		}
+		for (std::size_t i = 0; i < emitted.size(); ++i)
+		{
+			_streaming_iq_data[_fmcw_if_output_cursor + i] += emitted[i];
+		}
+		_fmcw_if_output_cursor += emitted.size();
+	}
+
+	void Receiver::advanceFmcwIfOutputZeros(std::size_t sample_count)
+	{
+		if (_fmcw_if_samples_to_discard > 0)
+		{
+			const auto discard = std::min<std::uint64_t>(_fmcw_if_samples_to_discard, sample_count);
+			sample_count -= static_cast<std::size_t>(discard);
+			_fmcw_if_samples_to_discard -= discard;
+		}
+		if (sample_count == 0)
+		{
+			return;
+		}
+		if (_streaming_iq_data.size() < _fmcw_if_output_cursor + sample_count)
+		{
+			_streaming_iq_data.resize(_fmcw_if_output_cursor + sample_count);
+		}
+		_fmcw_if_output_cursor += sample_count;
+	}
+
+	void Receiver::endFmcwIfResamplingSegment()
+	{
+		if (_fmcw_if_sink == nullptr)
+		{
+			return;
+		}
+		_fmcw_if_segment_active = false;
 	}
 
 	void Receiver::flushFmcwIfResampling()
@@ -227,16 +325,15 @@ namespace radar
 		{
 			return;
 		}
-		auto emitted = _fmcw_if_sink->finish();
-		if (_fmcw_if_samples_to_discard > 0)
-		{
-			const auto discard = std::min<std::uint64_t>(_fmcw_if_samples_to_discard, emitted.size());
-			emitted.erase(emitted.begin(), emitted.begin() + static_cast<std::ptrdiff_t>(discard));
-			_fmcw_if_samples_to_discard -= discard;
-		}
-		_streaming_iq_data.insert(_streaming_iq_data.end(), emitted.begin(), emitted.end());
+		endFmcwIfResamplingSegment();
 		if (_fmcw_if_plan.has_value())
 		{
+			const RealType flush_until_time = params::endTime() + _fmcw_if_plan->group_delay_seconds +
+				1.0 / _fmcw_if_plan->actual_output_sample_rate_hz;
+			consumeFmcwIfZerosUntil(ceilSampleIndexAtOrAfter(flush_until_time, _fmcw_if_plan->input_sample_rate_hz));
+			auto emitted = _fmcw_if_sink->finish();
+			appendFmcwIfOutput(std::move(emitted));
+
 			const auto expected_samples =
 				static_cast<std::size_t>(std::ceil(std::max<RealType>(0.0, params::endTime() - params::startTime()) *
 												   _fmcw_if_plan->actual_output_sample_rate_hz));
@@ -244,8 +341,30 @@ namespace radar
 			{
 				_streaming_iq_data.resize(expected_samples);
 			}
+			else if (_streaming_iq_data.size() < expected_samples)
+			{
+				_streaming_iq_data.resize(expected_samples);
+			}
 		}
 		_fmcw_if_sink.reset();
+	}
+
+	void Receiver::consumeFmcwIfZerosUntil(const std::size_t target_input_cursor)
+	{
+		if (_fmcw_if_sink == nullptr)
+		{
+			throw std::logic_error("FMCW IF resampling sink has not been initialized.");
+		}
+		if (target_input_cursor <= _fmcw_if_input_cursor)
+		{
+			return;
+		}
+
+		const auto count = target_input_cursor - _fmcw_if_input_cursor;
+		auto result = _fmcw_if_sink->consumeZeroInput(count);
+		_fmcw_if_input_cursor = target_input_cursor;
+		appendFmcwIfOutput(std::move(result.emitted));
+		advanceFmcwIfOutputZeros(result.skipped_output_samples);
 	}
 
 	void Receiver::setResolvedDechirpSources(std::vector<core::ActiveStreamingSource> sources)
