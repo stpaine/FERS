@@ -362,6 +362,19 @@ namespace serial::xml_serializer_utils
 			ref_elem.setAttribute("waveform_name",
 								  !reference.waveform_name.empty() ? reference.waveform_name : reference.name);
 		}
+		const auto& if_chain = rx.getFmcwIfChainRequest();
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			addChildWithNumber(mode_elem, "if_sample_rate", *if_chain.sample_rate_hz);
+		}
+		if (if_chain.filter_bandwidth_hz.has_value())
+		{
+			addChildWithNumber(mode_elem, "if_filter_bandwidth", *if_chain.filter_bandwidth_hz);
+		}
+		if (if_chain.filter_transition_width_hz.has_value())
+		{
+			addChildWithNumber(mode_elem, "if_filter_transition_width", *if_chain.filter_transition_width_hz);
+		}
 	}
 
 	void serializeReceiver(const radar::Receiver& rx, const XmlElement& parent)

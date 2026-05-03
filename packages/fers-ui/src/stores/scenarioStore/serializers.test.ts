@@ -301,6 +301,9 @@ describe('serializeComponentInner', () => {
             fmcwModeConfig: {
                 dechirp_mode: 'physical',
                 dechirp_reference: { source: 'attached' },
+                if_sample_rate: 1e6,
+                if_filter_bandwidth: 4e5,
+                if_filter_transition_width: 1e5,
             },
             schedule: [],
         };
@@ -309,6 +312,9 @@ describe('serializeComponentInner', () => {
             fmcw_mode: {
                 dechirp_mode: 'physical',
                 dechirp_reference: { source: 'attached' },
+                if_sample_rate: 1e6,
+                if_filter_bandwidth: 4e5,
+                if_filter_transition_width: 1e5,
             },
         });
     });

@@ -20,6 +20,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
@@ -190,6 +191,18 @@ namespace core
 		/// Removes ended streaming sources once no future receiver sample can observe their in-flight energy.
 		void cleanupInactiveStreamingSources(RealType from_time);
 
+		/// Builds and attaches IF resampling sinks for configured FMCW receivers.
+		void initializeFmcwIfResamplers();
+
+		/// Flushes all pending high-rate samples buffered for IF resamplers.
+		void flushFmcwIfBlocks();
+
+		/// Flushes one receiver's pending IF-resampling high-rate block.
+		void flushFmcwIfBlock(std::size_t receiver_index);
+
+		/// Adds one high-rate sample to a receiver's IF-resampling block buffer.
+		void appendFmcwIfSample(std::size_t receiver_index, RealType t_step, ComplexType sample);
+
 		/// Returns the latest conservative receive time at which an ended source must still be retained.
 		[[nodiscard]] std::optional<RealType> streamingSourceCleanupDeadline(const ActiveStreamingSource& source,
 																			 RealType from_time) const;
@@ -201,6 +214,14 @@ namespace core
 
 		/// Creates the CW phase-noise lookup if any active timing source needs it.
 		void ensureCwPhaseNoiseLookup();
+
+		/// Returns the dechirp reference mixer for a receiver at one sample time.
+		[[nodiscard]] std::optional<ComplexType> calculateDechirpMixer(radar::Receiver* rx, RealType t_step,
+																	   ReceiverTrackerCache& tracker_cache) const;
+
+		/// Adds pulsed interference into a completed high-rate IF block before resampling.
+		void applyPulsedInterferenceToFmcwIfBlock(std::size_t receiver_index, std::span<ComplexType> block,
+												  RealType block_start_time);
 
 		/// Emits summary logs for streaming receiver buffers.
 		void logStreamingSummaries() const;
@@ -248,6 +269,10 @@ namespace core
 		std::string _output_dir; ///< Output directory for the simulation files.
 		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup; ///< Cached CW phase-noise lookup.
 		std::vector<ReceiverTrackerCache> _streaming_tracker_caches; ///< Per-receiver streaming tracker caches.
+		std::vector<ReceiverTrackerCache> _if_pulse_tracker_caches; ///< Per-receiver dechirp trackers for pulse blocks.
+		std::vector<std::vector<ComplexType>> _fmcw_if_block_buffers; ///< Pending high-rate IF blocks.
+		std::vector<RealType> _fmcw_if_block_start_times; ///< Start time for each pending IF block.
+		RealType _internal_stop_time = 0.0; ///< Physics stop time including IF over-render margin.
 	};
 
 	/**

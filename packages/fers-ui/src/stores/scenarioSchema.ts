@@ -239,6 +239,9 @@ const FmcwModeConfigSchema = z
     .object({
         dechirp_mode: z.enum(['none', 'physical', 'ideal']).optional(),
         dechirp_reference: DechirpReferenceSchema.optional(),
+        if_sample_rate: z.number().optional(),
+        if_filter_bandwidth: z.number().optional(),
+        if_filter_transition_width: z.number().optional(),
     })
     .optional();
 

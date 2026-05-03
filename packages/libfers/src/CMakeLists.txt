@@ -52,6 +52,7 @@ set(LIBFERS_PRIVATE_HEADERS
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer_utils.h
 	${CMAKE_CURRENT_LIST_DIR}/serial/kml_generator_utils.h
 	${CMAKE_CURRENT_LIST_DIR}/signal/dsp_filters.h
+	${CMAKE_CURRENT_LIST_DIR}/signal/if_resampler.h
 	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.h
 	${CMAKE_CURRENT_LIST_DIR}/timing/timing.h
@@ -100,6 +101,7 @@ set(LIBFERS_SOURCES
 	${CMAKE_CURRENT_LIST_DIR}/serial/xml_serializer_utils.cpp
 	${CMAKE_CURRENT_LIST_DIR}/serial/kml_generator_utils.cpp
 	${CMAKE_CURRENT_LIST_DIR}/signal/dsp_filters.cpp
+	${CMAKE_CURRENT_LIST_DIR}/signal/if_resampler.cpp
 	${CMAKE_CURRENT_LIST_DIR}/signal/radar_signal.cpp
 	${CMAKE_CURRENT_LIST_DIR}/timing/prototype_timing.cpp
 	${CMAKE_CURRENT_LIST_DIR}/timing/timing.cpp

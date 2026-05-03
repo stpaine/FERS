@@ -25,6 +25,7 @@
 #include "radar/target.h"
 #include "radar/transmitter.h"
 #include "serial/response.h"
+#include "signal/if_resampler.h"
 #include "signal/radar_signal.h"
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
@@ -431,6 +432,91 @@ TEST_CASE("finalizeStreamingReceiver records FMCW source metadata for detached r
 	const auto& streaming_segment = metadata.at("streaming_segments").front();
 	REQUIRE_THAT(streaming_segment.at("first_chirp_start_time").get<RealType>(), WithinAbs(0.0, 1e-12));
 	REQUIRE(streaming_segment.at("emitted_chirp_count") == 4);
+
+	std::filesystem::remove_all(out_dir);
+}
+
+TEST_CASE("finalizeStreamingReceiver writes IF-rate FMCW metadata", "[processing][finalizer][fmcw][if]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 1.0);
+	params::setRate(256.0);
+	params::setOversampleRatio(1);
+	params::setAdcBits(0);
+
+	const std::string receiver_name = uniqueName("fmcw_if_finalize");
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("fmcw_if_finalize_dir");
+	std::filesystem::create_directories(out_dir);
+	const auto output_path = resultPath(out_dir, receiver_name);
+	removeIfExists(output_path);
+
+	radar::Platform rx_platform("IfRxPlatform");
+	radar::Receiver receiver(&rx_platform, receiver_name, 60, radar::OperationMode::FMCW_MODE);
+	auto timing_owner = makeQuietTiming("if_clk", 26, 77.0);
+	receiver.setTiming(timing_owner.timing);
+	receiver.setNoiseTemperature(0.0);
+	receiver.setDechirpMode(radar::Receiver::DechirpMode::Physical);
+	receiver.setDechirpReference({.source = radar::Receiver::DechirpReferenceSource::Attached,
+								  .name = "",
+								  .transmitter_name = "",
+								  .waveform_name = ""});
+	receiver.setFmcwIfChainRequest(
+		{.sample_rate_hz = 64.0, .filter_bandwidth_hz = 16.0, .filter_transition_width_hz = 8.0});
+	FmcwTxFixture source_fixture("IfTx", 1001, 1002, 1.0, 1.0, 1.0, 0.0, std::size_t{1});
+	const auto source = core::makeActiveSource(&source_fixture.transmitter, params::startTime(), params::endTime());
+	receiver.setResolvedDechirpSources({source});
+
+	const fers_signal::FmcwIfResamplerRequest request{.input_sample_rate_hz = 256.0,
+													  .output_sample_rate_hz = 64.0,
+													  .filter_bandwidth_hz = 16.0,
+													  .filter_transition_width_hz = 8.0};
+	const auto plan = fers_signal::planFmcwIfResampler(request);
+	receiver.initializeFmcwIfResampling(plan);
+	const std::vector<ComplexType> high_rate_iq(4096, ComplexType{1.0, 0.0});
+	receiver.consumeFmcwIfBlock(high_rate_iq);
+
+	processing::finalizeStreamingReceiver(&receiver, nullptr, nullptr, out_dir.string(), nullptr, {source});
+
+	{
+		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		RealType sampling_rate = 0.0;
+		unsigned long long total_samples = 0;
+		bool decimation_enabled = false;
+		bool legacy_full_rate = true;
+		unsigned long long numerator = 0;
+		unsigned long long denominator = 0;
+		RealType if_sample_rate = 0.0;
+		RealType group_delay = 0.0;
+		std::string metadata_json;
+
+		file.getAttribute("sampling_rate").read(sampling_rate);
+		file.getAttribute("total_samples").read(total_samples);
+		file.getAttribute("fmcw_if_decimation_enabled").read(decimation_enabled);
+		file.getAttribute("fmcw_if_legacy_full_rate").read(legacy_full_rate);
+		file.getAttribute("fmcw_if_resample_numerator").read(numerator);
+		file.getAttribute("fmcw_if_resample_denominator").read(denominator);
+		file.getAttribute("fmcw_if_sample_rate").read(if_sample_rate);
+		file.getAttribute("fmcw_if_filter_group_delay_seconds").read(group_delay);
+		file.getAttribute("fers_metadata_json").read(metadata_json);
+
+		REQUIRE_THAT(sampling_rate, WithinAbs(64.0, 1e-12));
+		REQUIRE(total_samples == 64ULL);
+		REQUIRE(decimation_enabled);
+		REQUIRE_FALSE(legacy_full_rate);
+		REQUIRE(numerator == 1ULL);
+		REQUIRE(denominator == 4ULL);
+		REQUIRE_THAT(if_sample_rate, WithinAbs(64.0, 1e-12));
+		REQUIRE_THAT(group_delay, WithinAbs(plan.group_delay_seconds, 1e-12));
+
+		const auto metadata = nlohmann::json::parse(metadata_json);
+		REQUIRE(metadata.at("fmcw_if_decimation_enabled").get<bool>());
+		REQUIRE_FALSE(metadata.at("fmcw_if_legacy_full_rate").get<bool>());
+		REQUIRE_THAT(metadata.at("fmcw_if_sample_rate").get<RealType>(), WithinAbs(64.0, 1e-12));
+		REQUIRE(metadata.at("fmcw_if_resample_numerator") == 1);
+		REQUIRE(metadata.at("fmcw_if_resample_denominator") == 4);
+		REQUIRE(metadata.at("fmcw_if_group_delay_compensated").get<bool>());
+		REQUIRE(metadata.at("streaming_segments").front().at("sample_count") == 64);
+	}
 
 	std::filesystem::remove_all(out_dir);
 }

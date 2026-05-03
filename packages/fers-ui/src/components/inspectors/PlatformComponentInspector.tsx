@@ -52,6 +52,10 @@ type CompatibleWaveform = {
     name: string;
     waveformType: string;
 };
+type FmcwIfChainKey =
+    | 'if_sample_rate'
+    | 'if_filter_bandwidth'
+    | 'if_filter_transition_width';
 
 export const RADAR_MODE_OPTIONS: ReadonlyArray<{
     value: RadarType;
@@ -554,6 +558,7 @@ export function PlatformComponentInspector({
                 nextReference.waveform_name = fmcwWaveformNames[0];
             }
             commitConfig({
+                ...config,
                 dechirp_mode: dechirpMode,
                 dechirp_reference: nextReference,
             });
@@ -561,6 +566,7 @@ export function PlatformComponentInspector({
 
         const handleTransmitterReferenceChange = (name: string) => {
             commitConfig({
+                ...config,
                 dechirp_mode: dechirpMode,
                 dechirp_reference: {
                     source: 'transmitter',
@@ -571,12 +577,29 @@ export function PlatformComponentInspector({
 
         const handleCustomWaveformReferenceChange = (name: string) => {
             commitConfig({
+                ...config,
                 dechirp_mode: dechirpMode,
                 dechirp_reference: {
                     source: 'custom',
                     ...(name ? { waveform_name: name } : {}),
                 },
             });
+        };
+
+        const handleIfChainNumberChange = (
+            key: FmcwIfChainKey,
+            value: number | null
+        ) => {
+            const nextConfig: ReceiverFmcwModeConfig = {
+                ...config,
+                dechirp_mode: dechirpMode,
+            };
+            if (value === null) {
+                delete nextConfig[key];
+            } else {
+                nextConfig[key] = value;
+            }
+            commitConfig(nextConfig);
         };
 
         return (
@@ -684,6 +707,40 @@ export function PlatformComponentInspector({
                                 </Select>
                             </FormControl>
                         )}
+
+                        <NumberField
+                            label="IF Sample Rate (Hz)"
+                            value={config.if_sample_rate ?? null}
+                            emptyBehavior="null"
+                            onChange={(value) =>
+                                handleIfChainNumberChange(
+                                    'if_sample_rate',
+                                    value
+                                )
+                            }
+                        />
+                        <NumberField
+                            label="IF Filter Bandwidth (Hz)"
+                            value={config.if_filter_bandwidth ?? null}
+                            emptyBehavior="null"
+                            onChange={(value) =>
+                                handleIfChainNumberChange(
+                                    'if_filter_bandwidth',
+                                    value
+                                )
+                            }
+                        />
+                        <NumberField
+                            label="IF Transition Width (Hz)"
+                            value={config.if_filter_transition_width ?? null}
+                            emptyBehavior="null"
+                            onChange={(value) =>
+                                handleIfChainNumberChange(
+                                    'if_filter_transition_width',
+                                    value
+                                )
+                            }
+                        />
                     </>
                 )}
             </Section>

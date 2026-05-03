@@ -328,6 +328,9 @@
                     <xs:attribute name="waveform_name" type="xs:string"/>
                 </xs:complexType>
             </xs:element>
+            <xs:element name="if_sample_rate" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="if_filter_bandwidth" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="if_filter_transition_width" type="xs:string" minOccurs="0" maxOccurs="1"/>
         </xs:sequence>
         <xs:attribute name="dechirp_mode" default="none">
             <xs:simpleType>

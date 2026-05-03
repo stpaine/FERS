@@ -37,6 +37,8 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/response.h"
+#include "signal/if_resampler.h"
 #include "signal/radar_signal.h"
 #include "sim_events.h"
 #include "simulation/channel_model.h"
@@ -53,10 +55,26 @@ namespace core
 {
 	namespace
 	{
+		constexpr std::size_t fmcw_if_block_size = 1024;
+
 		[[nodiscard]] bool isStreamingReceiver(const Receiver* const receiver) noexcept
 		{
 			return receiver != nullptr &&
 				(receiver->getMode() == OperationMode::CW_MODE || receiver->getMode() == OperationMode::FMCW_MODE);
+		}
+
+		[[nodiscard]] bool activePastUserEnd(const Receiver* const receiver) noexcept
+		{
+			if (receiver == nullptr)
+			{
+				return false;
+			}
+			if (receiver->getSchedule().empty())
+			{
+				return true;
+			}
+			return std::ranges::any_of(receiver->getSchedule(),
+									   [](const auto& period) { return period.end > params::endTime(); });
 		}
 
 		[[nodiscard]] std::size_t streamingSampleIndexAtOrAfter(const RealType time, const RealType dt_sim)
@@ -493,7 +511,8 @@ namespace core
 
 		/// Builds an active streaming source for a transmitter at an event timestamp.
 		std::optional<ActiveStreamingSource> streamingSourceAtEvent(const Transmitter* const transmitter,
-																	const RealType timestamp)
+																	const RealType timestamp,
+																	const RealType internal_stop_time)
 		{
 			if (transmitter == nullptr || !transmitter->isStreamingMode())
 			{
@@ -504,7 +523,7 @@ namespace core
 			if (schedule.empty())
 			{
 				const RealType segment_start = params::startTime();
-				auto source = makeActiveSource(transmitter, segment_start, params::endTime());
+				auto source = makeActiveSource(transmitter, segment_start, internal_stop_time);
 				if (timestamp >= segment_start && timestamp < source.segment_end)
 				{
 					return source;
@@ -518,7 +537,7 @@ namespace core
 			for (const auto& period : schedule)
 			{
 				const RealType active_start = std::max(params::startTime(), period.start);
-				auto source = makeActiveSource(transmitter, period.start, std::min(params::endTime(), period.end));
+				auto source = makeActiveSource(transmitter, period.start, std::min(internal_stop_time, period.end));
 				if (timestamp >= active_start && timestamp < source.segment_end)
 				{
 					return source;
@@ -535,6 +554,10 @@ namespace core
 		_last_report_time(std::chrono::steady_clock::now()), _output_dir(std::move(output_dir))
 	{
 		_streaming_tracker_caches.resize(_world->getReceivers().size());
+		_if_pulse_tracker_caches.resize(_world->getReceivers().size());
+		_fmcw_if_block_buffers.resize(_world->getReceivers().size());
+		_fmcw_if_block_start_times.resize(_world->getReceivers().size(), params::startTime());
+		_internal_stop_time = params::endTime();
 	}
 
 	void SimulationEngine::run()
@@ -543,6 +566,8 @@ namespace core
 		{
 			_reporter->report("Initializing event-driven simulation...", 0, 100);
 		}
+
+		initializeFmcwIfResamplers();
 
 		logSimulationMemoryProjection(*_world);
 
@@ -553,7 +578,7 @@ namespace core
 
 		auto& event_queue = _world->getEventQueue();
 		auto& state = _world->getSimulationState();
-		const RealType end_time = params::endTime();
+		const RealType end_time = _internal_stop_time;
 
 		while (!event_queue.empty() && state.t_current <= end_time)
 		{
@@ -561,12 +586,22 @@ namespace core
 			event_queue.pop();
 
 			processStreamingPhysics(event.timestamp);
+			flushFmcwIfBlocks();
 
 			state.t_current = event.timestamp;
 
 			processEvent(event);
 			updateProgress();
 		}
+
+		const bool has_active_if_overrender =
+			std::ranges::any_of(_world->getReceivers(), [](const auto& receiver)
+								{ return receiver->isActive() && receiver->hasFmcwIfResamplingSink(); });
+		if (has_active_if_overrender)
+		{
+			processStreamingPhysics(end_time);
+		}
+		flushFmcwIfBlocks();
 
 		shutdown();
 	}
@@ -677,6 +712,79 @@ namespace core
 		}
 	}
 
+	void SimulationEngine::initializeFmcwIfResamplers()
+	{
+		_internal_stop_time = params::endTime();
+		for (const auto& receiver_ptr : _world->getReceivers())
+		{
+			if (!receiver_ptr->isDechirpEnabled() || !receiver_ptr->hasFmcwIfSampleRate())
+			{
+				continue;
+			}
+
+			const auto& request = receiver_ptr->getFmcwIfChainRequest();
+			const RealType output_rate = *request.sample_rate_hz;
+			const RealType bandwidth = request.filter_bandwidth_hz.value_or(0.40 * output_rate);
+			fers_signal::FmcwIfResamplerRequest resampler_request{
+				.input_sample_rate_hz = params::rate() * static_cast<RealType>(params::oversampleRatio()),
+				.output_sample_rate_hz = output_rate,
+				.filter_bandwidth_hz = bandwidth,
+				.filter_transition_width_hz = request.filter_transition_width_hz};
+			auto plan = fers_signal::planFmcwIfResampler(resampler_request);
+			const RealType block_time =
+				static_cast<RealType>(fmcw_if_block_size) / resampler_request.input_sample_rate_hz;
+			const RealType over_render =
+				plan.group_delay_seconds + 1.0 / plan.actual_output_sample_rate_hz + block_time;
+			_internal_stop_time = std::max(_internal_stop_time, params::endTime() + over_render);
+			receiver_ptr->initializeFmcwIfResampling(std::move(plan));
+			LOG(Level::INFO,
+				"Receiver '{}' enabled FMCW IF resampling: input_rate={} Hz requested_output_rate={} Hz "
+				"actual_output_rate={} Hz ratio={}/{} passband={} Hz transition={} Hz.",
+				receiver_ptr->getName(), resampler_request.input_sample_rate_hz, output_rate,
+				receiver_ptr->getFmcwIfResamplerPlan()->actual_output_sample_rate_hz,
+				receiver_ptr->getFmcwIfResamplerPlan()->overall_ratio.numerator,
+				receiver_ptr->getFmcwIfResamplerPlan()->overall_ratio.denominator,
+				receiver_ptr->getFmcwIfResamplerPlan()->filter_bandwidth_hz,
+				receiver_ptr->getFmcwIfResamplerPlan()->filter_transition_width_hz);
+		}
+
+		if (_internal_stop_time <= params::endTime())
+		{
+			return;
+		}
+
+		for (const auto& receiver_ptr : _world->getReceivers())
+		{
+			if (!receiver_ptr->hasFmcwIfSampleRate())
+			{
+				continue;
+			}
+
+			auto dechirp_sources = receiver_ptr->getDechirpSources();
+			for (auto& source : dechirp_sources)
+			{
+				if (std::abs(source.segment_end - params::endTime()) > 1.0e-12)
+				{
+					continue;
+				}
+				if (source.transmitter == nullptr || source.transmitter->getSchedule().empty())
+				{
+					source.segment_end = _internal_stop_time;
+					continue;
+				}
+				for (const auto& period : source.transmitter->getSchedule())
+				{
+					if (period.start <= params::endTime() && period.end > params::endTime())
+					{
+						source.segment_end = std::min(_internal_stop_time, period.end);
+						break;
+					}
+				}
+			}
+			receiver_ptr->setResolvedDechirpSources(std::move(dechirp_sources));
+		}
+	}
+
 	void SimulationEngine::ensureCwPhaseNoiseLookup()
 	{
 		if (_cw_phase_noise_lookup)
@@ -691,7 +799,7 @@ namespace core
 			lookup_start = std::min(lookup_start, source.segment_start);
 		}
 		_cw_phase_noise_lookup = std::make_unique<simulation::CwPhaseNoiseLookup>(
-			simulation::CwPhaseNoiseLookup::build(timings, lookup_start, params::endTime()));
+			simulation::CwPhaseNoiseLookup::build(timings, lookup_start, _internal_stop_time));
 	}
 
 	void SimulationEngine::processStreamingPhysics(const RealType t_event)
@@ -763,7 +871,14 @@ namespace core
 						ComplexType sample =
 							calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
 													 _streaming_tracker_caches[receiver_index]);
-						receiver_ptr->setStreamingSample(sample_index, sample);
+						if (receiver_ptr->hasFmcwIfResamplingSink())
+						{
+							appendFmcwIfSample(receiver_index, t_step, sample);
+						}
+						else
+						{
+							receiver_ptr->setStreamingSample(sample_index, sample);
+						}
 					}
 				}
 				if (((sample_index - first_index) % progress_report_stride) == 0 || sample_index + 1 == final_index)
@@ -777,46 +892,168 @@ namespace core
 		cleanupInactiveStreamingSources(t_current);
 	}
 
+	void SimulationEngine::appendFmcwIfSample(const std::size_t receiver_index, const RealType t_step,
+											  const ComplexType sample)
+	{
+		auto& block = _fmcw_if_block_buffers[receiver_index];
+		if (block.empty())
+		{
+			_fmcw_if_block_start_times[receiver_index] = t_step;
+		}
+		block.push_back(sample);
+		if (block.size() >= fmcw_if_block_size)
+		{
+			flushFmcwIfBlock(receiver_index);
+		}
+	}
+
+	void SimulationEngine::flushFmcwIfBlocks()
+	{
+		for (std::size_t receiver_index = 0; receiver_index < _fmcw_if_block_buffers.size(); ++receiver_index)
+		{
+			flushFmcwIfBlock(receiver_index);
+		}
+	}
+
+	void SimulationEngine::flushFmcwIfBlock(const std::size_t receiver_index)
+	{
+		if (receiver_index >= _world->getReceivers().size())
+		{
+			return;
+		}
+		auto& block = _fmcw_if_block_buffers[receiver_index];
+		if (block.empty())
+		{
+			return;
+		}
+		auto& receiver = _world->getReceivers()[receiver_index];
+		if (!receiver->hasFmcwIfResamplingSink())
+		{
+			block.clear();
+			return;
+		}
+
+		applyPulsedInterferenceToFmcwIfBlock(receiver_index, block, _fmcw_if_block_start_times[receiver_index]);
+		receiver->consumeFmcwIfBlock(block);
+		block.clear();
+	}
+
+	void SimulationEngine::applyPulsedInterferenceToFmcwIfBlock(const std::size_t receiver_index,
+																std::span<ComplexType> block,
+																const RealType block_start_time)
+	{
+		if (block.empty() || receiver_index >= _world->getReceivers().size())
+		{
+			return;
+		}
+
+		auto& receiver = _world->getReceivers()[receiver_index];
+		const RealType sample_rate = params::rate() * static_cast<RealType>(params::oversampleRatio());
+		const RealType block_end_time = block_start_time + static_cast<RealType>(block.size()) / sample_rate;
+		auto& tracker_cache = _if_pulse_tracker_caches[receiver_index];
+
+		for (const auto& response : receiver->getPulsedInterferenceLog())
+		{
+			if (response->endTime() <= block_start_time || response->startTime() >= block_end_time)
+			{
+				continue;
+			}
+
+			unsigned pulse_size = 0;
+			RealType pulse_rate = 0.0;
+			const auto rendered_pulse = response->renderBinary(pulse_rate, pulse_size, 0.0);
+			const RealType rate_tolerance =
+				std::numeric_limits<RealType>::epsilon() * std::max(std::abs(pulse_rate), std::abs(sample_rate)) * 16.0;
+			if (std::abs(pulse_rate - sample_rate) > rate_tolerance)
+			{
+				throw std::runtime_error(
+					"Pulsed interference sample rate must match the FMCW IF resampler input sample rate.");
+			}
+
+			const RealType pulse_end_time = response->startTime() + static_cast<RealType>(pulse_size) / pulse_rate;
+			const auto dest_begin = static_cast<long long>(
+				std::max<RealType>(0.0, std::ceil((response->startTime() - block_start_time) * sample_rate)));
+			const auto dest_end = static_cast<long long>(std::min<RealType>(
+				static_cast<RealType>(block.size()), std::ceil((pulse_end_time - block_start_time) * sample_rate)));
+
+			for (long long dest = dest_begin; dest < dest_end; ++dest)
+			{
+				const RealType t_sample = block_start_time + static_cast<RealType>(dest) / sample_rate;
+				const auto source_index =
+					static_cast<long long>(std::llround((t_sample - response->startTime()) * pulse_rate));
+				if (source_index < 0 || source_index >= static_cast<long long>(rendered_pulse.size()))
+				{
+					continue;
+				}
+				const auto mixer = calculateDechirpMixer(receiver.get(), t_sample, tracker_cache);
+				if (!mixer.has_value())
+				{
+					continue;
+				}
+				block[static_cast<std::size_t>(dest)] +=
+					*mixer * std::conj(rendered_pulse[static_cast<std::size_t>(source_index)]);
+			}
+		}
+	}
+
+	std::optional<ComplexType> SimulationEngine::calculateDechirpMixer(Receiver* rx, const RealType t_step,
+																	   ReceiverTrackerCache& tracker_cache) const
+	{
+		RealType reference_phase = 0.0;
+		const auto& dechirp_sources = rx->getDechirpSources();
+		if (tracker_cache.dechirp_reference.size() < dechirp_sources.size())
+		{
+			tracker_cache.dechirp_reference.resize(dechirp_sources.size());
+		}
+
+		if (!tracker_cache.last_dechirp_time.has_value() || t_step < *tracker_cache.last_dechirp_time)
+		{
+			tracker_cache.active_dechirp_source_index = 0;
+			std::fill(tracker_cache.dechirp_reference.begin(), tracker_cache.dechirp_reference.end(),
+					  FmcwChirpBoundaryTracker{});
+		}
+		tracker_cache.last_dechirp_time = t_step;
+
+		bool reference_active = false;
+		auto& source_index = tracker_cache.active_dechirp_source_index;
+		while (source_index < dechirp_sources.size() && t_step >= dechirp_sources[source_index].segment_end)
+		{
+			++source_index;
+		}
+		if (source_index < dechirp_sources.size())
+		{
+			const auto& reference_source = dechirp_sources[source_index];
+			if (t_step >= reference_source.segment_start && t_step < reference_source.segment_end &&
+				simulation::calculateStreamingReferencePhase(
+					reference_source, t_step, &tracker_cache.dechirp_reference[source_index], reference_phase))
+			{
+				reference_active = true;
+			}
+		}
+
+		if (!reference_active)
+		{
+			return std::nullopt;
+		}
+
+		RealType receiver_phase = 0.0;
+		if (rx->getDechirpMode() == Receiver::DechirpMode::Physical && _cw_phase_noise_lookup)
+		{
+			receiver_phase = _cw_phase_noise_lookup->sample(rx->getTiming().get(), t_step);
+		}
+		return std::polar(1.0, reference_phase + receiver_phase);
+	}
+
 	ComplexType SimulationEngine::calculateStreamingSample(Receiver* rx, const RealType t_step,
 														   const std::vector<ActiveStreamingSource>& streaming_sources,
 														   ReceiverTrackerCache& tracker_cache) const
 	{
 		const bool dechirping = rx->isDechirpEnabled();
-		RealType reference_phase = 0.0;
+		std::optional<ComplexType> dechirp_mixer;
 		if (dechirping)
 		{
-			const auto& dechirp_sources = rx->getDechirpSources();
-			if (tracker_cache.dechirp_reference.size() < dechirp_sources.size())
-			{
-				tracker_cache.dechirp_reference.resize(dechirp_sources.size());
-			}
-
-			if (!tracker_cache.last_dechirp_time.has_value() || t_step < *tracker_cache.last_dechirp_time)
-			{
-				tracker_cache.active_dechirp_source_index = 0;
-				std::fill(tracker_cache.dechirp_reference.begin(), tracker_cache.dechirp_reference.end(),
-						  FmcwChirpBoundaryTracker{});
-			}
-			tracker_cache.last_dechirp_time = t_step;
-
-			bool reference_active = false;
-			auto& source_index = tracker_cache.active_dechirp_source_index;
-			while (source_index < dechirp_sources.size() && t_step >= dechirp_sources[source_index].segment_end)
-			{
-				++source_index;
-			}
-			if (source_index < dechirp_sources.size())
-			{
-				const auto& reference_source = dechirp_sources[source_index];
-				if (t_step >= reference_source.segment_start && t_step < reference_source.segment_end &&
-					simulation::calculateStreamingReferencePhase(
-						reference_source, t_step, &tracker_cache.dechirp_reference[source_index], reference_phase))
-				{
-					reference_active = true;
-				}
-			}
-
-			if (!reference_active)
+			dechirp_mixer = calculateDechirpMixer(rx, t_step, tracker_cache);
+			if (!dechirp_mixer.has_value())
 			{
 				return {0.0, 0.0};
 			}
@@ -851,12 +1088,6 @@ namespace core
 			return total_sample;
 		}
 
-		RealType receiver_phase = 0.0;
-		if (rx->getDechirpMode() == Receiver::DechirpMode::Physical && _cw_phase_noise_lookup)
-		{
-			receiver_phase = _cw_phase_noise_lookup->sample(rx->getTiming().get(), t_step);
-		}
-
 		// Mixing Convention: s_IF = s_ref * conj(s_rx)
 		// This convention is chosen to ensure that:
 		// 1. Stationary targets (positive delay tau) result in a POSITIVE beat frequency (f_b = alpha * tau).
@@ -864,7 +1095,7 @@ namespace core
 		//    at short ranges (Range Correlation Effect).
 		// 3. For an up-chirp, a receding target (negative RF Doppler) results in a
 		//    higher IF frequency (f_IF = f_b + |f_d|).
-		return std::polar(1.0, reference_phase + receiver_phase) * std::conj(total_sample);
+		return *dechirp_mixer * std::conj(total_sample);
 	}
 
 	void SimulationEngine::appendStreamingTrackerSource()
@@ -1004,8 +1235,8 @@ namespace core
 			handleRxPulsedWindowEnd(static_cast<Receiver*>(event.source_object), event.timestamp);
 			break;
 		case EventType::TX_STREAMING_START:
-			if (const auto source =
-					streamingSourceAtEvent(static_cast<Transmitter*>(event.source_object), event.timestamp);
+			if (const auto source = streamingSourceAtEvent(static_cast<Transmitter*>(event.source_object),
+														   event.timestamp, _internal_stop_time);
 				source.has_value())
 			{
 				handleTxStreamingStart(*source);
@@ -1107,7 +1338,21 @@ namespace core
 
 	void SimulationEngine::handleRxStreamingStart(Receiver* rx) { rx->setActive(true); }
 
-	void SimulationEngine::handleRxStreamingEnd(Receiver* rx) { rx->setActive(false); }
+	void SimulationEngine::handleRxStreamingEnd(Receiver* rx)
+	{
+		const auto receiver_it = std::ranges::find_if(_world->getReceivers(), [rx](const auto& receiver_ptr)
+													  { return receiver_ptr.get() == rx; });
+		if (receiver_it != _world->getReceivers().end())
+		{
+			flushFmcwIfBlock(static_cast<std::size_t>(receiver_it - _world->getReceivers().begin()));
+		}
+		if (rx->hasFmcwIfResamplingSink() && _world->getSimulationState().t_current >= params::endTime() &&
+			_world->getSimulationState().t_current < _internal_stop_time && activePastUserEnd(rx))
+		{
+			return;
+		}
+		rx->setActive(false);
+	}
 
 	void SimulationEngine::updateProgress() { reportSimulationProgress(_world->getSimulationState().t_current); }
 

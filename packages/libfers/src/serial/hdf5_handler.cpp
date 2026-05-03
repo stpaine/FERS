@@ -48,6 +48,83 @@ namespace serial
 		file.createAttribute("fmcw_source_count", static_cast<unsigned long long>(metadata.fmcw_sources.size()));
 		file.createAttribute("fmcw_dechirp_mode", metadata.fmcw_dechirp_mode);
 		file.createAttribute("fmcw_dechirp_reference_source", metadata.fmcw_dechirp_reference_source);
+		file.createAttribute("fmcw_if_decimation_enabled", metadata.fmcw_if_decimation_enabled);
+		file.createAttribute("fmcw_if_legacy_full_rate", metadata.fmcw_if_legacy_full_rate);
+		file.createAttribute("fmcw_if_group_delay_compensated", metadata.fmcw_if_group_delay_compensated);
+		if (metadata.fmcw_if_requested_sample_rate.has_value())
+		{
+			file.createAttribute("fmcw_if_requested_sample_rate", *metadata.fmcw_if_requested_sample_rate);
+		}
+		if (metadata.fmcw_if_sample_rate.has_value())
+		{
+			file.createAttribute("fmcw_if_sample_rate", *metadata.fmcw_if_sample_rate);
+		}
+		if (metadata.fmcw_if_input_sample_rate.has_value())
+		{
+			file.createAttribute("fmcw_if_input_sample_rate", *metadata.fmcw_if_input_sample_rate);
+		}
+		if (metadata.fmcw_if_resample_numerator.has_value())
+		{
+			file.createAttribute("fmcw_if_resample_numerator",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_resample_numerator));
+		}
+		if (metadata.fmcw_if_resample_denominator.has_value())
+		{
+			file.createAttribute("fmcw_if_resample_denominator",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_resample_denominator));
+		}
+		if (metadata.fmcw_if_decimation_factor.has_value())
+		{
+			file.createAttribute("fmcw_if_decimation_factor", *metadata.fmcw_if_decimation_factor);
+		}
+		if (metadata.fmcw_if_filter_bandwidth.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_bandwidth", *metadata.fmcw_if_filter_bandwidth);
+		}
+		if (metadata.fmcw_if_filter_transition_width.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_transition_width", *metadata.fmcw_if_filter_transition_width);
+		}
+		if (metadata.fmcw_if_filter_stopband.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_stopband", *metadata.fmcw_if_filter_stopband);
+		}
+		if (metadata.fmcw_if_filter_group_delay_seconds.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_group_delay_seconds", *metadata.fmcw_if_filter_group_delay_seconds);
+		}
+		if (metadata.fmcw_if_compensated_integer_delay_samples.has_value())
+		{
+			file.createAttribute("fmcw_if_compensated_integer_delay_samples",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_compensated_integer_delay_samples));
+		}
+		if (metadata.fmcw_if_compensated_fractional_delay_samples.has_value())
+		{
+			file.createAttribute("fmcw_if_compensated_fractional_delay_samples",
+								 *metadata.fmcw_if_compensated_fractional_delay_samples);
+		}
+		if (metadata.fmcw_if_warmup_discard_samples.has_value())
+		{
+			file.createAttribute("fmcw_if_warmup_discard_samples",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_warmup_discard_samples));
+		}
+		if (metadata.fmcw_if_phase_refinement.has_value())
+		{
+			file.createAttribute("fmcw_if_phase_refinement",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_phase_refinement));
+		}
+		if (metadata.fmcw_if_timing_error_seconds.has_value())
+		{
+			file.createAttribute("fmcw_if_timing_error_seconds", *metadata.fmcw_if_timing_error_seconds);
+		}
+		if (metadata.fmcw_if_phase_error_radians.has_value())
+		{
+			file.createAttribute("fmcw_if_phase_error_radians", *metadata.fmcw_if_phase_error_radians);
+		}
+		if (metadata.fmcw_if_noise_variance.has_value())
+		{
+			file.createAttribute("fmcw_if_noise_variance", *metadata.fmcw_if_noise_variance);
+		}
 		if (metadata.fmcw_dechirp_reference_transmitter_id.has_value())
 		{
 			file.createAttribute("fmcw_dechirp_reference_transmitter_id",

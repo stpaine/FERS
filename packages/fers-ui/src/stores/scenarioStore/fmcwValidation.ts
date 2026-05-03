@@ -37,6 +37,11 @@ type FmcwEmitterComponent = Extract<
 >;
 
 const TRIANGLE_EPSILON = 1e-12;
+const IF_CHAIN_FIELD_KEYS = [
+    'if_sample_rate',
+    'if_filter_bandwidth',
+    'if_filter_transition_width',
+] as const;
 
 const isFmcwWaveform = (
     waveform: Waveform | undefined
@@ -52,6 +57,38 @@ function pushIssue(
     issue: FmcwValidationIssue
 ): void {
     issues.push(issue);
+}
+
+function hasIfChainFields(config: unknown): boolean {
+    return (
+        isRecord(config) &&
+        IF_CHAIN_FIELD_KEYS.some((key) => Object.hasOwn(config, key))
+    );
+}
+
+function getValidIfChainNumber(
+    config: unknown,
+    key: (typeof IF_CHAIN_FIELD_KEYS)[number],
+    label: string,
+    component: Pick<PlatformComponent, 'id' | 'name'>,
+    issues: FmcwValidationIssue[]
+): number | undefined {
+    if (!isRecord(config) || !Object.hasOwn(config, key)) {
+        return undefined;
+    }
+
+    const value = config[key];
+    if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+        pushIssue(issues, {
+            severity: 'error',
+            itemId: component.id,
+            componentId: component.id,
+            field: 'fmcwModeConfig',
+            message: `${component.name} ${label} must be a finite positive value.`,
+        });
+        return undefined;
+    }
+    return value;
 }
 
 function effectiveSchedule(
@@ -240,7 +277,65 @@ function validateFmcwReceiverDechirpConfig(
                 message: `${component.name} declares a dechirp reference while dechirp mode is none.`,
             });
         }
+        if (hasIfChainFields(config)) {
+            pushIssue(issues, {
+                severity: 'error',
+                itemId: component.id,
+                componentId: component.id,
+                field: 'fmcwModeConfig',
+                message: `${component.name} declares IF-chain settings while dechirp mode is none.`,
+            });
+        }
         return issues;
+    }
+
+    const ifSampleRate = getValidIfChainNumber(
+        config,
+        'if_sample_rate',
+        'IF sample rate',
+        component,
+        issues
+    );
+    const ifFilterBandwidth = getValidIfChainNumber(
+        config,
+        'if_filter_bandwidth',
+        'IF filter bandwidth',
+        component,
+        issues
+    );
+    getValidIfChainNumber(
+        config,
+        'if_filter_transition_width',
+        'IF transition width',
+        component,
+        issues
+    );
+    if (
+        ifSampleRate === undefined &&
+        (ifFilterBandwidth !== undefined ||
+            (isRecord(config) &&
+                Object.hasOwn(config, 'if_filter_transition_width')))
+    ) {
+        pushIssue(issues, {
+            severity: 'error',
+            itemId: component.id,
+            componentId: component.id,
+            field: 'fmcwModeConfig',
+            message: `${component.name} IF filter settings require an IF sample rate.`,
+        });
+    }
+    if (
+        ifSampleRate !== undefined &&
+        ifFilterBandwidth !== undefined &&
+        ifFilterBandwidth >= ifSampleRate / 2
+    ) {
+        pushIssue(issues, {
+            severity: 'error',
+            itemId: component.id,
+            componentId: component.id,
+            field: 'fmcwModeConfig',
+            message: `${component.name} IF filter bandwidth must be less than half the IF sample rate.`,
+        });
     }
 
     if (!reference) {

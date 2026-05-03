@@ -12,7 +12,15 @@ export type DechirpReference =
 export type ReceiverFmcwModeConfig = {
     dechirp_mode?: DechirpMode;
     dechirp_reference?: DechirpReference;
+    if_sample_rate?: number;
+    if_filter_bandwidth?: number;
+    if_filter_transition_width?: number;
 };
+
+export type FmcwIfChainConfig = Pick<
+    ReceiverFmcwModeConfig,
+    'if_sample_rate' | 'if_filter_bandwidth' | 'if_filter_transition_width'
+>;
 
 export const DECHIRP_MODE_OPTIONS: ReadonlyArray<{
     value: DechirpMode;
@@ -87,6 +95,25 @@ export function getDechirpReferenceSource(
         : 'attached';
 }
 
+export function getFmcwIfChainConfig(config: unknown): FmcwIfChainConfig {
+    if (!isRecord(config)) {
+        return {};
+    }
+
+    const ifChainConfig: FmcwIfChainConfig = {};
+    if (typeof config.if_sample_rate === 'number') {
+        ifChainConfig.if_sample_rate = config.if_sample_rate;
+    }
+    if (typeof config.if_filter_bandwidth === 'number') {
+        ifChainConfig.if_filter_bandwidth = config.if_filter_bandwidth;
+    }
+    if (typeof config.if_filter_transition_width === 'number') {
+        ifChainConfig.if_filter_transition_width =
+            config.if_filter_transition_width;
+    }
+    return ifChainConfig;
+}
+
 export function createDechirpReference(
     source: DechirpReferenceSource,
     currentReference?: unknown
@@ -132,6 +159,7 @@ export function normalizeFmcwModeConfig(
     return {
         dechirp_mode: dechirpMode,
         dechirp_reference: reference,
+        ...getFmcwIfChainConfig(config),
     };
 }
 
@@ -148,5 +176,6 @@ export function createFmcwModeConfig(
         dechirp_mode: dechirpMode,
         dechirp_reference:
             current.dechirp_reference ?? createDechirpReference('attached'),
+        ...getFmcwIfChainConfig(current),
     };
 }

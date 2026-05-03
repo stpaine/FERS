@@ -20,6 +20,7 @@
 #include <format>
 #include <initializer_list>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <random>
 #include <stdexcept>
 #include <string_view>
@@ -178,10 +179,28 @@ namespace
 		}
 	}
 
-	/// Returns true when a JSON FMCW mode object carries receiver-side dechirp fields.
+	/// Returns true when a JSON FMCW mode object carries receiver-side FMCW fields.
 	bool has_dechirp_fields(const nlohmann::json& mode_json)
 	{
-		return mode_json.contains("dechirp_mode") || mode_json.contains("dechirp_reference");
+		return mode_json.contains("dechirp_mode") || mode_json.contains("dechirp_reference") ||
+			mode_json.contains("if_sample_rate") || mode_json.contains("if_filter_bandwidth") ||
+			mode_json.contains("if_filter_transition_width");
+	}
+
+	std::optional<RealType> get_optional_positive_real(const nlohmann::json& object, const std::string_view key,
+													   const std::string& owner)
+	{
+		const std::string key_string(key);
+		if (!object.contains(key_string))
+		{
+			return std::nullopt;
+		}
+		const RealType value = object.at(key_string).get<RealType>();
+		if (value <= 0.0 || !std::isfinite(value))
+		{
+			throw std::runtime_error(owner + " " + key_string + " must be a finite positive value.");
+		}
+		return value;
 	}
 
 	/// Parses receiver-side dechirp settings from a JSON component.
@@ -199,7 +218,9 @@ namespace
 		{
 			throw std::runtime_error(owner + " fmcw_mode must be an object.");
 		}
-		reject_unknown_keys(mode_json, owner, "fmcw_mode", {"dechirp_mode", "dechirp_reference"});
+		reject_unknown_keys(mode_json, owner, "fmcw_mode",
+							{"dechirp_mode", "dechirp_reference", "if_sample_rate", "if_filter_bandwidth",
+							 "if_filter_transition_width"});
 
 		radar::Receiver::DechirpMode mode = radar::Receiver::DechirpMode::None;
 		if (mode_json.contains("dechirp_mode"))
@@ -207,14 +228,45 @@ namespace
 			mode = radar::parseDechirpModeToken(mode_json.at("dechirp_mode").get<std::string>());
 		}
 
+		radar::Receiver::FmcwIfChainRequest if_chain{
+			.sample_rate_hz = get_optional_positive_real(mode_json, "if_sample_rate", owner),
+			.filter_bandwidth_hz = get_optional_positive_real(mode_json, "if_filter_bandwidth", owner),
+			.filter_transition_width_hz = get_optional_positive_real(mode_json, "if_filter_transition_width", owner)};
+
 		if (mode == radar::Receiver::DechirpMode::None)
 		{
 			if (mode_json.contains("dechirp_reference"))
 			{
 				throw std::runtime_error(owner + " declares dechirp_reference while dechirp_mode is 'none'.");
 			}
+			if (if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
+				if_chain.filter_transition_width_hz.has_value())
+			{
+				throw std::runtime_error(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
+			}
 			receiver.setDechirpMode(mode);
 			return;
+		}
+
+		if ((if_chain.filter_bandwidth_hz.has_value() || if_chain.filter_transition_width_hz.has_value()) &&
+			!if_chain.sample_rate_hz.has_value())
+		{
+			throw std::runtime_error(owner + " IF filter fields require if_sample_rate.");
+		}
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			const RealType sim_rate = params::rate() * params::oversampleRatio();
+			if (*if_chain.sample_rate_hz > sim_rate)
+			{
+				throw std::runtime_error(owner + " if_sample_rate must not exceed the simulation sample rate.");
+			}
+		}
+		if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value())
+		{
+			if (*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
+			{
+				throw std::runtime_error(owner + " if_filter_bandwidth must be less than half if_sample_rate.");
+			}
 		}
 
 		if (!mode_json.contains("dechirp_reference") || !mode_json.at("dechirp_reference").is_object())
@@ -270,6 +322,7 @@ namespace
 
 		receiver.setDechirpMode(mode);
 		receiver.setDechirpReference(std::move(reference));
+		receiver.setFmcwIfChainRequest(std::move(if_chain));
 	}
 
 	/// Serializes receiver-side FMCW mode settings.
@@ -283,6 +336,19 @@ namespace
 
 		const auto& reference = receiver.getDechirpReference();
 		mode_json["dechirp_mode"] = std::string(radar::dechirpModeToken(receiver.getDechirpMode()));
+		const auto& if_chain = receiver.getFmcwIfChainRequest();
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			mode_json["if_sample_rate"] = *if_chain.sample_rate_hz;
+		}
+		if (if_chain.filter_bandwidth_hz.has_value())
+		{
+			mode_json["if_filter_bandwidth"] = *if_chain.filter_bandwidth_hz;
+		}
+		if (if_chain.filter_transition_width_hz.has_value())
+		{
+			mode_json["if_filter_transition_width"] = *if_chain.filter_transition_width_hz;
+		}
 		nlohmann::json ref_json = {{"source", std::string(radar::dechirpReferenceSourceToken(reference.source))}};
 		if (reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
 		{
@@ -1571,7 +1637,7 @@ namespace
 			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
 				receiver->getMode() == radar::OperationMode::FMCW_MODE)
 			{
-				receiver->prepareStreamingData(num_samples);
+				receiver->prepareStreamingData(receiver->hasFmcwIfSampleRate() ? 0 : num_samples);
 			}
 		}
 

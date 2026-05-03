@@ -450,6 +450,27 @@ TEST_CASE("serializeReceiver", "[serial][xml_serializer]")
 		REQUIRE_THAT(s, ContainsSubstring("<window_skip>0</window_skip>"));
 		REQUIRE_THAT(s, ContainsSubstring("<window_length>1e-04</window_length>"));
 	}
+
+	SECTION("FMCW IF-chain options")
+	{
+		radar::Receiver rx(&plat, "rx3", 42, radar::OperationMode::FMCW_MODE);
+		rx.setTiming(timing);
+		rx.setDechirpMode(radar::Receiver::DechirpMode::Physical);
+		rx.setDechirpReference({.source = radar::Receiver::DechirpReferenceSource::Attached,
+								.name = "",
+								.transmitter_name = "",
+								.waveform_name = ""});
+		rx.setFmcwIfChainRequest(
+			{.sample_rate_hz = 1.0e6, .filter_bandwidth_hz = 4.0e5, .filter_transition_width_hz = 1.0e5});
+		serial::xml_serializer_utils::serializeReceiver(rx, root);
+		std::string s = dumpElement(root);
+		REQUIRE_THAT(s, ContainsSubstring("dechirp_mode=\"physical\""));
+		REQUIRE_THAT(s, ContainsSubstring("<dechirp_reference source=\"attached\"/>"));
+		REQUIRE_THAT(s, ContainsSubstring("<if_sample_rate>1e+06</if_sample_rate>"));
+		REQUIRE_THAT(s, ContainsSubstring("<if_filter_bandwidth>4e+05</if_filter_bandwidth>"));
+		REQUIRE_THAT(s, ContainsSubstring("<if_filter_transition_width>1e+05</if_filter_transition_width>"));
+		REQUIRE(s.find("<dechirp_reference") < s.find("<if_sample_rate>"));
+	}
 }
 
 TEST_CASE("serializeMonostatic pairs matching attached Transmitter/Receiver", "[serial][xml_serializer]")

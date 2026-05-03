@@ -738,11 +738,64 @@ TEST_CASE("JSON: FMCW dechirp configuration validates and round-trips", "[serial
 		REQUIRE(mode_json.at("dechirp_reference").at("source") == "attached");
 	}
 
+	SECTION("IF-chain fields are parsed and serialized")
+	{
+		core::World world;
+		const auto scenario = make_scenario({{"dechirp_mode", "physical"},
+											 {"dechirp_reference", {{"source", "attached"}}},
+											 {"if_sample_rate", 1.0e6},
+											 {"if_filter_bandwidth", 4.0e5},
+											 {"if_filter_transition_width", 1.0e5}});
+
+		REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+		const auto* rx = world.getReceivers().front().get();
+		const auto& if_chain = rx->getFmcwIfChainRequest();
+		REQUIRE(if_chain.sample_rate_hz.has_value());
+		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
+		REQUIRE(if_chain.filter_transition_width_hz.has_value());
+		REQUIRE_THAT(*if_chain.sample_rate_hz, WithinAbs(1.0e6, 1.0e-9));
+		REQUIRE_THAT(*if_chain.filter_bandwidth_hz, WithinAbs(4.0e5, 1.0e-9));
+		REQUIRE_THAT(*if_chain.filter_transition_width_hz, WithinAbs(1.0e5, 1.0e-9));
+
+		const json serialized = serial::world_to_json(world);
+		const auto& mode_json =
+			serialized.at("simulation").at("platforms").at(0).at("components").at(0).at("monostatic").at("fmcw_mode");
+		REQUIRE(mode_json.at("if_sample_rate") == 1.0e6);
+		REQUIRE(mode_json.at("if_filter_bandwidth") == 4.0e5);
+		REQUIRE(mode_json.at("if_filter_transition_width") == 1.0e5);
+	}
+
 	SECTION("orphan dechirp_reference is rejected")
 	{
 		core::World world;
 		const auto scenario = make_scenario({{"dechirp_reference", {{"source", "attached"}}}});
 		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("dechirp_reference"));
+	}
+
+	SECTION("IF sample rate requires dechirp")
+	{
+		core::World world;
+		const auto scenario = make_scenario({{"if_sample_rate", 1.0e6}});
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("IF-chain fields"));
+	}
+
+	SECTION("IF-chain values must be positive")
+	{
+		core::World world;
+		const auto scenario = make_scenario(
+			{{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}, {"if_sample_rate", -1.0}});
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("finite positive"));
+	}
+
+	SECTION("IF filter bandwidth must be below IF Nyquist")
+	{
+		core::World world;
+		const auto scenario = make_scenario({{"dechirp_mode", "physical"},
+											 {"dechirp_reference", {{"source", "attached"}}},
+											 {"if_sample_rate", 1.0e6},
+											 {"if_filter_bandwidth", 5.0e5}});
+		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder),
+							ContainsSubstring("less than half if_sample_rate"));
 	}
 
 	SECTION("conflicting mode blocks cannot hide dechirp configuration")

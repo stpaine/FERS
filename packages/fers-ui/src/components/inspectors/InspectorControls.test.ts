@@ -298,6 +298,21 @@ describe('Platform component inspector waveform compatibility', () => {
             },
         });
         expect(
+            createFmcwModeConfig('ideal', {
+                dechirp_mode: 'physical',
+                dechirp_reference: { source: 'attached' },
+                if_sample_rate: 1e6,
+                if_filter_bandwidth: 4e5,
+                if_filter_transition_width: 1e5,
+            })
+        ).toEqual({
+            dechirp_mode: 'ideal',
+            dechirp_reference: { source: 'attached' },
+            if_sample_rate: 1e6,
+            if_filter_bandwidth: 4e5,
+            if_filter_transition_width: 1e5,
+        });
+        expect(
             createDechirpReference('transmitter', {
                 source: 'custom',
                 waveform_name: 'Bad carryover',

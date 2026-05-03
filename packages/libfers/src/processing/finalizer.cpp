@@ -360,6 +360,23 @@ namespace processing
 			}
 		}
 
+		/// Applies IF-rate thermal noise only inside selected spans.
+		void applyThermalNoiseToSpansAtSampleRate(std::vector<ComplexType>& iq_buffer, const RealType noise_temperature,
+												  std::mt19937& rng_engine, std::span<const pipeline::SampleSpan> spans,
+												  const RealType sample_rate_hz)
+		{
+			for (const auto& span : spans)
+			{
+				if (span.start >= span.end_exclusive || span.start >= iq_buffer.size())
+				{
+					continue;
+				}
+				const auto end = std::min(span.end_exclusive, iq_buffer.size());
+				applyThermalNoiseAtSampleRate(std::span(iq_buffer).subspan(span.start, end - span.start),
+											  noise_temperature, rng_engine, sample_rate_hz);
+			}
+		}
+
 		/// Builds output metadata for a streaming receiver result file.
 		core::OutputFileMetadata
 		buildStreamingMetadata(const radar::Receiver* receiver, const std::string& hdf5_filename,
@@ -441,6 +458,38 @@ namespace processing
 			metadata.fmcw_dechirp_mode = std::string(radar::dechirpModeToken(receiver->getDechirpMode()));
 			if (receiver->isDechirpEnabled())
 			{
+				const auto& if_request = receiver->getFmcwIfChainRequest();
+				const auto& if_plan = receiver->getFmcwIfResamplerPlan();
+				metadata.fmcw_if_legacy_full_rate = !if_request.sample_rate_hz.has_value();
+				metadata.fmcw_if_decimation_enabled = if_plan.has_value();
+				if (if_request.sample_rate_hz.has_value())
+				{
+					metadata.fmcw_if_requested_sample_rate = *if_request.sample_rate_hz;
+				}
+				if (if_plan.has_value())
+				{
+					metadata.fmcw_if_sample_rate = if_plan->actual_output_sample_rate_hz;
+					metadata.fmcw_if_input_sample_rate = if_plan->input_sample_rate_hz;
+					metadata.fmcw_if_resample_numerator = static_cast<unsigned>(if_plan->overall_ratio.numerator);
+					metadata.fmcw_if_resample_denominator = static_cast<unsigned>(if_plan->overall_ratio.denominator);
+					metadata.fmcw_if_decimation_factor = if_plan->actual_output_sample_rate_hz > 0.0
+						? if_plan->input_sample_rate_hz / if_plan->actual_output_sample_rate_hz
+						: 0.0;
+					metadata.fmcw_if_filter_bandwidth = if_plan->filter_bandwidth_hz;
+					metadata.fmcw_if_filter_transition_width = if_plan->filter_transition_width_hz;
+					metadata.fmcw_if_filter_stopband = if_plan->stopband_attenuation_db;
+					metadata.fmcw_if_filter_group_delay_seconds = if_plan->group_delay_seconds;
+					metadata.fmcw_if_compensated_integer_delay_samples = if_plan->warmup_discard_samples;
+					metadata.fmcw_if_compensated_fractional_delay_samples = if_plan->fractional_output_delay_samples;
+					metadata.fmcw_if_warmup_discard_samples = if_plan->warmup_discard_samples;
+					metadata.fmcw_if_phase_refinement = static_cast<unsigned>(if_plan->phase_refinement);
+					metadata.fmcw_if_timing_error_seconds = if_plan->estimated_timing_error_seconds;
+					metadata.fmcw_if_phase_error_radians = if_plan->estimated_phase_error_radians;
+					metadata.fmcw_if_noise_variance =
+						params::boltzmannK() * receiver->getNoiseTemperature() * if_plan->actual_output_sample_rate_hz;
+					metadata.fmcw_if_group_delay_compensated = if_plan->group_delay_compensated;
+				}
+
 				const auto& reference = receiver->getDechirpReference();
 				metadata.fmcw_dechirp_reference_source =
 					std::string(radar::dechirpReferenceSourceToken(reference.source));
@@ -614,6 +663,7 @@ namespace processing
 	{
 		LOG(logging::Level::INFO, "Finalization task started for streaming receiver '{}'.", receiver->getName());
 
+		receiver->flushFmcwIfResampling();
 		auto& iq_buffer = receiver->getMutableStreamingData();
 		if (iq_buffer.empty())
 		{
@@ -629,8 +679,17 @@ namespace processing
 		}
 
 		const bool dechirped = receiver->isDechirpEnabled();
-		const RealType output_sample_rate =
-			dechirped ? params::rate() * static_cast<RealType>(params::oversampleRatio()) : params::rate();
+		const auto& if_plan = receiver->getFmcwIfResamplerPlan();
+		const bool if_decimated = dechirped && if_plan.has_value();
+		const RealType output_sample_rate = if_decimated
+			? if_plan->actual_output_sample_rate_hz
+			: (dechirped ? params::rate() * static_cast<RealType>(params::oversampleRatio()) : params::rate());
+		const auto expected_samples = static_cast<std::size_t>(
+			std::ceil(std::max<RealType>(0.0, params::endTime() - params::startTime()) * output_sample_rate));
+		if (if_decimated && iq_buffer.size() > expected_samples)
+		{
+			iq_buffer.resize(expected_samples);
+		}
 		const auto dechirp_time_spans = dechirped ? dechirpActiveTimeSpans(receiver) : std::vector<TimeSpan>{};
 		const auto dechirp_sample_spans = dechirped
 			? sampleSpansFromTimeSpans(dechirp_time_spans, iq_buffer.size(), output_sample_rate)
@@ -642,8 +701,11 @@ namespace processing
 		}
 		if (dechirped)
 		{
-			pipeline::applyPulsedInterference(iq_buffer, receiver->getPulsedInterferenceLog(), dechirp_sample_spans,
-											  output_sample_rate);
+			if (!if_decimated)
+			{
+				pipeline::applyPulsedInterference(iq_buffer, receiver->getPulsedInterferenceLog(), dechirp_sample_spans,
+												  output_sample_rate);
+			}
 		}
 		else
 		{
@@ -656,8 +718,17 @@ namespace processing
 		}
 		if (dechirped)
 		{
-			applyThermalNoiseToSpans(iq_buffer, receiver->getNoiseTemperature(), receiver->getRngEngine(),
-									 dechirp_sample_spans);
+			if (if_decimated)
+			{
+				applyThermalNoiseToSpansAtSampleRate(iq_buffer, receiver->getNoiseTemperature(),
+													 receiver->getRngEngine(), dechirp_sample_spans,
+													 output_sample_rate);
+			}
+			else
+			{
+				applyThermalNoiseToSpans(iq_buffer, receiver->getNoiseTemperature(), receiver->getRngEngine(),
+										 dechirp_sample_spans);
+			}
 		}
 		else
 		{

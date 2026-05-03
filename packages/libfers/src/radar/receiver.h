@@ -13,9 +13,13 @@
 #pragma once
 
 #include <condition_variable>
+#include <cstdint>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <random>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -24,6 +28,7 @@
 #include "core/simulation_state.h"
 #include "radar_obj.h"
 #include "serial/response.h"
+#include "signal/if_resampler.h"
 
 namespace pool
 {
@@ -75,6 +80,15 @@ namespace radar
 			std::string transmitter_name; ///< Resolved transmitter name for attached/transmitter references.
 			SimId waveform_id = 0; ///< Resolved waveform ID for custom references.
 			std::string waveform_name; ///< Resolved waveform name for custom references.
+		};
+
+		/// Receiver-local FMCW IF-chain request parsed from scenario input.
+		struct FmcwIfChainRequest
+		{
+			std::optional<RealType> sample_rate_hz = std::nullopt; ///< Requested IF ADC sample rate in hertz.
+			std::optional<RealType> filter_bandwidth_hz = std::nullopt; ///< One-sided IF passband edge in hertz.
+			std::optional<RealType> filter_transition_width_hz =
+				std::nullopt; ///< Optional IF filter transition width in hertz.
 		};
 
 		/**
@@ -199,6 +213,36 @@ namespace radar
 		/// Gets the configured dechirp reference.
 		[[nodiscard]] const DechirpReference& getDechirpReference() const noexcept { return _dechirp_reference; }
 
+		/// Gets the optional receiver-local FMCW IF-chain request.
+		[[nodiscard]] const FmcwIfChainRequest& getFmcwIfChainRequest() const noexcept { return _fmcw_if_chain; }
+
+		/// Gets the receiver-local FMCW IF sample rate in Hz.
+		[[nodiscard]] std::optional<RealType> getIfSampleRate() const noexcept { return _fmcw_if_chain.sample_rate_hz; }
+
+		/// Gets the receiver-local FMCW IF filter bandwidth in Hz.
+		[[nodiscard]] std::optional<RealType> getIfFilterBandwidth() const noexcept
+		{
+			return _fmcw_if_chain.filter_bandwidth_hz;
+		}
+
+		/// Gets the receiver-local FMCW IF filter transition width in Hz.
+		[[nodiscard]] std::optional<RealType> getIfFilterTransitionWidth() const noexcept
+		{
+			return _fmcw_if_chain.filter_transition_width_hz;
+		}
+
+		/// Returns true when this receiver requests IF-rate FMCW output.
+		[[nodiscard]] bool hasFmcwIfSampleRate() const noexcept { return _fmcw_if_chain.sample_rate_hz.has_value(); }
+
+		/// Returns true when this receiver is using the online FMCW IF resampling sink.
+		[[nodiscard]] bool hasFmcwIfResamplingSink() const noexcept { return _fmcw_if_sink != nullptr; }
+
+		/// Gets the active or most recently used IF resampling plan, if any.
+		[[nodiscard]] const std::optional<fers_signal::FmcwIfResamplerPlan>& getFmcwIfResamplerPlan() const noexcept
+		{
+			return _fmcw_if_plan;
+		}
+
 		/// Gets resolved receive-time LO source segments.
 		[[nodiscard]] const std::vector<core::ActiveStreamingSource>& getDechirpSources() const noexcept
 		{
@@ -228,6 +272,18 @@ namespace radar
 
 		/// Stores the unresolved dechirp reference parsed from scenario input.
 		void setDechirpReference(DechirpReference reference);
+
+		/// Stores the receiver-local FMCW IF-chain request.
+		void setFmcwIfChainRequest(FmcwIfChainRequest request) noexcept;
+
+		/// Creates the online FMCW IF resampling sink and clears the output buffer.
+		void initializeFmcwIfResampling(fers_signal::FmcwIfResamplerPlan plan);
+
+		/// Feeds one completed high-rate dechirped block into the online IF sink.
+		void consumeFmcwIfBlock(std::span<const ComplexType> block);
+
+		/// Flushes remaining samples from the online IF sink into the output buffer.
+		void flushFmcwIfResampling();
 
 		/// Replaces resolved receive-time LO source segments.
 		void setResolvedDechirpSources(std::vector<core::ActiveStreamingSource> sources);
@@ -371,6 +427,10 @@ namespace radar
 		DechirpMode _dechirp_mode{DechirpMode::None}; ///< FMCW dechirp mode.
 		DechirpReference _dechirp_reference{}; ///< Configured/resolved LO reference.
 		std::vector<core::ActiveStreamingSource> _dechirp_sources; ///< Resolved LO sources.
+		FmcwIfChainRequest _fmcw_if_chain{}; ///< Optional receiver-local IF-chain request.
+		std::optional<fers_signal::FmcwIfResamplerPlan> _fmcw_if_plan; ///< Active IF resampling plan.
+		std::unique_ptr<fers_signal::FmcwIfResamplingSink> _fmcw_if_sink; ///< Online IF resampling state.
+		std::uint64_t _fmcw_if_samples_to_discard = 0; ///< Remaining startup IF samples to suppress.
 	};
 
 	/// Converts a dechirp mode to its scenario token.

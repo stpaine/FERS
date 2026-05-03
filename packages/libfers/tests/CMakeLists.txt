@@ -32,6 +32,7 @@ add_executable(libfers_tests
 			   core/test_thread_pool.cpp
 			   core/test_world.cpp
 			   signal/test_dsp_filters.cpp
+			   signal/test_if_resampler.cpp
 			   signal/test_radar_signal.cpp
 			   timing/test_prototype_timing.cpp
 			   timing/test_timing.cpp

@@ -1019,6 +1019,28 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 		REQUIRE(rx->getDechirpReference().source == radar::Receiver::DechirpReferenceSource::Attached);
 	}
 
+	SECTION("FMCW receiver accepts IF-chain fields with dechirp")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode dechirp_mode=\"physical\">"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "    <if_sample_rate>1000</if_sample_rate>"
+						   "    <if_filter_bandwidth>400</if_filter_bandwidth>"
+						   "    <if_filter_transition_width>100</if_filter_transition_width>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+		const auto& if_chain = rx->getFmcwIfChainRequest();
+
+		REQUIRE(if_chain.sample_rate_hz.has_value());
+		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
+		REQUIRE(if_chain.filter_transition_width_hz.has_value());
+		REQUIRE_THAT(*if_chain.sample_rate_hz, WithinAbs(1000.0, 1.0e-9));
+		REQUIRE_THAT(*if_chain.filter_bandwidth_hz, WithinAbs(400.0, 1.0e-9));
+		REQUIRE_THAT(*if_chain.filter_transition_width_hz, WithinAbs(100.0, 1.0e-9));
+	}
+
 	SECTION("FMCW receiver rejects orphan dechirp reference")
 	{
 		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
@@ -1029,6 +1051,32 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 
 		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
 							ContainsSubstring("dechirp_reference"));
+	}
+
+	SECTION("FMCW receiver rejects IF-chain fields without dechirp")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode>"
+						   "    <if_sample_rate>1e6</if_sample_rate>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("IF-chain fields"));
+	}
+
+	SECTION("FMCW receiver rejects IF bandwidth at Nyquist")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode dechirp_mode=\"ideal\">"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "    <if_sample_rate>1000</if_sample_rate>"
+						   "    <if_filter_bandwidth>500</if_filter_bandwidth>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("less than half"));
 	}
 
 	SECTION("Invalid pulsed parameters throw")

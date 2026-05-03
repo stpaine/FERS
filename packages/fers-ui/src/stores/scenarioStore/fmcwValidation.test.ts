@@ -185,6 +185,85 @@ describe('FMCW validation', () => {
         ).toBe(true);
     });
 
+    test('validates receiver IF-chain settings', () => {
+        const scenario = makeScenario(makeLinearWaveform({}));
+        scenario.platforms[0].components.push({
+            id: 'rx-1',
+            type: 'receiver',
+            name: 'FMCW Rx',
+            radarType: 'fmcw',
+            window_skip: null,
+            window_length: null,
+            prf: null,
+            antennaId: null,
+            timingId: null,
+            noiseTemperature: null,
+            noDirectPaths: false,
+            noPropagationLoss: false,
+            fmcwModeConfig: {
+                dechirp_mode: 'physical',
+                dechirp_reference: {
+                    source: 'transmitter',
+                    transmitter_name: 'FMCW Tx',
+                },
+                if_sample_rate: 1e6,
+                if_filter_bandwidth: 4e5,
+                if_filter_transition_width: 1e5,
+            },
+            schedule: [],
+        });
+
+        expect(
+            validateFmcwScenario(scenario).some(
+                (issue) => issue.field === 'fmcwModeConfig'
+            )
+        ).toBe(false);
+
+        const receiver = scenario.platforms[0].components[1];
+        if (receiver.type !== 'receiver') {
+            throw new Error('Expected receiver fixture');
+        }
+
+        receiver.fmcwModeConfig = {
+            dechirp_mode: 'none',
+            if_sample_rate: 1e6,
+        };
+        expect(
+            validateFmcwScenario(scenario).some((issue) =>
+                issue.message.includes('IF-chain settings')
+            )
+        ).toBe(true);
+
+        receiver.fmcwModeConfig = {
+            dechirp_mode: 'physical',
+            dechirp_reference: {
+                source: 'transmitter',
+                transmitter_name: 'FMCW Tx',
+            },
+            if_sample_rate: -1,
+        };
+        expect(
+            validateFmcwScenario(scenario).some((issue) =>
+                issue.message.includes('IF sample rate')
+            )
+        ).toBe(true);
+
+        receiver.fmcwModeConfig = {
+            dechirp_mode: 'physical',
+            dechirp_reference: {
+                source: 'transmitter',
+                transmitter_name: 'FMCW Tx',
+            },
+            if_sample_rate: 1e6,
+            if_filter_bandwidth: 5e5,
+        };
+        expect(
+            validateFmcwScenario(scenario).some((issue) =>
+                issue.message.includes('less than half')
+            )
+        ).toBe(true);
+    });
+
     test('validates named transmitter and custom waveform dechirp references', () => {
         const waveform = makeLinearWaveform({ id: 'wave-1', name: 'FMCW LO' });
         const scenario = makeScenario(waveform);

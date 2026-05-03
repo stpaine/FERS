@@ -13,6 +13,8 @@
 #include "receiver.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <stdexcept>
 #include <utility>
 
@@ -158,6 +160,7 @@ namespace radar
 		if (_mode != OperationMode::FMCW_MODE)
 		{
 			setDechirpMode(DechirpMode::None);
+			_fmcw_if_chain = {};
 		}
 	}
 
@@ -168,6 +171,10 @@ namespace radar
 		{
 			_dechirp_reference = {};
 			_dechirp_sources.clear();
+			_fmcw_if_chain = {};
+			_fmcw_if_plan.reset();
+			_fmcw_if_sink.reset();
+			_fmcw_if_samples_to_discard = 0;
 		}
 	}
 
@@ -175,6 +182,70 @@ namespace radar
 	{
 		_dechirp_reference = std::move(reference);
 		_dechirp_sources.clear();
+	}
+
+	void Receiver::setFmcwIfChainRequest(FmcwIfChainRequest request) noexcept
+	{
+		_fmcw_if_chain = std::move(request);
+		_fmcw_if_plan.reset();
+		_fmcw_if_sink.reset();
+		_fmcw_if_samples_to_discard = 0;
+	}
+
+	void Receiver::initializeFmcwIfResampling(fers_signal::FmcwIfResamplerPlan plan)
+	{
+		_streaming_iq_data.clear();
+		_fmcw_if_plan = std::move(plan);
+		const auto expected_samples =
+			static_cast<std::size_t>(std::ceil(std::max<RealType>(0.0, params::endTime() - params::startTime()) *
+											   _fmcw_if_plan->actual_output_sample_rate_hz));
+		_streaming_iq_data.reserve(expected_samples);
+		_fmcw_if_samples_to_discard = _fmcw_if_plan->warmup_discard_samples;
+		_fmcw_if_sink = std::make_unique<fers_signal::FmcwIfResamplingSink>(*_fmcw_if_plan);
+	}
+
+	void Receiver::consumeFmcwIfBlock(const std::span<const ComplexType> block)
+	{
+		if (_fmcw_if_sink == nullptr)
+		{
+			throw std::logic_error("FMCW IF resampling sink has not been initialized.");
+		}
+		_fmcw_if_sink->consume(block);
+		auto emitted = _fmcw_if_sink->takeOutput();
+		if (_fmcw_if_samples_to_discard > 0)
+		{
+			const auto discard = std::min<std::uint64_t>(_fmcw_if_samples_to_discard, emitted.size());
+			emitted.erase(emitted.begin(), emitted.begin() + static_cast<std::ptrdiff_t>(discard));
+			_fmcw_if_samples_to_discard -= discard;
+		}
+		_streaming_iq_data.insert(_streaming_iq_data.end(), emitted.begin(), emitted.end());
+	}
+
+	void Receiver::flushFmcwIfResampling()
+	{
+		if (_fmcw_if_sink == nullptr)
+		{
+			return;
+		}
+		auto emitted = _fmcw_if_sink->finish();
+		if (_fmcw_if_samples_to_discard > 0)
+		{
+			const auto discard = std::min<std::uint64_t>(_fmcw_if_samples_to_discard, emitted.size());
+			emitted.erase(emitted.begin(), emitted.begin() + static_cast<std::ptrdiff_t>(discard));
+			_fmcw_if_samples_to_discard -= discard;
+		}
+		_streaming_iq_data.insert(_streaming_iq_data.end(), emitted.begin(), emitted.end());
+		if (_fmcw_if_plan.has_value())
+		{
+			const auto expected_samples =
+				static_cast<std::size_t>(std::ceil(std::max<RealType>(0.0, params::endTime() - params::startTime()) *
+												   _fmcw_if_plan->actual_output_sample_rate_hz));
+			if (_streaming_iq_data.size() > expected_samples)
+			{
+				_streaming_iq_data.resize(expected_samples);
+			}
+		}
+		_fmcw_if_sink.reset();
 	}
 
 	void Receiver::setResolvedDechirpSources(std::vector<core::ActiveStreamingSource> sources)

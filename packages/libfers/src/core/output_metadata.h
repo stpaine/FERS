@@ -109,6 +109,29 @@ namespace core
 		std::optional<SimId> fmcw_dechirp_reference_waveform_id = std::nullopt; ///< Custom LO waveform ID.
 		std::optional<std::string> fmcw_dechirp_reference_waveform_name = std::nullopt; ///< Custom LO waveform name.
 		std::optional<FmcwMetadata> fmcw_dechirp_reference_waveform = std::nullopt; ///< Custom LO waveform parameters.
+		bool fmcw_if_decimation_enabled = false; ///< True when IF-rate resampling is used.
+		bool fmcw_if_legacy_full_rate = false; ///< True for legacy full-rate dechirped IF output.
+		std::optional<RealType> fmcw_if_requested_sample_rate = std::nullopt; ///< Requested IF ADC rate in hertz.
+		std::optional<RealType> fmcw_if_sample_rate = std::nullopt; ///< Realized IF output sample rate in hertz.
+		std::optional<RealType> fmcw_if_input_sample_rate = std::nullopt; ///< Input simulation sample rate in hertz.
+		std::optional<unsigned> fmcw_if_resample_numerator = std::nullopt; ///< Reduced rational P.
+		std::optional<unsigned> fmcw_if_resample_denominator = std::nullopt; ///< Reduced rational Q.
+		std::optional<RealType> fmcw_if_decimation_factor = std::nullopt; ///< Input/output sample-rate ratio.
+		std::optional<RealType> fmcw_if_filter_bandwidth = std::nullopt; ///< One-sided IF passband in hertz.
+		std::optional<RealType> fmcw_if_filter_transition_width = std::nullopt; ///< IF transition width in hertz.
+		std::optional<RealType> fmcw_if_filter_stopband = std::nullopt; ///< IF stopband attenuation in dB.
+		std::optional<RealType> fmcw_if_filter_group_delay_seconds = std::nullopt; ///< Total filter delay.
+		std::optional<std::uint64_t> fmcw_if_compensated_integer_delay_samples =
+			std::nullopt; ///< Integer output-delay compensation.
+		std::optional<RealType> fmcw_if_compensated_fractional_delay_samples =
+			std::nullopt; ///< Fractional output-delay compensation.
+		std::optional<std::uint64_t> fmcw_if_warmup_discard_samples =
+			std::nullopt; ///< Startup outputs discarded by the sink.
+		std::optional<unsigned> fmcw_if_phase_refinement = std::nullopt; ///< Polyphase refinement factor.
+		std::optional<RealType> fmcw_if_timing_error_seconds = std::nullopt; ///< Estimated timing error.
+		std::optional<RealType> fmcw_if_phase_error_radians = std::nullopt; ///< Estimated IF edge phase error.
+		std::optional<RealType> fmcw_if_noise_variance = std::nullopt; ///< Post-resampling complex noise variance.
+		bool fmcw_if_group_delay_compensated = false; ///< True when IF output timestamps are aligned to t_start.
 	};
 
 	/// Metadata summary for the full simulation output set.

@@ -75,11 +75,40 @@ namespace serial::xml_parser_utils
 			return *selected_mode;
 		}
 
-		/// Returns true when an FMCW mode block carries receiver-side dechirp fields.
+		/// Returns true when an FMCW mode block carries receiver-side FMCW fields.
 		bool has_dechirp_fields(const XmlElement& fmcw_mode)
 		{
 			return XmlElement::getOptionalAttribute(fmcw_mode, "dechirp_mode").has_value() ||
-				fmcw_mode.childElement("dechirp_reference", 0).isValid();
+				fmcw_mode.childElement("dechirp_reference", 0).isValid() ||
+				fmcw_mode.childElement("if_sample_rate", 0).isValid() ||
+				fmcw_mode.childElement("if_filter_bandwidth", 0).isValid() ||
+				fmcw_mode.childElement("if_filter_transition_width", 0).isValid();
+		}
+
+		/// Parses an optional positive scalar child under <fmcw_mode>.
+		std::optional<RealType> parse_optional_fmcw_if_child(const XmlElement& fmcw_mode, const std::string& child_name,
+															 const std::string& owner)
+		{
+			const XmlElement element = fmcw_mode.childElement(child_name, 0);
+			if (!element.isValid())
+			{
+				return std::nullopt;
+			}
+			if (fmcw_mode.childElement(child_name, 1).isValid())
+			{
+				throw XmlException(owner + " must declare at most one <" + child_name + ">.");
+			}
+			const std::string text = element.getText();
+			if (text.empty())
+			{
+				throw XmlException("Element " + child_name + " is empty!");
+			}
+			const RealType value = std::stod(text);
+			if (value <= 0.0 || !std::isfinite(value))
+			{
+				throw XmlException(owner + " <" + child_name + "> must be a finite positive value.");
+			}
+			return value;
 		}
 
 		/// Parses receiver-side dechirp settings from an FMCW mode block.
@@ -113,14 +142,45 @@ namespace serial::xml_parser_utils
 			}
 
 			const XmlElement ref_element = fmcw_mode.childElement("dechirp_reference", 0);
+			radar::Receiver::FmcwIfChainRequest if_chain{
+				.sample_rate_hz = parse_optional_fmcw_if_child(fmcw_mode, "if_sample_rate", owner),
+				.filter_bandwidth_hz = parse_optional_fmcw_if_child(fmcw_mode, "if_filter_bandwidth", owner),
+				.filter_transition_width_hz =
+					parse_optional_fmcw_if_child(fmcw_mode, "if_filter_transition_width", owner)};
 			if (mode == radar::Receiver::DechirpMode::None)
 			{
 				if (ref_element.isValid())
 				{
 					throw XmlException(owner + " declares <dechirp_reference> while dechirp_mode is 'none'.");
 				}
+				if (if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
+					if_chain.filter_transition_width_hz.has_value())
+				{
+					throw XmlException(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
+				}
 				receiver.setDechirpMode(mode);
 				return;
+			}
+
+			if ((if_chain.filter_bandwidth_hz.has_value() || if_chain.filter_transition_width_hz.has_value()) &&
+				!if_chain.sample_rate_hz.has_value())
+			{
+				throw XmlException(owner + " IF filter fields require <if_sample_rate>.");
+			}
+			if (if_chain.sample_rate_hz.has_value())
+			{
+				const RealType sim_rate = params::rate() * params::oversampleRatio();
+				if (*if_chain.sample_rate_hz > sim_rate)
+				{
+					throw XmlException(owner + " <if_sample_rate> must not exceed the simulation sample rate.");
+				}
+			}
+			if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value())
+			{
+				if (*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
+				{
+					throw XmlException(owner + " <if_filter_bandwidth> must be less than half <if_sample_rate>.");
+				}
 			}
 
 			if (!ref_element.isValid())
@@ -175,6 +235,7 @@ namespace serial::xml_parser_utils
 
 			receiver.setDechirpMode(mode);
 			receiver.setDechirpReference(std::move(reference));
+			receiver.setFmcwIfChainRequest(std::move(if_chain));
 		}
 
 		/// Throws an XML validation exception with the provided message.
@@ -1395,7 +1456,7 @@ namespace serial::xml_parser_utils
 			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
 				receiver->getMode() == radar::OperationMode::FMCW_MODE)
 			{
-				receiver->prepareStreamingData(num_samples);
+				receiver->prepareStreamingData(receiver->hasFmcwIfSampleRate() ? 0 : num_samples);
 			}
 		}
 

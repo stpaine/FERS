@@ -398,13 +398,25 @@ namespace core
 				projection.allocated_streaming_iq_buffers =
 					addBytes(projection.allocated_streaming_iq_buffers,
 							 multiplyBytes(capacity, static_cast<std::uint64_t>(sizeof(ComplexType))));
-				const auto rendered_samples = receiver.isDechirpEnabled()
-					? projection.streaming_sample_count
-					: downsampledSampleCount(projection.streaming_sample_count);
+				bool if_count_overflowed = false;
+				const bool if_rate_dechirped = receiver.isDechirpEnabled() && receiver.hasFmcwIfSampleRate();
+				const auto if_sample_count = if_rate_dechirped
+					? countSamplesForDuration(projection.duration_seconds, *receiver.getIfSampleRate(),
+											  if_count_overflowed)
+					: std::uint64_t{0};
+				const auto rendered_samples = if_rate_dechirped
+					? if_sample_count
+					: (receiver.isDechirpEnabled() ? projection.streaming_sample_count
+												   : downsampledSampleCount(projection.streaming_sample_count));
 				projection.rendered_hdf5_sample_count =
 					addBytes({.bytes = projection.rendered_hdf5_sample_count},
-							 {.bytes = rendered_samples, .overflowed = sample_count_overflowed})
+							 {.bytes = rendered_samples, .overflowed = sample_count_overflowed || if_count_overflowed})
 						.bytes;
+				const auto resident_samples = if_rate_dechirped ? if_sample_count : projection.streaming_sample_count;
+				projection.streaming_iq_buffers =
+					addBytes(projection.streaming_iq_buffers,
+							 multiplyBytes(resident_samples, static_cast<std::uint64_t>(sizeof(ComplexType)),
+										   sample_count_overflowed || if_count_overflowed));
 				continue;
 			}
 
@@ -427,11 +439,6 @@ namespace core
 					addBytes({.bytes = projection.rendered_hdf5_sample_count}, rendered_samples).bytes;
 			}
 		}
-
-		projection.streaming_iq_buffers =
-			multiplyBytes(projection.streaming_sample_count,
-						  projection.streaming_receiver_count * static_cast<std::uint64_t>(sizeof(ComplexType)),
-						  sample_count_overflowed);
 
 		projection.rendered_hdf5_payload =
 			multiplyBytes(projection.rendered_hdf5_sample_count, 2ULL * static_cast<std::uint64_t>(sizeof(RealType)));
@@ -508,20 +515,24 @@ namespace core
 
 		LOG(logging::Level::DEBUG,
 			"Projected simulation footprint: phase_noise_lookup_memory={} ({} enabled timing sources x {} samples), "
-			"streaming_iq_buffer_memory={} ({} receivers x {} samples), rendered_hdf5_dataset_payload={} "
+			"streaming_iq_buffer_memory={} ({} streaming receivers, IF-rate receivers use IF sample counts), "
+			"rendered_hdf5_dataset_payload={} "
 			"({} output samples), resident_baseline={} (current RSS minus allocated streaming IQ buffers), "
 			"projected_total_footprint={}.",
 			formatByteSize(projection.phase_noise_lookup.bytes), projection.enabled_phase_noise_timing_count,
 			projection.phase_noise_sample_count, formatByteSize(projection.streaming_iq_buffers.bytes),
-			projection.streaming_receiver_count, projection.streaming_sample_count,
-			formatByteSize(projection.rendered_hdf5_payload.bytes), projection.rendered_hdf5_sample_count,
-			resident_baseline, total);
+			projection.streaming_receiver_count, formatByteSize(projection.rendered_hdf5_payload.bytes),
+			projection.rendered_hdf5_sample_count, resident_baseline, total);
 
 		constexpr std::uint64_t one_gib = 1024ULL * 1024ULL * 1024ULL;
 		for (const auto& receiver_ptr : world.getReceivers())
 		{
 			const auto& receiver = *receiver_ptr;
 			if (!receiver.isDechirpEnabled())
+			{
+				continue;
+			}
+			if (receiver.hasFmcwIfSampleRate())
 			{
 				continue;
 			}

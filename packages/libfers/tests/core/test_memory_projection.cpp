@@ -166,6 +166,37 @@ TEST_CASE("Simulation memory projection counts dechirped streaming output at RF 
 	REQUIRE(projection.rendered_hdf5_payload.bytes == 36 * 2 * sizeof(RealType));
 }
 
+TEST_CASE("Simulation memory projection counts IF-rate dechirped output at receiver rate",
+		  "[core][memory_projection][fmcw]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 1.0);
+	params::setRate(10.0);
+	params::setOversampleRatio(2);
+
+	auto world = makeProjectionWorld();
+	auto* platform = world->getPlatforms().front().get();
+	auto* antenna = world->findAntenna(300);
+	const auto timing = world->getReceivers().front()->getTiming();
+
+	auto dechirped_rx =
+		std::make_unique<radar::Receiver>(platform, "IfRateRx", 13, radar::OperationMode::FMCW_MODE, 800);
+	dechirped_rx->setTiming(timing);
+	dechirped_rx->setAntenna(antenna);
+	dechirped_rx->setDechirpMode(radar::Receiver::DechirpMode::Physical);
+	dechirped_rx->setFmcwIfChainRequest(
+		{.sample_rate_hz = 5.0, .filter_bandwidth_hz = 2.0, .filter_transition_width_hz = 1.0});
+	world->add(std::move(dechirped_rx));
+
+	const auto projection = core::projectSimulationMemory(*world);
+
+	REQUIRE(projection.streaming_sample_count == 20);
+	REQUIRE(projection.streaming_receiver_count == 2);
+	REQUIRE(projection.rendered_hdf5_sample_count == 21);
+	REQUIRE(projection.streaming_iq_buffers.bytes == 25 * sizeof(ComplexType));
+	REQUIRE(projection.rendered_hdf5_payload.bytes == 21 * 2 * sizeof(RealType));
+}
+
 TEST_CASE("Simulation memory projection starts phase-noise lookup at earliest streaming receiver",
 		  "[core][memory_projection]")
 {
