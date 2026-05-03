@@ -299,9 +299,22 @@ namespace fers_signal
 
 			auto [amplitude, phase, fdelay, i_sample_unwrap] =
 				calculateWeightsAndDelays(iter, next, sample_time, idelay, fracWinDelay);
+			const RealType native_position = (sample_time - points.front().time) * _rate;
+			const auto source_index = static_cast<int>(std::floor(native_position));
+			RealType source_fraction = native_position - static_cast<RealType>(source_index);
+			if (source_fraction < 0.0 && source_fraction > -1.0e-12)
+			{
+				source_fraction = 0.0;
+			}
+
+			const RealType combined_delay = fdelay + source_fraction;
+			const auto delay_unwrap = static_cast<int>(std::floor(combined_delay));
+			fdelay = combined_delay - static_cast<RealType>(delay_unwrap);
+			i_sample_unwrap += delay_unwrap;
+
 			const auto& filt = interp.getFilter(fdelay);
-			const auto source_index = static_cast<int>(std::llround((sample_time - points.front().time) * _rate));
-			ComplexType accum = performConvolution(source_index, filt.data(), filt_length, amplitude, i_sample_unwrap);
+			const ComplexType accum =
+				performConvolution(source_index, filt.data(), filt_length, amplitude, i_sample_unwrap);
 			out[i] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
 
 			sample_time += timestep;

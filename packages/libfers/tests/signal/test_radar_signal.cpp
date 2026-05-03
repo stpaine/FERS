@@ -310,3 +310,47 @@ TEST_CASE("Signal renderSlice matches cropped full response with padding", "[sig
 		REQUIRE_THAT(slice[pad + i].imag(), WithinAbs(full[crop_start + i].imag(), 1e-9));
 	}
 }
+
+TEST_CASE("Signal renderSlice interpolates onto non-native output grids", "[signal][radar]")
+{
+	ParamGuard guard;
+	params::setOversampleRatio(1);
+
+	constexpr RealType native_rate_hz = 100.0;
+	constexpr RealType output_rate_hz = 137.0;
+	constexpr RealType tone_hz = 7.0;
+	constexpr RealType start_time = 3.0;
+	constexpr RealType slice_start_time = start_time + 6.0;
+	constexpr std::size_t slice_count = 256;
+	constexpr unsigned sample_count = 2048;
+
+	std::vector<ComplexType> input(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * tone_hz * static_cast<RealType>(i) / native_rate_hz;
+		input[i] = {std::cos(phase), std::sin(phase)};
+	}
+
+	fers_signal::Signal signal;
+	signal.load(input, sample_count, native_rate_hz);
+	const std::vector<interp::InterpPoint> points = {{1.0, start_time, 0.0, 0.0}};
+
+	const auto slice = signal.renderSlice(points, slice_start_time, output_rate_hz, slice_count, 0.0);
+
+	ComplexType correlation{0.0, 0.0};
+	RealType output_energy = 0.0;
+	RealType reference_energy = 0.0;
+	for (std::size_t i = 0; i < slice.size(); ++i)
+	{
+		const RealType elapsed = slice_start_time - start_time + static_cast<RealType>(i) / output_rate_hz;
+		const RealType phase = 2.0 * PI * tone_hz * elapsed;
+		const ComplexType expected{std::cos(phase), std::sin(phase)};
+		correlation += slice[i] * std::conj(expected);
+		output_energy += std::norm(slice[i]);
+		reference_energy += std::norm(expected);
+	}
+
+	const RealType normalized_correlation = std::abs(correlation) / std::sqrt(output_energy * reference_energy);
+	REQUIRE(normalized_correlation > 0.999);
+	REQUIRE(std::abs(std::arg(correlation)) < 0.01);
+}
