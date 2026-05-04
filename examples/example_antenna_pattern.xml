@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Standalone antenna pattern asset for:
+    <antenna name="ExampleXmlAntenna" pattern="xml" filename="example_antenna_pattern.xml"/>
+
+  Angles are boresight offsets. With symmetry="mirrored", negative offsets use
+  the matching positive-angle gain sample.
+-->
+<antenna>
+    <azimuth unit="deg" format="dBi" symmetry="mirrored">
+        <gainsample>
+            <angle>0</angle>
+            <gain>20</gain>
+        </gainsample>
+        <gainsample>
+            <angle>3</angle>
+            <gain>17</gain>
+        </gainsample>
+        <gainsample>
+            <angle>10</angle>
+            <gain>10</gain>
+        </gainsample>
+        <gainsample>
+            <angle>20</angle>
+            <gain>0</gain>
+        </gainsample>
+        <gainsample>
+            <angle>45</angle>
+            <gain>-20</gain>
+        </gainsample>
+        <gainsample>
+            <angle>90</angle>
+            <gain>-35</gain>
+        </gainsample>
+        <gainsample>
+            <angle>180</angle>
+            <gain>-45</gain>
+        </gainsample>
+    </azimuth>
+    <elevation unit="deg" format="dBi" symmetry="mirrored">
+        <gainsample>
+            <angle>0</angle>
+            <gain>20</gain>
+        </gainsample>
+        <gainsample>
+            <angle>3</angle>
+            <gain>16</gain>
+        </gainsample>
+        <gainsample>
+            <angle>10</angle>
+            <gain>8</gain>
+        </gainsample>
+        <gainsample>
+            <angle>20</angle>
+            <gain>-3</gain>
+        </gainsample>
+        <gainsample>
+            <angle>45</angle>
+            <gain>-25</gain>
+        </gainsample>
+        <gainsample>
+            <angle>90</angle>
+            <gain>-40</gain>
+        </gainsample>
+    </elevation>
+</antenna>
