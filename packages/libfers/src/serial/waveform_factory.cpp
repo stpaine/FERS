@@ -35,6 +35,7 @@ using fers_signal::Signal;
 
 namespace
 {
+	/// Converts a sample count to unsigned after validating the supported range.
 	[[nodiscard]] unsigned checked_sample_count(const std::size_t sample_count, const std::string_view source)
 	{
 		if (sample_count > static_cast<std::size_t>(std::numeric_limits<unsigned>::max()))
@@ -44,6 +45,7 @@ namespace
 		return static_cast<unsigned>(sample_count);
 	}
 
+	/// Parses and validates a CSV waveform sample count header.
 	[[nodiscard]] unsigned parse_csv_sample_count(const RealType sample_count, const std::filesystem::path& filepath)
 	{
 		if (!std::isfinite(sample_count) || sample_count < 0.0 || std::trunc(sample_count) != sample_count)

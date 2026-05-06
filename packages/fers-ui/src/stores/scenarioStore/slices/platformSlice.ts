@@ -5,12 +5,16 @@ import { invoke } from '@tauri-apps/api/core';
 import { StateCreator } from 'zustand';
 import { createDefaultPlatform } from '../defaults';
 import { generateSimId } from '../idUtils';
+import { createUniqueScenarioName } from '../nameUtils';
 import {
     cleanObject,
     serializeComponentInner,
     serializePlatform,
 } from '../serializers';
-import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import {
+    enqueueFullSyncDetached,
+    enqueueGranularSyncDetached,
+} from '../syncQueue';
 import {
     Platform,
     PlatformActions,
@@ -41,7 +45,7 @@ function syncPlatformGranular(
 ): void {
     const platform = getFn().platforms.find((p) => p.id === platformId);
     if (!platform) return;
-    void enqueueGranularSync(
+    enqueueGranularSyncDetached(
         'Platform',
         platform.id,
         JSON.stringify(cleanObject(serializePlatform(platform)))
@@ -61,14 +65,14 @@ export const createPlatformSlice: StateCreator<
             const newPlatform: Platform = {
                 ...createDefaultPlatform(),
                 id,
-                name: newName,
+                name: createUniqueScenarioName(state, newName),
             };
             // Defaults to empty components list
             state.platforms.push(newPlatform);
             state.isDirty = true;
         });
         // libfers has no granular add API for Platforms — full sync is required.
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
     },
     addPositionWaypoint: (platformId) => {
         let touched = false;
@@ -163,6 +167,7 @@ export const createPlatformSlice: StateCreator<
             const name = `${platform.name} ${
                 componentType.charAt(0).toUpperCase() + componentType.slice(1)
             }`;
+            const uniqueName = createUniqueScenarioName(state, name);
             let newComponent: PlatformComponent;
 
             switch (componentType) {
@@ -172,7 +177,7 @@ export const createPlatformSlice: StateCreator<
                         type: 'monostatic',
                         txId: id,
                         rxId: rxId ?? generateSimId('Receiver'),
-                        name,
+                        name: uniqueName,
                         radarType: 'pulsed',
                         window_skip: 0,
                         window_length: 1e-5,
@@ -190,7 +195,7 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'transmitter',
-                        name,
+                        name: uniqueName,
                         radarType: 'pulsed',
                         prf: 1000,
                         antennaId: null,
@@ -203,7 +208,7 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'receiver',
-                        name,
+                        name: uniqueName,
                         radarType: 'pulsed',
                         window_skip: 0,
                         window_length: 1e-5,
@@ -220,7 +225,7 @@ export const createPlatformSlice: StateCreator<
                     newComponent = {
                         id,
                         type: 'target',
-                        name,
+                        name: uniqueName,
                         rcs_type: 'isotropic',
                         rcs_value: 1,
                         rcs_model: 'constant',
@@ -236,7 +241,7 @@ export const createPlatformSlice: StateCreator<
         if (added) {
             // Components (Transmitter/Receiver/Target/Monostatic) are independent
             // backend objects with their own IDs; there is no granular add API.
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         }
     },
     removePlatformComponent: (platformId, componentId) => {
@@ -259,7 +264,7 @@ export const createPlatformSlice: StateCreator<
         });
         if (removed) {
             // libfers has no granular remove API — full sync is required.
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         }
     },
     setPlatformRcsModel: (platformId, componentId, newModel) => {
@@ -288,7 +293,7 @@ export const createPlatformSlice: StateCreator<
                 (c) => c.id === componentId
             );
             if (component) {
-                void enqueueGranularSync(
+                enqueueGranularSyncDetached(
                     'Target',
                     component.id,
                     JSON.stringify(

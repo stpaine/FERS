@@ -47,7 +47,7 @@
                 >
 
         <!-- Waveform definition -->
-        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw))>
+        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw | fmcw_linear_chirp | fmcw_triangle))>
         <!ATTLIST waveform
                 name CDATA #REQUIRED>
 
@@ -61,6 +61,17 @@
         <!ELEMENT pulsed_from_file EMPTY>
         <!ATTLIST pulsed_from_file filename CDATA #REQUIRED>
         <!ELEMENT cw EMPTY>
+        <!ELEMENT fmcw_linear_chirp (chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset?, chirp_count?)>
+        <!ATTLIST fmcw_linear_chirp direction (up|down) #REQUIRED>
+        <!ELEMENT fmcw_triangle (chirp_bandwidth, chirp_duration, start_frequency_offset?, triangle_count?)>
+        <!ELEMENT chirp_bandwidth (#PCDATA)>
+        <!ELEMENT chirp_duration (#PCDATA)>
+        <!ELEMENT chirp_period (#PCDATA)>
+        <!ELEMENT start_frequency_offset (#PCDATA)>
+        <!-- Per-schedule-segment maximum chirp count; each scheduled period may emit up to this many chirps. -->
+        <!ELEMENT chirp_count (#PCDATA)>
+        <!-- Per-schedule-segment maximum full triangle count; each scheduled period may emit up to this many triangles. -->
+        <!ELEMENT triangle_count (#PCDATA)>
 
         <!-- Timing Source -->
         <!ELEMENT timing (frequency,freq_offset?,random_freq_offset_stdev?,phase_offset?,random_phase_offset_stdev?,noise_entry*)>
@@ -149,6 +160,17 @@
         <!-- Elements for defining radar operational modes -->
         <!ELEMENT pulsed_mode (prf, window_skip?, window_length?)>
         <!ELEMENT cw_mode EMPTY>
+        <!ELEMENT fmcw_mode (dechirp_reference?, if_sample_rate?, if_filter_bandwidth?, if_filter_transition_width?)>
+        <!ATTLIST fmcw_mode dechirp_mode (none|physical|ideal) "none">
+        <!ELEMENT dechirp_reference EMPTY>
+        <!ATTLIST dechirp_reference
+                source (attached|transmitter|custom) #REQUIRED
+                transmitter_name CDATA #IMPLIED
+                waveform_name CDATA #IMPLIED
+                >
+        <!ELEMENT if_sample_rate (#PCDATA)>
+        <!ELEMENT if_filter_bandwidth (#PCDATA)>
+        <!ELEMENT if_filter_transition_width (#PCDATA)>
 
         <!ELEMENT schedule (period+)>
         <!ELEMENT period EMPTY>
@@ -158,7 +180,7 @@
                 >
 
         <!-- Monostatic radar installations -->
-        <!ELEMENT monostatic ((pulsed_mode | cw_mode), noise_temp?, schedule?)>
+        <!ELEMENT monostatic ((pulsed_mode | cw_mode | fmcw_mode), noise_temp?, schedule?)>
         <!ATTLIST monostatic
                 name CDATA #REQUIRED
                 antenna CDATA #REQUIRED
@@ -170,7 +192,7 @@
         <!ELEMENT noise_temp (#PCDATA)>
 
         <!-- Standalone Transmitter -->
-        <!ELEMENT transmitter ((pulsed_mode | cw_mode), schedule?)>
+        <!ELEMENT transmitter ((pulsed_mode | cw_mode | fmcw_mode), schedule?)>
         <!ATTLIST transmitter
                 name CDATA #REQUIRED
                 waveform CDATA #REQUIRED
@@ -178,7 +200,7 @@
                 timing CDATA #REQUIRED>
 
         <!-- Standalone Receiver -->
-        <!ELEMENT receiver ((pulsed_mode | cw_mode), noise_temp?, schedule?)>
+        <!ELEMENT receiver ((pulsed_mode | cw_mode | fmcw_mode), noise_temp?, schedule?)>
         <!ATTLIST receiver
                 name CDATA #REQUIRED
                 antenna CDATA #REQUIRED

@@ -35,6 +35,8 @@ interface PlatformInspectorProps {
     selectedComponentId: string | null;
 }
 
+type InterpolationType = 'static' | 'linear' | 'cubic';
+
 interface WaypointEditDialogProps {
     open: boolean;
     onClose: (
@@ -43,6 +45,57 @@ interface WaypointEditDialogProps {
     waypoint: PositionWaypoint | RotationWaypoint | null;
     waypointType: 'position' | 'rotation';
     angleUnitLabel: 'deg' | 'rad';
+}
+
+const createDefaultPositionWaypoint = (): PositionWaypoint => ({
+    id: generateSimId('Platform'),
+    x: 0,
+    y: 0,
+    altitude: 0,
+    time: 0,
+});
+
+const createDefaultRotationWaypoint = (): RotationWaypoint => ({
+    id: generateSimId('Platform'),
+    azimuth: 0,
+    elevation: 0,
+    time: 0,
+});
+
+export function ensureCubicPositionWaypoints(
+    waypoints: PositionWaypoint[]
+): PositionWaypoint[] {
+    if (waypoints.length >= 2) {
+        return waypoints;
+    }
+
+    const first = waypoints[0] ?? createDefaultPositionWaypoint();
+    return [
+        first,
+        {
+            ...first,
+            id: generateSimId('Platform'),
+            time: first.time + 1,
+        },
+    ];
+}
+
+export function ensureCubicRotationWaypoints(
+    waypoints: RotationWaypoint[]
+): RotationWaypoint[] {
+    if (waypoints.length >= 2) {
+        return waypoints;
+    }
+
+    const first = waypoints[0] ?? createDefaultRotationWaypoint();
+    return [
+        first,
+        {
+            ...first,
+            id: generateSimId('Platform'),
+            time: first.time + 1,
+        },
+    ];
 }
 
 function WaypointEditDialog({
@@ -234,6 +287,36 @@ export function PlatformInspector({
         }
     };
 
+    const handleMotionInterpolationChange = (
+        interpolation: InterpolationType
+    ) => {
+        handleChange('motionPath', {
+            ...item.motionPath,
+            interpolation,
+            waypoints:
+                interpolation === 'cubic'
+                    ? ensureCubicPositionWaypoints(item.motionPath.waypoints)
+                    : item.motionPath.waypoints,
+        });
+    };
+
+    const handleRotationInterpolationChange = (
+        interpolation: InterpolationType
+    ) => {
+        if (item.rotation.type !== 'path') {
+            return;
+        }
+
+        handleChange('rotation', {
+            ...item.rotation,
+            interpolation,
+            waypoints:
+                interpolation === 'cubic'
+                    ? ensureCubicRotationWaypoints(item.rotation.waypoints)
+                    : item.rotation.waypoints,
+        });
+    };
+
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <BufferedTextField
@@ -253,9 +336,8 @@ export function PlatformInspector({
                         label="Interpolation"
                         value={item.motionPath.interpolation}
                         onChange={(e) =>
-                            handleChange(
-                                'motionPath.interpolation',
-                                e.target.value
+                            handleMotionInterpolationChange(
+                                e.target.value as InterpolationType
                             )
                         }
                     >
@@ -403,9 +485,9 @@ export function PlatformInspector({
                                         label="Interpolation"
                                         value={rotation.interpolation}
                                         onChange={(e) =>
-                                            handleChange(
-                                                'rotation.interpolation',
-                                                e.target.value
+                                            handleRotationInterpolationChange(
+                                                e.target
+                                                    .value as InterpolationType
                                             )
                                         }
                                     >

@@ -18,6 +18,7 @@
 #include <format>
 #include <highfive/highfive.hpp>
 #include <stdexcept>
+#include <vector>
 
 #include "core/logging.h"
 #include "core/parameters.h"
@@ -35,9 +36,221 @@ namespace serial
 		file.createAttribute("receiver_id", static_cast<unsigned long long>(metadata.receiver_id));
 		file.createAttribute("receiver_name", metadata.receiver_name);
 		file.createAttribute("data_mode", metadata.mode);
+		if (metadata.sampling_rate > 0.0)
+		{
+			file.createAttribute("output_sampling_rate", metadata.sampling_rate);
+		}
 		file.createAttribute("total_samples", static_cast<unsigned long long>(metadata.total_samples));
 		file.createAttribute("sample_start", static_cast<unsigned long long>(metadata.sample_start));
 		file.createAttribute("sample_end_exclusive", static_cast<unsigned long long>(metadata.sample_end_exclusive));
+		file.createAttribute("streaming_segment_count",
+							 static_cast<unsigned long long>(metadata.streaming_segments.size()));
+		file.createAttribute("fmcw_source_count", static_cast<unsigned long long>(metadata.fmcw_sources.size()));
+		file.createAttribute("fmcw_dechirp_mode", metadata.fmcw_dechirp_mode);
+		file.createAttribute("fmcw_dechirp_reference_source", metadata.fmcw_dechirp_reference_source);
+		file.createAttribute("fmcw_if_decimation_enabled", metadata.fmcw_if_decimation_enabled);
+		file.createAttribute("fmcw_if_legacy_full_rate", metadata.fmcw_if_legacy_full_rate);
+		file.createAttribute("fmcw_if_group_delay_compensated", metadata.fmcw_if_group_delay_compensated);
+		if (metadata.fmcw_if_requested_sample_rate.has_value())
+		{
+			file.createAttribute("fmcw_if_requested_sample_rate", *metadata.fmcw_if_requested_sample_rate);
+		}
+		if (metadata.fmcw_if_sample_rate.has_value())
+		{
+			file.createAttribute("fmcw_if_sample_rate", *metadata.fmcw_if_sample_rate);
+		}
+		if (metadata.fmcw_if_input_sample_rate.has_value())
+		{
+			file.createAttribute("fmcw_if_input_sample_rate", *metadata.fmcw_if_input_sample_rate);
+		}
+		if (metadata.fmcw_if_resample_numerator.has_value())
+		{
+			file.createAttribute("fmcw_if_resample_numerator",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_resample_numerator));
+		}
+		if (metadata.fmcw_if_resample_denominator.has_value())
+		{
+			file.createAttribute("fmcw_if_resample_denominator",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_resample_denominator));
+		}
+		if (metadata.fmcw_if_decimation_factor.has_value())
+		{
+			file.createAttribute("fmcw_if_decimation_factor", *metadata.fmcw_if_decimation_factor);
+		}
+		if (metadata.fmcw_if_filter_bandwidth.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_bandwidth", *metadata.fmcw_if_filter_bandwidth);
+		}
+		if (metadata.fmcw_if_filter_transition_width.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_transition_width", *metadata.fmcw_if_filter_transition_width);
+		}
+		if (metadata.fmcw_if_filter_stopband.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_stopband", *metadata.fmcw_if_filter_stopband);
+		}
+		if (metadata.fmcw_if_filter_group_delay_seconds.has_value())
+		{
+			file.createAttribute("fmcw_if_filter_group_delay_seconds", *metadata.fmcw_if_filter_group_delay_seconds);
+		}
+		if (metadata.fmcw_if_compensated_integer_delay_samples.has_value())
+		{
+			file.createAttribute("fmcw_if_compensated_integer_delay_samples",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_compensated_integer_delay_samples));
+		}
+		if (metadata.fmcw_if_compensated_fractional_delay_samples.has_value())
+		{
+			file.createAttribute("fmcw_if_compensated_fractional_delay_samples",
+								 *metadata.fmcw_if_compensated_fractional_delay_samples);
+		}
+		if (metadata.fmcw_if_warmup_discard_samples.has_value())
+		{
+			file.createAttribute("fmcw_if_warmup_discard_samples",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_warmup_discard_samples));
+		}
+		if (metadata.fmcw_if_phase_refinement.has_value())
+		{
+			file.createAttribute("fmcw_if_phase_refinement",
+								 static_cast<unsigned long long>(*metadata.fmcw_if_phase_refinement));
+		}
+		if (metadata.fmcw_if_timing_error_seconds.has_value())
+		{
+			file.createAttribute("fmcw_if_timing_error_seconds", *metadata.fmcw_if_timing_error_seconds);
+		}
+		if (metadata.fmcw_if_phase_error_radians.has_value())
+		{
+			file.createAttribute("fmcw_if_phase_error_radians", *metadata.fmcw_if_phase_error_radians);
+		}
+		if (metadata.fmcw_if_noise_variance.has_value())
+		{
+			file.createAttribute("fmcw_if_noise_variance", *metadata.fmcw_if_noise_variance);
+		}
+		if (metadata.fmcw_dechirp_reference_transmitter_id.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_transmitter_id",
+								 static_cast<unsigned long long>(*metadata.fmcw_dechirp_reference_transmitter_id));
+		}
+		if (metadata.fmcw_dechirp_reference_transmitter_name.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_transmitter_name",
+								 *metadata.fmcw_dechirp_reference_transmitter_name);
+		}
+		if (metadata.fmcw_dechirp_reference_waveform_id.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_waveform_id",
+								 static_cast<unsigned long long>(*metadata.fmcw_dechirp_reference_waveform_id));
+		}
+		if (metadata.fmcw_dechirp_reference_waveform_name.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_waveform_name",
+								 *metadata.fmcw_dechirp_reference_waveform_name);
+		}
+		if (metadata.fmcw_dechirp_reference_waveform.has_value())
+		{
+			file.createAttribute("fmcw_dechirp_reference_waveform_shape",
+								 metadata.fmcw_dechirp_reference_waveform->waveform_shape);
+			file.createAttribute("fmcw_dechirp_reference_chirp_bandwidth",
+								 metadata.fmcw_dechirp_reference_waveform->chirp_bandwidth);
+			file.createAttribute("fmcw_dechirp_reference_chirp_duration",
+								 metadata.fmcw_dechirp_reference_waveform->chirp_duration);
+			file.createAttribute("fmcw_dechirp_reference_chirp_rate",
+								 metadata.fmcw_dechirp_reference_waveform->chirp_rate);
+			file.createAttribute("fmcw_dechirp_reference_start_frequency_offset",
+								 metadata.fmcw_dechirp_reference_waveform->start_frequency_offset);
+			if (metadata.fmcw_dechirp_reference_waveform->waveform_shape == "linear")
+			{
+				file.createAttribute("fmcw_dechirp_reference_chirp_period",
+									 metadata.fmcw_dechirp_reference_waveform->chirp_period);
+				file.createAttribute("fmcw_dechirp_reference_chirp_direction",
+									 metadata.fmcw_dechirp_reference_waveform->chirp_direction);
+			}
+			else if (metadata.fmcw_dechirp_reference_waveform->triangle_period.has_value())
+			{
+				file.createAttribute("fmcw_dechirp_reference_triangle_period",
+									 *metadata.fmcw_dechirp_reference_waveform->triangle_period);
+			}
+		}
+		if (metadata.fmcw.has_value())
+		{
+			file.createAttribute("fmcw_waveform_shape", metadata.fmcw->waveform_shape);
+			file.createAttribute("fmcw_chirp_bandwidth", metadata.fmcw->chirp_bandwidth);
+			file.createAttribute("fmcw_chirp_duration", metadata.fmcw->chirp_duration);
+			file.createAttribute("fmcw_chirp_rate", metadata.fmcw->chirp_rate);
+			file.createAttribute("fmcw_start_frequency_offset", metadata.fmcw->start_frequency_offset);
+			if (metadata.fmcw->waveform_shape == "linear")
+			{
+				file.createAttribute("fmcw_chirp_period", metadata.fmcw->chirp_period);
+				file.createAttribute("fmcw_chirp_rate_signed", metadata.fmcw->chirp_rate_signed);
+				file.createAttribute("fmcw_chirp_direction", metadata.fmcw->chirp_direction);
+				if (metadata.fmcw->chirp_count.has_value())
+				{
+					file.createAttribute("fmcw_chirp_count",
+										 static_cast<unsigned long long>(*metadata.fmcw->chirp_count));
+				}
+			}
+			else if (metadata.fmcw->waveform_shape == "triangle")
+			{
+				if (metadata.fmcw->triangle_period.has_value())
+				{
+					file.createAttribute("fmcw_triangle_period", *metadata.fmcw->triangle_period);
+				}
+				if (metadata.fmcw->triangle_count.has_value())
+				{
+					file.createAttribute("fmcw_triangle_count",
+										 static_cast<unsigned long long>(*metadata.fmcw->triangle_count));
+				}
+			}
+			std::vector<RealType> streaming_first_chirp_starts;
+			std::vector<unsigned long long> streaming_emitted_chirp_counts;
+			std::vector<RealType> streaming_first_triangle_starts;
+			std::vector<unsigned long long> streaming_emitted_triangle_counts;
+			for (const auto& segment : metadata.streaming_segments)
+			{
+				if (segment.first_chirp_start_time.has_value())
+				{
+					streaming_first_chirp_starts.push_back(*segment.first_chirp_start_time);
+				}
+				if (segment.emitted_chirp_count.has_value())
+				{
+					streaming_emitted_chirp_counts.push_back(
+						static_cast<unsigned long long>(*segment.emitted_chirp_count));
+				}
+				if (segment.first_triangle_start_time.has_value())
+				{
+					streaming_first_triangle_starts.push_back(*segment.first_triangle_start_time);
+				}
+				if (segment.emitted_triangle_count.has_value())
+				{
+					streaming_emitted_triangle_counts.push_back(
+						static_cast<unsigned long long>(*segment.emitted_triangle_count));
+				}
+			}
+			// Per-segment vectors use the streaming_ prefix; scalar fmcw_ attributes describe the waveform.
+			if (!streaming_first_chirp_starts.empty())
+			{
+				auto attr = file.createAttribute<RealType>("streaming_first_chirp_start_time",
+														   HighFive::DataSpace::From(streaming_first_chirp_starts));
+				attr.write(streaming_first_chirp_starts);
+			}
+			if (!streaming_emitted_chirp_counts.empty())
+			{
+				auto attr = file.createAttribute<unsigned long long>(
+					"streaming_emitted_chirp_count", HighFive::DataSpace::From(streaming_emitted_chirp_counts));
+				attr.write(streaming_emitted_chirp_counts);
+			}
+			if (!streaming_first_triangle_starts.empty())
+			{
+				auto attr = file.createAttribute<RealType>("streaming_first_triangle_start_time",
+														   HighFive::DataSpace::From(streaming_first_triangle_starts));
+				attr.write(streaming_first_triangle_starts);
+			}
+			if (!streaming_emitted_triangle_counts.empty())
+			{
+				auto attr = file.createAttribute<unsigned long long>(
+					"streaming_emitted_triangle_count", HighFive::DataSpace::From(streaming_emitted_triangle_counts));
+				attr.write(streaming_emitted_triangle_counts);
+			}
+		}
 	}
 
 	void readPulseData(const std::string& name, std::vector<ComplexType>& data)

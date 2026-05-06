@@ -25,7 +25,7 @@
 
 namespace
 {
-	// Callback to capture libxml2 generic errors into a std::string
+	/// Captures libxml2 generic errors into a std::string buffer.
 	void libxmlGenericErrorCallback(void* ctx, const char* msg, ...)
 	{
 		auto* err_str = static_cast<std::string*>(ctx);
@@ -43,7 +43,7 @@ namespace
 		err_str->append(buf);
 	}
 
-	// Helper to produce an error box
+	/// Formats a raw XML error message with a title and remediation hint.
 	std::string formatError(const std::string_view title, const std::string& rawErrors, const std::string_view hint)
 	{
 		std::string errors = rawErrors;
@@ -73,7 +73,7 @@ namespace
 						   title, errors.empty() ? "Unknown validation error." : errors, hint);
 	}
 
-	// Retrieves syntax and malformed document errors nicely
+	/// Retrieves the most recent libxml parser error as a formatted string.
 	std::string getXmlLastErrorFormatted()
 	{
 		const xmlError* err = xmlGetLastError();

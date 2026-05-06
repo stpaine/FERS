@@ -89,13 +89,16 @@ TEST_CASE("get_child_real_type extracts floating point values", "[serial][xml_pa
 
 TEST_CASE("get_attribute_bool extracts boolean values safely", "[serial][xml_parser_utils]")
 {
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
 	auto doc = loadXml("<root flag_true=\"true\" flag_false=\"false\" flag_invalid=\"yes\"/>");
 	auto root = doc.getRootElement();
 
 	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_true", false) == true);
 	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_false", true) == false);
-	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_invalid", true) == false);
+	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "flag_invalid", true) == true);
 	REQUIRE(serial::xml_parser_utils::get_attribute_bool(root, "missing", true) == true); // Default fallback
+	REQUIRE_THAT(capture.str(), ContainsSubstring("Invalid boolean value"));
 }
 
 TEST_CASE("resolve_reference_id maps string names to SimIds", "[serial][xml_parser_utils]")
@@ -201,6 +204,43 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 		REQUIRE(p.random_seed.value() == 42);
 		REQUIRE(p.adc_bits == 12);
 		REQUIRE(p.oversample_ratio == 4);
+	}
+
+	SECTION("Missing optional parameters use defaults without warnings")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE_THAT(p.c, WithinAbs(params::Parameters::DEFAULT_C, 1e-5));
+		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(1000.0, 1e-5));
+		REQUIRE(p.adc_bits == 0);
+		REQUIRE(p.oversample_ratio == 1);
+		REQUIRE(capture.str().empty());
+	}
+
+	SECTION("Origin altitude defaults to zero when omitted")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<parameters>"
+						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+						   "  <origin latitude=\"-33.0\" longitude=\"18.0\"/>"
+						   "  <coordinatesystem frame=\"ENU\"/>"
+						   "</parameters>");
+
+		params::Parameters p;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+
+		REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
+		REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
+		REQUIRE_THAT(p.origin_altitude, WithinAbs(0.0, 1e-5));
+		REQUIRE(capture.str().empty());
 	}
 
 	SECTION("Unsigned optional parameters reject invalid values")
@@ -317,6 +357,170 @@ TEST_CASE("parseWaveform handles CW and delegates file loading", "[serial][xml_p
 	}
 }
 
+TEST_CASE("parseWaveform warns for large FMCW streaming allocation", "[serial][xml_parser_utils]")
+{
+	ParamGuard guard;
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
+
+	params::setRate(1.0e9);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 5.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+	ctx.parameters.start = 0.0;
+	ctx.parameters.end = 5.0;
+	ctx.loaders = createMockLoaders();
+
+	auto doc = loadXml("<waveform name=\"huge_fmcw\">"
+					   "  <power>10</power>"
+					   "  <carrier_frequency>2.4e9</carrier_frequency>"
+					   "  <fmcw_linear_chirp direction=\"up\">"
+					   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
+					   "    <chirp_duration>1e-3</chirp_duration>"
+					   "    <chirp_period>1e-3</chirp_period>"
+					   "  </fmcw_linear_chirp>"
+					   "</waveform>");
+
+	serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+	REQUIRE(world.getWaveforms().size() == 1);
+	REQUIRE_THAT(capture.str(), ContainsSubstring("GiB of FMCW streaming IQ data"));
+}
+
+TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml_parser_utils][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+	ctx.parameters.start = 0.0;
+	ctx.parameters.end = 1.0;
+	ctx.loaders = createMockLoaders();
+
+	SECTION("well-formed FMCW waveform")
+	{
+		auto doc = loadXml("<waveform name=\"fmcw_good\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
+						   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <chirp_period>2e-3</chirp_period>"
+						   "    <start_frequency_offset>-2.5e5</start_frequency_offset>"
+						   "    <chirp_count>4</chirp_count>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		REQUIRE(world.getWaveforms().size() == 1);
+		const auto* wave = world.getWaveforms().begin()->second.get();
+		const auto* fmcw = wave->getFmcwChirpSignal();
+		REQUIRE(fmcw != nullptr);
+		REQUIRE(fmcw->isDownChirp());
+		REQUIRE_THAT(wave->getLength(), WithinAbs(1.0e-3, 1.0e-12));
+	}
+
+	SECTION("well-formed FMCW triangle waveform")
+	{
+		auto doc = loadXml("<waveform name=\"fmcw_triangle_good\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_triangle>"
+						   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <start_frequency_offset>1e3</start_frequency_offset>"
+						   "    <triangle_count>4</triangle_count>"
+						   "  </fmcw_triangle>"
+						   "</waveform>");
+
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		REQUIRE(world.getWaveforms().size() == 1);
+		const auto* wave = world.getWaveforms().begin()->second.get();
+		const auto* triangle = wave->getFmcwTriangleSignal();
+		REQUIRE(triangle != nullptr);
+		REQUIRE(wave->isFmcwFamily());
+		REQUIRE_THAT(wave->getLength(), WithinAbs(2.0e-3, 1.0e-12));
+		REQUIRE(triangle->getTriangleCount().value() == 4);
+	}
+
+	SECTION("chirp period shorter than duration is rejected")
+	{
+		auto doc = loadXml("<waveform name=\"fmcw_bad_period\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"up\">"
+						   "    <chirp_bandwidth>1e6</chirp_bandwidth>"
+						   "    <chirp_duration>2e-3</chirp_duration>"
+						   "    <chirp_period>1e-3</chirp_period>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx),
+							ContainsSubstring("FMCW requires T_rep >= T_c"));
+	}
+
+	SECTION("complex-baseband aliasing constraint uses both sweep edges")
+	{
+		auto doc = loadXml("<waveform name=\"fmcw_bad_alias\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
+						   "    <chirp_bandwidth>5e5</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <chirp_period>1e-3</chirp_period>"
+						   "    <start_frequency_offset>-1.6e6</start_frequency_offset>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		REQUIRE_THROWS_AS(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx), XmlException);
+	}
+
+	SECTION("down-chirp aliasing constraint uses actual sweep interval")
+	{
+		params::setRate(26.0e6);
+		auto doc = loadXml("<waveform name=\"fmcw_down_centered\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
+						   "    <chirp_bandwidth>50e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <chirp_period>1e-3</chirp_period>"
+						   "    <start_frequency_offset>25e6</start_frequency_offset>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		REQUIRE_NOTHROW(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx));
+	}
+
+	SECTION("down-chirp carrier sanity check uses actual lower sweep edge")
+	{
+		params::setRate(80.0e6);
+		auto doc = loadXml("<waveform name=\"fmcw_bad_rf\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>40e6</carrier_frequency>"
+						   "  <fmcw_linear_chirp direction=\"down\">"
+						   "    <chirp_bandwidth>70e6</chirp_bandwidth>"
+						   "    <chirp_duration>1e-3</chirp_duration>"
+						   "    <chirp_period>1e-3</chirp_period>"
+						   "    <start_frequency_offset>25e6</start_frequency_offset>"
+						   "  </fmcw_linear_chirp>"
+						   "</waveform>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx),
+							ContainsSubstring("non-positive RF-equivalent frequency"));
+	}
+}
+
 TEST_CASE("parseTiming extracts clock parameters and noise entries", "[serial][xml_parser_utils]")
 {
 	core::World world;
@@ -346,6 +550,29 @@ TEST_CASE("parseTiming extracts clock parameters and noise entries", "[serial][x
 
 	REQUIRE(timing->getSyncOnPulse() == true);
 	// Noise entries are added internally, we just verify it didn't crash
+}
+
+TEST_CASE("parseTiming accepts omitted defaults without warnings", "[serial][xml_parser_utils]")
+{
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+
+	auto doc = loadXml("<timing name=\"quiet\"><frequency>1e6</frequency></timing>");
+
+	serial::xml_parser_utils::parseTiming(doc.getRootElement(), ctx);
+	REQUIRE(world.getTimings().size() == 1);
+
+	auto* timing = world.getTimings().begin()->second.get();
+	REQUIRE(timing->getName() == "quiet");
+	REQUIRE_FALSE(timing->getFreqOffset().has_value());
+	REQUIRE_FALSE(timing->getRandomFreqOffsetStdev().has_value());
+	REQUIRE_FALSE(timing->getPhaseOffset().has_value());
+	REQUIRE_FALSE(timing->getRandomPhaseOffsetStdev().has_value());
+	REQUIRE_FALSE(timing->getSyncOnPulse());
+	REQUIRE(capture.str().empty());
 }
 
 TEST_CASE("parseAntenna instantiates correct antenna types", "[serial][xml_parser_utils]")
@@ -422,6 +649,23 @@ TEST_CASE("parseAntenna instantiates correct antenna types", "[serial][xml_parse
 	}
 }
 
+TEST_CASE("parseAntenna accepts omitted efficiency without warnings", "[serial][xml_parser_utils]")
+{
+	LogLevelGuard log_level(logging::Level::WARNING);
+	CerrCapture capture;
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.loaders = createMockLoaders();
+
+	auto doc = loadXml("<antenna name=\"iso\" pattern=\"isotropic\"></antenna>");
+
+	serial::xml_parser_utils::parseAntenna(doc.getRootElement(), ctx);
+	REQUIRE(world.getAntennas().size() == 1);
+	REQUIRE_THAT(world.getAntennas().begin()->second->getEfficiencyFactor(), WithinAbs(1.0, 1e-12));
+	REQUIRE(capture.str().empty());
+}
+
 TEST_CASE("parseMotionPath handles all interpolation types", "[serial][xml_parser_utils]")
 {
 	radar::Platform platform("plat");
@@ -454,6 +698,18 @@ TEST_CASE("parseMotionPath handles all interpolation types", "[serial][xml_parse
 		auto doc = loadXml("<motionpath interpolation=\"magic\"></motionpath>");
 		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
 		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_STATIC);
+	}
+
+	SECTION("Missing interpolation defaults to static without warnings")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<motionpath>"
+						   "  <positionwaypoint><x>1</x><y>2</y><altitude>3</altitude><time>0</time></positionwaypoint>"
+						   "</motionpath>");
+		serial::xml_parser_utils::parseMotionPath(doc.getRootElement(), &platform);
+		REQUIRE(platform.getMotionPath()->getType() == math::Path::InterpType::INTERP_STATIC);
+		REQUIRE(capture.str().empty());
 	}
 }
 
@@ -566,18 +822,119 @@ TEST_CASE("parseTransmitter resolves references and builds object with schedule"
 	radar::Platform platform("plat");
 
 	auto doc = loadXml("<transmitter name=\"tx1\" waveform=\"w1\" antenna=\"a1\" timing=\"t1\">"
-					   "  <pulsed_mode><prf>1000</prf></pulsed_mode>"
+					   "  <cw_mode/>"
 					   "  <schedule><period start=\"0.1\" end=\"0.5\"/></schedule>"
 					   "</transmitter>");
 
 	auto* tx = serial::xml_parser_utils::parseTransmitter(doc.getRootElement(), &platform, ctx, refs);
 
 	REQUIRE(tx->getName() == "tx1");
-	REQUIRE(tx->getMode() == radar::OperationMode::PULSED_MODE);
-	REQUIRE_THAT(tx->getPrf(), WithinAbs(1000.0, 1e-5));
+	REQUIRE(tx->getMode() == radar::OperationMode::CW_MODE);
 	REQUIRE(tx->getSignal()->getName() == "w1");
 	REQUIRE(tx->getAntenna()->getName() == "a1");
 	REQUIRE(tx->getSchedule().size() == 1);
+}
+
+TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial][xml_parser_utils][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-3, 1.0e-3);
+	world.add(std::make_unique<fers_signal::RadarSignal>("fmcw_wave", 1.0, 1e9, 1.0e-3, std::move(fmcw_signal), 10));
+	world.add(std::make_unique<antenna::Isotropic>("a1", 20));
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	timing_proto->setFrequency(1e6);
+	world.add(std::move(timing_proto));
+
+	std::unordered_map<std::string, SimId> w_refs = {{"fmcw_wave", 10}};
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	auto mismatch_doc = loadXml("<transmitter name=\"tx1\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+								"  <cw_mode/>"
+								"</transmitter>");
+	REQUIRE_THROWS_AS(serial::xml_parser_utils::parseTransmitter(mismatch_doc.getRootElement(), &platform, ctx, refs),
+					  XmlException);
+
+	auto ambiguous_doc = loadXml("<transmitter name=\"tx2\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+								 "  <cw_mode/>"
+								 "  <fmcw_mode/>"
+								 "</transmitter>");
+	REQUIRE_THROWS_AS(serial::xml_parser_utils::parseTransmitter(ambiguous_doc.getRootElement(), &platform, ctx, refs),
+					  XmlException);
+
+	auto transmitter_dechirp_doc =
+		loadXml("<transmitter name=\"tx3\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+				"  <fmcw_mode dechirp_mode=\"physical\"><dechirp_reference source=\"attached\"/></fmcw_mode>"
+				"</transmitter>");
+	REQUIRE_THROWS_WITH(
+		serial::xml_parser_utils::parseTransmitter(transmitter_dechirp_doc.getRootElement(), &platform, ctx, refs),
+		ContainsSubstring("must not contain dechirp configuration"));
+}
+
+TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timing", "[serial][xml_parser_utils][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-3, 2.0e-3);
+	world.add(std::make_unique<fers_signal::RadarSignal>("fmcw_wave", 1.0, 1e9, 1.0e-3, std::move(fmcw_signal), 10));
+	world.add(std::make_unique<antenna::Isotropic>("a1", 20));
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	timing_proto->setFrequency(1e6);
+	world.add(std::move(timing_proto));
+
+	std::unordered_map<std::string, SimId> w_refs = {{"fmcw_wave", 10}};
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	SECTION("period shorter than T_c is rejected")
+	{
+		auto doc = loadXml("<transmitter name=\"tx_short_tc\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode/>"
+						   "  <schedule><period start=\"0.1\" end=\"0.1005\"/></schedule>"
+						   "</transmitter>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseTransmitter(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("shorter than FMCW chirp_duration T_c"));
+	}
+
+	SECTION("period shorter than T_rep but at least T_c only warns")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<transmitter name=\"tx_short_trep\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode/>"
+						   "  <schedule><period start=\"0.1\" end=\"0.1015\"/></schedule>"
+						   "</transmitter>");
+
+		auto* tx = serial::xml_parser_utils::parseTransmitter(doc.getRootElement(), &platform, ctx, refs);
+		REQUIRE(tx->getSchedule().size() == 1);
+		REQUIRE_THAT(capture.str(), ContainsSubstring("shorter than FMCW chirp_period"));
+	}
 }
 
 TEST_CASE("parseReceiver resolves references and builds object with flags and schedule", "[serial][xml_parser_utils]")
@@ -628,6 +985,98 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 		REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
 		REQUIRE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
 		REQUIRE(rx->getSchedule().size() == 1);
+	}
+
+	SECTION("Missing receiver defaults do not warn")
+	{
+		LogLevelGuard log_level(logging::Level::WARNING);
+		CerrCapture capture;
+		auto doc = loadXml("<receiver name=\"rx_defaults\" antenna=\"a1\" timing=\"t1\">"
+						   "  <cw_mode/>"
+						   "</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+
+		REQUIRE(rx->getName() == "rx_defaults");
+		REQUIRE(rx->getMode() == radar::OperationMode::CW_MODE);
+		REQUIRE_FALSE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT));
+		REQUIRE_FALSE(rx->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS));
+		REQUIRE(capture.str().empty());
+	}
+
+	SECTION("FMCW receiver accepts attached dechirp reference")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode dechirp_mode=\"physical\">"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+
+		REQUIRE(rx->getMode() == radar::OperationMode::FMCW_MODE);
+		REQUIRE(rx->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
+		REQUIRE(rx->getDechirpReference().source == radar::Receiver::DechirpReferenceSource::Attached);
+	}
+
+	SECTION("FMCW receiver accepts IF-chain fields with dechirp")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode dechirp_mode=\"physical\">"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "    <if_sample_rate>1000</if_sample_rate>"
+						   "    <if_filter_bandwidth>400</if_filter_bandwidth>"
+						   "    <if_filter_transition_width>100</if_filter_transition_width>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		auto* rx = serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs);
+		const auto& if_chain = rx->getFmcwIfChainRequest();
+
+		REQUIRE(if_chain.sample_rate_hz.has_value());
+		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
+		REQUIRE(if_chain.filter_transition_width_hz.has_value());
+		REQUIRE_THAT(*if_chain.sample_rate_hz, WithinAbs(1000.0, 1.0e-9));
+		REQUIRE_THAT(*if_chain.filter_bandwidth_hz, WithinAbs(400.0, 1.0e-9));
+		REQUIRE_THAT(*if_chain.filter_transition_width_hz, WithinAbs(100.0, 1.0e-9));
+	}
+
+	SECTION("FMCW receiver rejects orphan dechirp reference")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode>"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("dechirp_reference"));
+	}
+
+	SECTION("FMCW receiver rejects IF-chain fields without dechirp")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode>"
+						   "    <if_sample_rate>1e6</if_sample_rate>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("IF-chain fields"));
+	}
+
+	SECTION("FMCW receiver rejects IF bandwidth at Nyquist")
+	{
+		auto doc = loadXml("<receiver name=\"rx_fmcw\" antenna=\"a1\" timing=\"t1\">"
+						   "  <fmcw_mode dechirp_mode=\"ideal\">"
+						   "    <dechirp_reference source=\"attached\"/>"
+						   "    <if_sample_rate>1000</if_sample_rate>"
+						   "    <if_filter_bandwidth>500</if_filter_bandwidth>"
+						   "  </fmcw_mode>"
+						   "</receiver>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseReceiver(doc.getRootElement(), &platform, ctx, refs),
+							ContainsSubstring("less than half"));
 	}
 
 	SECTION("Invalid pulsed parameters throw")
@@ -688,6 +1137,47 @@ TEST_CASE("parseMonostatic reuses one shared timing instance for a common timing
 	REQUIRE(world.getTransmitters().size() == 1);
 	REQUIRE(world.getReceivers().size() == 1);
 	REQUIRE(world.getTransmitters().front()->getTiming().get() == world.getReceivers().front()->getTiming().get());
+}
+
+TEST_CASE("parseMonostatic derives FMCW mode from the monostatic block without receiver override",
+		  "[serial][xml_parser_utils][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-3, 1.0e-3);
+	world.add(std::make_unique<fers_signal::RadarSignal>("w1", 1.0, 1e9, 1.0e-3, std::move(fmcw_signal), 10));
+	world.add(std::make_unique<antenna::Isotropic>("a1", 20));
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	timing_proto->setFrequency(1e6);
+	world.add(std::move(timing_proto));
+
+	std::unordered_map<std::string, SimId> w_refs = {{"w1", 10}};
+	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+
+	radar::Platform platform("plat");
+
+	auto doc = loadXml("<monostatic name=\"mono\" waveform=\"w1\" antenna=\"a1\" timing=\"t1\">"
+					   "  <fmcw_mode/>"
+					   "</monostatic>");
+
+	serial::xml_parser_utils::parseMonostatic(doc.getRootElement(), &platform, ctx, refs);
+
+	REQUIRE(world.getTransmitters().size() == 1);
+	REQUIRE(world.getReceivers().size() == 1);
+	REQUIRE(world.getTransmitters().front()->getMode() == radar::OperationMode::FMCW_MODE);
+	REQUIRE(world.getReceivers().front()->getMode() == radar::OperationMode::FMCW_MODE);
+	REQUIRE(world.getTransmitters().front()->getAttached() == world.getReceivers().front().get());
 }
 
 TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")

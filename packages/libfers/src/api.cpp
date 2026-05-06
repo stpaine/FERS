@@ -28,6 +28,7 @@
 
 #include "antenna/antenna_factory.h"
 #include "core/fers_context.h"
+#include "core/memory_projection.h"
 #include "core/sim_threading.h"
 #include "core/thread_pool.h"
 #include "fers_version.h"
@@ -164,10 +165,11 @@ static fers_log_level_t map_internal_log_level(logging::Level level)
 
 namespace
 {
-	std::mutex log_callback_mutex;
-	fers_log_callback_t log_callback = nullptr;
-	void* log_callback_user_data = nullptr;
+	std::mutex log_callback_mutex; ///< Guards C API log callback state.
+	fers_log_callback_t log_callback = nullptr; ///< Registered C API log callback, if any.
+	void* log_callback_user_data = nullptr; ///< Opaque user data passed to the registered log callback.
 
+	/// Forwards an internal formatted log line to the registered C API callback.
 	void forward_log_callback(const logging::Level level, const std::string& line, void* /*user_data*/)
 	{
 		fers_log_callback_t callback = nullptr;
@@ -446,6 +448,31 @@ char* fers_get_last_output_metadata_json(fers_context_t* context)
 	catch (const std::exception& e)
 	{
 		handle_api_exception(e, "fers_get_last_output_metadata_json");
+		return nullptr;
+	}
+}
+
+char* fers_get_memory_projection_json(fers_context_t* context)
+{
+	last_error_message.clear();
+	if (context == nullptr)
+	{
+		last_error_message = "Invalid context provided to fers_get_memory_projection_json.";
+		LOG(logging::Level::ERROR, last_error_message);
+		return nullptr;
+	}
+
+	auto* ctx = reinterpret_cast<FersContext*>(context);
+
+	try
+	{
+		const auto projection = core::projectSimulationMemory(*ctx->getWorld());
+		const std::string json_str = core::memoryProjectionToJsonString(projection);
+		return strdup(json_str.c_str());
+	}
+	catch (const std::exception& e)
+	{
+		handle_api_exception(e, "fers_get_memory_projection_json");
 		return nullptr;
 	}
 }
@@ -1193,6 +1220,7 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 				dst.origin_id = static_cast<uint64_t>(src.origin_id);
 				dst.rcs = src.rcs;
 				dst.actual_power_dbm = src.actual_power_dbm;
+				dst.display_value = src.display_value;
 			}
 		}
 		else

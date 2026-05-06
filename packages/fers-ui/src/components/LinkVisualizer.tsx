@@ -43,6 +43,7 @@ interface LinkMetadata {
     origin_id: string;
     rcs: number; // RCS in m^2; negative if not applicable
     actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
+    display_value: number; // Numeric value represented by label, in the label's unit
 }
 
 interface LinkRange {
@@ -60,6 +61,7 @@ interface RenderableLink extends LinkMetadata {
     source_name: string;
     dest_name: string;
     origin_name: string;
+    fmcwDutyCycle: number | null;
     range: LinkRange | null;
 }
 
@@ -73,6 +75,7 @@ interface RustVisualLink {
     origin_id: string;
     rcs: number; // RCS in m^2; negative if not applicable
     actual_power_dbm: number; // Received power with actual RCS; -999 if not applicable
+    display_value: number; // Numeric value represented by label, in the label's unit
 }
 
 // Helper to determine color based on link type and quality
@@ -90,6 +93,9 @@ const getLinkColor = (link: LinkMetadata) => {
     }
     return '#ffffff';
 };
+
+const getLinkValueUnit = (link: LinkMetadata) =>
+    link.link_type === 'illuminator' ? 'dBW/m²' : 'dBm';
 
 function LinkLine({ link }: { link: RenderableLink }) {
     const points = useMemo(
@@ -120,6 +126,21 @@ function LinkLine({ link }: { link: RenderableLink }) {
 }
 
 function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
+    const dutyCycle = link.fmcwDutyCycle ?? 1.0;
+    const hasDutyCycledValue =
+        link.fmcwDutyCycle !== null && dutyCycle > 0 && dutyCycle < 0.9995;
+    const dutyCycleOffsetDb = hasDutyCycledValue
+        ? -10.0 * Math.log10(dutyCycle)
+        : 0.0;
+    const peakDisplayValue =
+        hasDutyCycledValue && link.display_value > -990
+            ? link.display_value + dutyCycleOffsetDb
+            : null;
+    const actualPeakPowerDbm =
+        hasDutyCycledValue && link.actual_power_dbm > -990
+            ? link.actual_power_dbm + dutyCycleOffsetDb
+            : null;
+
     return (
         <Tooltip
             arrow
@@ -145,14 +166,50 @@ function LabelItem({ link, color }: { link: RenderableLink; color: string }) {
                         <b>Distance:</b> {(link.distance / 1000).toFixed(2)} km
                     </Typography>
                     <Typography variant="caption" display="block">
-                        <b>Value:</b> {link.label}
+                        <b>
+                            {hasDutyCycledValue ? 'Average Value:' : 'Value:'}
+                        </b>{' '}
+                        {link.label}
                     </Typography>
+                    {hasDutyCycledValue && (
+                        <>
+                            <Typography variant="caption" display="block">
+                                <b>FMCW Duty Cycle:</b>{' '}
+                                {(dutyCycle * 100).toFixed(1)}%
+                            </Typography>
+                            {peakDisplayValue !== null && (
+                                <Typography
+                                    variant="caption"
+                                    display="block"
+                                    sx={{ pl: 1.5, opacity: 0.7 }}
+                                >
+                                    peak equivalent:{' '}
+                                    {peakDisplayValue.toFixed(1)}{' '}
+                                    {getLinkValueUnit(link)}
+                                </Typography>
+                            )}
+                        </>
+                    )}
                     {link.actual_power_dbm > -990 && (
                         <>
                             <Typography variant="caption" display="block">
-                                <b>Actual Power:</b>{' '}
+                                <b>
+                                    {hasDutyCycledValue
+                                        ? 'Actual Average Power:'
+                                        : 'Actual Power:'}
+                                </b>{' '}
                                 {link.actual_power_dbm.toFixed(1)} dBm
                             </Typography>
+                            {actualPeakPowerDbm !== null && (
+                                <Typography
+                                    variant="caption"
+                                    display="block"
+                                    sx={{ pl: 1.5, opacity: 0.7 }}
+                                >
+                                    actual peak: {actualPeakPowerDbm.toFixed(1)}{' '}
+                                    dBm
+                                </Typography>
+                            )}
                             {link.range &&
                                 link.range.powerMin < link.range.powerMax && (
                                     <Typography
@@ -254,6 +311,7 @@ const LABEL_OVERLAP_PX = 60;
 export default function LinkVisualizer() {
     const currentTime = useScenarioStore((state) => state.currentTime);
     const platforms = useScenarioStore((state) => state.platforms);
+    const waveforms = useScenarioStore((state) => state.waveforms);
     const visibility = useScenarioStore((state) => state.visibility);
     const isSimulating = useSimulationProgressStore(
         (state) => state.isSimulating
@@ -331,6 +389,48 @@ export default function LinkVisualizer() {
         return map;
     }, [platforms]);
 
+    const fmcwDutyCycleByTransmitter = useMemo(() => {
+        const waveformById = new Map(waveforms.map((w) => [w.id, w]));
+        const dutyCycleByTx = new Map<string, number>();
+
+        platforms.forEach((p) => {
+            p.components.forEach((c) => {
+                if (c.type !== 'transmitter' && c.type !== 'monostatic') {
+                    return;
+                }
+
+                const waveform = c.waveformId
+                    ? waveformById.get(c.waveformId)
+                    : undefined;
+                if (!waveform) {
+                    return;
+                }
+
+                const dutyCycle =
+                    waveform.waveformType === 'fmcw_triangle'
+                        ? 1
+                        : waveform.waveformType === 'fmcw_linear_chirp' &&
+                            waveform.chirp_period > 0
+                          ? Math.min(
+                                1,
+                                Math.max(
+                                    0,
+                                    waveform.chirp_duration /
+                                        waveform.chirp_period
+                                )
+                            )
+                          : null;
+                if (dutyCycle === null) {
+                    return;
+                }
+                const txId = c.type === 'monostatic' ? c.txId : c.id;
+                dutyCycleByTx.set(txId, dutyCycle);
+            });
+        });
+
+        return dutyCycleByTx;
+    }, [platforms, waveforms]);
+
     // Reset throttle and accumulated ranges when the scenario structure changes
     useEffect(() => {
         lastFetchTimeRef.current = 0;
@@ -391,6 +491,7 @@ export default function LinkVisualizer() {
                             origin_id: l.origin_id,
                             rcs: l.rcs,
                             actual_power_dbm: l.actual_power_dbm,
+                            display_value: l.display_value,
                         })
                     );
                     setLinkMetadata(reconstructedLinks);
@@ -552,6 +653,8 @@ export default function LinkVisualizer() {
                         componentToName.get(meta.dest_id) ?? meta.dest_id,
                     origin_name:
                         componentToName.get(meta.origin_id) ?? meta.origin_id,
+                    fmcwDutyCycle:
+                        fmcwDutyCycleByTransmitter.get(meta.origin_id) ?? null,
                     range,
                 };
 
@@ -582,6 +685,7 @@ export default function LinkVisualizer() {
         currentTime,
         componentToPlatform,
         componentToName,
+        fmcwDutyCycleByTransmitter,
         showLinkLabels,
         showLinkMonostatic,
         showLinkIlluminator,

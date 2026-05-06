@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import MapIcon from '@mui/icons-material/Map';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import {
@@ -10,7 +12,9 @@ import {
     CardActions,
     CardContent,
     CircularProgress,
+    Collapse,
     Grid,
+    IconButton,
     LinearProgress,
     List,
     ListItem,
@@ -31,8 +35,11 @@ import { dirname, join } from '@tauri-apps/api/path';
 import { open, save } from '@tauri-apps/plugin-dialog';
 import React, { useEffect, useRef, useState } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
+import { getBlockingFmcwValidationMessage } from '@/stores/scenarioStore/fmcwValidation';
 import {
-    type SimulationOutputMetadata,
+    normalizeSimulationOutputMetadata,
+    type RawSimulationOutputMetadata,
+    type SimulationOutputFileMetadata,
     type SimulationProgressState,
     useSimulationProgressStore,
 } from '@/stores/simulationProgressStore';
@@ -46,6 +53,9 @@ export const SimulationView = React.memo(function SimulationView() {
     const [metadataExportPath, setMetadataExportPath] = useState<string | null>(
         null
     );
+    const [expandedMetadataPaths, setExpandedMetadataPaths] = useState<
+        Set<string>
+    >(() => new Set());
     const isSimulating = useSimulationProgressStore(
         (state) => state.isSimulating
     );
@@ -148,7 +158,11 @@ export const SimulationView = React.memo(function SimulationView() {
             (event) => {
                 try {
                     setSimulationOutputMetadata(
-                        JSON.parse(event.payload) as SimulationOutputMetadata
+                        normalizeSimulationOutputMetadata(
+                            JSON.parse(
+                                event.payload
+                            ) as RawSimulationOutputMetadata
+                        )
                     );
                 } catch (err) {
                     const errorMessage =
@@ -236,6 +250,14 @@ export const SimulationView = React.memo(function SimulationView() {
     };
 
     const handleRunSimulation = async () => {
+        const scenarioState = useScenarioStore.getState();
+        const validationMessage =
+            getBlockingFmcwValidationMessage(scenarioState);
+        if (validationMessage) {
+            showError(`FMCW validation failed: ${validationMessage}`);
+            return;
+        }
+
         progressRef.current = {};
         setMetadataExportPath(null);
         startSimulationRun();
@@ -257,12 +279,19 @@ export const SimulationView = React.memo(function SimulationView() {
 
     const handleGenerateKml = async () => {
         try {
+            const scenarioState = useScenarioStore.getState();
+            const validationMessage =
+                getBlockingFmcwValidationMessage(scenarioState);
+            if (validationMessage) {
+                showError(`FMCW validation failed: ${validationMessage}`);
+                return;
+            }
+
             const effectiveDir = await getEffectiveOutputDir();
 
             // 1. Get the simulation name from the store
             const simName =
-                useScenarioStore.getState().globalParameters.simulation_name ||
-                'scenario';
+                scenarioState.globalParameters.simulation_name || 'scenario';
 
             // 2. Sanitize the name and append extension
             const suggestedFileName = `${simName.replace(/[^a-z0-9]/gi, '_')}.kml`;
@@ -367,6 +396,143 @@ export const SimulationView = React.memo(function SimulationView() {
             return '0';
         }
         return uniform ? String(minSamples) : `${minSamples} - ${maxSamples}`;
+    };
+    const formatMetric = (value: number) =>
+        value.toLocaleString(undefined, { maximumSignificantDigits: 6 });
+    const formatMetadataSamplingRates = () => {
+        if (!simulationOutputMetadata) {
+            return '';
+        }
+        if (typeof simulationOutputMetadata.sampling_rate === 'number') {
+            return `${formatMetric(
+                simulationOutputMetadata.sampling_rate
+            )} samples/s`;
+        }
+        return `${simulationOutputMetadata.sampling_rates?.length ?? 0} sample rates`;
+    };
+    const formatFmcwMetadata = (
+        fmcw: NonNullable<SimulationOutputFileMetadata['fmcw']>
+    ) => {
+        if (fmcw.waveform_shape === 'triangle') {
+            return `triangle, B=${formatMetric(
+                fmcw.chirp_bandwidth
+            )}, T_c=${formatMetric(
+                fmcw.chirp_duration
+            )}, T_tri=${formatMetric(fmcw.triangle_period ?? 0)}`;
+        }
+
+        return `${fmcw.chirp_direction ?? 'up'}, B=${formatMetric(
+            fmcw.chirp_bandwidth
+        )}, T_c=${formatMetric(
+            fmcw.chirp_duration
+        )}, T_rep=${formatMetric(fmcw.chirp_period ?? 0)}`;
+    };
+    const formatPulseOrSegmentSummary = (
+        file: SimulationOutputFileMetadata
+    ) => {
+        if (file.mode === 'pulsed') {
+            return `${file.pulse_count} pulses, ${formatPulseLength(
+                file.min_pulse_length_samples,
+                file.max_pulse_length_samples,
+                file.uniform_pulse_length
+            )} samples`;
+        }
+
+        const segmentSummary = `${
+            file.streaming_segments.length
+        } streaming segments`;
+        if (file.mode !== 'fmcw' || !file.fmcw) {
+            if (file.mode === 'fmcw' && file.fmcw_sources.length > 0) {
+                return `${segmentSummary}, ${file.fmcw_sources.length} FMCW sources`;
+            }
+            return segmentSummary;
+        }
+
+        return `${segmentSummary}, ${formatFmcwMetadata(file.fmcw)}`;
+    };
+
+    const toggleMetadataRow = (path: string) => {
+        setExpandedMetadataPaths((current) => {
+            const next = new Set(current);
+            if (next.has(path)) {
+                next.delete(path);
+            } else {
+                next.add(path);
+            }
+            return next;
+        });
+    };
+
+    const renderFmcwDetails = (file: SimulationOutputFileMetadata) => {
+        if (file.mode !== 'fmcw') {
+            return null;
+        }
+
+        return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="body2">
+                    File sample rate: {formatMetric(file.sampling_rate)}{' '}
+                    samples/s
+                </Typography>
+                {file.fmcw_dechirp_mode &&
+                    file.fmcw_dechirp_mode !== 'none' && (
+                        <Typography variant="body2">
+                            Dechirp: {file.fmcw_dechirp_mode},{' '}
+                            {file.fmcw_dechirp_reference_source ?? 'none'}
+                        </Typography>
+                    )}
+                {file.fmcw_sources.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                        No FMCW source metadata was emitted for this receiver.
+                    </Typography>
+                ) : (
+                    file.fmcw_sources.map((source) => (
+                        <Box
+                            key={`${source.transmitter_id}:${source.waveform_id}`}
+                            sx={{ pl: 2 }}
+                        >
+                            <Typography variant="body2">
+                                {source.transmitter_name} /{' '}
+                                {source.waveform_name}:{' '}
+                                {formatFmcwMetadata(source)}, f0=
+                                {formatMetric(source.start_frequency_offset)}{' '}
+                                Hz, rate={formatMetric(source.chirp_rate)}
+                                Hz/s
+                                {source.chirp_rate_signed !== undefined
+                                    ? `, signed=${formatMetric(
+                                          source.chirp_rate_signed
+                                      )} Hz/s`
+                                    : ''}
+                                {source.chirp_count !== undefined
+                                    ? `, chirps=${source.chirp_count}`
+                                    : ''}
+                                {source.triangle_count !== undefined
+                                    ? `, triangles=${source.triangle_count}`
+                                    : ''}
+                            </Typography>
+                            {source.segments.map((segment) => (
+                                <Typography
+                                    key={`${segment.start_time}:${segment.end_time}`}
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block' }}
+                                >
+                                    [{formatMetric(segment.start_time)},{' '}
+                                    {formatMetric(segment.end_time)}]:{' '}
+                                    {segment.emitted_chirp_count !== undefined
+                                        ? `${segment.emitted_chirp_count} chirps`
+                                        : ''}
+                                    {segment.emitted_triangle_count !==
+                                    undefined
+                                        ? `${segment.emitted_triangle_count} triangles`
+                                        : ''}
+                                </Typography>
+                            ))}
+                        </Box>
+                    ))
+                )}
+            </Box>
+        );
     };
 
     return (
@@ -594,14 +760,6 @@ export const SimulationView = React.memo(function SimulationView() {
                                                 >
                                                     <ListItemText
                                                         primary={prog.message}
-                                                        secondary={
-                                                            progressPercent !==
-                                                                null &&
-                                                            progressPercent <
-                                                                100
-                                                                ? 'Processing...'
-                                                                : ''
-                                                        }
                                                     />
                                                     {showChunkLabel && (
                                                         <Box
@@ -674,8 +832,7 @@ export const SimulationView = React.memo(function SimulationView() {
                                     {simulationOutputMetadata.files.length === 1
                                         ? ''
                                         : 's'}{' '}
-                                    at {simulationOutputMetadata.sampling_rate}{' '}
-                                    samples/s.
+                                    at {formatMetadataSamplingRates()}.
                                 </Typography>
                             </Box>
                             <Button
@@ -708,8 +865,12 @@ export const SimulationView = React.memo(function SimulationView() {
                                 <Table size="small">
                                     <TableHead>
                                         <TableRow>
+                                            <TableCell />
                                             <TableCell>Receiver</TableCell>
                                             <TableCell>Mode</TableCell>
+                                            <TableCell align="right">
+                                                Rate
+                                            </TableCell>
                                             <TableCell align="right">
                                                 Samples
                                             </TableCell>
@@ -720,39 +881,106 @@ export const SimulationView = React.memo(function SimulationView() {
                                     </TableHead>
                                     <TableBody>
                                         {simulationOutputMetadata.files.map(
-                                            (file) => (
-                                                <TableRow key={file.path}>
-                                                    <TableCell>
-                                                        {file.receiver_name}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {file.mode}
-                                                    </TableCell>
-                                                    <TableCell align="right">
-                                                        {file.total_samples}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {formatSampleRange(
-                                                            file.sample_start,
-                                                            file.sample_end_exclusive
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {file.mode === 'pulsed'
-                                                            ? `${file.pulse_count} pulses, ${formatPulseLength(file.min_pulse_length_samples, file.max_pulse_length_samples, file.uniform_pulse_length)} samples`
-                                                            : `${file.cw_segments.length} CW segments`}
-                                                    </TableCell>
-                                                    <TableCell
-                                                        sx={{
-                                                            maxWidth: 360,
-                                                            overflowWrap:
-                                                                'anywhere',
-                                                        }}
+                                            (file) => {
+                                                const isExpanded =
+                                                    expandedMetadataPaths.has(
+                                                        file.path
+                                                    );
+                                                const canExpand =
+                                                    file.mode === 'fmcw';
+                                                return (
+                                                    <React.Fragment
+                                                        key={file.path}
                                                     >
-                                                        {file.path}
-                                                    </TableCell>
-                                                </TableRow>
-                                            )
+                                                        <TableRow>
+                                                            <TableCell>
+                                                                {canExpand && (
+                                                                    <IconButton
+                                                                        size="small"
+                                                                        onClick={() =>
+                                                                            toggleMetadataRow(
+                                                                                file.path
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {isExpanded ? (
+                                                                            <KeyboardArrowDownIcon fontSize="small" />
+                                                                        ) : (
+                                                                            <KeyboardArrowRightIcon fontSize="small" />
+                                                                        )}
+                                                                    </IconButton>
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {
+                                                                    file.receiver_name
+                                                                }
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {file.mode}
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                                {formatMetric(
+                                                                    file.sampling_rate
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell align="right">
+                                                                {
+                                                                    file.total_samples
+                                                                }
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {formatSampleRange(
+                                                                    file.sample_start,
+                                                                    file.sample_end_exclusive
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {formatPulseOrSegmentSummary(
+                                                                    file
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell
+                                                                sx={{
+                                                                    maxWidth: 360,
+                                                                    overflowWrap:
+                                                                        'anywhere',
+                                                                }}
+                                                            >
+                                                                {file.path}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                        {canExpand && (
+                                                            <TableRow>
+                                                                <TableCell
+                                                                    colSpan={8}
+                                                                    sx={{
+                                                                        py: 0,
+                                                                    }}
+                                                                >
+                                                                    <Collapse
+                                                                        in={
+                                                                            isExpanded
+                                                                        }
+                                                                        timeout="auto"
+                                                                        unmountOnExit
+                                                                    >
+                                                                        <Box
+                                                                            sx={{
+                                                                                py: 2,
+                                                                            }}
+                                                                        >
+                                                                            {renderFmcwDetails(
+                                                                                file
+                                                                            )}
+                                                                        </Box>
+                                                                    </Collapse>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        )}
+                                                    </React.Fragment>
+                                                );
+                                            }
                                         )}
                                     </TableBody>
                                 </Table>

@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE simulation SYSTEM "fers-xml.dtd">
+<simulation name="FmcwBistaticExternalDechirpScenario">
+    <parameters>
+        <starttime>0.0</starttime>
+        <endtime>0.080</endtime>
+        <rate>2.0e6</rate>
+        <simSamplingRate>2.0e6</simSamplingRate>
+        <randomseed>5151</randomseed>
+    </parameters>
+
+    <antenna name="BistaticIsotropicAntenna" pattern="isotropic">
+        <efficiency>1.0</efficiency>
+    </antenna>
+
+    <waveform name="BistaticFmcwUpChirp">
+        <power>2000.0</power>
+        <carrier_frequency>5.0e9</carrier_frequency>
+        <fmcw_linear_chirp direction="up">
+            <chirp_bandwidth>1.0e6</chirp_bandwidth>
+            <chirp_duration>1.0e-3</chirp_duration>
+            <chirp_period>1.0e-3</chirp_period>
+            <start_frequency_offset>-5.0e5</start_frequency_offset>
+            <chirp_count>80</chirp_count>
+        </fmcw_linear_chirp>
+    </waveform>
+
+    <timing name="BistaticFmcwClock">
+        <frequency>5.0e9</frequency>
+    </timing>
+
+    <platform name="BistaticTxPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>-100.0</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <transmitter name="BistaticFmcwTx" antenna="BistaticIsotropicAntenna" waveform="BistaticFmcwUpChirp"
+                     timing="BistaticFmcwClock">
+            <fmcw_mode/>
+        </transmitter>
+    </platform>
+
+    <platform name="BistaticRxPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>100.0</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <receiver name="BistaticFmcwRx" antenna="BistaticIsotropicAntenna" timing="BistaticFmcwClock"
+                  nodirect="true">
+            <fmcw_mode dechirp_mode="none"/>
+            <noise_temp>0.0</noise_temp>
+        </receiver>
+    </platform>
+
+    <platform name="BistaticMovingTargetPlatform">
+        <motionpath interpolation="linear">
+            <positionwaypoint>
+                <x>0.0</x>
+                <y>300.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+            <positionwaypoint>
+                <x>0.0</x>
+                <y>299.2</y>
+                <altitude>0.0</altitude>
+                <time>0.080</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <target name="BistaticMovingPointTarget">
+            <rcs type="isotropic">
+                <value>5.0</value>
+            </rcs>
+        </target>
+    </platform>
+</simulation>

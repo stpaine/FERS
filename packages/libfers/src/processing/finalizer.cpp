@@ -13,6 +13,8 @@
 #include <format>
 #include <highfive/highfive.hpp>
 #include <limits>
+#include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -24,13 +26,16 @@
 #include "processing/finalizer_pipeline.h"
 #include "processing/signal_processor.h"
 #include "radar/receiver.h"
+#include "radar/transmitter.h"
 #include "serial/hdf5_handler.h"
+#include "signal/radar_signal.h"
 #include "timing/timing.h"
 
 namespace processing
 {
 	namespace
 	{
+		/// Finalizes aggregate pulsed metadata after all chunks have been collected.
 		void finalizePulsedMetadata(core::OutputFileMetadata& metadata)
 		{
 			metadata.pulse_count = static_cast<std::uint64_t>(metadata.chunks.size());
@@ -57,13 +62,334 @@ namespace processing
 			metadata.sample_end_exclusive = metadata.total_samples;
 		}
 
-		core::OutputFileMetadata buildCwMetadata(const radar::Receiver* receiver, const std::string& hdf5_filename,
-												 const std::size_t total_samples)
+		/// Converts a cached streaming source to reusable FMCW waveform metadata.
+		core::FmcwMetadata buildFmcwMetadata(const core::ActiveStreamingSource& source)
+		{
+			if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+			{
+				return core::FmcwMetadata{
+					.waveform_shape = "triangle",
+					.chirp_bandwidth = source.triangle != nullptr ? source.triangle->getChirpBandwidth() : 0.0,
+					.chirp_duration = source.chirp_duration,
+					.chirp_rate = source.chirp_rate,
+					.start_frequency_offset = source.start_freq_off,
+					.triangle_period = source.triangle_period,
+					.triangle_count = source.triangle_count.has_value()
+						? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*source.triangle_count))
+						: std::nullopt};
+			}
+
+			return core::FmcwMetadata{
+				.waveform_shape = "linear",
+				.chirp_bandwidth = source.fmcw != nullptr ? source.fmcw->getChirpBandwidth() : 0.0,
+				.chirp_duration = source.chirp_duration,
+				.chirp_period = source.chirp_period,
+				.chirp_rate = source.chirp_rate,
+				.chirp_rate_signed = source.signed_chirp_rate,
+				.chirp_direction = source.fmcw != nullptr
+					? std::string(fers_signal::fmcwChirpDirectionToken(source.fmcw->getDirection()))
+					: std::string("up"),
+				.start_frequency_offset = source.start_freq_off,
+				.chirp_count = source.chirp_count.has_value()
+					? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*source.chirp_count))
+					: std::nullopt};
+		}
+
+		/// Builds one FMCW source schedule segment from an active source cache.
+		core::FmcwSourceSegmentMetadata buildFmcwSourceSegment(const core::ActiveStreamingSource& source)
+		{
+			const RealType active_start = std::max(params::startTime(), source.segment_start);
+			const RealType active_end = std::min(params::endTime(), source.segment_end);
+			core::FmcwSourceSegmentMetadata segment{.start_time = source.segment_start, .end_time = source.segment_end};
+			if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+			{
+				segment.first_triangle_start_time = core::firstFmcwTriangleStart(source, active_start, active_end);
+				segment.emitted_triangle_count = core::countFmcwTriangleStarts(source, active_start, active_end);
+			}
+			else
+			{
+				segment.first_chirp_start_time = core::firstFmcwChirpStart(source, active_start, active_end);
+				segment.emitted_chirp_count = core::countFmcwChirpStarts(source, active_start, active_end);
+			}
+			return segment;
+		}
+
+		/// Finds the first source metadata entry for a transmitter/waveform pair.
+		std::vector<core::FmcwSourceMetadata>::iterator findFmcwSource(std::vector<core::FmcwSourceMetadata>& sources,
+																	   const SimId transmitter_id,
+																	   const SimId waveform_id)
+		{
+			return std::ranges::find_if(
+				sources, [&](const core::FmcwSourceMetadata& source)
+				{ return source.transmitter_id == transmitter_id && source.waveform_id == waveform_id; });
+		}
+
+		/// Builds explicit per-source FMCW metadata from active streaming transmitters.
+		std::vector<core::FmcwSourceMetadata>
+		buildFmcwSources(const std::vector<core::ActiveStreamingSource>& streaming_sources)
+		{
+			std::vector<core::FmcwSourceMetadata> fmcw_sources;
+			for (const auto& streaming_source : streaming_sources)
+			{
+				if (!streaming_source.is_fmcw || streaming_source.transmitter == nullptr)
+				{
+					continue;
+				}
+
+				const auto* signal = streaming_source.transmitter->getSignal();
+				if (signal == nullptr)
+				{
+					continue;
+				}
+
+				const auto transmitter_id = streaming_source.transmitter->getId();
+				const auto waveform_id = signal->getId();
+				auto existing = findFmcwSource(fmcw_sources, transmitter_id, waveform_id);
+				if (existing == fmcw_sources.end())
+				{
+					core::FmcwSourceMetadata source{.transmitter_id = transmitter_id,
+													.transmitter_name = streaming_source.transmitter->getName(),
+													.waveform_id = waveform_id,
+													.waveform_name = signal->getName(),
+													.carrier_frequency = signal->getCarrier(),
+													.waveform = buildFmcwMetadata(streaming_source)};
+					source.segments.push_back(buildFmcwSourceSegment(streaming_source));
+					fmcw_sources.push_back(std::move(source));
+					continue;
+				}
+
+				existing->segments.push_back(buildFmcwSourceSegment(streaming_source));
+			}
+			return fmcw_sources;
+		}
+
+		/// Adds scalar compatibility chirp metadata to receiver streaming segments for one FMCW source.
+		void annotateStreamingSegmentsForSingleFmcwSource(core::OutputFileMetadata& metadata,
+														  const core::ActiveStreamingSource& source)
+		{
+			for (auto& segment : metadata.streaming_segments)
+			{
+				const RealType active_start = std::max(segment.start_time, source.segment_start);
+				const RealType active_end = std::min(segment.end_time, source.segment_end);
+				if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+				{
+					const auto first_triangle = core::firstFmcwTriangleStart(source, active_start, active_end);
+					const auto emitted = core::countFmcwTriangleStarts(source, active_start, active_end);
+					if (first_triangle.has_value() || emitted > 0)
+					{
+						segment.first_triangle_start_time = first_triangle;
+						segment.emitted_triangle_count = emitted;
+					}
+				}
+				else
+				{
+					const auto first_chirp = core::firstFmcwChirpStart(source, active_start, active_end);
+					const auto emitted = core::countFmcwChirpStarts(source, active_start, active_end);
+					if (first_chirp.has_value() || emitted > 0)
+					{
+						segment.first_chirp_start_time = first_chirp;
+						segment.emitted_chirp_count = emitted;
+					}
+				}
+			}
+		}
+
+		/// Half-open time interval in simulation seconds.
+		using TimeSpan = std::pair<RealType, RealType>;
+
+		/// Converts a time interval to a half-open sample span at a specific output rate.
+		std::optional<pipeline::SampleSpan> timeSpanToSampleSpan(const TimeSpan& span, const std::size_t total_samples,
+																 const RealType sample_rate)
+		{
+			const auto start_sample = static_cast<std::size_t>(std::min<RealType>(
+				static_cast<RealType>(total_samples),
+				std::max<RealType>(0.0, std::ceil((span.first - params::startTime()) * sample_rate))));
+			const auto end_sample = static_cast<std::size_t>(std::min<RealType>(
+				static_cast<RealType>(total_samples),
+				std::max<RealType>(0.0, std::ceil((span.second - params::startTime()) * sample_rate))));
+			if (start_sample >= end_sample)
+			{
+				return std::nullopt;
+			}
+			return pipeline::SampleSpan{.start = start_sample, .end_exclusive = end_sample};
+		}
+
+		/// Merges overlapping or adjacent time spans.
+		void normalizeTimeSpans(std::vector<TimeSpan>& spans)
+		{
+			std::ranges::sort(spans, [](const TimeSpan& lhs, const TimeSpan& rhs) { return lhs.first < rhs.first; });
+			std::vector<TimeSpan> merged;
+			for (const auto& span : spans)
+			{
+				if (span.second <= span.first)
+				{
+					continue;
+				}
+				if (merged.empty() || span.first > merged.back().second)
+				{
+					merged.push_back(span);
+					continue;
+				}
+				merged.back().second = std::max(merged.back().second, span.second);
+			}
+			spans = std::move(merged);
+		}
+
+		/// Returns receiver active intervals clipped to simulation time.
+		std::vector<TimeSpan> receiverActiveTimeSpans(const radar::Receiver* receiver)
+		{
+			std::vector<TimeSpan> spans;
+			if (receiver->getSchedule().empty())
+			{
+				spans.emplace_back(params::startTime(), params::endTime());
+				return spans;
+			}
+
+			for (const auto& period : receiver->getSchedule())
+			{
+				const RealType start = std::max(params::startTime(), period.start);
+				const RealType end = std::min(params::endTime(), period.end);
+				if (start < end)
+				{
+					spans.emplace_back(start, end);
+				}
+			}
+			return spans;
+		}
+
+		/// Adds LO-active intervals for one source intersected with a receiver-active interval.
+		void appendDechirpSourceIntervals(const core::ActiveStreamingSource& source, const TimeSpan& receiver_span,
+										  std::vector<TimeSpan>& output)
+		{
+			const RealType clipped_start = std::max({receiver_span.first, source.segment_start, params::startTime()});
+			const RealType clipped_end = std::min({receiver_span.second, source.segment_end, params::endTime()});
+			if (clipped_start >= clipped_end)
+			{
+				return;
+			}
+
+			if (source.kind == core::StreamingWaveformKind::FmcwLinear)
+			{
+				if (source.chirp_period <= 0.0 || source.chirp_duration <= 0.0)
+				{
+					return;
+				}
+				auto chirp_index = clipped_start <= source.segment_start
+					? std::size_t{0}
+					: static_cast<std::size_t>(
+						  std::floor((clipped_start - source.segment_start) / source.chirp_period));
+				while (true)
+				{
+					if (source.chirp_count.has_value() && chirp_index >= *source.chirp_count)
+					{
+						return;
+					}
+					const RealType chirp_start =
+						source.segment_start + static_cast<RealType>(chirp_index) * source.chirp_period;
+					if (chirp_start >= clipped_end)
+					{
+						return;
+					}
+					const RealType chirp_end = std::min(chirp_start + source.chirp_duration, source.segment_end);
+					const RealType active_start = std::max(chirp_start, clipped_start);
+					const RealType active_end = std::min(chirp_end, clipped_end);
+					if (active_start < active_end)
+					{
+						output.emplace_back(active_start, active_end);
+					}
+					++chirp_index;
+				}
+			}
+
+			output.emplace_back(clipped_start, clipped_end);
+		}
+
+		/// Returns exact LO-active time spans for a dechirped receiver.
+		std::vector<TimeSpan> dechirpActiveTimeSpans(const radar::Receiver* receiver)
+		{
+			std::vector<TimeSpan> spans;
+			const auto receiver_spans = receiverActiveTimeSpans(receiver);
+			for (const auto& receiver_span : receiver_spans)
+			{
+				for (const auto& source : receiver->getDechirpSources())
+				{
+					appendDechirpSourceIntervals(source, receiver_span, spans);
+				}
+			}
+			normalizeTimeSpans(spans);
+			return spans;
+		}
+
+		/// Converts time spans to sample spans.
+		std::vector<pipeline::SampleSpan> sampleSpansFromTimeSpans(const std::vector<TimeSpan>& spans,
+																   const std::size_t total_samples,
+																   const RealType sample_rate)
+		{
+			std::vector<pipeline::SampleSpan> sample_spans;
+			for (const auto& span : spans)
+			{
+				if (const auto sample_span = timeSpanToSampleSpan(span, total_samples, sample_rate))
+				{
+					if (!sample_spans.empty() && sample_spans.back().end_exclusive >= sample_span->start)
+					{
+						sample_spans.back().end_exclusive =
+							std::max(sample_spans.back().end_exclusive, sample_span->end_exclusive);
+					}
+					else
+					{
+						sample_spans.push_back(*sample_span);
+					}
+				}
+			}
+			return sample_spans;
+		}
+
+		/// Applies thermal noise only inside selected spans.
+		void applyThermalNoiseToSpans(std::vector<ComplexType>& iq_buffer, const RealType noise_temperature,
+									  std::mt19937& rng_engine, std::span<const pipeline::SampleSpan> spans)
+		{
+			for (const auto& span : spans)
+			{
+				if (span.start >= span.end_exclusive || span.start >= iq_buffer.size())
+				{
+					continue;
+				}
+				const auto end = std::min(span.end_exclusive, iq_buffer.size());
+				applyThermalNoise(std::span(iq_buffer).subspan(span.start, end - span.start), noise_temperature,
+								  rng_engine);
+			}
+		}
+
+		/// Applies IF-rate thermal noise only inside selected spans.
+		void applyThermalNoiseToSpansAtSampleRate(std::vector<ComplexType>& iq_buffer, const RealType noise_temperature,
+												  std::mt19937& rng_engine, std::span<const pipeline::SampleSpan> spans,
+												  const RealType sample_rate_hz)
+		{
+			for (const auto& span : spans)
+			{
+				if (span.start >= span.end_exclusive || span.start >= iq_buffer.size())
+				{
+					continue;
+				}
+				const auto end = std::min(span.end_exclusive, iq_buffer.size());
+				applyThermalNoiseAtSampleRate(std::span(iq_buffer).subspan(span.start, end - span.start),
+											  noise_temperature, rng_engine, sample_rate_hz);
+			}
+		}
+
+		/// Builds output metadata for a streaming receiver result file.
+		core::OutputFileMetadata
+		buildStreamingMetadata(const radar::Receiver* receiver, const std::string& hdf5_filename,
+							   const std::size_t total_samples,
+							   const std::vector<core::ActiveStreamingSource>& streaming_sources,
+							   const RealType output_sample_rate, const std::vector<TimeSpan>& dechirp_time_spans = {})
 		{
 			core::OutputFileMetadata metadata{.receiver_id = receiver->getId(),
 											  .receiver_name = receiver->getName(),
-											  .mode = "cw",
+											  .mode = receiver->getMode() == radar::OperationMode::FMCW_MODE ? "fmcw"
+																											 : "cw",
 											  .path = hdf5_filename,
+											  .sampling_rate = output_sample_rate,
 											  .total_samples = static_cast<std::uint64_t>(total_samples),
 											  .sample_start = 0,
 											  .sample_end_exclusive = static_cast<std::uint64_t>(total_samples)};
@@ -72,39 +398,130 @@ namespace processing
 			{
 				const auto start_sample = static_cast<std::uint64_t>(std::min<RealType>(
 					static_cast<RealType>(total_samples),
-					std::max<RealType>(0.0, std::ceil((start_time - params::startTime()) * params::rate()))));
+					std::max<RealType>(0.0, std::ceil((start_time - params::startTime()) * output_sample_rate))));
 				const auto end_sample = static_cast<std::uint64_t>(std::min<RealType>(
 					static_cast<RealType>(total_samples),
-					std::max<RealType>(0.0, std::ceil((end_time - params::startTime()) * params::rate()))));
+					std::max<RealType>(0.0, std::ceil((end_time - params::startTime()) * output_sample_rate))));
 				if (start_sample < end_sample)
 				{
-					metadata.cw_segments.push_back({.start_time = start_time,
-													.end_time = end_time,
-													.sample_count = end_sample - start_sample,
-													.sample_start = start_sample,
-													.sample_end_exclusive = end_sample});
+					core::StreamingSegmentMetadata segment{.start_time = start_time,
+														   .end_time = end_time,
+														   .sample_count = end_sample - start_sample,
+														   .sample_start = start_sample,
+														   .sample_end_exclusive = end_sample};
+					metadata.streaming_segments.push_back(std::move(segment));
 				}
 			};
 
-			const auto& schedule = receiver->getSchedule();
-			if (schedule.empty())
+			if (receiver->isDechirpEnabled())
 			{
-				append_segment(params::startTime(), params::endTime());
+				for (const auto& span : dechirp_time_spans)
+				{
+					append_segment(span.first, span.second);
+				}
 			}
 			else
 			{
-				for (const auto& period : schedule)
+				const auto& schedule = receiver->getSchedule();
+				if (schedule.empty())
 				{
-					const RealType start = std::max(params::startTime(), period.start);
-					const RealType end = std::min(params::endTime(), period.end);
-					if (start < end)
+					append_segment(params::startTime(), params::endTime());
+				}
+				else
+				{
+					for (const auto& period : schedule)
 					{
-						append_segment(start, end);
+						const RealType start = std::max(params::startTime(), period.start);
+						const RealType end = std::min(params::endTime(), period.end);
+						if (start < end)
+						{
+							append_segment(start, end);
+						}
+					}
+				}
+			}
+
+			metadata.fmcw_sources = buildFmcwSources(streaming_sources);
+			if (metadata.fmcw_sources.size() == 1)
+			{
+				metadata.fmcw = metadata.fmcw_sources.front().waveform;
+				for (const auto& streaming_source : streaming_sources)
+				{
+					if (streaming_source.is_fmcw && streaming_source.transmitter != nullptr &&
+						streaming_source.transmitter->getId() == metadata.fmcw_sources.front().transmitter_id)
+					{
+						annotateStreamingSegmentsForSingleFmcwSource(metadata, streaming_source);
+					}
+				}
+			}
+
+			metadata.fmcw_dechirp_mode = std::string(radar::dechirpModeToken(receiver->getDechirpMode()));
+			if (receiver->isDechirpEnabled())
+			{
+				const auto& if_request = receiver->getFmcwIfChainRequest();
+				const auto& if_plan = receiver->getFmcwIfResamplerPlan();
+				metadata.fmcw_if_legacy_full_rate = !if_request.sample_rate_hz.has_value();
+				metadata.fmcw_if_decimation_enabled = if_plan.has_value();
+				if (if_request.sample_rate_hz.has_value())
+				{
+					metadata.fmcw_if_requested_sample_rate = *if_request.sample_rate_hz;
+				}
+				if (if_plan.has_value())
+				{
+					metadata.fmcw_if_sample_rate = if_plan->actual_output_sample_rate_hz;
+					metadata.fmcw_if_input_sample_rate = if_plan->input_sample_rate_hz;
+					metadata.fmcw_if_resample_numerator = static_cast<unsigned>(if_plan->overall_ratio.numerator);
+					metadata.fmcw_if_resample_denominator = static_cast<unsigned>(if_plan->overall_ratio.denominator);
+					metadata.fmcw_if_decimation_factor = if_plan->actual_output_sample_rate_hz > 0.0
+						? if_plan->input_sample_rate_hz / if_plan->actual_output_sample_rate_hz
+						: 0.0;
+					metadata.fmcw_if_filter_bandwidth = if_plan->filter_bandwidth_hz;
+					metadata.fmcw_if_filter_transition_width = if_plan->filter_transition_width_hz;
+					metadata.fmcw_if_filter_stopband = if_plan->stopband_attenuation_db;
+					metadata.fmcw_if_filter_group_delay_seconds = if_plan->group_delay_seconds;
+					metadata.fmcw_if_compensated_integer_delay_samples = if_plan->warmup_discard_samples;
+					metadata.fmcw_if_compensated_fractional_delay_samples = if_plan->fractional_output_delay_samples;
+					metadata.fmcw_if_warmup_discard_samples = if_plan->warmup_discard_samples;
+					metadata.fmcw_if_phase_refinement = static_cast<unsigned>(if_plan->phase_refinement);
+					metadata.fmcw_if_timing_error_seconds = if_plan->estimated_timing_error_seconds;
+					metadata.fmcw_if_phase_error_radians = if_plan->estimated_phase_error_radians;
+					metadata.fmcw_if_noise_variance =
+						params::boltzmannK() * receiver->getNoiseTemperature() * if_plan->actual_output_sample_rate_hz;
+					metadata.fmcw_if_group_delay_compensated = if_plan->group_delay_compensated;
+				}
+
+				const auto& reference = receiver->getDechirpReference();
+				metadata.fmcw_dechirp_reference_source =
+					std::string(radar::dechirpReferenceSourceToken(reference.source));
+				if (reference.source == radar::Receiver::DechirpReferenceSource::Attached ||
+					reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
+				{
+					metadata.fmcw_dechirp_reference_transmitter_id = reference.transmitter_id;
+					metadata.fmcw_dechirp_reference_transmitter_name = reference.transmitter_name;
+				}
+				else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
+				{
+					metadata.fmcw_dechirp_reference_waveform_id = reference.waveform_id;
+					metadata.fmcw_dechirp_reference_waveform_name = reference.waveform_name;
+					if (!receiver->getDechirpSources().empty())
+					{
+						metadata.fmcw_dechirp_reference_waveform =
+							buildFmcwMetadata(receiver->getDechirpSources().front());
 					}
 				}
 			}
 
 			return metadata;
+		}
+
+		/// Returns the UI-facing finalization label for a streaming receiver.
+		std::string streamingFinalizerLabel(const radar::Receiver* receiver)
+		{
+			if (receiver->getMode() == radar::OperationMode::FMCW_MODE)
+			{
+				return "FMCW";
+			}
+			return "CW";
 		}
 	}
 
@@ -128,7 +545,8 @@ namespace processing
 		core::OutputFileMetadata file_metadata{.receiver_id = receiver->getId(),
 											   .receiver_name = receiver->getName(),
 											   .mode = "pulsed",
-											   .path = hdf5_filename};
+											   .path = hdf5_filename,
+											   .sampling_rate = params::rate()};
 
 		std::unique_ptr<HighFive::File> h5_file;
 		{
@@ -145,6 +563,7 @@ namespace processing
 		const auto report_interval = std::chrono::milliseconds(100);
 		const RealType rate = params::rate() * params::oversampleRatio();
 		const RealType dt = 1.0 / rate;
+		core::ReceiverTrackerCache streaming_tracker_cache;
 
 		while (true)
 		{
@@ -173,7 +592,8 @@ namespace processing
 			applyThermalNoise(window_buffer, receiver->getNoiseTemperature(receiver->getRotation(actual_start)),
 							  receiver->getRngEngine());
 
-			pipeline::applyCwInterference(window_buffer, actual_start, dt, receiver, job.active_cw_sources, targets);
+			pipeline::applyStreamingInterference(window_buffer, actual_start, dt, receiver,
+												 job.active_streaming_sources, targets, streaming_tracker_cache);
 
 			renderWindow(window_buffer, job.duration, actual_start, frac_delay, job.responses);
 
@@ -236,36 +656,87 @@ namespace processing
 		LOG(logging::Level::INFO, "Finalizer thread for receiver '{}' finished.", receiver->getName());
 	}
 
-	void finalizeCwReceiver(radar::Receiver* receiver, pool::ThreadPool* /*pool*/,
-							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
-							std::shared_ptr<core::OutputMetadataCollector> metadata_collector)
+	void finalizeStreamingReceiver(radar::Receiver* receiver, pool::ThreadPool* /*pool*/,
+								   std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
+								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector,
+								   std::vector<core::ActiveStreamingSource> streaming_sources)
 	{
-		LOG(logging::Level::INFO, "Finalization task started for CW receiver '{}'.", receiver->getName());
-		if (reporter)
-		{
-			reporter->report(std::format("Finalizing CW Receiver {}", receiver->getName()), 0, 100);
-		}
+		LOG(logging::Level::INFO, "Finalization task started for streaming receiver '{}'.", receiver->getName());
 
-		auto& iq_buffer = receiver->getMutableCwData();
+		receiver->flushFmcwIfResampling();
+		auto& iq_buffer = receiver->getMutableStreamingData();
 		if (iq_buffer.empty())
 		{
-			LOG(logging::Level::INFO, "No CW data to finalize for receiver '{}'.", receiver->getName());
+			LOG(logging::Level::INFO, "No streaming data to finalize for receiver '{}'.", receiver->getName());
 			return;
 		}
 
 		if (reporter)
 		{
+			reporter->report(
+				std::format("Finalizing {} Receiver {}", streamingFinalizerLabel(receiver), receiver->getName()), 0,
+				100);
+		}
+
+		const bool dechirped = receiver->isDechirpEnabled();
+		const auto& if_plan = receiver->getFmcwIfResamplerPlan();
+		const bool if_decimated = dechirped && if_plan.has_value();
+		const RealType output_sample_rate = if_decimated
+			? if_plan->actual_output_sample_rate_hz
+			: (dechirped ? params::rate() * static_cast<RealType>(params::oversampleRatio()) : params::rate());
+		const auto expected_samples = static_cast<std::size_t>(
+			std::ceil(std::max<RealType>(0.0, params::endTime() - params::startTime()) * output_sample_rate));
+		if (if_decimated && iq_buffer.size() > expected_samples)
+		{
+			iq_buffer.resize(expected_samples);
+		}
+		const auto dechirp_time_spans = dechirped ? dechirpActiveTimeSpans(receiver) : std::vector<TimeSpan>{};
+		const auto dechirp_sample_spans = dechirped
+			? sampleSpansFromTimeSpans(dechirp_time_spans, iq_buffer.size(), output_sample_rate)
+			: std::vector<pipeline::SampleSpan>{};
+
+		if (reporter)
+		{
 			reporter->report(std::format("Rendering Interference for {}", receiver->getName()), 25, 100);
 		}
-		pipeline::applyPulsedInterference(iq_buffer, receiver->getPulsedInterferenceLog());
+		if (dechirped)
+		{
+			if (!if_decimated)
+			{
+				pipeline::applyPulsedInterference(iq_buffer, receiver->getPulsedInterferenceLog(), dechirp_sample_spans,
+												  output_sample_rate);
+			}
+		}
+		else
+		{
+			pipeline::applyPulsedInterference(iq_buffer, receiver->getPulsedInterferenceLog());
+		}
 
 		if (reporter)
 		{
 			reporter->report(std::format("Applying Noise for {}", receiver->getName()), 50, 100);
 		}
-		applyThermalNoise(iq_buffer, receiver->getNoiseTemperature(), receiver->getRngEngine());
+		if (dechirped)
+		{
+			if (if_decimated)
+			{
+				applyThermalNoiseToSpansAtSampleRate(iq_buffer, receiver->getNoiseTemperature(),
+													 receiver->getRngEngine(), dechirp_sample_spans,
+													 output_sample_rate);
+			}
+			else
+			{
+				applyThermalNoiseToSpans(iq_buffer, receiver->getNoiseTemperature(), receiver->getRngEngine(),
+										 dechirp_sample_spans);
+			}
+		}
+		else
+		{
+			applyThermalNoise(iq_buffer, receiver->getNoiseTemperature(), receiver->getRngEngine());
+		}
 
-		const RealType fullscale = pipeline::applyDownsamplingAndQuantization(iq_buffer);
+		const RealType fullscale =
+			dechirped ? quantizeAndScaleWindow(iq_buffer) : pipeline::applyDownsamplingAndQuantization(iq_buffer);
 
 		if (reporter)
 		{
@@ -278,9 +749,10 @@ namespace processing
 			std::filesystem::create_directories(out_path);
 		}
 		const auto hdf5_filename = (out_path / std::format("{}_results.h5", receiver->getName())).string();
-		auto file_metadata = buildCwMetadata(receiver, hdf5_filename, iq_buffer.size());
-		pipeline::exportCwToHdf5(hdf5_filename, iq_buffer, fullscale, receiver->getTiming()->getFrequency(),
-								 &file_metadata);
+		auto file_metadata = buildStreamingMetadata(receiver, hdf5_filename, iq_buffer.size(), streaming_sources,
+													output_sample_rate, dechirp_time_spans);
+		pipeline::exportStreamingToHdf5(hdf5_filename, iq_buffer, fullscale, receiver->getTiming()->getFrequency(),
+										&file_metadata, output_sample_rate);
 		if (metadata_collector)
 		{
 			metadata_collector->addFile(std::move(file_metadata));
@@ -291,4 +763,5 @@ namespace processing
 			reporter->report(std::format("Finalized {}", receiver->getName()), 100, 100);
 		}
 	}
+
 }

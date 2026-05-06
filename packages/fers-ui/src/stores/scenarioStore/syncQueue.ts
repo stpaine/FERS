@@ -196,12 +196,24 @@ export function enqueueGranularSync(
     itemId: string,
     json: string
 ): Promise<void> {
+    if (pendingFullSync) {
+        return pendingFullSync;
+    }
+
     pendingGranularUpdates.set(getGranularUpdateKey(itemType, itemId), {
         itemType,
         itemId,
         json,
     });
     return scheduleGranularFlush();
+}
+
+export function enqueueGranularSyncDetached(
+    itemType: string,
+    itemId: string,
+    json: string
+): void {
+    void enqueueGranularSync(itemType, itemId, json).catch(() => undefined);
 }
 
 export function registerGranularSyncFailureHandler(
@@ -240,12 +252,17 @@ export function enqueueFullSync(buildSnapshot: () => string): Promise<void> {
             await handleSyncWarnings(warnings);
         } catch (e) {
             console.error('Full sync failed:', e);
+            throw e;
         }
     });
     pendingFullSync = task;
     discardBufferedGranularSync(task);
     queue = task.catch(() => undefined);
     return task;
+}
+
+export function enqueueFullSyncDetached(buildSnapshot: () => string): void {
+    void enqueueFullSync(buildSnapshot).catch(() => undefined);
 }
 
 /** Resolves once every currently-queued sync task has settled. */

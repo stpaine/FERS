@@ -4,6 +4,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstdint>
 #include <filesystem>
 #include <libfers/api.h>
 
@@ -131,6 +132,32 @@ TEST_CASE("API loads a minimal scenario from XML file and exports XML", "[api][s
 	REQUIRE_THAT(xml_text.str(), ContainsSubstring("<simulation"));
 }
 
+TEST_CASE("API exposes memory projection JSON", "[api][scenario][memory_projection]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::previewScenarioXml("Memory Projection Scenario");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	api_test::ApiString projection_text(fers_get_memory_projection_json(context.get()));
+	REQUIRE(projection_text.get() != nullptr);
+
+	const json projection = json::parse(projection_text.str());
+	REQUIRE(projection["phase_noise_lookups"].contains("bytes"));
+	REQUIRE(projection["streaming_iq_buffers"]["bytes"].get<std::uint64_t>() > 0);
+	REQUIRE(projection["rendered_hdf5_dataset_payload"]["bytes"].get<std::uint64_t>() > 0);
+	REQUIRE(projection["resident_baseline"].contains("bytes"));
+	REQUIRE(projection["projected_total_footprint"].contains("bytes"));
+
+	REQUIRE(fers_get_memory_projection_json(nullptr) == nullptr);
+	api_test::ApiString error = api_test::lastError();
+	REQUIRE(error.get() != nullptr);
+	REQUIRE_THAT(error.str(), ContainsSubstring("Invalid context provided to fers_get_memory_projection_json"));
+}
+
 TEST_CASE("API scenario serialization and update helpers reject null arguments", "[api][scenario]")
 {
 	api_test::clearLastError();
@@ -197,6 +224,32 @@ TEST_CASE("API update scenario from JSON modifies serialized state", "[api][scen
 
 	const auto updated = api_test::parseScenarioJson(context.get());
 	REQUIRE(updated.at("simulation").at("name") == "After Update");
+}
+
+TEST_CASE("API failed JSON scenario update preserves previous world for later granular edits", "[api][scenario]")
+{
+	api_test::ParamGuard guard;
+	api_test::clearLastError();
+	api_test::Context context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = api_test::minimalScenarioXml("Before Failed Update");
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+
+	auto scenario = api_test::parseScenarioJson(context.get());
+	const auto original_platform = scenario["simulation"]["platforms"][0];
+	const uint64_t platform_id = api_test::parseId(original_platform["id"]);
+
+	auto invalid = scenario;
+	invalid["simulation"]["platforms"][0].erase("name");
+	REQUIRE(fers_update_scenario_from_json(context.get(), invalid.dump().c_str()) == 2);
+
+	auto platform_update = original_platform;
+	platform_update["name"] = "Rename After Failed Full Sync";
+	REQUIRE(fers_update_platform_from_json(context.get(), platform_id, platform_update.dump().c_str()) == 0);
+
+	const auto updated = api_test::parseScenarioJson(context.get());
+	REQUIRE(updated["simulation"]["platforms"][0]["name"] == "Rename After Failed Full Sync");
 }
 
 TEST_CASE("API update scenario from malformed JSON returns JSON-specific error code", "[api][scenario]")
@@ -364,14 +417,15 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 		auto tx = scenario["simulation"]["platforms"][0]["components"][0]["transmitter"];
 		uint64_t tx_id = api_test::parseId(tx["id"]);
 		tx["name"] = "UpdatedTx";
-		tx["pulsed_mode"] = {{"prf", 1250.0}};
+		tx["cw_mode"] = json::object();
+		tx.erase("pulsed_mode");
 
 		REQUIRE(fers_update_transmitter_from_json(context.get(), tx_id, tx.dump().c_str()) == 0);
 
 		auto updated = api_test::parseScenarioJson(context.get());
 		auto updated_tx = updated["simulation"]["platforms"][0]["components"][0]["transmitter"];
 		REQUIRE(updated_tx["name"] == "UpdatedTx");
-		REQUIRE_THAT(updated_tx["pulsed_mode"]["prf"].get<double>(), WithinAbs(1250.0, 1e-9));
+		REQUIRE(updated_tx["cw_mode"].is_object());
 	}
 
 	SECTION("Receiver update")

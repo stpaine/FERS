@@ -7,10 +7,14 @@
 #include "finalizer_pipeline.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstddef>
 #include <highfive/highfive.hpp>
+#include <limits>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <unordered_map>
 
 #include "core/logging.h"
@@ -28,6 +32,38 @@
 
 namespace processing::pipeline
 {
+	namespace
+	{
+		/// Prepares caller-owned tracker storage for one independent receive window without shrinking capacity.
+		void prepareWindowTrackerCache(core::ReceiverTrackerCache& tracker_cache, const std::size_t source_count,
+									   const std::size_t target_count)
+		{
+			if (tracker_cache.direct.size() < source_count)
+			{
+				tracker_cache.direct.resize(source_count);
+			}
+			if (tracker_cache.reflected.size() < source_count)
+			{
+				tracker_cache.reflected.resize(source_count);
+			}
+
+			for (std::size_t source_index = 0; source_index < source_count; ++source_index)
+			{
+				tracker_cache.direct[source_index] = {};
+
+				auto& reflected_trackers = tracker_cache.reflected[source_index];
+				if (reflected_trackers.size() < target_count)
+				{
+					reflected_trackers.resize(target_count);
+				}
+				for (std::size_t target_index = 0; target_index < target_count; ++target_index)
+				{
+					reflected_trackers[target_index] = {};
+				}
+			}
+		}
+	}
+
 	void advanceTimingModel(timing::Timing* timing_model, const radar::Receiver* receiver, const RealType rate)
 	{
 
@@ -75,10 +111,12 @@ namespace processing::pipeline
 		return {rounded_start, fractional_delay};
 	}
 
-	void applyCwInterference(std::span<ComplexType> window, const RealType actual_start, const RealType dt,
-							 const radar::Receiver* receiver, const std::vector<radar::Transmitter*>& cw_sources,
-							 const std::vector<std::unique_ptr<radar::Target>>* targets,
-							 const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
+	void applyStreamingInterference(std::span<ComplexType> window, const RealType actual_start, const RealType dt,
+									const radar::Receiver* receiver,
+									const std::vector<core::ActiveStreamingSource>& streaming_sources,
+									const std::vector<std::unique_ptr<radar::Target>>* targets,
+									core::ReceiverTrackerCache& tracker_cache,
+									const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
 	{
 		const simulation::CwPhaseNoiseLookup* lookup = phase_noise_lookup;
 		std::optional<simulation::CwPhaseNoiseLookup> owned_lookup;
@@ -86,9 +124,10 @@ namespace processing::pipeline
 		{
 			std::unordered_map<SimId, std::shared_ptr<timing::Timing>> unique_timings;
 			unique_timings.try_emplace(receiver->getTiming()->getId(), receiver->getTiming());
-			for (const auto* cw_source : cw_sources)
+			for (const auto& streaming_source : streaming_sources)
 			{
-				unique_timings.try_emplace(cw_source->getTiming()->getId(), cw_source->getTiming());
+				unique_timings.try_emplace(streaming_source.transmitter->getTiming()->getId(),
+										   streaming_source.transmitter->getTiming());
 			}
 
 			std::vector<std::shared_ptr<timing::Timing>> timings;
@@ -104,24 +143,29 @@ namespace processing::pipeline
 			lookup = &*owned_lookup;
 		}
 
+		prepareWindowTrackerCache(tracker_cache, streaming_sources.size(), targets->size());
+
 		RealType t_sample = actual_start;
 		for (auto& window_sample : window)
 		{
-			ComplexType cw_interference_sample{0.0, 0.0};
-			for (const auto* cw_source : cw_sources)
+			ComplexType streaming_interference_sample{0.0, 0.0};
+			for (std::size_t source_index = 0; source_index < streaming_sources.size(); ++source_index)
 			{
+				const auto& streaming_source = streaming_sources[source_index];
 				if (!receiver->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT))
 				{
-					cw_interference_sample +=
-						simulation::calculateDirectPathContribution(cw_source, receiver, t_sample, lookup);
+					streaming_interference_sample += simulation::calculateStreamingDirectPathContribution(
+						streaming_source, receiver, t_sample, lookup, &tracker_cache.direct[source_index]);
 				}
-				for (const auto& target_ptr : *targets)
+				for (std::size_t target_index = 0; target_index < targets->size(); ++target_index)
 				{
-					cw_interference_sample += simulation::calculateReflectedPathContribution(
-						cw_source, receiver, target_ptr.get(), t_sample, lookup);
+					const auto& target_ptr = (*targets)[target_index];
+					streaming_interference_sample += simulation::calculateStreamingReflectedPathContribution(
+						streaming_source, receiver, target_ptr.get(), t_sample, lookup,
+						&tracker_cache.reflected[source_index][target_index]);
 				}
 			}
-			window_sample += cw_interference_sample;
+			window_sample += streaming_interference_sample;
 			t_sample += dt;
 		}
 	}
@@ -129,20 +173,55 @@ namespace processing::pipeline
 	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
 								 const std::vector<std::unique_ptr<serial::Response>>& interference_log)
 	{
+		const std::array active_spans{SampleSpan{.start = 0, .end_exclusive = iq_buffer.size()}};
+		applyPulsedInterference(iq_buffer, interference_log, active_spans,
+								params::rate() * static_cast<RealType>(params::oversampleRatio()));
+	}
+
+	void applyPulsedInterference(std::vector<ComplexType>& iq_buffer,
+								 const std::vector<std::unique_ptr<serial::Response>>& interference_log,
+								 const std::span<const SampleSpan> active_spans, const RealType output_sample_rate)
+	{
 		for (const auto& response : interference_log)
 		{
 			unsigned psize;
 			RealType prate;
 			const auto rendered_pulse = response->renderBinary(prate, psize, 0.0);
-
-			const RealType dt_sim = 1.0 / prate;
-			const auto start_index = static_cast<size_t>((response->startTime() - params::startTime()) / dt_sim);
-
-			for (size_t i = 0; i < psize; ++i)
+			const RealType rate_tolerance = std::numeric_limits<RealType>::epsilon() *
+				std::max(std::abs(prate), std::abs(output_sample_rate)) * 16.0;
+			if (std::abs(prate - output_sample_rate) > rate_tolerance)
 			{
-				if (start_index + i < iq_buffer.size())
+				throw std::runtime_error(
+					"Pulsed interference sample rate must match the streaming output sample rate.");
+			}
+
+			const RealType pulse_end_time = response->startTime() + static_cast<RealType>(psize) / prate;
+			const auto pulse_start_index =
+				static_cast<long long>(std::floor((response->startTime() - params::startTime()) * output_sample_rate));
+			const auto pulse_end_index =
+				static_cast<long long>(std::ceil((pulse_end_time - params::startTime()) * output_sample_rate));
+			const auto buffer_end_index = static_cast<long long>(iq_buffer.size());
+
+			for (const auto& span : active_spans)
+			{
+				const auto span_start = static_cast<long long>(std::min(span.start, iq_buffer.size()));
+				const auto span_end = static_cast<long long>(std::min(span.end_exclusive, iq_buffer.size()));
+				const auto dest_begin = std::max({span_start, pulse_start_index, 0LL});
+				const auto dest_end = std::min({span_end, pulse_end_index, buffer_end_index});
+				if (dest_begin >= dest_end)
 				{
-					iq_buffer[start_index + i] += rendered_pulse[i];
+					continue;
+				}
+
+				const auto copy_count = static_cast<std::size_t>(dest_end - dest_begin);
+				auto source_index = dest_begin - pulse_start_index;
+				for (std::size_t i = 0; i < copy_count; ++i, ++source_index)
+				{
+					if (source_index >= 0 && source_index < static_cast<long long>(rendered_pulse.size()))
+					{
+						iq_buffer[static_cast<std::size_t>(dest_begin) + i] +=
+							rendered_pulse[static_cast<std::size_t>(source_index)];
+					}
 				}
 			}
 		}
@@ -165,8 +244,9 @@ namespace processing::pipeline
 		return quantizeAndScaleWindow(buffer);
 	}
 
-	void exportCwToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
-						const RealType fullscale, const RealType ref_freq, const core::OutputFileMetadata* metadata)
+	void exportStreamingToHdf5(const std::string& filename, const std::vector<ComplexType>& iq_buffer,
+							   const RealType fullscale, const RealType ref_freq,
+							   const core::OutputFileMetadata* metadata, const RealType sample_rate)
 	{
 		std::scoped_lock lock(serial::hdf5_global_mutex);
 		try
@@ -183,7 +263,7 @@ namespace processing::pipeline
 			HighFive::DataSet q_dataset = file.createDataSet<RealType>("Q_data", HighFive::DataSpace::From(q_data));
 			q_dataset.write(q_data);
 
-			file.createAttribute("sampling_rate", params::rate());
+			file.createAttribute("sampling_rate", sample_rate > 0.0 ? sample_rate : params::rate());
 			file.createAttribute("start_time", params::startTime());
 			file.createAttribute("fullscale", fullscale);
 			file.createAttribute("reference_carrier_frequency", ref_freq);
@@ -192,11 +272,12 @@ namespace processing::pipeline
 				serial::writeOutputFileMetadataAttributes(file, *metadata);
 			}
 
-			LOG(logging::Level::INFO, "Successfully exported CW data to '{}'", filename);
+			LOG(logging::Level::INFO, "Successfully exported streaming data to '{}'", filename);
 		}
 		catch (const HighFive::Exception& err)
 		{
-			LOG(logging::Level::FATAL, "Error writing CW data to HDF5 file '{}': {}", filename, err.what());
+			LOG(logging::Level::FATAL, "Error writing streaming data to HDF5 file '{}': {}", filename, err.what());
 		}
 	}
+
 }

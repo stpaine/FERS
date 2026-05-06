@@ -104,7 +104,49 @@
                     <xs:element name="cw">
                         <xs:complexType/>
                     </xs:element>
-                    <!-- Additional waveform types (e.g., FMCW) can be added here -->
+                    <xs:element name="fmcw_linear_chirp">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="chirp_bandwidth" type="xs:string"/>
+                                <xs:element name="chirp_duration" type="xs:string"/>
+                                <xs:element name="chirp_period" type="xs:string"/>
+                                <xs:element minOccurs="0" name="start_frequency_offset" type="xs:string"/>
+                                <xs:element minOccurs="0" name="chirp_count" type="xs:string">
+                                    <xs:annotation>
+                                        <xs:documentation>
+                                            Per-schedule-segment maximum chirp count. If a transmitter has multiple
+                                            schedule periods, each period emits up to this many chirps.
+                                        </xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
+                            </xs:sequence>
+                            <xs:attribute name="direction" use="required">
+                                <xs:simpleType>
+                                    <xs:restriction base="xs:token">
+                                        <xs:enumeration value="up"/>
+                                        <xs:enumeration value="down"/>
+                                    </xs:restriction>
+                                </xs:simpleType>
+                            </xs:attribute>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="fmcw_triangle">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="chirp_bandwidth" type="xs:string"/>
+                                <xs:element name="chirp_duration" type="xs:string"/>
+                                <xs:element minOccurs="0" name="start_frequency_offset" type="xs:string"/>
+                                <xs:element minOccurs="0" name="triangle_count" type="xs:string">
+                                    <xs:annotation>
+                                        <xs:documentation>
+                                            Per-schedule-segment maximum complete triangle count. If a transmitter has
+                                            multiple schedule periods, each period emits up to this many full triangles.
+                                        </xs:documentation>
+                                    </xs:annotation>
+                                </xs:element>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
                 </xs:choice>
             </xs:sequence>
             <xs:attribute name="name" type="xs:string" use="required"/>
@@ -269,6 +311,38 @@
         </xs:complexType>
     </xs:element>
 
+    <xs:complexType name="receiverFmcwModeType">
+        <xs:sequence>
+            <xs:element name="dechirp_reference" minOccurs="0" maxOccurs="1">
+                <xs:complexType>
+                    <xs:attribute name="source" use="required">
+                        <xs:simpleType>
+                            <xs:restriction base="xs:string">
+                                <xs:enumeration value="attached"/>
+                                <xs:enumeration value="transmitter"/>
+                                <xs:enumeration value="custom"/>
+                            </xs:restriction>
+                        </xs:simpleType>
+                    </xs:attribute>
+                    <xs:attribute name="transmitter_name" type="xs:string"/>
+                    <xs:attribute name="waveform_name" type="xs:string"/>
+                </xs:complexType>
+            </xs:element>
+            <xs:element name="if_sample_rate" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="if_filter_bandwidth" type="xs:string" minOccurs="0" maxOccurs="1"/>
+            <xs:element name="if_filter_transition_width" type="xs:string" minOccurs="0" maxOccurs="1"/>
+        </xs:sequence>
+        <xs:attribute name="dechirp_mode" default="none">
+            <xs:simpleType>
+                <xs:restriction base="xs:string">
+                    <xs:enumeration value="none"/>
+                    <xs:enumeration value="physical"/>
+                    <xs:enumeration value="ideal"/>
+                </xs:restriction>
+            </xs:simpleType>
+        </xs:attribute>
+    </xs:complexType>
+
     <!-- Monostatic radar installations -->
     <xs:element name="monostatic">
         <xs:complexType>
@@ -286,6 +360,7 @@
                     <xs:element name="cw_mode">
                         <xs:complexType/>
                     </xs:element>
+                    <xs:element name="fmcw_mode" type="receiverFmcwModeType"/>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>
@@ -312,6 +387,9 @@
                         </xs:complexType>
                     </xs:element>
                     <xs:element name="cw_mode">
+                        <xs:complexType/>
+                    </xs:element>
+                    <xs:element name="fmcw_mode">
                         <xs:complexType/>
                     </xs:element>
                 </xs:choice>
@@ -341,6 +419,7 @@
                     <xs:element name="cw_mode">
                         <xs:complexType/>
                     </xs:element>
+                    <xs:element name="fmcw_mode" type="receiverFmcwModeType"/>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>

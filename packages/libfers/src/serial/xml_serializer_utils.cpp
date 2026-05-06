@@ -114,6 +114,37 @@ namespace serial::xml_serializer_utils
 		{
 			(void)parent.addChild("cw"); // Empty element
 		}
+		else if (const auto* fmcw = waveform.getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			const XmlElement fmcw_elem = parent.addChild("fmcw_linear_chirp");
+			fmcw_elem.setAttribute("direction",
+								   std::string(fers_signal::fmcwChirpDirectionToken(fmcw->getDirection())));
+			addChildWithNumber(fmcw_elem, "chirp_bandwidth", fmcw->getChirpBandwidth());
+			addChildWithNumber(fmcw_elem, "chirp_duration", fmcw->getChirpDuration());
+			addChildWithNumber(fmcw_elem, "chirp_period", fmcw->getChirpPeriod());
+			if (std::abs(fmcw->getStartFrequencyOffset()) > EPSILON)
+			{
+				addChildWithNumber(fmcw_elem, "start_frequency_offset", fmcw->getStartFrequencyOffset());
+			}
+			if (fmcw->getChirpCount().has_value())
+			{
+				addChildWithNumber(fmcw_elem, "chirp_count", static_cast<RealType>(*fmcw->getChirpCount()));
+			}
+		}
+		else if (const auto* triangle = waveform.getFmcwTriangleSignal(); triangle != nullptr)
+		{
+			const XmlElement fmcw_elem = parent.addChild("fmcw_triangle");
+			addChildWithNumber(fmcw_elem, "chirp_bandwidth", triangle->getChirpBandwidth());
+			addChildWithNumber(fmcw_elem, "chirp_duration", triangle->getChirpDuration());
+			if (std::abs(triangle->getStartFrequencyOffset()) > EPSILON)
+			{
+				addChildWithNumber(fmcw_elem, "start_frequency_offset", triangle->getStartFrequencyOffset());
+			}
+			if (triangle->getTriangleCount().has_value())
+			{
+				addChildWithNumber(fmcw_elem, "triangle_count", static_cast<RealType>(*triangle->getTriangleCount()));
+			}
+		}
 		else
 		{
 			const XmlElement pulsed_file = parent.addChild("pulsed_from_file");
@@ -298,12 +329,52 @@ namespace serial::xml_serializer_utils
 			const XmlElement mode_elem = tx_elem.addChild("pulsed_mode");
 			addChildWithNumber(mode_elem, "prf", tx.getPrf());
 		}
+		else if (tx.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			(void)tx_elem.addChild("fmcw_mode");
+		}
 		else
 		{
 			(void)tx_elem.addChild("cw_mode");
 		}
 
 		serializeSchedule(tx.getSchedule(), tx_elem);
+	}
+
+	void serializeReceiverFmcwMode(const radar::Receiver& rx, const XmlElement& mode_elem)
+	{
+		if (!rx.isDechirpEnabled())
+		{
+			return;
+		}
+
+		const auto& reference = rx.getDechirpReference();
+		mode_elem.setAttribute("dechirp_mode", radar::dechirpModeToken(rx.getDechirpMode()));
+		const XmlElement ref_elem = mode_elem.addChild("dechirp_reference");
+		ref_elem.setAttribute("source", radar::dechirpReferenceSourceToken(reference.source));
+		if (reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
+		{
+			ref_elem.setAttribute("transmitter_name",
+								  !reference.transmitter_name.empty() ? reference.transmitter_name : reference.name);
+		}
+		else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
+		{
+			ref_elem.setAttribute("waveform_name",
+								  !reference.waveform_name.empty() ? reference.waveform_name : reference.name);
+		}
+		const auto& if_chain = rx.getFmcwIfChainRequest();
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			addChildWithNumber(mode_elem, "if_sample_rate", *if_chain.sample_rate_hz);
+		}
+		if (if_chain.filter_bandwidth_hz.has_value())
+		{
+			addChildWithNumber(mode_elem, "if_filter_bandwidth", *if_chain.filter_bandwidth_hz);
+		}
+		if (if_chain.filter_transition_width_hz.has_value())
+		{
+			addChildWithNumber(mode_elem, "if_filter_transition_width", *if_chain.filter_transition_width_hz);
+		}
 	}
 
 	void serializeReceiver(const radar::Receiver& rx, const XmlElement& parent)
@@ -321,6 +392,10 @@ namespace serial::xml_serializer_utils
 			addChildWithNumber(mode_elem, "prf", rx.getWindowPrf());
 			addChildWithNumber(mode_elem, "window_skip", rx.getWindowSkip());
 			addChildWithNumber(mode_elem, "window_length", rx.getWindowLength());
+		}
+		else if (rx.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			serializeReceiverFmcwMode(rx, rx_elem.addChild("fmcw_mode"));
 		}
 		else
 		{
@@ -351,6 +426,10 @@ namespace serial::xml_serializer_utils
 			addChildWithNumber(mode_elem, "prf", tx.getPrf());
 			addChildWithNumber(mode_elem, "window_skip", rx.getWindowSkip());
 			addChildWithNumber(mode_elem, "window_length", rx.getWindowLength());
+		}
+		else if (tx.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			serializeReceiverFmcwMode(rx, mono_elem.addChild("fmcw_mode"));
 		}
 		else
 		{

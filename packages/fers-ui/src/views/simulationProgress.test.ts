@@ -56,34 +56,93 @@ describe('simulation progress normalization', () => {
             total: 100,
             details: [
                 {
-                    id: 'cw-finalizing',
+                    id: 'streaming-finalizing',
                     message: 'Finalizing CW Receiver CWRadar',
                     current: 0,
                     total: 100,
                 },
                 {
-                    id: 'cw-rendering-interference',
+                    id: 'streaming-rendering-interference',
                     message: 'Rendering Interference for CWRadar',
                     current: 25,
                     total: 100,
                 },
                 {
-                    id: 'cw-applying-noise',
+                    id: 'streaming-applying-noise',
                     message: 'Applying Noise for CWRadar',
                     current: 50,
                     total: 100,
                 },
                 {
-                    id: 'cw-writing-hdf5',
+                    id: 'streaming-writing-hdf5',
                     message: 'Writing HDF5 for CWRadar',
                     current: 75,
                     total: 100,
                 },
                 {
-                    id: 'cw-finalized',
+                    id: 'streaming-finalized',
                     message: 'Finalized CWRadar',
                     current: 100,
                     total: 100,
+                },
+            ],
+        });
+    });
+
+    test('keeps FMCW receiver phases on one stable row', () => {
+        const tracked = trackProgress([
+            {
+                message: 'Finalizing FMCW Receiver TrackerDriftFMCW',
+                current: 0,
+                total: 100,
+            },
+            {
+                message: 'Rendering Interference for TrackerDriftFMCW',
+                current: 25,
+                total: 100,
+            },
+            {
+                message: 'Applying Noise for TrackerDriftFMCW',
+                current: 50,
+                total: 100,
+            },
+            {
+                message: 'Writing HDF5 for TrackerDriftFMCW',
+                current: 75,
+                total: 100,
+            },
+            {
+                message: 'Finalized TrackerDriftFMCW',
+                current: 100,
+                total: 100,
+            },
+        ]);
+
+        expect(Object.keys(tracked)).toEqual(['receiver:TrackerDriftFMCW']);
+        expect(tracked['receiver:TrackerDriftFMCW']).toMatchObject({
+            message: 'Finalized TrackerDriftFMCW',
+            current: 100,
+            total: 100,
+            details: [
+                {
+                    id: 'streaming-finalizing',
+                    message: 'Finalizing FMCW Receiver TrackerDriftFMCW',
+                },
+                {
+                    id: 'streaming-rendering-interference',
+                    message: 'Rendering Interference for TrackerDriftFMCW',
+                },
+                {
+                    id: 'streaming-applying-noise',
+                    message: 'Applying Noise for TrackerDriftFMCW',
+                },
+                {
+                    id: 'streaming-writing-hdf5',
+                    message: 'Writing HDF5 for TrackerDriftFMCW',
+                },
+                {
+                    id: 'streaming-finalized',
+                    message: 'Finalized TrackerDriftFMCW',
                 },
             ],
         });
@@ -173,27 +232,6 @@ describe('simulation progress normalization', () => {
             message: 'Simulation complete',
             current: 100,
             total: 100,
-            details: [
-                {
-                    id: 'main-progress',
-                    message: 'Simulating... 1.00s / 10.00s',
-                    current: 10,
-                    total: 100,
-                },
-                {
-                    id: 'main-export-wait',
-                    message:
-                        'Main simulation finished. Waiting for data export...',
-                    current: 100,
-                    total: 100,
-                },
-                {
-                    id: 'main-complete',
-                    message: 'Simulation complete',
-                    current: 100,
-                    total: 100,
-                },
-            ],
         });
     });
 
@@ -228,19 +266,19 @@ describe('simulation progress normalization', () => {
                 total: 100,
                 details: [
                     {
-                        id: 'cw-finalizing',
+                        id: 'streaming-finalizing',
                         message: 'Finalizing CW Receiver CWRadar',
                         current: 0,
                         total: 100,
                     },
                     {
-                        id: 'cw-writing-hdf5',
+                        id: 'streaming-writing-hdf5',
                         message: 'Writing HDF5 for CWRadar',
                         current: 75,
                         total: 100,
                     },
                     {
-                        id: 'cw-finalized',
+                        id: 'streaming-finalized',
                         message: 'Finalized CWRadar',
                         current: 100,
                         total: 100,
@@ -270,21 +308,6 @@ describe('simulation progress normalization', () => {
                 message: 'Simulation complete',
                 current: 100,
                 total: 100,
-                details: [
-                    {
-                        id: 'main-export-wait',
-                        message:
-                            'Main simulation finished. Waiting for data export...',
-                        current: 100,
-                        total: 100,
-                    },
-                    {
-                        id: 'main-complete',
-                        message: 'Simulation complete',
-                        current: 100,
-                        total: 100,
-                    },
-                ],
             },
         });
     });

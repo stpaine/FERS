@@ -22,8 +22,8 @@ semi-independent packages.
 - **Unified Event-Driven Core:** A modernized C++23 engine featuring a unified event-driven architecture for efficient
   simulation of both pulsed and continuous-wave scenarios, with optimized multithreading.
 - **Visual Scenario Builder:** An intuitive 3D interface to construct, configure, and visualize radar scenarios.
-- **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed, and
-  continuous wave (CW).
+- **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed,
+  continuous wave (CW), and native FMCW streaming modes.
 - **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and
@@ -31,6 +31,25 @@ semi-independent packages.
   with a searchable interface, generated directly from the source code.
 - **Unified Schema:** A central XML schema ensures consistency and serves as the single source of truth for scenarios
   across the simulator and the UI.
+
+## Feature Stability
+
+Last reviewed: 2026-04-30.
+
+These labels describe the current state of the `master` branch and should be read alongside
+the [development status disclaimer](#disclaimer--development-status). "Verified" means the feature has been checked
+against the current project expectations; "unverified" means it is available but still needs validation before users
+should rely on it for important results.
+
+| Feature | Stability | Verification |
+| ------- | --------- | ------------ |
+| fers-cli | Stable | N/A |
+| fers-ui | Beta | N/A |
+| Pulsed radar | Stable | Verified |
+| CW radar | Beta | Unverified |
+| FMCW radar | Alpha | Unverified |
+| Multimodal | Alpha | Unverified |
+| KML generation | Stable | Verified |
 
 ## Repository Structure
 

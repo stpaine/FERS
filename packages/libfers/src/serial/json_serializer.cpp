@@ -15,10 +15,15 @@
 
 #include "serial/json_serializer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <format>
+#include <initializer_list>
 #include <nlohmann/json.hpp>
+#include <optional>
 #include <random>
+#include <stdexcept>
+#include <string_view>
 #include <unordered_map>
 
 #include "antenna/antenna_factory.h"
@@ -32,6 +37,7 @@
 #include "radar/receiver.h"
 #include "radar/target.h"
 #include "radar/transmitter.h"
+#include "serial/fmcw_validation.h"
 #include "serial/rotation_angle_utils.h"
 #include "serial/rotation_warning_utils.h"
 #include "signal/radar_signal.h"
@@ -43,10 +49,13 @@
 
 namespace
 {
+	/// Map from timing prototype SimId to shared runtime timing instance.
 	using TimingInstanceMap = std::unordered_map<SimId, std::shared_ptr<timing::Timing>>;
 
+	/// Serializes a SimId as a JSON string.
 	nlohmann::json sim_id_to_json(const SimId id) { return std::to_string(id); }
 
+	/// Parses a required SimId from a JSON object.
 	SimId parse_json_id(const nlohmann::json& j, const std::string& key, const std::string& owner)
 	{
 		if (!j.contains(key))
@@ -87,6 +96,7 @@ namespace
 		throw std::runtime_error("Invalid '" + key + "' type for " + owner + ".");
 	}
 
+	/// Resolves or instantiates a shared timing instance by prototype SimId.
 	std::shared_ptr<timing::Timing> resolve_timing_instance(core::World& world, std::mt19937& masterSeeder,
 															TimingInstanceMap& timing_instances, const SimId timing_id)
 	{
@@ -106,6 +116,251 @@ namespace
 		timing->initializeModel(timing_proto);
 		timing_instances.emplace(timing_id, timing);
 		return timing;
+	}
+
+	/// Formats a JSON field for warnings without assuming the field type.
+	std::string json_field_for_log(const nlohmann::json& j, const char* key)
+	{
+		if (!j.contains(key) || j.at(key).is_null())
+		{
+			return "";
+		}
+		if (j.at(key).is_string())
+		{
+			return j.at(key).get<std::string>();
+		}
+		return j.at(key).dump();
+	}
+
+	/// Throws a JSON validation error with the provided message.
+	void throw_json_validation_error(const std::string& message) { throw std::runtime_error(message); }
+
+	/// Validates an FMCW waveform while adapting validation errors to std::runtime_error.
+	void validate_fmcw_waveform(const fers_signal::RadarSignal& wave, const std::string& owner)
+	{
+		serial::fmcw_validation::validateWaveform(wave, owner, throw_json_validation_error);
+	}
+
+	/// Validates waveform/mode compatibility while adapting validation errors to std::runtime_error.
+	void validate_waveform_mode_match(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
+									  const std::string& owner)
+	{
+		serial::fmcw_validation::validateWaveformModeMatch(wave, mode, owner, throw_json_validation_error);
+	}
+
+	/// Validates an FMCW schedule while adapting validation errors to std::runtime_error.
+	void validate_fmcw_schedule(const std::vector<radar::SchedulePeriod>& schedule,
+								const fers_signal::RadarSignal& wave, const std::string& owner)
+	{
+		serial::fmcw_validation::validateSchedule(schedule, wave, owner, throw_json_validation_error);
+	}
+
+	/// Throws if a JSON object contains keys outside a strict whitelist.
+	void reject_unknown_keys(const nlohmann::json& object, const std::string& owner, const std::string_view object_name,
+							 const std::initializer_list<std::string_view> allowed_keys)
+	{
+		for (const auto& [key, value] : object.items())
+		{
+			(void)value;
+			bool allowed = false;
+			for (const auto allowed_key : allowed_keys)
+			{
+				if (key == allowed_key)
+				{
+					allowed = true;
+					break;
+				}
+			}
+			if (!allowed)
+			{
+				throw std::runtime_error(owner + " " + std::string(object_name) + " contains unsupported key '" + key +
+										 "'.");
+			}
+		}
+	}
+
+	/// Returns true when a JSON FMCW mode object carries receiver-side FMCW fields.
+	bool has_dechirp_fields(const nlohmann::json& mode_json)
+	{
+		return mode_json.contains("dechirp_mode") || mode_json.contains("dechirp_reference") ||
+			mode_json.contains("if_sample_rate") || mode_json.contains("if_filter_bandwidth") ||
+			mode_json.contains("if_filter_transition_width");
+	}
+
+	std::optional<RealType> get_optional_positive_real(const nlohmann::json& object, const std::string_view key,
+													   const std::string& owner)
+	{
+		const std::string key_string(key);
+		if (!object.contains(key_string))
+		{
+			return std::nullopt;
+		}
+		const RealType value = object.at(key_string).get<RealType>();
+		if (value <= 0.0 || !std::isfinite(value))
+		{
+			throw std::runtime_error(owner + " " + key_string + " must be a finite positive value.");
+		}
+		return value;
+	}
+
+	/// Parses receiver-side dechirp settings from a JSON component.
+	void parse_receiver_dechirp_config(const nlohmann::json& comp_json, radar::Receiver& receiver,
+									   const std::string& owner)
+	{
+		if (receiver.getMode() != radar::OperationMode::FMCW_MODE)
+		{
+			receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
+			return;
+		}
+
+		const auto& mode_json = comp_json.contains("fmcw_mode") ? comp_json.at("fmcw_mode") : nlohmann::json::object();
+		if (!mode_json.is_object())
+		{
+			throw std::runtime_error(owner + " fmcw_mode must be an object.");
+		}
+		reject_unknown_keys(mode_json, owner, "fmcw_mode",
+							{"dechirp_mode", "dechirp_reference", "if_sample_rate", "if_filter_bandwidth",
+							 "if_filter_transition_width"});
+
+		radar::Receiver::DechirpMode mode = radar::Receiver::DechirpMode::None;
+		if (mode_json.contains("dechirp_mode"))
+		{
+			mode = radar::parseDechirpModeToken(mode_json.at("dechirp_mode").get<std::string>());
+		}
+
+		radar::Receiver::FmcwIfChainRequest if_chain{
+			.sample_rate_hz = get_optional_positive_real(mode_json, "if_sample_rate", owner),
+			.filter_bandwidth_hz = get_optional_positive_real(mode_json, "if_filter_bandwidth", owner),
+			.filter_transition_width_hz = get_optional_positive_real(mode_json, "if_filter_transition_width", owner)};
+
+		if (mode == radar::Receiver::DechirpMode::None)
+		{
+			if (mode_json.contains("dechirp_reference"))
+			{
+				throw std::runtime_error(owner + " declares dechirp_reference while dechirp_mode is 'none'.");
+			}
+			if (if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
+				if_chain.filter_transition_width_hz.has_value())
+			{
+				throw std::runtime_error(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
+			}
+			receiver.setDechirpMode(mode);
+			return;
+		}
+
+		if ((if_chain.filter_bandwidth_hz.has_value() || if_chain.filter_transition_width_hz.has_value()) &&
+			!if_chain.sample_rate_hz.has_value())
+		{
+			throw std::runtime_error(owner + " IF filter fields require if_sample_rate.");
+		}
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			const RealType sim_rate = params::rate() * params::oversampleRatio();
+			if (*if_chain.sample_rate_hz > sim_rate)
+			{
+				throw std::runtime_error(owner + " if_sample_rate must not exceed the simulation sample rate.");
+			}
+		}
+		if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value())
+		{
+			if (*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
+			{
+				throw std::runtime_error(owner + " if_filter_bandwidth must be less than half if_sample_rate.");
+			}
+		}
+
+		if (!mode_json.contains("dechirp_reference") || !mode_json.at("dechirp_reference").is_object())
+		{
+			throw std::runtime_error(owner + " enables dechirping but does not declare dechirp_reference.");
+		}
+
+		const auto& ref_json = mode_json.at("dechirp_reference");
+		reject_unknown_keys(ref_json, owner, "dechirp_reference", {"source", "transmitter_name", "waveform_name"});
+		if (!ref_json.contains("source"))
+		{
+			throw std::runtime_error(owner + " dechirp_reference requires source.");
+		}
+		radar::Receiver::DechirpReference reference;
+		reference.source = radar::parseDechirpReferenceSourceToken(ref_json.at("source").get<std::string>());
+
+		const bool has_transmitter_name = ref_json.contains("transmitter_name");
+		const bool has_waveform_name = ref_json.contains("waveform_name");
+		switch (reference.source)
+		{
+		case radar::Receiver::DechirpReferenceSource::Attached:
+			if (has_transmitter_name || has_waveform_name)
+			{
+				throw std::runtime_error(owner +
+										 " attached dechirp_reference must not set transmitter_name or waveform_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::Transmitter:
+			if (!has_transmitter_name || has_waveform_name)
+			{
+				throw std::runtime_error(owner + " transmitter dechirp_reference requires transmitter_name only.");
+			}
+			reference.name = ref_json.at("transmitter_name").get<std::string>();
+			if (reference.name.empty())
+			{
+				throw std::runtime_error(owner + " transmitter dechirp_reference has an empty transmitter_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::Custom:
+			if (!has_waveform_name || has_transmitter_name)
+			{
+				throw std::runtime_error(owner + " custom dechirp_reference requires waveform_name only.");
+			}
+			reference.name = ref_json.at("waveform_name").get<std::string>();
+			if (reference.name.empty())
+			{
+				throw std::runtime_error(owner + " custom dechirp_reference has an empty waveform_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::None:
+			throw std::runtime_error(owner + " dechirp_reference source must be attached, transmitter, or custom.");
+		}
+
+		receiver.setDechirpMode(mode);
+		receiver.setDechirpReference(std::move(reference));
+		receiver.setFmcwIfChainRequest(std::move(if_chain));
+	}
+
+	/// Serializes receiver-side FMCW mode settings.
+	nlohmann::json receiver_fmcw_mode_to_json(const radar::Receiver& receiver)
+	{
+		nlohmann::json mode_json = nlohmann::json::object();
+		if (!receiver.isDechirpEnabled())
+		{
+			return mode_json;
+		}
+
+		const auto& reference = receiver.getDechirpReference();
+		mode_json["dechirp_mode"] = std::string(radar::dechirpModeToken(receiver.getDechirpMode()));
+		const auto& if_chain = receiver.getFmcwIfChainRequest();
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			mode_json["if_sample_rate"] = *if_chain.sample_rate_hz;
+		}
+		if (if_chain.filter_bandwidth_hz.has_value())
+		{
+			mode_json["if_filter_bandwidth"] = *if_chain.filter_bandwidth_hz;
+		}
+		if (if_chain.filter_transition_width_hz.has_value())
+		{
+			mode_json["if_filter_transition_width"] = *if_chain.filter_transition_width_hz;
+		}
+		nlohmann::json ref_json = {{"source", std::string(radar::dechirpReferenceSourceToken(reference.source))}};
+		if (reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
+		{
+			ref_json["transmitter_name"] =
+				!reference.transmitter_name.empty() ? reference.transmitter_name : reference.name;
+		}
+		else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
+		{
+			ref_json["waveform_name"] = !reference.waveform_name.empty() ? reference.waveform_name : reference.name;
+		}
+		mode_json["dechirp_reference"] = std::move(ref_json);
+		return mode_json;
 	}
 }
 
@@ -319,6 +574,34 @@ namespace fers_signal
 		{
 			j["cw"] = nlohmann::json::object();
 		}
+		else if (const auto* fmcw = rs.getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			j["fmcw_linear_chirp"] = {{"direction", std::string(fmcwChirpDirectionToken(fmcw->getDirection()))},
+									  {"chirp_bandwidth", fmcw->getChirpBandwidth()},
+									  {"chirp_duration", fmcw->getChirpDuration()},
+									  {"chirp_period", fmcw->getChirpPeriod()}};
+			if (std::abs(fmcw->getStartFrequencyOffset()) > EPSILON)
+			{
+				j["fmcw_linear_chirp"]["start_frequency_offset"] = fmcw->getStartFrequencyOffset();
+			}
+			if (fmcw->getChirpCount().has_value())
+			{
+				j["fmcw_linear_chirp"]["chirp_count"] = *fmcw->getChirpCount();
+			}
+		}
+		else if (const auto* triangle = rs.getFmcwTriangleSignal(); triangle != nullptr)
+		{
+			j["fmcw_triangle"] = {{"chirp_bandwidth", triangle->getChirpBandwidth()},
+								  {"chirp_duration", triangle->getChirpDuration()}};
+			if (std::abs(triangle->getStartFrequencyOffset()) > EPSILON)
+			{
+				j["fmcw_triangle"]["start_frequency_offset"] = triangle->getStartFrequencyOffset();
+			}
+			if (triangle->getTriangleCount().has_value())
+			{
+				j["fmcw_triangle"]["triangle_count"] = *triangle->getTriangleCount();
+			}
+		}
 		else
 		{
 			if (const auto& filename = rs.getFilename(); filename.has_value())
@@ -345,6 +628,55 @@ namespace fers_signal
 			auto cw_signal = std::make_unique<CwSignal>();
 			rs = std::make_unique<RadarSignal>(name, power, carrier, params::endTime() - params::startTime(),
 											   std::move(cw_signal), id);
+		}
+		else if (j.contains("fmcw_linear_chirp"))
+		{
+			const auto& fmcw_json = j.at("fmcw_linear_chirp");
+			const auto direction = parseFmcwChirpDirection(fmcw_json.at("direction").get<std::string>());
+			std::optional<std::size_t> chirp_count;
+			if (fmcw_json.contains("chirp_count"))
+			{
+				const auto parsed_count = fmcw_json.at("chirp_count").get<long long>();
+				if (parsed_count <= 0)
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid chirp_count.");
+				}
+				chirp_count = static_cast<std::size_t>(parsed_count);
+			}
+
+			auto fmcw_signal = std::make_unique<FmcwChirpSignal>(
+				fmcw_json.at("chirp_bandwidth").get<RealType>(), fmcw_json.at("chirp_duration").get<RealType>(),
+				fmcw_json.at("chirp_period").get<RealType>(), fmcw_json.value("start_frequency_offset", 0.0),
+				chirp_count, direction);
+			rs = std::make_unique<RadarSignal>(name, power, carrier, fmcw_signal->getChirpDuration(),
+											   std::move(fmcw_signal), id);
+			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");
+		}
+		else if (j.contains("fmcw_triangle"))
+		{
+			const auto& fmcw_json = j.at("fmcw_triangle");
+			std::optional<std::size_t> triangle_count;
+			if (fmcw_json.contains("triangle_count"))
+			{
+				const auto& count_json = fmcw_json.at("triangle_count");
+				if (!count_json.is_number_integer() && !count_json.is_number_unsigned())
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid triangle_count.");
+				}
+				const auto parsed_count = count_json.get<long long>();
+				if (parsed_count <= 0)
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid triangle_count.");
+				}
+				triangle_count = static_cast<std::size_t>(parsed_count);
+			}
+
+			auto fmcw_signal = std::make_unique<FmcwTriangleSignal>(
+				fmcw_json.at("chirp_bandwidth").get<RealType>(), fmcw_json.at("chirp_duration").get<RealType>(),
+				fmcw_json.value("start_frequency_offset", 0.0), triangle_count);
+			rs = std::make_unique<RadarSignal>(name, power, carrier, fmcw_signal->getTrianglePeriod(),
+											   std::move(fmcw_signal), id);
+			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");
 		}
 		else if (j.contains("pulsed_from_file"))
 		{
@@ -491,6 +823,10 @@ namespace radar
 		{
 			j["pulsed_mode"] = {{"prf", t.getPrf()}};
 		}
+		else if (t.getMode() == OperationMode::FMCW_MODE)
+		{
+			j["fmcw_mode"] = nlohmann::json::object();
+		}
 		else
 		{
 			j["cw_mode"] = nlohmann::json::object();
@@ -515,6 +851,10 @@ namespace radar
 		{
 			j["pulsed_mode"] = {
 				{"prf", r.getWindowPrf()}, {"window_skip", r.getWindowSkip()}, {"window_length", r.getWindowLength()}};
+		}
+		else if (r.getMode() == OperationMode::FMCW_MODE)
+		{
+			j["fmcw_mode"] = receiver_fmcw_mode_to_json(r);
 		}
 		else
 		{
@@ -642,6 +982,7 @@ namespace params
 
 namespace
 {
+	/// Serializes a platform and its attached components to JSON.
 	nlohmann::json serialize_platform(const radar::Platform* p, const core::World& world)
 	{
 		nlohmann::json plat_json = *p;
@@ -686,7 +1027,14 @@ namespace
 						}
 						else
 						{
-							monostatic_comp["cw_mode"] = nlohmann::json::object();
+							if (t->getMode() == radar::OperationMode::FMCW_MODE)
+							{
+								monostatic_comp["fmcw_mode"] = receiver_fmcw_mode_to_json(*recv);
+							}
+							else
+							{
+								monostatic_comp["cw_mode"] = nlohmann::json::object();
+							}
 						}
 					}
 					plat_json["components"].push_back(nlohmann::json{{"monostatic", monostatic_comp}});
@@ -723,6 +1071,7 @@ namespace
 		return plat_json;
 	}
 
+	/// Parses simulation parameters from JSON and updates the master seeder.
 	void parse_parameters(const nlohmann::json& sim, std::mt19937& masterSeeder)
 	{
 		auto new_params = sim.at("parameters").get<params::Parameters>();
@@ -745,6 +1094,7 @@ namespace
 		params::params.simulation_name = sim.value("name", "");
 	}
 
+	/// Parses top-level reusable assets from JSON into the world.
 	void parse_assets(const nlohmann::json& sim, core::World& world)
 	{
 		if (sim.contains("waveforms"))
@@ -786,19 +1136,114 @@ namespace
 		}
 	}
 
+	void validate_unique_names(const nlohmann::json& sim)
+	{
+		std::unordered_map<std::string, std::string> name_registry;
+		name_registry.reserve(64);
+
+		const auto register_name = [&name_registry](const nlohmann::json& element, const std::string_view kind)
+		{
+			if (!element.is_object() || !element.contains("name"))
+			{
+				return;
+			}
+
+			const auto name = element.at("name").get<std::string>();
+			const auto [iter, inserted] = name_registry.emplace(name, std::string(kind));
+			if (!inserted)
+			{
+				throw std::runtime_error("Duplicate name '" + name + "' found for " + std::string(kind) +
+										 "; previously used by " + iter->second + ".");
+			}
+		};
+
+		if (sim.contains("waveforms"))
+		{
+			for (const auto& waveform : sim.at("waveforms"))
+			{
+				register_name(waveform, "waveform");
+			}
+		}
+
+		if (sim.contains("timings"))
+		{
+			for (const auto& timing : sim.at("timings"))
+			{
+				register_name(timing, "timing");
+			}
+		}
+
+		if (sim.contains("antennas"))
+		{
+			for (const auto& antenna : sim.at("antennas"))
+			{
+				register_name(antenna, "antenna");
+			}
+		}
+
+		if (sim.contains("platforms"))
+		{
+			for (const auto& platform : sim.at("platforms"))
+			{
+				register_name(platform, "platform");
+				if (!platform.contains("components") || !platform.at("components").is_array())
+				{
+					continue;
+				}
+
+				for (const auto& component_wrapper : platform.at("components"))
+				{
+					if (!component_wrapper.is_object())
+					{
+						continue;
+					}
+					for (const auto& [kind, component] : component_wrapper.items())
+					{
+						register_name(component, kind);
+					}
+				}
+			}
+		}
+	}
+
+	/// Counts operation mode blocks on a component.
+	std::size_t mode_block_count(const nlohmann::json& comp_json)
+	{
+		return static_cast<std::size_t>(comp_json.contains("pulsed_mode")) +
+			static_cast<std::size_t>(comp_json.contains("fmcw_mode")) +
+			static_cast<std::size_t>(comp_json.contains("cw_mode"));
+	}
+
+	/// Throws when a partial update or full component declares conflicting modes.
+	void reject_conflicting_mode_blocks(const nlohmann::json& comp_json, const std::string& error_context)
+	{
+		if (mode_block_count(comp_json) > 1)
+		{
+			throw std::runtime_error(error_context +
+									 " must have at most one of 'pulsed_mode', 'cw_mode', or 'fmcw_mode'.");
+		}
+	}
+
+	/// Parses the mutually exclusive operation mode block for a component.
 	radar::OperationMode parse_mode(const nlohmann::json& comp_json, const std::string& error_context)
 	{
+		reject_conflicting_mode_blocks(comp_json, error_context);
 		if (comp_json.contains("pulsed_mode"))
 		{
 			return radar::OperationMode::PULSED_MODE;
+		}
+		if (comp_json.contains("fmcw_mode"))
+		{
+			return radar::OperationMode::FMCW_MODE;
 		}
 		if (comp_json.contains("cw_mode"))
 		{
 			return radar::OperationMode::CW_MODE;
 		}
-		throw std::runtime_error(error_context + " must have a 'pulsed_mode' or 'cw_mode' block.");
+		throw std::runtime_error(error_context + " must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block.");
 	}
 
+	/// Parses a transmitter component from JSON into the world.
 	void parse_transmitter(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 						   std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
@@ -811,24 +1256,30 @@ namespace
 		if (world.findWaveform(wave_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid waveform '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("waveform", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "waveform"));
 			return;
 		}
 		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid timing source '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "timing"));
 			return;
 		}
 		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Transmitter '{}': Missing or invalid antenna '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "antenna"));
 			return;
 		}
 
 		radar::OperationMode mode =
 			parse_mode(comp_json, "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
+		if (mode == radar::OperationMode::FMCW_MODE && comp_json.contains("fmcw_mode") &&
+			has_dechirp_fields(comp_json.at("fmcw_mode")))
+		{
+			throw std::runtime_error("Transmitter component '" + comp_json.value("name", "Unnamed") +
+									 "' fmcw_mode must not contain dechirp configuration.");
+		}
 
 		const auto trans_id = parse_json_id(comp_json, "id", "Transmitter");
 		auto trans = std::make_unique<radar::Transmitter>(plat, comp_json.value("name", "Unnamed"), mode, trans_id);
@@ -837,7 +1288,11 @@ namespace
 			trans->setPrf(comp_json.at("pulsed_mode").value("prf", 0.0));
 		}
 
-		trans->setWave(world.findWaveform(wave_id));
+		auto* const waveform = world.findWaveform(wave_id);
+		validate_fmcw_waveform(*waveform, "Waveform '" + waveform->getName() + "'");
+		validate_waveform_mode_match(*waveform, mode,
+									 "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
+		trans->setWave(waveform);
 		trans->setAntenna(world.findAntenna(antenna_id));
 
 		if (const auto timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
@@ -853,13 +1308,23 @@ namespace
 			{
 				pri = 1.0 / trans->getPrf();
 			}
-			trans->setSchedule(radar::processRawSchedule(std::move(raw), trans->getName(),
-														 mode == radar::OperationMode::PULSED_MODE, pri));
+			auto schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
+													  mode == radar::OperationMode::PULSED_MODE, pri);
+			if (waveform->isFmcwFamily())
+			{
+				validate_fmcw_schedule(schedule, *waveform, "Transmitter component '" + trans->getName() + "'");
+			}
+			trans->setSchedule(std::move(schedule));
+		}
+		else if (waveform->isFmcwFamily())
+		{
+			validate_fmcw_schedule(trans->getSchedule(), *waveform, "Transmitter component '" + trans->getName() + "'");
 		}
 
 		world.add(std::move(trans));
 	}
 
+	/// Parses a receiver component from JSON into the world.
 	void parse_receiver(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 						std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
@@ -871,14 +1336,14 @@ namespace
 		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Receiver '{}': Missing or invalid timing source '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "timing"));
 			return;
 		}
 
 		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Receiver '{}': Missing or invalid antenna '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "antenna"));
 			return;
 		}
 
@@ -925,9 +1390,12 @@ namespace
 														mode == radar::OperationMode::PULSED_MODE, pri));
 		}
 
+		parse_receiver_dechirp_config(comp_json, *recv,
+									  "Receiver component '" + comp_json.value("name", "Unnamed") + "'");
 		world.add(std::move(recv));
 	}
 
+	/// Parses a target component from JSON into the world.
 	void parse_target(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 					  std::mt19937& masterSeeder)
 	{
@@ -984,6 +1452,7 @@ namespace
 		}
 	}
 
+	/// Parses a monostatic component into linked transmitter and receiver objects.
 	void parse_monostatic(const nlohmann::json& comp_json, radar::Platform* plat, core::World& world,
 						  std::mt19937& masterSeeder, TimingInstanceMap& timing_instances)
 	{
@@ -998,19 +1467,19 @@ namespace
 		if (world.findWaveform(wave_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid waveform '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("waveform", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "waveform"));
 			return;
 		}
 		if (world.findTiming(timing_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid timing source '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("timing", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "timing"));
 			return;
 		}
 		if (world.findAntenna(antenna_id) == nullptr)
 		{
 			LOG(logging::Level::WARNING, "Skipping Monostatic '{}': Missing or invalid antenna '{}'.",
-				comp_json.value("name", "Unnamed"), comp_json.value("antenna", ""));
+				comp_json.value("name", "Unnamed"), json_field_for_log(comp_json, "antenna"));
 			return;
 		}
 
@@ -1025,7 +1494,11 @@ namespace
 			trans->setPrf(comp_json.at("pulsed_mode").value("prf", 0.0));
 		}
 
-		trans->setWave(world.findWaveform(wave_id));
+		auto* const waveform = world.findWaveform(wave_id);
+		validate_fmcw_waveform(*waveform, "Waveform '" + waveform->getName() + "'");
+		validate_waveform_mode_match(*waveform, mode,
+									 "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
+		trans->setWave(waveform);
 		trans->setAntenna(world.findAntenna(antenna_id));
 		if (const auto shared_timing = resolve_timing_instance(world, masterSeeder, timing_instances, timing_id))
 		{
@@ -1071,18 +1544,31 @@ namespace
 			// Process once, apply to both
 			auto processed_schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
 																mode == radar::OperationMode::PULSED_MODE, pri);
+			if (waveform->isFmcwFamily())
+			{
+				validate_fmcw_schedule(processed_schedule, *waveform,
+									   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
+			}
 
 			trans->setSchedule(processed_schedule);
 			recv->setSchedule(processed_schedule);
+		}
+		else if (waveform->isFmcwFamily())
+		{
+			validate_fmcw_schedule(trans->getSchedule(), *waveform,
+								   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 		}
 
 		// Link them and add to world
 		trans->setAttached(recv.get());
 		recv->setAttached(trans.get());
+		parse_receiver_dechirp_config(comp_json, *recv,
+									  "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 		world.add(std::move(trans));
 		world.add(std::move(recv));
 	}
 
+	/// Parses a platform and its component list from JSON into the world.
 	void parse_platform(const nlohmann::json& plat_json, core::World& world, std::mt19937& masterSeeder,
 						TimingInstanceMap& timing_instances)
 	{
@@ -1119,6 +1605,43 @@ namespace
 		}
 
 		world.add(std::move(plat));
+	}
+
+	void populate_world_from_json(const nlohmann::json& j, core::World& world, std::mt19937& masterSeeder)
+	{
+		world.clear();
+
+		const auto& sim = j.at("simulation");
+		validate_unique_names(sim);
+
+		parse_parameters(sim, masterSeeder);
+		parse_assets(sim, world);
+
+		if (sim.contains("platforms"))
+		{
+			TimingInstanceMap timing_instances;
+			for (const auto& plat_json : sim.at("platforms"))
+			{
+				parse_platform(plat_json, world, masterSeeder, timing_instances);
+			}
+		}
+		world.resolveReceiverDechirpReferences();
+
+		const RealType start_time = params::startTime();
+		const RealType end_time = params::endTime();
+		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
+		const auto num_samples = static_cast<size_t>(std::ceil((end_time - start_time) / dt_sim));
+
+		for (const auto& receiver : world.getReceivers())
+		{
+			if (receiver->getMode() == radar::OperationMode::CW_MODE ||
+				receiver->getMode() == radar::OperationMode::FMCW_MODE)
+			{
+				receiver->prepareStreamingData(receiver->hasFmcwIfSampleRate() ? 0 : num_samples);
+			}
+		}
+
+		world.scheduleInitialEvents();
 	}
 }
 
@@ -1304,10 +1827,20 @@ namespace serial
 		if (j.contains("name"))
 			tx->setName(j.at("name").get<std::string>());
 
+		reject_conflicting_mode_blocks(j, "Transmitter '" + tx->getName() + "'");
 		if (j.contains("pulsed_mode"))
 		{
 			tx->setMode(radar::OperationMode::PULSED_MODE);
 			tx->setPrf(j.at("pulsed_mode").value("prf", 0.0));
+		}
+		else if (j.contains("fmcw_mode"))
+		{
+			if (has_dechirp_fields(j.at("fmcw_mode")))
+			{
+				throw std::runtime_error("Transmitter '" + tx->getName() +
+										 "' fmcw_mode must not contain dechirp configuration.");
+			}
+			tx->setMode(radar::OperationMode::FMCW_MODE);
 		}
 		else if (j.contains("cw_mode"))
 		{
@@ -1320,6 +1853,8 @@ namespace serial
 			auto* wf = world.findWaveform(id);
 			if (wf == nullptr)
 				throw std::runtime_error("Waveform ID " + std::to_string(id) + " not found.");
+			validate_fmcw_waveform(*wf, "Waveform '" + wf->getName() + "'");
+			validate_waveform_mode_match(*wf, tx->getMode(), "Transmitter '" + tx->getName() + "'");
 			tx->setWave(wf);
 		}
 
@@ -1353,8 +1888,22 @@ namespace serial
 			RealType pri = 0.0;
 			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
 				pri = 1.0 / tx->getPrf();
-			tx->setSchedule(radar::processRawSchedule(std::move(raw), tx->getName(),
-													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri));
+			auto schedule = radar::processRawSchedule(std::move(raw), tx->getName(),
+													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
+			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
+			{
+				validate_fmcw_schedule(schedule, *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
+			}
+			tx->setSchedule(std::move(schedule));
+		}
+		if (tx->getSignal() != nullptr)
+		{
+			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
+			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Transmitter '" + tx->getName() + "'");
+			if (tx->getSignal()->isFmcwFamily())
+			{
+				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
+			}
 		}
 	}
 
@@ -1364,12 +1913,17 @@ namespace serial
 		if (j.contains("name"))
 			rx->setName(j.at("name").get<std::string>());
 
+		reject_conflicting_mode_blocks(j, "Receiver '" + rx->getName() + "'");
 		if (j.contains("pulsed_mode"))
 		{
 			rx->setMode(radar::OperationMode::PULSED_MODE);
 			const auto& mode_json = j.at("pulsed_mode");
 			rx->setWindowProperties(mode_json.value("window_length", 0.0), mode_json.value("prf", 0.0),
 									mode_json.value("window_skip", 0.0));
+		}
+		else if (j.contains("fmcw_mode"))
+		{
+			rx->setMode(radar::OperationMode::FMCW_MODE);
 		}
 		else if (j.contains("cw_mode"))
 		{
@@ -1427,12 +1981,26 @@ namespace serial
 			rx->setSchedule(radar::processRawSchedule(std::move(raw), rx->getName(),
 													  rx->getMode() == radar::OperationMode::PULSED_MODE, pri));
 		}
+		if (j.contains("fmcw_mode"))
+		{
+			parse_receiver_dechirp_config(j, *rx, "Receiver '" + rx->getName() + "'");
+		}
+		world.resolveReceiverDechirpReferences();
 	}
 
 	void update_monostatic_from_json(const nlohmann::json& j, radar::Transmitter* tx, radar::Receiver* rx,
 									 core::World& world, std::mt19937& masterSeeder)
 	{
-		update_transmitter_from_json(j, tx, world, masterSeeder);
+		auto transmitter_json = j;
+		if (transmitter_json.contains("fmcw_mode") && transmitter_json.at("fmcw_mode").is_object())
+		{
+			transmitter_json["fmcw_mode"].erase("dechirp_mode");
+			transmitter_json["fmcw_mode"].erase("dechirp_reference");
+			transmitter_json["fmcw_mode"].erase("if_sample_rate");
+			transmitter_json["fmcw_mode"].erase("if_filter_bandwidth");
+			transmitter_json["fmcw_mode"].erase("if_filter_transition_width");
+		}
+		update_transmitter_from_json(transmitter_json, tx, world, masterSeeder);
 
 		if (j.contains("name"))
 			rx->setName(j.at("name").get<std::string>());
@@ -1486,9 +2054,27 @@ namespace serial
 				pri = 1.0 / tx->getPrf();
 			auto processed_schedule = radar::processRawSchedule(
 				std::move(raw), tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
+			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
+			{
+				validate_fmcw_schedule(processed_schedule, *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
+			}
 			tx->setSchedule(processed_schedule);
 			rx->setSchedule(processed_schedule);
 		}
+		if (tx->getSignal() != nullptr)
+		{
+			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
+			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Monostatic '" + tx->getName() + "'");
+			if (tx->getSignal()->isFmcwFamily())
+			{
+				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
+			}
+		}
+		if (j.contains("fmcw_mode"))
+		{
+			parse_receiver_dechirp_config(j, *rx, "Monostatic '" + tx->getName() + "'");
+		}
+		world.resolveReceiverDechirpReferences();
 	}
 
 	void update_target_from_json(const nlohmann::json& j, radar::Target* existing_tgt, core::World& world,
@@ -1589,42 +2175,8 @@ namespace serial
 
 	void json_to_world(const nlohmann::json& j, core::World& world, std::mt19937& masterSeeder)
 	{
-		// 1. Clear the existing world state. This function always performs a full
-		//    replacement to ensure the C++ state is a perfect mirror of the UI state.
-		world.clear();
-
-		const auto& sim = j.at("simulation");
-
-		parse_parameters(sim, masterSeeder);
-		parse_assets(sim, world);
-
-		// 3. Restore platforms and their components.
-		if (sim.contains("platforms"))
-		{
-			TimingInstanceMap timing_instances;
-			for (const auto& plat_json : sim.at("platforms"))
-			{
-				parse_platform(plat_json, world, masterSeeder, timing_instances);
-			}
-		}
-
-		// 4. Finalize world state after all objects are loaded.
-
-		// Prepare CW receiver buffers before starting simulation
-		const RealType start_time = params::startTime();
-		const RealType end_time = params::endTime();
-		const RealType dt_sim = 1.0 / (params::rate() * params::oversampleRatio());
-		const auto num_samples = static_cast<size_t>(std::ceil((end_time - start_time) / dt_sim));
-
-		for (const auto& receiver : world.getReceivers())
-		{
-			if (receiver->getMode() == radar::OperationMode::CW_MODE)
-			{
-				receiver->prepareCwData(num_samples);
-			}
-		}
-
-		// Schedule initial events after all objects are loaded.
-		world.scheduleInitialEvents();
+		core::World parsed_world;
+		populate_world_from_json(j, parsed_world, masterSeeder);
+		world.swap(parsed_world);
 	}
 }

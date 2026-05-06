@@ -143,12 +143,38 @@ namespace core
 		[[nodiscard]] radar::Transmitter* findTransmitter(const SimId id);
 
 		/**
+		 * @brief Finds a transmitter by name.
+		 *
+		 * @param name The transmitter name to find.
+		 * @return A pointer to the Transmitter if found, or nullptr if not found.
+		 */
+		[[nodiscard]] radar::Transmitter* findTransmitterByName(const std::string& name);
+
+		/**
 		 * @brief Finds a receiver by ID.
 		 *
 		 * @param id The ID of the receiver to find.
 		 * @return A pointer to the Receiver if found, or nullptr if not found.
 		 */
 		[[nodiscard]] radar::Receiver* findReceiver(const SimId id);
+
+		/**
+		 * @brief Finds a waveform by name.
+		 *
+		 * @param name The waveform name to find.
+		 * @return A pointer to the RadarSignal if found, or nullptr if not found.
+		 */
+		[[nodiscard]] fers_signal::RadarSignal* findWaveformByName(const std::string& name);
+
+		/**
+		 * @brief Finds the earliest simulation time that can require CW phase-noise samples.
+		 *
+		 * Includes active streaming transmitters and receivers. Pre-start transmitter periods that cross the
+		 * simulation start are included so retarded emissions can sample transmitter phase noise before t_start.
+		 *
+		 * @return Earliest required lookup time, or params::startTime() if no streaming component overlaps.
+		 */
+		[[nodiscard]] RealType earliestPhaseNoiseLookupStart() const;
 
 		/**
 		 * @brief Finds a target by ID.
@@ -257,10 +283,22 @@ namespace core
 		void clear() noexcept;
 
 		/**
+		 * @brief Exchanges all owned world state with another world.
+		 */
+		void swap(World& other) noexcept;
+
+		/**
 		 * @brief Populates the event queue with the initial events for the simulation.
 		 * This method should be called after all simulation objects have been parsed and added to the world.
 		 */
 		void scheduleInitialEvents();
+
+		/**
+		 * @brief Resolves and validates receiver FMCW dechirp references after all components are loaded.
+		 *
+		 * @throws std::runtime_error if a dechirped receiver has an invalid or inactive LO reference.
+		 */
+		void resolveReceiverDechirpReferences();
 
 		/**
 		 * @brief Dumps the current state of the event queue to a string for debugging.
@@ -284,22 +322,26 @@ namespace core
 		[[nodiscard]] SimulationState& getSimulationState() noexcept { return _simulation_state; }
 
 	private:
-		std::vector<std::unique_ptr<radar::Platform>> _platforms;
+		std::vector<std::unique_ptr<radar::Platform>> _platforms; ///< Owned radar platforms.
 
-		std::vector<std::unique_ptr<radar::Transmitter>> _transmitters;
+		std::vector<std::unique_ptr<radar::Transmitter>> _transmitters; ///< Owned transmitters.
 
-		std::vector<std::unique_ptr<radar::Receiver>> _receivers;
+		std::vector<std::unique_ptr<radar::Receiver>> _receivers; ///< Owned receivers.
 
-		std::vector<std::unique_ptr<radar::Target>> _targets;
+		std::vector<std::unique_ptr<radar::Target>> _targets; ///< Owned targets.
 
-		std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>> _waveforms;
+		std::unordered_map<SimId, std::unique_ptr<fers_signal::RadarSignal>> _waveforms; ///< Owned waveform assets.
 
-		std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>> _antennas;
+		std::unordered_map<std::string, SimId> _waveform_ids_by_name; ///< Waveform name to ID lookup.
 
-		std::unordered_map<SimId, std::unique_ptr<timing::PrototypeTiming>> _timings;
+		std::unordered_map<std::string, radar::Transmitter*> _transmitters_by_name; ///< Transmitter name lookup.
 
-		std::priority_queue<Event, std::vector<Event>, EventComparator> _event_queue;
+		std::unordered_map<SimId, std::unique_ptr<antenna::Antenna>> _antennas; ///< Owned antenna assets.
 
-		SimulationState _simulation_state;
+		std::unordered_map<SimId, std::unique_ptr<timing::PrototypeTiming>> _timings; ///< Owned timing prototypes.
+
+		std::priority_queue<Event, std::vector<Event>, EventComparator> _event_queue; ///< Pending simulation events.
+
+		SimulationState _simulation_state; ///< Mutable runtime simulation state.
 	};
 }

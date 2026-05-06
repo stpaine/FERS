@@ -14,6 +14,8 @@
 #include <memory>
 #include <vector>
 
+#include "core/simulation_state.h"
+
 namespace radar
 {
 	class Receiver;
@@ -50,18 +52,19 @@ namespace processing
 							std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr);
 
 	/**
-	 * @brief The finalization task for a continuous-wave (CW) mode receiver.
+	 * @brief The finalization task for a streaming-mode receiver.
 	 *
-	 * This function is submitted to the main thread pool when a CW receiver
+	 * This function is submitted to the main thread pool when a streaming receiver
 	 * finishes its operation. It processes the entire collected I/Q buffer,
 	 * applies interference and noise, and writes the final data to a file.
 	 *
-	 * @param receiver A pointer to the CW-mode receiver to finalize.
+	 * @param receiver A pointer to the streaming-mode receiver to finalize.
 	 * @param pool A pointer to the main thread pool for parallelizing sub-tasks.
 	 * @param reporter Shared pointer to the progress reporter for status updates.
 	 * @param output_dir Output directory for the simulation files.
 	 */
-	void finalizeCwReceiver(radar::Receiver* receiver, pool::ThreadPool* pool,
-							std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
-							std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr);
+	void finalizeStreamingReceiver(radar::Receiver* receiver, pool::ThreadPool* pool,
+								   std::shared_ptr<core::ProgressReporter> reporter, const std::string& output_dir,
+								   std::shared_ptr<core::OutputMetadataCollector> metadata_collector = nullptr,
+								   std::vector<core::ActiveStreamingSource> streaming_sources = {});
 }

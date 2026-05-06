@@ -1,12 +1,17 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <complex>
+#include <iostream>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "antenna/antenna_factory.h"
 #include "core/config.h"
+#include "core/logging.h"
 #include "core/parameters.h"
 #include "core/sim_events.h"
 #include "core/sim_threading.h"
@@ -25,7 +30,9 @@
 #include "timing/prototype_timing.h"
 #include "timing/timing.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
+using Catch::Matchers::WithinRel;
 
 namespace
 {
@@ -39,6 +46,130 @@ namespace
 		ParamGuard() : saved(params::params) {}
 		~ParamGuard() { params::params = saved; }
 	};
+
+	struct CerrCapture
+	{
+		std::ostringstream buffer;
+		std::streambuf* old{nullptr};
+		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		~CerrCapture() { std::cerr.rdbuf(old); }
+		[[nodiscard]] std::string str() const { return buffer.str(); }
+	};
+
+	struct LogLevelGuard
+	{
+		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
+		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
+	};
+
+	/// Initializes a platform with constant position and zero rotation.
+	void setupStaticPlatform(radar::Platform& platform, const math::Vec3& position)
+	{
+		platform.getMotionPath()->addCoord(math::Coord{position, 0.0});
+		platform.getMotionPath()->finalize();
+		platform.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+		platform.getRotationPath()->finalize();
+	}
+
+	void setupPathPlatform(radar::Platform& platform, const math::Path::InterpType interpolation,
+						   const std::vector<math::Coord>& coords)
+	{
+		platform.getMotionPath()->setInterp(interpolation);
+		for (const auto& coord : coords)
+		{
+			platform.getMotionPath()->addCoord(coord);
+		}
+		platform.getMotionPath()->finalize();
+		platform.getRotationPath()->addCoord(math::RotationCoord{0.0, 0.0, 0.0});
+		platform.getRotationPath()->finalize();
+	}
+
+	struct StreamingPathWorld
+	{
+		std::unique_ptr<core::World> world;
+		radar::Transmitter* tx = nullptr;
+		radar::Receiver* rx = nullptr;
+		radar::Target* target = nullptr;
+	};
+
+	StreamingPathWorld
+	createStreamingPathWorld(const math::Path::InterpType tx_interpolation, const std::vector<math::Coord>& tx_coords,
+							 const math::Path::InterpType rx_interpolation, const std::vector<math::Coord>& rx_coords,
+							 const std::optional<std::vector<math::Coord>>& target_coords = std::nullopt,
+							 const math::Path::InterpType target_interpolation = math::Path::InterpType::INTERP_STATIC)
+	{
+		auto world = std::make_unique<core::World>();
+
+		auto tx_plat = std::make_unique<radar::Platform>("TxPlat", 210);
+		setupPathPlatform(*tx_plat, tx_interpolation, tx_coords);
+		auto rx_plat = std::make_unique<radar::Platform>("RxPlat", 211);
+		setupPathPlatform(*rx_plat, rx_interpolation, rx_coords);
+
+		radar::Platform* target_platform_ptr = nullptr;
+		std::unique_ptr<radar::Platform> target_plat;
+		if (target_coords.has_value())
+		{
+			target_plat = std::make_unique<radar::Platform>("TargetPlat", 212);
+			setupPathPlatform(*target_plat, target_interpolation, *target_coords);
+			target_platform_ptr = target_plat.get();
+		}
+
+		auto proto_timing = std::make_unique<timing::PrototypeTiming>("Clock", 213);
+		proto_timing->setFrequency(1.0e6);
+		auto timing = std::make_shared<timing::Timing>("ClockInstance", 214);
+		timing->initializeModel(proto_timing.get());
+		auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 215);
+		auto signal = std::make_unique<fers_signal::RadarSignal>("CWWave", 1.0, 1.0e6, 1.0,
+																 std::make_unique<fers_signal::CwSignal>(), 216);
+
+		auto tx = std::make_unique<radar::Transmitter>(tx_plat.get(), "Tx", radar::OperationMode::CW_MODE, 217);
+		tx->setTiming(timing);
+		tx->setAntenna(antenna.get());
+		tx->setSignal(signal.get());
+
+		auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 218);
+		rx->setTiming(timing);
+		rx->setAntenna(antenna.get());
+
+		auto* tx_ptr = tx.get();
+		auto* rx_ptr = rx.get();
+
+		world->add(std::move(tx_plat));
+		world->add(std::move(rx_plat));
+		if (target_plat)
+		{
+			world->add(std::move(target_plat));
+		}
+		world->add(std::move(proto_timing));
+		world->add(std::move(antenna));
+		world->add(std::move(signal));
+		world->add(std::move(tx));
+		world->add(std::move(rx));
+
+		radar::Target* target_ptr = nullptr;
+		if (target_platform_ptr != nullptr)
+		{
+			auto target = radar::createIsoTarget(target_platform_ptr, "Target", 1.0, 219, 220);
+			target_ptr = target.get();
+			world->add(std::move(target));
+		}
+
+		return {.world = std::move(world), .tx = tx_ptr, .rx = rx_ptr, .target = target_ptr};
+	}
+
+	/// Wraps a phase delta into the [-pi, pi] interval.
+	RealType unwrapDelta(RealType delta)
+	{
+		while (delta > PI)
+		{
+			delta -= 2.0 * PI;
+		}
+		while (delta < -PI)
+		{
+			delta += 2.0 * PI;
+		}
+		return delta;
+	}
 
 	/**
 	 * @brief Helper to create a fully configured World with basic physics objects.
@@ -116,6 +247,40 @@ namespace
 		return world;
 	}
 
+	std::unique_ptr<core::World> createFmcwLoggingWorld(const std::optional<std::size_t> chirp_count,
+														std::vector<radar::SchedulePeriod> schedule = {})
+	{
+		auto world = std::make_unique<core::World>();
+
+		auto platform = std::make_unique<radar::Platform>("FmcwPlatform", 100);
+		auto* platform_ptr = platform.get();
+		auto timing_proto = std::make_unique<timing::PrototypeTiming>("FmcwClock", 101);
+		timing_proto->setFrequency(1.0e6);
+		auto timing = std::make_shared<timing::Timing>("FmcwClockInstance", 42);
+		timing->initializeModel(timing_proto.get());
+		auto antenna = std::make_unique<antenna::Isotropic>("FmcwAntenna", 102);
+		auto* antenna_ptr = antenna.get();
+		auto fmcw = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 0.04, 0.1, 0.0, chirp_count);
+		auto wave = std::make_unique<fers_signal::RadarSignal>("FmcwWave", 10.0, 1.0e9, 0.04, std::move(fmcw), 103);
+		auto* wave_ptr = wave.get();
+		auto transmitter =
+			std::make_unique<radar::Transmitter>(platform_ptr, "FmcwTx", radar::OperationMode::FMCW_MODE, 104);
+		transmitter->setTiming(timing);
+		transmitter->setAntenna(antenna_ptr);
+		transmitter->setSignal(wave_ptr);
+		if (!schedule.empty())
+		{
+			transmitter->setSchedule(std::move(schedule));
+		}
+
+		world->add(std::move(platform));
+		world->add(std::move(timing_proto));
+		world->add(std::move(antenna));
+		world->add(std::move(wave));
+		world->add(std::move(transmitter));
+		return world;
+	}
+
 	simulation::CwPhaseNoiseLookup makeLookup(const std::shared_ptr<timing::Timing>& timing)
 	{
 		const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
@@ -156,9 +321,68 @@ TEST_CASE("ProgressReporter safely wraps and calls callback", "[core][threading]
 	}
 }
 
-TEST_CASE("SimulationEngine handles CW state events", "[core][threading]")
+TEST_CASE("makeActiveSource caches streaming scalars and clips FMCW chirp count", "[core][threading][fmcw]")
 {
 	ParamGuard guard;
+
+	radar::Platform platform("TxPlatform");
+	antenna::Isotropic antenna("Iso");
+	auto timing = std::make_shared<timing::Timing>("Clock", 42);
+
+	radar::Transmitter tx(&platform, "FmcwTx", radar::OperationMode::FMCW_MODE, 101);
+	tx.setAntenna(&antenna);
+	tx.setTiming(timing);
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(20.0e6, 100.0e-6, 250.0e-6, 1.0e6, 1000);
+	fers_signal::RadarSignal wave("FmcwWave", 16.0, 10.0e9, 100.0e-6, std::move(fmcw_signal), 301);
+	tx.setSignal(&wave);
+
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 5.0, 65.0);
+
+	REQUIRE(source.transmitter == &tx);
+	REQUIRE(source.is_fmcw);
+	REQUIRE(source.fmcw == wave.getFmcwChirpSignal());
+	REQUIRE_THAT(source.segment_end, WithinAbs(5.25, 1.0e-12));
+	REQUIRE_THAT(source.carrier_freq, WithinAbs(10.0e9, 1.0e-6));
+	REQUIRE_THAT(source.amplitude, WithinAbs(4.0, 1.0e-12));
+	REQUIRE_THAT(source.chirp_duration, WithinAbs(100.0e-6, 1.0e-15));
+	REQUIRE_THAT(source.chirp_period, WithinAbs(250.0e-6, 1.0e-15));
+	REQUIRE_THAT(source.chirp_rate, WithinAbs(200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.signed_chirp_rate, WithinAbs(200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.start_freq_off, WithinAbs(1.0e6, 1.0e-9));
+	REQUIRE_THAT(source.two_pi_f0, WithinAbs(2.0 * PI * 1.0e6, 1.0e-9));
+	REQUIRE_THAT(source.s_pi_alpha, WithinAbs(PI * 200.0e9, 1.0e-3));
+	REQUIRE(source.chirp_count.has_value());
+	REQUIRE(*source.chirp_count == std::size_t{1000});
+}
+
+TEST_CASE("makeActiveSource caches signed FMCW down-chirp coefficient", "[core][threading][fmcw]")
+{
+	ParamGuard guard;
+
+	radar::Platform platform("TxPlatform");
+	antenna::Isotropic antenna("Iso");
+	auto timing = std::make_shared<timing::Timing>("Clock", 42);
+
+	radar::Transmitter tx(&platform, "FmcwTx", radar::OperationMode::FMCW_MODE, 101);
+	tx.setAntenna(&antenna);
+	tx.setTiming(timing);
+	auto fmcw_signal = std::make_unique<fers_signal::FmcwChirpSignal>(20.0e6, 100.0e-6, 250.0e-6, 1.0e6, std::nullopt,
+																	  fers_signal::FmcwChirpDirection::Down);
+	fers_signal::RadarSignal wave("FmcwWave", 16.0, 10.0e9, 100.0e-6, std::move(fmcw_signal), 301);
+	tx.setSignal(&wave);
+
+	const core::ActiveStreamingSource source = core::makeActiveSource(&tx, 5.0, 65.0);
+
+	REQUIRE(source.is_fmcw);
+	REQUIRE_THAT(source.chirp_rate, WithinAbs(200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.signed_chirp_rate, WithinAbs(-200.0e9, 1.0e-3));
+	REQUIRE_THAT(source.s_pi_alpha, WithinAbs(-PI * 200.0e9, 1.0e-3));
+}
+
+TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setTime(0.0, 10.0);
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
@@ -166,31 +390,31 @@ TEST_CASE("SimulationEngine handles CW state events", "[core][threading]")
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
 
-	SECTION("Tx CW Start adds to active list")
+	SECTION("Tx streaming start adds to active list")
 	{
-		engine.handleTxCwStart(tx);
-		REQUIRE(world->getSimulationState().active_cw_transmitters.size() == 1);
-		REQUIRE(world->getSimulationState().active_cw_transmitters[0] == tx);
+		engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
+		REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
+		REQUIRE(world->getSimulationState().active_streaming_transmitters[0].transmitter == tx);
 	}
 
-	SECTION("Tx CW End removes from active list")
+	SECTION("Tx streaming end keeps source as in-flight candidate")
 	{
-		engine.handleTxCwStart(tx);
-		engine.handleTxCwEnd(tx);
-		REQUIRE(world->getSimulationState().active_cw_transmitters.empty());
+		engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
+		engine.handleTxStreamingEnd(tx);
+		REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 	}
 
-	SECTION("Rx CW Start sets active")
+	SECTION("Rx streaming start sets active")
 	{
 		REQUIRE_FALSE(rx->isActive());
-		engine.handleRxCwStart(rx);
+		engine.handleRxStreamingStart(rx);
 		REQUIRE(rx->isActive());
 	}
 
-	SECTION("Rx CW End clears active")
+	SECTION("Rx streaming end clears active")
 	{
-		engine.handleRxCwStart(rx);
-		engine.handleRxCwEnd(rx);
+		engine.handleRxStreamingStart(rx);
+		engine.handleRxStreamingEnd(rx);
 		REQUIRE_FALSE(rx->isActive());
 	}
 }
@@ -322,8 +546,6 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
-	std::vector<radar::Transmitter*> active_tx = {tx};
-
 	SECTION("Calculates exact Direct and Reflected Path complex envelope")
 	{
 		// Math Verification:
@@ -354,14 +576,15 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 		ComplexType expected_refl = std::polar(expected_refl_amp, expected_phase);
 		ComplexType expected_total = expected_direct + expected_refl;
 
-		ComplexType actual_total = engine.calculateCwSample(rx, 0.0, active_tx);
+		ComplexType actual_total = simulation::calculateDirectPathContribution(tx, rx, 0.0) +
+			simulation::calculateReflectedPathContribution(tx, rx, world->getTargets().front().get(), 0.0);
 
 		REQUIRE_THAT(actual_total.real(), WithinAbs(expected_total.real(), 1e-12));
 		REQUIRE_THAT(actual_total.imag(), WithinAbs(expected_total.imag(), 1e-12));
 	}
 }
 
-TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buffers", "[core][threading]")
+TEST_CASE("SimulationEngine processStreamingPhysics steps through time and updates buffers", "[core][threading]")
 {
 	ParamGuard guard;
 	params::setRate(1000.0);
@@ -376,21 +599,21 @@ TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buff
 	auto* rx = world->getReceivers().front().get();
 
 	// Prepare receiver buffer
-	rx->prepareCwData(10);
+	rx->prepareStreamingData(10);
 	rx->setActive(true);
 
 	// Set state
 	world->getSimulationState().t_current = 0.0;
-	world->getSimulationState().active_cw_transmitters.push_back(tx);
+	engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
 
 	SECTION("Processes correct number of samples based on dt")
 	{
 		// dt = 1/1000 = 0.001s. Processing up to t=0.0025 should hit indices 0, 1, 2.
-		engine.processCwPhysics(0.0025);
+		engine.processStreamingPhysics(0.0025);
 
-		const auto& buffer = rx->getCwData();
-		// Samples 0, 1, 2 should be non-zero (populated with physics)
-		REQUIRE(std::abs(buffer[0]) > 0.0);
+		const auto& buffer = rx->getStreamingData();
+		// Sample 0 arrives before the propagation delay; samples 1 and 2 contain retarded-time energy.
+		REQUIRE(std::abs(buffer[0]) == 0.0);
 		REQUIRE(std::abs(buffer[1]) > 0.0);
 		REQUIRE(std::abs(buffer[2]) > 0.0);
 
@@ -399,7 +622,247 @@ TEST_CASE("SimulationEngine processCwPhysics steps through time and updates buff
 	}
 }
 
-TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW samples", "[core][threading]")
+TEST_CASE("SimulationEngine keeps streaming source through propagation tail after transmit end", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.4);
+	params::setC(1000.0);
+
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+
+	auto* tx = world->getTransmitters().front().get();
+	auto* rx = world->getReceivers().front().get();
+
+	rx->prepareStreamingData(400);
+	rx->setActive(true);
+
+	const core::ActiveStreamingSource source = core::makeActiveSource(tx, 0.0, 0.2);
+	engine.handleTxStreamingStart(source);
+	engine.handleTxStreamingEnd(tx);
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+	world->getSimulationState().t_current = 0.2;
+	engine.processStreamingPhysics(0.315);
+
+	bool saw_tail_energy = false;
+	for (std::size_t index = 200; index < 205; ++index)
+	{
+		saw_tail_energy = saw_tail_energy || std::abs(rx->getStreamingData()[index]) > 0.0;
+	}
+	REQUIRE(saw_tail_energy);
+
+	for (std::size_t index = 310; index < 315; ++index)
+	{
+		REQUIRE(std::abs(rx->getStreamingData()[index]) == 0.0);
+	}
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine cleanup preserves moving direct streaming tails", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.6);
+	params::setC(1000.0);
+
+	const auto run_case = [](const math::Path::InterpType interpolation, const std::vector<math::Coord>& tx_path,
+							 const RealType active_sample_time, const RealType cleanup_time)
+	{
+		auto fixture = createStreamingPathWorld(interpolation, tx_path, math::Path::InterpType::INTERP_STATIC,
+												{{math::Vec3{0.0, 0.0, 0.0}, 0.0}, {math::Vec3{0.0, 0.0, 0.0}, 0.6}});
+		pool::ThreadPool pool(1);
+		core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+
+		fixture.rx->prepareStreamingData(600);
+		fixture.rx->setActive(true);
+		engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+		fixture.world->getSimulationState().t_current = 0.2;
+		engine.handleTxStreamingEnd(fixture.tx);
+
+		engine.processStreamingPhysics(active_sample_time + 0.001);
+		const auto active_index = static_cast<std::size_t>(std::llround(active_sample_time * params::rate()));
+		REQUIRE(std::abs(fixture.rx->getStreamingData()[active_index]) > 0.0);
+		REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+		fixture.world->getSimulationState().t_current = active_sample_time + 0.001;
+		engine.processStreamingPhysics(cleanup_time);
+		REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+	};
+
+	SECTION("linear receding transmitter")
+	{
+		run_case(math::Path::InterpType::INTERP_LINEAR,
+				 {{math::Vec3{-100.0, 0.0, 0.0}, 0.0}, {math::Vec3{-200.0, 0.0, 0.0}, 1.0}}, 0.325, 0.34);
+	}
+
+	SECTION("cubic nonmonotone transmitter")
+	{
+		run_case(math::Path::InterpType::INTERP_CUBIC,
+				 {{math::Vec3{-100.0, 0.0, 0.0}, 0.0},
+				  {math::Vec3{-80.0, 0.0, 0.0}, 0.2},
+				  {math::Vec3{-200.0, 0.0, 0.0}, 0.4},
+				  {math::Vec3{-100.0, 0.0, 0.0}, 0.9}},
+				 0.35, 0.401);
+	}
+}
+
+TEST_CASE("SimulationEngine cleanup preserves reflected-only streaming tails", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.8);
+	params::setC(1000.0);
+
+	auto fixture = createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+											math::Path::InterpType::INTERP_STATIC, {{math::Vec3{500.0, 0.0, 0.0}, 0.0}},
+											std::vector<math::Coord>{{math::Vec3{250.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+	fixture.rx->prepareStreamingData(800);
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+	fixture.world->getSimulationState().t_current = 0.2;
+	engine.handleTxStreamingEnd(fixture.tx);
+
+	engine.processStreamingPhysics(0.601);
+	REQUIRE(std::abs(fixture.rx->getStreamingData()[600]) > 0.0);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+	fixture.world->getSimulationState().t_current = 0.601;
+	engine.processStreamingPhysics(0.701);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine cleanup keeps sources through receiver gaps when tails resume", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.5);
+	params::setC(1000.0);
+
+	auto fixture =
+		createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+								 math::Path::InterpType::INTERP_STATIC, {{math::Vec3{100.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->setSchedule({{0.0, 0.15}, {0.25, 0.5}});
+	fixture.rx->prepareStreamingData(500);
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+
+	engine.processStreamingPhysics(0.15);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+	engine.handleRxStreamingEnd(fixture.rx);
+
+	fixture.world->getSimulationState().t_current = 0.15;
+	engine.processStreamingPhysics(0.25);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+	engine.handleRxStreamingStart(fixture.rx);
+
+	fixture.world->getSimulationState().t_current = 0.25;
+	engine.processStreamingPhysics(0.301);
+	REQUIRE(std::abs(fixture.rx->getStreamingData()[250]) > 0.0);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine cleanup removes an old segment before a same-time next segment", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1024.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.75);
+	params::setC(1000.0);
+
+	auto fixture =
+		createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+								 math::Path::InterpType::INTERP_STATIC, {{math::Vec3{125.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->prepareStreamingData(768);
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.25));
+	fixture.world->getSimulationState().t_current = 0.25;
+	engine.handleTxStreamingEnd(fixture.tx);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+
+	engine.processStreamingPhysics(0.375);
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.375, 0.625));
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.size() == 1);
+	REQUIRE_THAT(fixture.world->getSimulationState().active_streaming_transmitters.front().segment_start,
+				 WithinAbs(0.375, 1.0e-12));
+}
+
+TEST_CASE("SimulationEngine cleanup skips long future sample-grid scans", "[core][threading]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e9);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+	params::setC(1000.0);
+
+	auto fixture =
+		createStreamingPathWorld(math::Path::InterpType::INTERP_STATIC, {{math::Vec3{0.0, 0.0, 0.0}, 0.0}},
+								 math::Path::InterpType::INTERP_STATIC, {{math::Vec3{100.0, 0.0, 0.0}, 0.0}});
+	fixture.rx->setSchedule({{9.0, 10.0}});
+	fixture.rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(fixture.world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(fixture.tx, 0.0, 0.2));
+	fixture.world->getSimulationState().t_current = 0.2;
+
+	REQUIRE_NOTHROW(engine.handleTxStreamingEnd(fixture.tx));
+	REQUIRE(fixture.world->getSimulationState().active_streaming_transmitters.empty());
+}
+
+TEST_CASE("SimulationEngine processStreamingPhysics handles active streaming receiver without streaming transmitters",
+		  "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	auto world = createPhysicsWorld();
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+
+	auto* rx = world->getReceivers().front().get();
+	rx->prepareStreamingData(10);
+	rx->setActive(true);
+	world->getSimulationState().t_current = 0.0;
+
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.empty());
+	REQUIRE_NOTHROW(engine.processStreamingPhysics(0.0025));
+
+	const auto& buffer = rx->getStreamingData();
+	for (const auto& sample : buffer)
+	{
+		REQUIRE(sample.real() == 0.0);
+		REQUIRE(sample.imag() == 0.0);
+	}
+}
+
+TEST_CASE("SimulationEngine processStreamingPhysics uses buffered shared timing for streaming samples",
+		  "[core][threading]")
 {
 	ParamGuard guard;
 	params::setRate(10.0);
@@ -440,7 +903,7 @@ TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW 
 	auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 5);
 	rx->setTiming(timing);
 	rx->setAntenna(antenna.get());
-	rx->prepareCwData(10);
+	rx->prepareStreamingData(10);
 	rx->setActive(true);
 
 	auto* tx_ptr = tx.get();
@@ -455,17 +918,241 @@ TEST_CASE("SimulationEngine processCwPhysics uses buffered shared timing for CW 
 	world->add(std::move(rx));
 
 	world->getSimulationState().t_current = 0.0;
-	world->getSimulationState().active_cw_transmitters.push_back(tx_ptr);
 
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
-	engine.processCwPhysics(0.6);
+	engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, params::startTime(), params::endTime()));
+	engine.processStreamingPhysics(0.6);
 
 	const ComplexType expected = simulation::calculateDirectPathContribution(tx_ptr, rx_ptr, 0.5, &lookup);
-	const ComplexType actual = rx_ptr->getCwData()[5];
+	const ComplexType actual = rx_ptr->getStreamingData()[5];
 
 	REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1e-6));
 	REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1e-6));
+}
+
+TEST_CASE("SimulationEngine phase-noise lookup covers pre-start retarded streaming emissions", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(10.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+	params::setC(10.0);
+
+	auto world = std::make_unique<core::World>();
+	auto tx_plat = std::make_unique<radar::Platform>("TxPlat", 10);
+	setupStaticPlatform(*tx_plat, math::Vec3{0.0, 0.0, 0.0});
+	auto rx_plat = std::make_unique<radar::Platform>("RxPlat", 11);
+	setupStaticPlatform(*rx_plat, math::Vec3{1.5, 0.0, 0.0});
+
+	auto proto_timing = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+	proto_timing->setFrequency(1.0);
+	proto_timing->setFreqOffset(1.0);
+	auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+	timing->initializeModel(proto_timing.get());
+	const std::vector<std::shared_ptr<timing::Timing>> timings = {timing};
+	const auto expected_lookup = simulation::CwPhaseNoiseLookup::build(timings, -0.2, params::endTime());
+
+	auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+	auto signal = std::make_unique<fers_signal::RadarSignal>("CWWave", 1.0, 1.0, 1.0,
+															 std::make_unique<fers_signal::CwSignal>(), 3);
+	auto tx = std::make_unique<radar::Transmitter>(tx_plat.get(), "Tx", radar::OperationMode::CW_MODE, 4);
+	tx->setTiming(timing);
+	tx->setAntenna(antenna.get());
+	tx->setSignal(signal.get());
+	auto rx = std::make_unique<radar::Receiver>(rx_plat.get(), "Rx", 42, radar::OperationMode::CW_MODE, 5);
+	rx->setTiming(timing);
+	rx->setAntenna(antenna.get());
+	rx->prepareStreamingData(10);
+	rx->setActive(true);
+
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	world->add(std::move(tx_plat));
+	world->add(std::move(rx_plat));
+	world->add(std::move(proto_timing));
+	world->add(std::move(antenna));
+	world->add(std::move(signal));
+	world->add(std::move(tx));
+	world->add(std::move(rx));
+	world->getSimulationState().t_current = 0.0;
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, -0.2, params::endTime()));
+	engine.processStreamingPhysics(0.2);
+
+	const ComplexType expected = simulation::calculateDirectPathContribution(tx_ptr, rx_ptr, 0.1, &expected_lookup);
+	const ComplexType actual = rx_ptr->getStreamingData()[1];
+	REQUIRE_THAT(actual.real(), WithinAbs(expected.real(), 1.0e-6));
+	REQUIRE_THAT(actual.imag(), WithinAbs(expected.imag(), 1.0e-6));
+}
+
+TEST_CASE("SimulationEngine native FMCW dechirp produces positive stationary-target beat",
+		  "[core][threading][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(1.0e6);
+	params::setOversampleRatio(1);
+	params::setSimSamplingRate(1.0e6);
+	params::setTime(0.0, 1.0e-3);
+
+	const RealType target_range = 150.0;
+	const RealType chirp_bandwidth = 1.0e6;
+	const RealType chirp_duration = 1.0e-3;
+	const RealType chirp_rate = chirp_bandwidth / chirp_duration;
+	const RealType tau = (2.0 * target_range) / params::c();
+
+	auto world = std::make_unique<core::World>();
+	auto radar_platform = std::make_unique<radar::Platform>("RadarPlatform", 10);
+	setupStaticPlatform(*radar_platform, math::Vec3{0.0, 0.0, 0.0});
+	auto target_platform = std::make_unique<radar::Platform>("TargetPlatform", 11);
+	setupStaticPlatform(*target_platform, math::Vec3{target_range, 0.0, 0.0});
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+	timing_proto->setFrequency(10.0e6);
+	auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+	timing->initializeModel(timing_proto.get());
+	auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+	auto fmcw = std::make_unique<fers_signal::FmcwChirpSignal>(chirp_bandwidth, chirp_duration, chirp_duration);
+	auto signal =
+		std::make_unique<fers_signal::RadarSignal>("FmcwWave", 1.0, 10.0e6, chirp_duration, std::move(fmcw), 3);
+
+	auto tx = std::make_unique<radar::Transmitter>(radar_platform.get(), "Tx", radar::OperationMode::FMCW_MODE, 4);
+	tx->setTiming(timing);
+	tx->setAntenna(antenna.get());
+	tx->setSignal(signal.get());
+
+	auto rx = std::make_unique<radar::Receiver>(radar_platform.get(), "Rx", 42, radar::OperationMode::FMCW_MODE, 5);
+	rx->setTiming(timing);
+	rx->setAntenna(antenna.get());
+	rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+	rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+	rx->setDechirpMode(radar::Receiver::DechirpMode::Ideal);
+	radar::Receiver::DechirpReference reference;
+	reference.source = radar::Receiver::DechirpReferenceSource::Attached;
+	rx->setDechirpReference(reference);
+	rx->prepareStreamingData(1000);
+	rx->setActive(true);
+
+	auto target = radar::createIsoTarget(target_platform.get(), "Target", 1.0, 7, 6);
+	auto* tx_ptr = tx.get();
+	auto* rx_ptr = rx.get();
+	tx->setAttached(rx_ptr);
+	rx->setAttached(tx_ptr);
+
+	world->add(std::move(radar_platform));
+	world->add(std::move(target_platform));
+	world->add(std::move(timing_proto));
+	world->add(std::move(antenna));
+	world->add(std::move(signal));
+	world->add(std::move(tx));
+	world->add(std::move(rx));
+	world->add(std::move(target));
+	world->resolveReceiverDechirpReferences();
+	world->getSimulationState().t_current = 0.0;
+
+	pool::ThreadPool pool(1);
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+	engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, params::startTime(), params::endTime()));
+	engine.processStreamingPhysics(0.0007);
+
+	const RealType dt = 1.0 / params::simSamplingRate();
+	const std::size_t first_index = 20;
+	const std::size_t sample_count = 500;
+	RealType unwrapped_span = 0.0;
+	RealType previous_phase = std::arg(rx_ptr->getStreamingData()[first_index]);
+	for (std::size_t i = 1; i < sample_count; ++i)
+	{
+		const RealType phase = std::arg(rx_ptr->getStreamingData()[first_index + i]);
+		unwrapped_span += unwrapDelta(phase - previous_phase);
+		previous_phase = phase;
+	}
+
+	const RealType measured_beat_hz = unwrapped_span / (2.0 * PI * dt * static_cast<RealType>(sample_count - 1));
+	REQUIRE_THAT(measured_beat_hz, WithinRel(chirp_rate * tau, 1.0e-3));
+}
+
+TEST_CASE("SimulationEngine physical FMCW dechirp keeps timing decorrelation absent from ideal mode",
+		  "[core][threading][fmcw][dechirp]")
+{
+	ParamGuard guard;
+	params::params.reset();
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setSimSamplingRate(2.0e6);
+	params::setTime(0.0, 1.0e-3);
+
+	const RealType target_range = 150.0;
+	const RealType chirp_duration = 1.0e-3;
+	const RealType freq_offset = 250.0e3;
+	const RealType tau = (2.0 * target_range) / params::c();
+	const std::size_t sample_index = 80;
+	const RealType sample_time = static_cast<RealType>(sample_index) / params::simSamplingRate();
+
+	const auto run_sample = [&](const radar::Receiver::DechirpMode mode)
+	{
+		auto world = std::make_unique<core::World>();
+		auto radar_platform = std::make_unique<radar::Platform>("RadarPlatform", 10);
+		setupStaticPlatform(*radar_platform, math::Vec3{0.0, 0.0, 0.0});
+		auto target_platform = std::make_unique<radar::Platform>("TargetPlatform", 11);
+		setupStaticPlatform(*target_platform, math::Vec3{target_range, 0.0, 0.0});
+		auto timing_proto = std::make_unique<timing::PrototypeTiming>("Clock", 1);
+		timing_proto->setFrequency(10.0e6);
+		timing_proto->setFreqOffset(freq_offset);
+		auto timing = std::make_shared<timing::Timing>("ClockInstance", 42, 1);
+		timing->initializeModel(timing_proto.get());
+		auto antenna = std::make_unique<antenna::Isotropic>("IsoAnt", 2);
+		auto fmcw = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, chirp_duration, chirp_duration);
+		auto signal =
+			std::make_unique<fers_signal::RadarSignal>("FmcwWave", 1.0, 10.0e6, chirp_duration, std::move(fmcw), 3);
+
+		auto tx = std::make_unique<radar::Transmitter>(radar_platform.get(), "Tx", radar::OperationMode::FMCW_MODE, 4);
+		tx->setTiming(timing);
+		tx->setAntenna(antenna.get());
+		tx->setSignal(signal.get());
+		auto rx = std::make_unique<radar::Receiver>(radar_platform.get(), "Rx", 42, radar::OperationMode::FMCW_MODE, 5);
+		rx->setTiming(timing);
+		rx->setAntenna(antenna.get());
+		rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+		rx->setDechirpMode(mode);
+		radar::Receiver::DechirpReference reference;
+		reference.source = radar::Receiver::DechirpReferenceSource::Attached;
+		rx->setDechirpReference(reference);
+		rx->prepareStreamingData(sample_index + 2);
+		rx->setActive(true);
+
+		auto target = radar::createIsoTarget(target_platform.get(), "Target", 1.0, 7, 6);
+		auto* tx_ptr = tx.get();
+		auto* rx_ptr = rx.get();
+		tx->setAttached(rx_ptr);
+		rx->setAttached(tx_ptr);
+
+		world->add(std::move(radar_platform));
+		world->add(std::move(target_platform));
+		world->add(std::move(timing_proto));
+		world->add(std::move(antenna));
+		world->add(std::move(signal));
+		world->add(std::move(tx));
+		world->add(std::move(rx));
+		world->add(std::move(target));
+		world->resolveReceiverDechirpReferences();
+		world->getSimulationState().t_current = 0.0;
+
+		pool::ThreadPool pool(1);
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.handleTxStreamingStart(core::makeActiveSource(tx_ptr, params::startTime(), params::endTime()));
+		engine.processStreamingPhysics(sample_time + 1.0 / params::simSamplingRate());
+		return rx_ptr->getStreamingData()[sample_index];
+	};
+
+	const ComplexType physical = run_sample(radar::Receiver::DechirpMode::Physical);
+	const ComplexType ideal = run_sample(radar::Receiver::DechirpMode::Ideal);
+	const RealType measured_delta = std::arg(physical * std::conj(ideal));
+	const RealType expected_delta = 2.0 * PI * freq_offset * tau;
+
+	REQUIRE_THAT(measured_delta, WithinAbs(expected_delta, 1.0e-6));
 }
 
 TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threading]")
@@ -480,8 +1167,8 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 
 	// Add an event to ensure the loop runs
 	auto* tx = world->getTransmitters().front().get();
-	world->getEventQueue().push({0.001, core::EventType::TX_CW_START, tx});
-	world->getEventQueue().push({0.004, core::EventType::TX_CW_END, tx});
+	world->getEventQueue().push({0.001, core::EventType::TX_STREAMING_START, tx});
+	world->getEventQueue().push({0.004, core::EventType::TX_STREAMING_END, tx});
 
 	int progress_updates = 0;
 	auto progress_cb = [&](const std::string&, int, int) { progress_updates++; };
@@ -495,6 +1182,89 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 
 		// Simulation time should have advanced to the last event
 		REQUIRE_THAT(world->getSimulationState().t_current, WithinAbs(0.004, 1e-9));
+	}
+}
+
+TEST_CASE("SimulationEngine reports progress while processing long streaming spans", "[core][threading]")
+{
+	ParamGuard guard;
+	params::setRate(100.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	auto world = createPhysicsWorld();
+	auto* rx = world->getReceivers().front().get();
+	rx->prepareStreamingData(100);
+	rx->setActive(true);
+
+	pool::ThreadPool pool(1);
+	std::vector<int> progress_updates;
+	std::vector<std::string> messages;
+	auto reporter = std::make_shared<core::ProgressReporter>(
+		[&](const std::string& message, const int current, int)
+		{
+			messages.push_back(message);
+			progress_updates.push_back(current);
+		});
+
+	core::SimulationEngine engine(world.get(), pool, reporter, ".");
+	engine.processStreamingPhysics(1.0);
+
+	REQUIRE_FALSE(progress_updates.empty());
+	bool saw_intermediate_progress = false;
+	for (const int progress : progress_updates)
+	{
+		if (progress > 0 && progress < 100)
+		{
+			saw_intermediate_progress = true;
+			break;
+		}
+	}
+	REQUIRE(saw_intermediate_progress);
+	REQUIRE_THAT(messages.front(), ContainsSubstring("Simulating..."));
+}
+
+TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][threading][fmcw]")
+{
+	ParamGuard guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+
+	SECTION("unbounded always-on transmitter logs total started chirps over simulation span")
+	{
+		params::setTime(0.0, 0.26);
+		auto world = createFmcwLoggingWorld(std::nullopt);
+		pool::ThreadPool pool(1);
+		LogLevelGuard log_level(logging::Level::INFO);
+		CerrCapture capture;
+
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.run();
+
+		const std::string output = capture.str();
+		REQUIRE_THAT(output, ContainsSubstring("shape=linear up"));
+		REQUIRE_THAT(output, ContainsSubstring("chirp_count=unbounded"));
+		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=3"));
+	}
+
+	SECTION("scheduled capped transmitter logs per-segment and cumulative started chirps")
+	{
+		params::setTime(0.05, 0.45);
+		auto world = createFmcwLoggingWorld(std::size_t{3}, {{-0.05, 0.25}, {0.3, 0.36}});
+		pool::ThreadPool pool(1);
+		LogLevelGuard log_level(logging::Level::INFO);
+		CerrCapture capture;
+
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.run();
+
+		const std::string output = capture.str();
+		REQUIRE_THAT(output, ContainsSubstring("shape=linear up"));
+		REQUIRE_THAT(output, ContainsSubstring("chirp_count=3"));
+		REQUIRE_THAT(output, ContainsSubstring("segment_chirp_count=2"));
+		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=2"));
+		REQUIRE_THAT(output, ContainsSubstring("segment_chirp_count=1"));
+		REQUIRE_THAT(output, ContainsSubstring("total_chirp_count=3"));
 	}
 }
 
@@ -535,30 +1305,30 @@ TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle",
 	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));
 }
 
-TEST_CASE("SimulationEngine processCwPhysics exits early if t_event <= t_current", "[core][threading]")
+TEST_CASE("SimulationEngine processStreamingPhysics exits early if t_event <= t_current", "[core][threading]")
 {
 	// This test covers:
-	// 2. processCwPhysics(t_event) -> if (t_event <= t_current) { return; }
+	// 2. processStreamingPhysics(t_event) -> if (t_event <= t_current) { return; }
 	ParamGuard guard;
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
 	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 
 	auto* rx = world->getReceivers().front().get();
-	rx->prepareCwData(10);
+	rx->prepareStreamingData(10);
 	rx->setActive(true);
 
 	// Advance the simulation state time
 	world->getSimulationState().t_current = 1.0;
 
 	// Call with t_event < t_current
-	REQUIRE_NOTHROW(engine.processCwPhysics(0.5));
+	REQUIRE_NOTHROW(engine.processStreamingPhysics(0.5));
 
 	// Call with t_event == t_current
-	REQUIRE_NOTHROW(engine.processCwPhysics(1.0));
+	REQUIRE_NOTHROW(engine.processStreamingPhysics(1.0));
 
 	// The buffer should be completely untouched (all zeros) because the method returned early
-	for (const auto& sample : rx->getCwData())
+	for (const auto& sample : rx->getStreamingData())
 	{
 		REQUIRE(sample.real() == 0.0);
 		REQUIRE(sample.imag() == 0.0);
@@ -579,20 +1349,20 @@ TEST_CASE("SimulationEngine processEvent dispatches all event types correctly", 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
 
-	// Test TX_CW_START
-	engine.processEvent({1.0, core::EventType::TX_CW_START, tx});
-	REQUIRE(world->getSimulationState().active_cw_transmitters.size() == 1);
+	// Test TX_STREAMING_START
+	engine.processEvent({1.0, core::EventType::TX_STREAMING_START, tx});
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 
-	// Test TX_CW_END
-	engine.processEvent({2.0, core::EventType::TX_CW_END, tx});
-	REQUIRE(world->getSimulationState().active_cw_transmitters.empty());
+	// Test TX_STREAMING_END
+	engine.processEvent({2.0, core::EventType::TX_STREAMING_END, tx});
+	REQUIRE(world->getSimulationState().active_streaming_transmitters.size() == 1);
 
-	// Test RX_CW_START
-	engine.processEvent({3.0, core::EventType::RX_CW_START, rx});
+	// Test RX_STREAMING_START
+	engine.processEvent({3.0, core::EventType::RX_STREAMING_START, rx});
 	REQUIRE(rx->isActive());
 
-	// Test RX_CW_END
-	engine.processEvent({4.0, core::EventType::RX_CW_END, rx});
+	// Test RX_STREAMING_END
+	engine.processEvent({4.0, core::EventType::RX_STREAMING_END, rx});
 	REQUIRE_FALSE(rx->isActive());
 
 	// Test TX_PULSED_START
@@ -681,7 +1451,7 @@ TEST_CASE("SimulationEngine updateProgress safely handles null reporter", "[core
 
 	// Add an event to ensure the main loop runs at least once, triggering updateProgress()
 	auto* tx = world->getTransmitters().front().get();
-	world->getEventQueue().push({0.5, core::EventType::TX_CW_START, tx});
+	world->getEventQueue().push({0.5, core::EventType::TX_STREAMING_START, tx});
 
 	// Passing nullptr for the progress callback ensures the internal _reporter is null
 	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));

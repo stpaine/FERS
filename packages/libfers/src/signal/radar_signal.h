@@ -12,10 +12,12 @@
 
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -29,6 +31,19 @@ namespace interp
 
 namespace fers_signal
 {
+	/// Sweep direction for a linear FMCW chirp.
+	enum class FmcwChirpDirection
+	{
+		Up, ///< Instantaneous baseband frequency increases over the chirp.
+		Down ///< Instantaneous baseband frequency decreases over the chirp.
+	};
+
+	/// Converts a chirp direction to the schema token.
+	[[nodiscard]] std::string_view fmcwChirpDirectionToken(FmcwChirpDirection direction) noexcept;
+
+	/// Parses a schema chirp direction token.
+	[[nodiscard]] FmcwChirpDirection parseFmcwChirpDirection(std::string_view direction);
+
 	/**
 	 * @class Signal
 	 * @brief Class for handling radar waveform signal data.
@@ -69,6 +84,9 @@ namespace fers_signal
 		 */
 		[[nodiscard]] RealType getRate() const noexcept { return _rate; }
 
+		/// Gets the number of native samples held by this signal.
+		[[nodiscard]] unsigned getSampleCount() const noexcept { return _size; }
+
 		/**
 		 * @brief Renders the signal data based on interpolation points.
 		 *
@@ -79,6 +97,15 @@ namespace fers_signal
 		 */
 		virtual std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 												double fracWinDelay) const;
+
+		/// Renders a bounded absolute-time slice on the requested output grid.
+		[[nodiscard]] virtual std::vector<ComplexType> renderSlice(const std::vector<interp::InterpPoint>& points,
+																   RealType outputStartTime, RealType outputSampleRate,
+																   std::size_t sampleCount,
+																   RealType fracWinDelay) const;
+
+		/// Returns true when this signal belongs to the FMCW waveform family.
+		[[nodiscard]] virtual bool isFmcwFamily() const noexcept { return false; }
 
 	private:
 		std::vector<ComplexType> _data; ///< The complex signal data.
@@ -191,6 +218,9 @@ namespace fers_signal
 		 */
 		[[nodiscard]] RealType getRate() const noexcept { return _signal->getRate(); }
 
+		/// Gets the number of native samples in the underlying signal.
+		[[nodiscard]] unsigned getSampleCount() const noexcept { return _signal->getSampleCount(); }
+
 		/**
 		 * @brief Gets the length of the radar signal.
 		 *
@@ -204,6 +234,24 @@ namespace fers_signal
 		 */
 		[[nodiscard]] const Signal* getSignal() const noexcept { return _signal.get(); }
 
+		/// Returns true when this signal is a continuous-wave signal.
+		[[nodiscard]] bool isCw() const noexcept;
+
+		/// Returns true when this signal is an FMCW linear chirp signal.
+		[[nodiscard]] bool isFmcwChirp() const noexcept;
+
+		/// Returns true when this signal is an FMCW triangular modulation signal.
+		[[nodiscard]] bool isFmcwTriangle() const noexcept;
+
+		/// Returns true when this signal belongs to the FMCW waveform family.
+		[[nodiscard]] bool isFmcwFamily() const noexcept;
+
+		/// Gets the FMCW chirp implementation, if this signal owns one.
+		[[nodiscard]] const class FmcwChirpSignal* getFmcwChirpSignal() const noexcept;
+
+		/// Gets the FMCW triangle implementation, if this signal owns one.
+		[[nodiscard]] const class FmcwTriangleSignal* getFmcwTriangleSignal() const noexcept;
+
 		/**
 		 * @brief Renders the radar signal.
 		 *
@@ -215,6 +263,11 @@ namespace fers_signal
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const;
 
+		/// Renders a bounded absolute-time slice on the requested output grid.
+		[[nodiscard]] std::vector<ComplexType> renderSlice(const std::vector<interp::InterpPoint>& points,
+														   RealType outputStartTime, RealType outputSampleRate,
+														   std::size_t sampleCount, RealType fracWinDelay) const;
+
 	private:
 		std::string _name; ///< The name of the radar signal.
 		SimId _id; ///< Unique ID for this radar signal.
@@ -225,6 +278,7 @@ namespace fers_signal
 		std::optional<std::string> _filename; ///< The original filename for file-based signals.
 	};
 
+	/// Continuous-wave signal implementation.
 	class CwSignal final : public Signal
 	{
 	public:
@@ -246,5 +300,154 @@ namespace fers_signal
 		 */
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const override;
+	};
+
+	/// FMCW linear chirp signal implementation.
+	class FmcwChirpSignal final : public Signal
+	{
+	public:
+		/// Constructs an FMCW chirp signal with timing and sweep parameters.
+		FmcwChirpSignal(RealType chirp_bandwidth, RealType chirp_duration, RealType chirp_period,
+						RealType start_frequency_offset = 0.0, std::optional<std::size_t> chirp_count = std::nullopt,
+						FmcwChirpDirection direction = FmcwChirpDirection::Up);
+
+		~FmcwChirpSignal() override = default;
+
+		FmcwChirpSignal(const FmcwChirpSignal&) noexcept = delete;
+
+		FmcwChirpSignal& operator=(const FmcwChirpSignal&) noexcept = delete;
+
+		FmcwChirpSignal(FmcwChirpSignal&&) noexcept = delete;
+
+		FmcwChirpSignal& operator=(FmcwChirpSignal&&) noexcept = delete;
+
+		/// Gets the chirp bandwidth in hertz.
+		[[nodiscard]] RealType getChirpBandwidth() const noexcept { return _chirp_bandwidth; }
+
+		/// Gets the chirp duration in seconds.
+		[[nodiscard]] RealType getChirpDuration() const noexcept { return _chirp_duration; }
+
+		/// Gets the chirp period in seconds.
+		[[nodiscard]] RealType getChirpPeriod() const noexcept { return _chirp_period; }
+
+		/// Gets the start frequency offset relative to carrier in hertz.
+		[[nodiscard]] RealType getStartFrequencyOffset() const noexcept { return _start_frequency_offset; }
+
+		/// Gets the optional finite chirp count.
+		[[nodiscard]] const std::optional<std::size_t>& getChirpCount() const noexcept { return _chirp_count; }
+
+		/// Gets the chirp rate in hertz per second.
+		[[nodiscard]] RealType getChirpRate() const noexcept { return _chirp_rate; }
+
+		/// Gets the signed chirp rate in hertz per second.
+		[[nodiscard]] RealType getSignedChirpRate() const noexcept
+		{
+			return isDownChirp() ? -_chirp_rate : _chirp_rate;
+		}
+
+		/// Gets the FMCW sweep direction.
+		[[nodiscard]] FmcwChirpDirection getDirection() const noexcept { return _direction; }
+
+		/// Returns true when this chirp sweeps downward.
+		[[nodiscard]] bool isDownChirp() const noexcept { return _direction == FmcwChirpDirection::Down; }
+
+		/// Returns false for linear chirps; triangles override this shape predicate.
+		[[nodiscard]] bool isTriangle() const noexcept { return false; }
+
+		/// Returns the active chirp index for a time since the segment start.
+		[[nodiscard]] std::optional<std::size_t> activeChirpIndexAt(RealType time_since_segment_start) const noexcept;
+
+		/// Returns true when the signal is inside an active chirp at the specified time.
+		[[nodiscard]] bool isActiveAt(RealType time_since_segment_start) const noexcept
+		{
+			return activeChirpIndexAt(time_since_segment_start).has_value();
+		}
+
+		/// Computes baseband phase for a time inside a chirp.
+		[[nodiscard]] RealType basebandPhaseForChirpTime(RealType chirp_time) const noexcept;
+
+		/// Computes instantaneous baseband phase at a time since segment start.
+		[[nodiscard]] std::optional<RealType>
+		instantaneousBasebandPhase(RealType time_since_segment_start) const noexcept;
+
+		/// Renders an FMCW waveform from interpolation points.
+		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+										RealType fracWinDelay) const override;
+
+		[[nodiscard]] bool isFmcwFamily() const noexcept override { return true; }
+
+	private:
+		RealType _chirp_bandwidth{}; ///< Chirp bandwidth in hertz.
+		RealType _chirp_duration{}; ///< Active chirp duration in seconds.
+		RealType _chirp_period{}; ///< Chirp repetition period in seconds.
+		RealType _start_frequency_offset{}; ///< Start frequency offset relative to carrier in hertz.
+		std::optional<std::size_t> _chirp_count; ///< Optional finite chirp count.
+		RealType _chirp_rate{}; ///< Frequency sweep rate in hertz per second.
+		FmcwChirpDirection _direction{FmcwChirpDirection::Up}; ///< Frequency sweep direction.
+	};
+
+	/// FMCW symmetric triangular modulation signal implementation.
+	class FmcwTriangleSignal final : public Signal
+	{
+	public:
+		/// Constructs an FMCW triangular modulation signal.
+		FmcwTriangleSignal(RealType chirp_bandwidth, RealType chirp_duration, RealType start_frequency_offset = 0.0,
+						   std::optional<std::size_t> triangle_count = std::nullopt);
+
+		~FmcwTriangleSignal() override = default;
+
+		FmcwTriangleSignal(const FmcwTriangleSignal&) noexcept = delete;
+
+		FmcwTriangleSignal& operator=(const FmcwTriangleSignal&) noexcept = delete;
+
+		FmcwTriangleSignal(FmcwTriangleSignal&&) noexcept = delete;
+
+		FmcwTriangleSignal& operator=(FmcwTriangleSignal&&) noexcept = delete;
+
+		/// Gets the chirp bandwidth in hertz.
+		[[nodiscard]] RealType getChirpBandwidth() const noexcept { return _chirp_bandwidth; }
+
+		/// Gets the per-leg chirp duration in seconds.
+		[[nodiscard]] RealType getChirpDuration() const noexcept { return _chirp_duration; }
+
+		/// Gets the start frequency offset relative to carrier in hertz.
+		[[nodiscard]] RealType getStartFrequencyOffset() const noexcept { return _start_frequency_offset; }
+
+		/// Gets the optional finite triangle count.
+		[[nodiscard]] const std::optional<std::size_t>& getTriangleCount() const noexcept { return _triangle_count; }
+
+		/// Gets the chirp rate magnitude in hertz per second.
+		[[nodiscard]] RealType getChirpRate() const noexcept { return _chirp_rate; }
+
+		/// Gets the full up/down triangle period in seconds.
+		[[nodiscard]] RealType getTrianglePeriod() const noexcept { return _triangle_period; }
+
+		/// Gets the full, unreduced phase accumulated by one leg.
+		[[nodiscard]] RealType getDeltaPhiUp() const noexcept { return _delta_phi_up; }
+
+		/// Returns true for triangular FMCW waveforms.
+		[[nodiscard]] bool isTriangle() const noexcept { return true; }
+
+		/// Computes baseband phase at a time since the triangle train start.
+		[[nodiscard]] RealType basebandPhaseForTriangleTime(RealType triangle_time) const noexcept;
+
+		/// Computes instantaneous baseband phase at a time since segment start.
+		[[nodiscard]] std::optional<RealType>
+		instantaneousBasebandPhase(RealType time_since_segment_start) const noexcept;
+
+		/// Renders an FMCW waveform from interpolation points.
+		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+										RealType fracWinDelay) const override;
+
+		[[nodiscard]] bool isFmcwFamily() const noexcept override { return true; }
+
+	private:
+		RealType _chirp_bandwidth{}; ///< Chirp bandwidth in hertz.
+		RealType _chirp_duration{}; ///< Per-leg chirp duration in seconds.
+		RealType _start_frequency_offset{}; ///< Start frequency offset relative to carrier in hertz.
+		std::optional<std::size_t> _triangle_count; ///< Optional finite triangle count.
+		RealType _chirp_rate{}; ///< Frequency sweep rate magnitude in hertz per second.
+		RealType _triangle_period{}; ///< Full triangle period in seconds.
+		RealType _delta_phi_up{}; ///< Full, unreduced phase accumulated by one leg.
 	};
 }

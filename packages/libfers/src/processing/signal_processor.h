@@ -64,6 +64,10 @@ namespace processing
 	 */
 	void applyThermalNoise(std::span<ComplexType> window, RealType noiseTemperature, std::mt19937& rngEngine);
 
+	/// Applies circular complex thermal noise using a caller-specified complex-baseband sample rate.
+	void applyThermalNoiseAtSampleRate(std::span<ComplexType> window, RealType noiseTemperature,
+									   std::mt19937& rngEngine, RealType sampleRateHz);
+
 	/**
 	 * @brief Simulates ADC quantization and scales a window of complex I/Q samples.
 	 *

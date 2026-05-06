@@ -99,8 +99,10 @@ namespace timing
 		 */
 		[[nodiscard]] std::optional<RealType> getFreqOffset() const noexcept { return _freq_offset; }
 
+		/** @brief Gets the random frequency-offset standard deviation. */
 		[[nodiscard]] std::optional<RealType> getRandomFreqOffsetStdev() const noexcept { return _random_freq_stdev; }
 
+		/** @brief Gets the random phase-offset standard deviation. */
 		[[nodiscard]] std::optional<RealType> getRandomPhaseOffsetStdev() const noexcept { return _random_phase_stdev; }
 
 		/**

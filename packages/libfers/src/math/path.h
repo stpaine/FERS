@@ -34,9 +34,9 @@ namespace math
 		 */
 		enum class InterpType
 		{
-			INTERP_STATIC,
-			INTERP_LINEAR,
-			INTERP_CUBIC
+			INTERP_STATIC, ///< Hold the first coordinate for all query times.
+			INTERP_LINEAR, ///< Linearly interpolate between neighboring coordinates.
+			INTERP_CUBIC ///< Cubically interpolate between neighboring coordinates.
 		};
 
 		/**

@@ -136,7 +136,7 @@ namespace serial::xml_parser_utils
 	 * @param element The XML element containing the attribute.
 	 * @param attributeName The name of the attribute.
 	 * @param defaultVal The value to return if the attribute is missing or invalid.
-	 * @return The parsed boolean value, or the default if extraction fails.
+	 * @return The parsed boolean value, or the default if the attribute is missing or invalid.
 	 */
 	bool get_attribute_bool(const XmlElement& element, const std::string& attributeName, bool defaultVal);
 

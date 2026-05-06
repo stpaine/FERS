@@ -13,14 +13,23 @@
 #pragma once
 
 #include <condition_variable>
+#include <cstdint>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
 #include <random>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include "core/rendering_job.h"
 #include "core/sim_id.h"
+#include "core/simulation_state.h"
 #include "radar_obj.h"
 #include "serial/response.h"
+#include "signal/if_resampler.h"
 
 namespace pool
 {
@@ -42,8 +51,45 @@ namespace radar
 		 */
 		enum class RecvFlag
 		{
-			FLAG_NODIRECT = 1,
-			FLAG_NOPROPLOSS = 2
+			FLAG_NODIRECT = 1, ///< Disable direct-path reception.
+			FLAG_NOPROPLOSS = 2 ///< Disable propagation-loss scaling.
+		};
+
+		/// Receiver-side FMCW dechirping mode.
+		enum class DechirpMode
+		{
+			None, ///< Output raw pre-mix streaming IQ.
+			Physical, ///< Preserve timing phase-noise decorrelation in the IF output.
+			Ideal ///< Ignore timing phase noise during the dechirp mix.
+		};
+
+		/// Source used to construct the receiver LO reference.
+		enum class DechirpReferenceSource
+		{
+			None, ///< No reference configured.
+			Attached, ///< Use the attached transmitter.
+			Transmitter, ///< Use a named transmitter.
+			Custom ///< Use a named top-level waveform with the receiver schedule.
+		};
+
+		/// Parsed and resolved dechirp reference details.
+		struct DechirpReference
+		{
+			DechirpReferenceSource source = DechirpReferenceSource::None; ///< Reference source type.
+			std::string name; ///< Parsed transmitter or waveform name when applicable.
+			SimId transmitter_id = 0; ///< Resolved transmitter ID for attached/transmitter references.
+			std::string transmitter_name; ///< Resolved transmitter name for attached/transmitter references.
+			SimId waveform_id = 0; ///< Resolved waveform ID for custom references.
+			std::string waveform_name; ///< Resolved waveform name for custom references.
+		};
+
+		/// Receiver-local FMCW IF-chain request parsed from scenario input.
+		struct FmcwIfChainRequest
+		{
+			std::optional<RealType> sample_rate_hz = std::nullopt; ///< Requested IF ADC sample rate in hertz.
+			std::optional<RealType> filter_bandwidth_hz = std::nullopt; ///< One-sided IF passband edge in hertz.
+			std::optional<RealType> filter_transition_width_hz =
+				std::nullopt; ///< Optional IF filter transition width in hertz.
 		};
 
 		/**
@@ -52,7 +98,7 @@ namespace radar
 		 * @param platform The platform associated with this receiver.
 		 * @param name The name of the receiver.
 		 * @param seed The seed for the receiver's internal random number generator.
-		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
+		 * @param mode The operational mode (PULSED_MODE, CW_MODE, or FMCW_MODE).
 		 */
 		explicit Receiver(Platform* platform, std::string name, unsigned seed, OperationMode mode,
 						  const SimId id = 0) noexcept;
@@ -74,7 +120,7 @@ namespace radar
 		void addResponseToInbox(std::unique_ptr<serial::Response> response) noexcept;
 
 		/**
-		 * @brief Adds a pulsed interference response to the receiver's CW-mode log.
+		 * @brief Adds a pulsed interference response to the receiver's streaming-mode log.
 		 * @param response A unique pointer to the response object.
 		 */
 		void addInterferenceToLog(std::unique_ptr<serial::Response> response) noexcept;
@@ -155,9 +201,54 @@ namespace radar
 		/**
 		 * @brief Gets the operational mode of the receiver.
 		 *
-		 * @return The operational mode (PULSED_MODE or CW_MODE).
+		 * @return The operational mode (PULSED_MODE, CW_MODE, or FMCW_MODE).
 		 */
 		[[nodiscard]] OperationMode getMode() const noexcept { return _mode; }
+
+		/// Gets the configured dechirp mode.
+		[[nodiscard]] DechirpMode getDechirpMode() const noexcept { return _dechirp_mode; }
+
+		/// Returns true when the receiver emits dechirped IF data.
+		[[nodiscard]] bool isDechirpEnabled() const noexcept { return _dechirp_mode != DechirpMode::None; }
+
+		/// Gets the configured dechirp reference.
+		[[nodiscard]] const DechirpReference& getDechirpReference() const noexcept { return _dechirp_reference; }
+
+		/// Gets the optional receiver-local FMCW IF-chain request.
+		[[nodiscard]] const FmcwIfChainRequest& getFmcwIfChainRequest() const noexcept { return _fmcw_if_chain; }
+
+		/// Gets the receiver-local FMCW IF sample rate in Hz.
+		[[nodiscard]] std::optional<RealType> getIfSampleRate() const noexcept { return _fmcw_if_chain.sample_rate_hz; }
+
+		/// Gets the receiver-local FMCW IF filter bandwidth in Hz.
+		[[nodiscard]] std::optional<RealType> getIfFilterBandwidth() const noexcept
+		{
+			return _fmcw_if_chain.filter_bandwidth_hz;
+		}
+
+		/// Gets the receiver-local FMCW IF filter transition width in Hz.
+		[[nodiscard]] std::optional<RealType> getIfFilterTransitionWidth() const noexcept
+		{
+			return _fmcw_if_chain.filter_transition_width_hz;
+		}
+
+		/// Returns true when this receiver requests IF-rate FMCW output.
+		[[nodiscard]] bool hasFmcwIfSampleRate() const noexcept { return _fmcw_if_chain.sample_rate_hz.has_value(); }
+
+		/// Returns true when this receiver is using the online FMCW IF resampling sink.
+		[[nodiscard]] bool hasFmcwIfResamplingSink() const noexcept { return _fmcw_if_sink != nullptr; }
+
+		/// Gets the active or most recently used IF resampling plan, if any.
+		[[nodiscard]] const std::optional<fers_signal::FmcwIfResamplerPlan>& getFmcwIfResamplerPlan() const noexcept
+		{
+			return _fmcw_if_plan;
+		}
+
+		/// Gets resolved receive-time LO source segments.
+		[[nodiscard]] const std::vector<core::ActiveStreamingSource>& getDechirpSources() const noexcept
+		{
+			return _dechirp_sources;
+		}
 
 		/**
 		 * @brief Checks if the receiver is currently active (listening).
@@ -173,9 +264,39 @@ namespace radar
 
 		/**
 		 * @brief Sets the operational mode of the receiver.
-		 * @param mode The operational mode (PULSED_MODE or CW_MODE).
+		 * @param mode The operational mode (PULSED_MODE, CW_MODE, or FMCW_MODE).
 		 */
-		void setMode(OperationMode mode) noexcept { _mode = mode; }
+		void setMode(OperationMode mode) noexcept;
+
+		/// Sets the receiver-side dechirp mode.
+		void setDechirpMode(DechirpMode mode) noexcept;
+
+		/// Stores the unresolved dechirp reference parsed from scenario input.
+		void setDechirpReference(DechirpReference reference);
+
+		/// Stores the receiver-local FMCW IF-chain request.
+		void setFmcwIfChainRequest(FmcwIfChainRequest request) noexcept;
+
+		/// Creates the online FMCW IF resampling sink and clears the output buffer.
+		void initializeFmcwIfResampling(fers_signal::FmcwIfResamplerPlan plan);
+
+		/// Advances the continuous IF resampling timeline to the next active segment start.
+		void beginFmcwIfResamplingSegment(RealType segment_start_time);
+
+		/// Feeds one completed high-rate dechirped block into the online IF sink.
+		void consumeFmcwIfBlock(std::span<const ComplexType> block, RealType block_start_time);
+
+		/// Marks the current scheduled IF segment inactive.
+		void endFmcwIfResamplingSegment();
+
+		/// Flushes remaining samples from the online IF sink into the output buffer.
+		void flushFmcwIfResampling();
+
+		/// Replaces resolved receive-time LO source segments.
+		void setResolvedDechirpSources(std::vector<core::ActiveStreamingSource> sources);
+
+		/// Clears resolved dechirp source segments.
+		void clearResolvedDechirpSources() noexcept { _dechirp_sources.clear(); }
 
 		/**
 		 * @brief Moves all responses from the inbox into a RenderingJob.
@@ -231,32 +352,32 @@ namespace radar
 		void setNoiseTemperature(RealType temp);
 
 		/**
-		 * @brief Prepares the internal storage for CW IQ data.
+		 * @brief Prepares the internal storage for streaming IQ data.
 		 * @param numSamples The total number of samples to allocate memory for.
 		 */
-		void prepareCwData(size_t numSamples);
+		void prepareStreamingData(size_t numSamples);
 
 		/**
-		 * @brief Sets a single IQ sample at a specific index for CW simulation.
+		 * @brief Sets a single IQ sample at a specific index for streaming simulation.
 		 * @param index The index at which to store the sample.
 		 * @param sample The complex IQ sample.
 		 */
-		void setCwSample(size_t index, ComplexType sample);
+		void setStreamingSample(size_t index, ComplexType sample);
 
 		/**
-		 * @brief Retrieves the collected CW IQ data.
+		 * @brief Retrieves the collected streaming IQ data.
 		 * @return A constant reference to the vector of complex IQ samples.
 		 */
-		[[nodiscard]] const std::vector<ComplexType>& getCwData() const { return _cw_iq_data; }
+		[[nodiscard]] const std::vector<ComplexType>& getStreamingData() const { return _streaming_iq_data; }
 
 		/**
-		 * @brief Retrieves the collected CW IQ data for modification.
+		 * @brief Retrieves the collected streaming IQ data for modification.
 		 * @return A mutable reference to the vector of complex IQ samples.
 		 */
-		[[nodiscard]] std::vector<ComplexType>& getMutableCwData() { return _cw_iq_data; }
+		[[nodiscard]] std::vector<ComplexType>& getMutableStreamingData() { return _streaming_iq_data; }
 
 		/**
-		 * @brief Retrieves the log of pulsed interferences for CW mode.
+		 * @brief Retrieves the log of pulsed interferences for streaming modes.
 		 * @return A const reference to the vector of interference responses.
 		 */
 		[[nodiscard]] const std::vector<std::unique_ptr<serial::Response>>& getPulsedInterferenceLog() const
@@ -285,8 +406,17 @@ namespace radar
 		[[nodiscard]] std::optional<RealType> getNextWindowTime(RealType time) const;
 
 	private:
+		/// Appends IF resampler output at the current absolute output cursor.
+		void appendFmcwIfOutput(std::vector<ComplexType> emitted);
+
+		/// Advances the IF output cursor over known zero samples.
+		void advanceFmcwIfOutputZeros(std::size_t sample_count);
+
+		/// Feeds zero-valued high-rate samples until the absolute input cursor reaches the target.
+		void consumeFmcwIfZerosUntil(std::size_t target_input_cursor);
+
 		// --- Common Members ---
-		bool _is_active = false;
+		bool _is_active = false; ///< True while the receiver is active.
 		RealType _noise_temperature = 0; ///< The noise temperature of the receiver.
 		int _flags = 0; ///< Flags for receiver configuration.
 		OperationMode _mode; ///< The operational mode of the receiver.
@@ -298,17 +428,39 @@ namespace radar
 		RealType _window_prf = 0; ///< The pulse repetition frequency (PRF) of the radar window.
 		RealType _window_skip = 0; ///< The skip time between radar windows.
 		std::vector<std::unique_ptr<serial::Response>>
-			_inbox; /// Mailbox for incoming Response objects during a receive window.
-		std::mutex _inbox_mutex;
-		std::queue<core::RenderingJob> _finalizer_queue; /// Queue of completed windows waiting for final processing.
-		std::mutex _finalizer_queue_mutex;
-		std::condition_variable _finalizer_queue_cv;
+			_inbox; ///< Mailbox for incoming Response objects during a receive window.
+		std::mutex _inbox_mutex; ///< Mutex guarding the pulsed receive inbox.
+		std::queue<core::RenderingJob> _finalizer_queue; ///< Completed windows waiting for final processing.
+		std::mutex _finalizer_queue_mutex; ///< Mutex guarding the finalizer queue.
+		std::condition_variable _finalizer_queue_cv; ///< Condition variable for finalizer queue updates.
 
 		// --- CW Mode Members ---
 		std::vector<std::unique_ptr<serial::Response>>
-			_pulsed_interference_log; /// Log of pulsed signals that interfere with CW reception.
-		std::mutex _interference_log_mutex;
-		std::vector<ComplexType> _cw_iq_data; /// Buffer for raw, simulation-long I/Q data.
+			_pulsed_interference_log; ///< Log of pulsed signals that interfere with CW reception.
+		std::mutex _interference_log_mutex; ///< Mutex guarding the pulsed interference log.
+		std::vector<ComplexType> _streaming_iq_data; ///< Buffer for raw, simulation-long I/Q data.
 		std::mutex _cw_mutex; ///< Mutex for handling CW data.
+		DechirpMode _dechirp_mode{DechirpMode::None}; ///< FMCW dechirp mode.
+		DechirpReference _dechirp_reference{}; ///< Configured/resolved LO reference.
+		std::vector<core::ActiveStreamingSource> _dechirp_sources; ///< Resolved LO sources.
+		FmcwIfChainRequest _fmcw_if_chain{}; ///< Optional receiver-local IF-chain request.
+		std::optional<fers_signal::FmcwIfResamplerPlan> _fmcw_if_plan; ///< Active IF resampling plan.
+		std::unique_ptr<fers_signal::FmcwIfResamplingSink> _fmcw_if_sink; ///< Online IF resampling state.
+		std::uint64_t _fmcw_if_samples_to_discard = 0; ///< Remaining startup IF samples to suppress.
+		std::size_t _fmcw_if_input_cursor = 0; ///< Absolute high-rate input samples consumed by the IF sink.
+		std::size_t _fmcw_if_output_cursor = 0; ///< Absolute output-sample cursor for IF insertion.
+		bool _fmcw_if_segment_active = false; ///< True while one scheduled IF segment is open.
 	};
+
+	/// Converts a dechirp mode to its scenario token.
+	[[nodiscard]] std::string_view dechirpModeToken(Receiver::DechirpMode mode) noexcept;
+
+	/// Parses a dechirp mode scenario token.
+	[[nodiscard]] Receiver::DechirpMode parseDechirpModeToken(std::string_view token);
+
+	/// Converts a dechirp reference source to its scenario token.
+	[[nodiscard]] std::string_view dechirpReferenceSourceToken(Receiver::DechirpReferenceSource source) noexcept;
+
+	/// Parses a dechirp reference source scenario token.
+	[[nodiscard]] Receiver::DechirpReferenceSource parseDechirpReferenceSourceToken(std::string_view token);
 }

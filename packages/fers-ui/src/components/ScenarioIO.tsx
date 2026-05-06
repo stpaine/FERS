@@ -10,6 +10,7 @@ import { open, save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { useState } from 'react';
 import { useScenarioStore } from '@/stores/scenarioStore';
+import { getBlockingFmcwValidationMessage } from '@/stores/scenarioStore/fmcwValidation';
 import ConfirmDialog from './ConfirmDialog';
 
 export default function ScenarioIO() {
@@ -30,6 +31,12 @@ export default function ScenarioIO() {
     const handleExport = async () => {
         try {
             const state = useScenarioStore.getState();
+            const validationMessage = getBlockingFmcwValidationMessage(state);
+            if (validationMessage) {
+                showError(`FMCW validation failed: ${validationMessage}`);
+                return;
+            }
+
             await state.syncBackend();
 
             const xmlContent = await invoke<string>('get_scenario_as_xml');

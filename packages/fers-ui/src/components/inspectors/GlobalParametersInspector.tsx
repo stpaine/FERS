@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { GlobalParameters, useScenarioStore } from '@/stores/scenarioStore';
+import { deriveUtmZone } from '@/stores/scenarioStore/serializers';
 import { BufferedTextField, NumberField, Section } from './InspectorControls';
 
 interface GlobalParametersInspectorProps {
@@ -61,6 +62,25 @@ export function GlobalParametersInspector({
             return;
         }
         setRotationAngleUnit(nextUnit, false);
+    };
+
+    const handleCoordinateSystemFrameChange = (
+        frame: GlobalParameters['coordinateSystem']['frame']
+    ) => {
+        if (frame === 'UTM') {
+            handleChange('coordinateSystem', {
+                frame,
+                zone:
+                    item.coordinateSystem.zone ??
+                    deriveUtmZone(item.origin.longitude),
+                hemisphere:
+                    item.coordinateSystem.hemisphere ??
+                    (item.origin.latitude < 0 ? 'S' : 'N'),
+            });
+            return;
+        }
+
+        handleChange('coordinateSystem', { frame });
     };
 
     return (
@@ -164,9 +184,9 @@ export function GlobalParametersInspector({
                         label="Coordinate System"
                         value={item.coordinateSystem.frame}
                         onChange={(e) =>
-                            handleChange(
-                                'coordinateSystem.frame',
-                                e.target.value
+                            handleCoordinateSystemFrameChange(
+                                e.target
+                                    .value as GlobalParameters['coordinateSystem']['frame']
                             )
                         }
                     >

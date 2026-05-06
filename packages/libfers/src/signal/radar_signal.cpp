@@ -26,8 +26,145 @@
 
 namespace fers_signal
 {
+	std::string_view fmcwChirpDirectionToken(const FmcwChirpDirection direction) noexcept
+	{
+		return direction == FmcwChirpDirection::Down ? "down" : "up";
+	}
+
+	FmcwChirpDirection parseFmcwChirpDirection(const std::string_view direction)
+	{
+		if (direction == "up")
+		{
+			return FmcwChirpDirection::Up;
+		}
+		if (direction == "down")
+		{
+			return FmcwChirpDirection::Down;
+		}
+		throw std::runtime_error("Unsupported FMCW chirp direction '" + std::string(direction) + "'.");
+	}
+
 	std::vector<ComplexType> CwSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
 											  const RealType /*fracWinDelay*/) const
+	{
+		size = 0;
+		return {};
+	}
+
+	FmcwChirpSignal::FmcwChirpSignal(const RealType chirp_bandwidth, const RealType chirp_duration,
+									 const RealType chirp_period, const RealType start_frequency_offset,
+									 std::optional<std::size_t> chirp_count, const FmcwChirpDirection direction) :
+		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration), _chirp_period(chirp_period),
+		_start_frequency_offset(start_frequency_offset), _chirp_count(std::move(chirp_count)),
+		_chirp_rate(chirp_bandwidth / chirp_duration), _direction(direction)
+	{
+	}
+
+	std::optional<std::size_t>
+	FmcwChirpSignal::activeChirpIndexAt(const RealType time_since_segment_start) const noexcept
+	{
+		if (time_since_segment_start < 0.0)
+		{
+			return std::nullopt;
+		}
+
+		const auto chirp_index = static_cast<std::size_t>(std::floor(time_since_segment_start / _chirp_period));
+		if (_chirp_count.has_value() && chirp_index >= *_chirp_count)
+		{
+			return std::nullopt;
+		}
+
+		const RealType chirp_time = time_since_segment_start - static_cast<RealType>(chirp_index) * _chirp_period;
+		// Exact arithmetic cannot make this negative, but floating-point boundary rounding can.
+		if (chirp_time < 0.0 || chirp_time >= _chirp_duration)
+		{
+			return std::nullopt;
+		}
+
+		return chirp_index;
+	}
+
+	std::optional<RealType>
+	FmcwChirpSignal::instantaneousBasebandPhase(const RealType time_since_segment_start) const noexcept
+	{
+		const auto chirp_index = activeChirpIndexAt(time_since_segment_start);
+		if (!chirp_index.has_value())
+		{
+			return std::nullopt;
+		}
+
+		const RealType chirp_time = time_since_segment_start - static_cast<RealType>(*chirp_index) * _chirp_period;
+		return basebandPhaseForChirpTime(chirp_time);
+	}
+
+	RealType FmcwChirpSignal::basebandPhaseForChirpTime(const RealType chirp_time) const noexcept
+	{
+		return 2.0 * PI * _start_frequency_offset * chirp_time + PI * getSignedChirpRate() * chirp_time * chirp_time;
+	}
+
+	std::vector<ComplexType> FmcwChirpSignal::render(const std::vector<interp::InterpPoint>& /*points*/, unsigned& size,
+													 const RealType /*fracWinDelay*/) const
+	{
+		size = 0;
+		return {};
+	}
+
+	FmcwTriangleSignal::FmcwTriangleSignal(const RealType chirp_bandwidth, const RealType chirp_duration,
+										   const RealType start_frequency_offset,
+										   std::optional<std::size_t> triangle_count) :
+		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration),
+		_start_frequency_offset(start_frequency_offset), _triangle_count(std::move(triangle_count)),
+		_chirp_rate(chirp_bandwidth / chirp_duration), _triangle_period(2.0 * chirp_duration),
+		_delta_phi_up(2.0 * PI * start_frequency_offset * chirp_duration +
+					  PI * _chirp_rate * chirp_duration * chirp_duration)
+	{
+	}
+
+	RealType FmcwTriangleSignal::basebandPhaseForTriangleTime(const RealType triangle_time) const noexcept
+	{
+		if (triangle_time <= 0.0)
+		{
+			return 0.0;
+		}
+
+		const auto triangle_index = static_cast<std::size_t>(std::floor(triangle_time / _triangle_period));
+		const RealType local_triangle_time = triangle_time - static_cast<RealType>(triangle_index) * _triangle_period;
+		const bool down_leg = local_triangle_time >= _chirp_duration;
+		const RealType u = down_leg ? local_triangle_time - _chirp_duration : local_triangle_time;
+		const RealType phi_base =
+			static_cast<RealType>(triangle_index) * 2.0 * _delta_phi_up + (down_leg ? _delta_phi_up : 0.0);
+		if (!down_leg)
+		{
+			return phi_base + 2.0 * PI * _start_frequency_offset * u + PI * _chirp_rate * u * u;
+		}
+		return phi_base + 2.0 * PI * (_start_frequency_offset + _chirp_bandwidth) * u - PI * _chirp_rate * u * u;
+	}
+
+	std::optional<RealType>
+	FmcwTriangleSignal::instantaneousBasebandPhase(const RealType time_since_segment_start) const noexcept
+	{
+		if (time_since_segment_start < 0.0)
+		{
+			return std::nullopt;
+		}
+
+		const auto triangle_index = static_cast<std::size_t>(std::floor(time_since_segment_start / _triangle_period));
+		if (_triangle_count.has_value() && triangle_index >= *_triangle_count)
+		{
+			return std::nullopt;
+		}
+
+		const RealType local_triangle_time =
+			time_since_segment_start - static_cast<RealType>(triangle_index) * _triangle_period;
+		if (local_triangle_time < 0.0 || local_triangle_time >= _triangle_period)
+		{
+			return std::nullopt;
+		}
+		return basebandPhaseForTriangleTime(time_since_segment_start);
+	}
+
+	std::vector<ComplexType> FmcwTriangleSignal::render(const std::vector<interp::InterpPoint>& /*points*/,
+														unsigned& size, const RealType /*fracWinDelay*/) const
 	{
 		size = 0;
 		return {};
@@ -53,6 +190,42 @@ namespace fers_signal
 		std::ranges::for_each(data, [scale](auto& value) { value *= scale; });
 
 		return data;
+	}
+
+	std::vector<ComplexType> RadarSignal::renderSlice(const std::vector<interp::InterpPoint>& points,
+													  const RealType outputStartTime, const RealType outputSampleRate,
+													  const std::size_t sampleCount, const RealType fracWinDelay) const
+	{
+		auto data = _signal->renderSlice(points, outputStartTime, outputSampleRate, sampleCount, fracWinDelay);
+		const RealType scale = std::sqrt(_power);
+
+		std::ranges::for_each(data, [scale](auto& value) { value *= scale; });
+
+		return data;
+	}
+
+	bool RadarSignal::isCw() const noexcept { return dynamic_cast<const CwSignal*>(_signal.get()) != nullptr; }
+
+	bool RadarSignal::isFmcwChirp() const noexcept
+	{
+		return dynamic_cast<const FmcwChirpSignal*>(_signal.get()) != nullptr;
+	}
+
+	bool RadarSignal::isFmcwTriangle() const noexcept
+	{
+		return dynamic_cast<const FmcwTriangleSignal*>(_signal.get()) != nullptr;
+	}
+
+	bool RadarSignal::isFmcwFamily() const noexcept { return _signal->isFmcwFamily(); }
+
+	const FmcwChirpSignal* RadarSignal::getFmcwChirpSignal() const noexcept
+	{
+		return dynamic_cast<const FmcwChirpSignal*>(_signal.get());
+	}
+
+	const FmcwTriangleSignal* RadarSignal::getFmcwTriangleSignal() const noexcept
+	{
+		return dynamic_cast<const FmcwTriangleSignal*>(_signal.get());
 	}
 
 	void Signal::clear() noexcept
@@ -82,34 +255,67 @@ namespace fers_signal
 	std::vector<ComplexType> Signal::render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 											const double fracWinDelay) const
 	{
-		auto out = std::vector<ComplexType>(_size);
 		size = _size;
+		if (points.empty())
+		{
+			return std::vector<ComplexType>(_size);
+		}
+		return renderSlice(points, points.front().time, _rate, _size, fracWinDelay);
+	}
 
-		const RealType timestep = 1.0 / _rate;
+	std::vector<ComplexType> Signal::renderSlice(const std::vector<interp::InterpPoint>& points,
+												 const RealType outputStartTime, const RealType outputSampleRate,
+												 const std::size_t sampleCount, const RealType fracWinDelay) const
+	{
+		auto out = std::vector<ComplexType>(sampleCount);
+		if (_size == 0 || _rate <= 0.0 || outputSampleRate <= 0.0 || points.empty())
+		{
+			return out;
+		}
+
+		const RealType timestep = 1.0 / outputSampleRate;
 		const int filt_length = static_cast<int>(params::renderFilterLength());
 		const auto& interp = interp::InterpFilter::getInstance();
 
 		auto iter = points.begin();
 		auto next = points.size() > 1 ? std::next(iter) : iter;
 		const RealType idelay = std::round(_rate * iter->delay);
-		RealType sample_time = iter->time;
+		RealType sample_time = outputStartTime;
 
-		for (int i = 0; i < static_cast<int>(_size); ++i)
+		for (std::size_t i = 0; i < sampleCount; ++i)
 		{
-			if (sample_time > next->time && next != iter)
+			while (sample_time > next->time && next != iter)
 			{
 				iter = next;
 				if (std::next(next) != points.end())
 				{
 					++next;
 				}
+				else
+				{
+					break;
+				}
 			}
 
 			auto [amplitude, phase, fdelay, i_sample_unwrap] =
 				calculateWeightsAndDelays(iter, next, sample_time, idelay, fracWinDelay);
+			const RealType native_position = (sample_time - points.front().time) * _rate;
+			const auto source_index = static_cast<int>(std::floor(native_position));
+			RealType source_fraction = native_position - static_cast<RealType>(source_index);
+			if (source_fraction < 0.0 && source_fraction > -1.0e-12)
+			{
+				source_fraction = 0.0;
+			}
+
+			const RealType combined_delay = fdelay + source_fraction;
+			const auto delay_unwrap = static_cast<int>(std::floor(combined_delay));
+			fdelay = combined_delay - static_cast<RealType>(delay_unwrap);
+			i_sample_unwrap += delay_unwrap;
+
 			const auto& filt = interp.getFilter(fdelay);
-			ComplexType accum = performConvolution(i, filt.data(), filt_length, amplitude, i_sample_unwrap);
-			out[static_cast<std::size_t>(i)] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
+			const ComplexType accum =
+				performConvolution(source_index, filt.data(), filt_length, amplitude, i_sample_unwrap);
+			out[i] = std::exp(ComplexType(0.0, 1.0) * phase) * accum;
 
 			sample_time += timestep;
 		}

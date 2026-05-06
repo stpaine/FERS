@@ -3,6 +3,8 @@
 
 import { beforeEach, describe, expect, test } from 'bun:test';
 import {
+    enqueueFullSync,
+    enqueueFullSyncDetached,
     enqueueGranularSync,
     type GranularSyncFailure,
     registerGranularSyncFailureHandler,
@@ -49,6 +51,74 @@ describe('syncQueue granular recovery', () => {
 
         expect(invocations).toEqual(['update_item_from_json:10']);
         expect(failures).toHaveLength(0);
+    });
+
+    test('coalesces granular edits into a pending full sync', async () => {
+        const invocations: string[] = [];
+        let snapshot = '{"simulation":{"name":"before"}}';
+
+        setSyncQueueInvokerForTests((async (
+            command: string,
+            args?: Record<string, unknown>
+        ) => {
+            invocations.push(
+                `${command}:${String(args?.itemId ?? '')}:${String(args?.json ?? '')}`
+            );
+        }) as InvokeFn);
+
+        const fullSync = enqueueFullSync(() => snapshot);
+        snapshot = '{"simulation":{"name":"after"}}';
+        const granularSync = enqueueGranularSync(
+            'Platform',
+            '281474976710657',
+            '{"id":"281474976710657","name":"after"}'
+        );
+
+        await fullSync;
+        await granularSync;
+        await waitForSyncIdle();
+
+        expect(invocations).toEqual([
+            'update_scenario_from_json::{"simulation":{"name":"after"}}',
+        ]);
+    });
+
+    test('rejects failed full syncs', async () => {
+        setSyncQueueInvokerForTests((async (command: string) => {
+            if (command === 'update_scenario_from_json') {
+                throw new Error('backend rejected scenario');
+            }
+        }) as InvokeFn);
+
+        await expect(
+            enqueueFullSync(() => '{"simulation":{"name":"bad"}}')
+        ).rejects.toThrow('backend rejected scenario');
+        await waitForSyncIdle();
+    });
+
+    test('detached full sync consumes backend rejection and leaves queue usable', async () => {
+        const invocations: string[] = [];
+
+        setSyncQueueInvokerForTests((async (
+            command: string,
+            args?: Record<string, unknown>
+        ) => {
+            invocations.push(`${command}:${String(args?.itemId ?? '')}`);
+            if (command === 'update_scenario_from_json') {
+                throw new Error('backend rejected scenario');
+            }
+        }) as InvokeFn);
+
+        enqueueFullSyncDetached(() => '{"simulation":{"name":"bad"}}');
+        await waitForSyncIdle();
+
+        await enqueueGranularSync('Waveform', '10', '{"id":"10"}');
+        await waitForSyncIdle();
+
+        expect(invocations).toEqual([
+            'update_scenario_from_json:',
+            'update_item_from_json:10',
+        ]);
     });
 
     test('recovers once and discards stale queued granular flushes after a failure', async () => {

@@ -101,22 +101,22 @@ int main(const int argc, char* argv[])
 		return 1;
 	}
 
-	// Set the output directory via the C-API
-	if (fers_set_output_directory(context, final_out_dir.string().c_str()) != 0)
-	{
-		char* err = fers_get_last_error_message();
-		LOG(FERS_LOG_FATAL, "Failed to set output directory: {}", err ? err : "Unknown error");
-		fers_free_string(err);
-		fers_context_destroy(context);
-		return 1;
-	}
-
 	// Load the scenario from file via the C-API
 	LOG(FERS_LOG_INFO, "Loading scenario from '{}'...", script_file);
 	if (fers_load_scenario_from_xml_file(context, script_file.c_str(), validate ? 1 : 0) != 0)
 	{
 		char* err = fers_get_last_error_message();
 		LOG(FERS_LOG_FATAL, "Failed to load scenario: {}", err ? err : "Unknown error");
+		fers_free_string(err);
+		fers_context_destroy(context);
+		return 1;
+	}
+
+	// Set output after loading; loading from a file defaults it to the scenario directory.
+	if (fers_set_output_directory(context, final_out_dir.string().c_str()) != 0)
+	{
+		char* err = fers_get_last_error_message();
+		LOG(FERS_LOG_FATAL, "Failed to set output directory: {}", err ? err : "Unknown error");
 		fers_free_string(err);
 		fers_context_destroy(context);
 		return 1;

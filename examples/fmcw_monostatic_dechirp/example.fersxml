@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE simulation SYSTEM "fers-xml.dtd">
+<simulation name="FmcwMonostaticPhysicalDechirpScenario">
+    <parameters>
+        <starttime>0.0</starttime>
+        <endtime>0.064</endtime>
+        <rate>2.0e6</rate>
+        <simSamplingRate>2.0e6</simSamplingRate>
+        <randomseed>4242</randomseed>
+    </parameters>
+
+    <antenna name="MonoIsotropicAntenna" pattern="isotropic">
+        <efficiency>1.0</efficiency>
+    </antenna>
+
+    <waveform name="MonoFmcwUpChirp">
+        <power>1000.0</power>
+        <carrier_frequency>10.0e9</carrier_frequency>
+        <fmcw_linear_chirp direction="up">
+            <chirp_bandwidth>1.0e6</chirp_bandwidth>
+            <chirp_duration>1.0e-3</chirp_duration>
+            <chirp_period>1.0e-3</chirp_period>
+            <start_frequency_offset>-5.0e5</start_frequency_offset>
+            <chirp_count>64</chirp_count>
+        </fmcw_linear_chirp>
+    </waveform>
+
+    <timing name="MonoFmcwClock">
+        <frequency>10.0e9</frequency>
+    </timing>
+
+    <platform name="MonoRadarPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>0.0</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <monostatic name="MonoFmcwRadar" antenna="MonoIsotropicAntenna" waveform="MonoFmcwUpChirp"
+                    timing="MonoFmcwClock" nodirect="true">
+            <fmcw_mode dechirp_mode="physical">
+                <dechirp_reference source="attached"/>
+            </fmcw_mode>
+            <noise_temp>0.0</noise_temp>
+        </monostatic>
+    </platform>
+
+    <platform name="MonoMovingTargetPlatform">
+        <motionpath interpolation="linear">
+            <positionwaypoint>
+                <x>150.0</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+            <positionwaypoint>
+                <x>150.32</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.064</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <target name="MonoMovingPointTarget">
+            <rcs type="isotropic">
+                <value>10.0</value>
+            </rcs>
+        </target>
+    </platform>
+</simulation>

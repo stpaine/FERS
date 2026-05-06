@@ -219,6 +219,7 @@ TEST_CASE("PreviewLink holds assigned values", "[simulation][channel_model][help
 	simulation::PreviewLink link{.type = simulation::LinkType::Monostatic,
 								 .quality = simulation::LinkQuality::Strong,
 								 .label = "Test Label",
+								 .display_value = -42.0,
 								 .source_id = 100,
 								 .dest_id = 200,
 								 .origin_id = 100};
@@ -226,6 +227,7 @@ TEST_CASE("PreviewLink holds assigned values", "[simulation][channel_model][help
 	REQUIRE(link.type == simulation::LinkType::Monostatic);
 	REQUIRE(link.quality == simulation::LinkQuality::Strong);
 	REQUIRE(link.label == "Test Label");
+	REQUIRE(link.display_value == -42.0);
 	REQUIRE(link.source_id == 100);
 	REQUIRE(link.dest_id == 200);
 	REQUIRE(link.origin_id == 100);

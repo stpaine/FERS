@@ -3,10 +3,12 @@
 #include <chrono>
 #include <filesystem>
 #include <highfive/highfive.hpp>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <vector>
 
 #include "core/config.h"
+#include "core/output_metadata.h"
 #include "core/parameters.h"
 #include "serial/hdf5_handler.h"
 
@@ -219,6 +221,101 @@ TEST_CASE("HDF5 writer adds backward-compatible output metadata attributes", "[s
 
 		REQUIRE(chunk_index == 0U);
 		REQUIRE(sample_count == 2ULL);
+	}
+
+	removeIfExists(path);
+}
+
+TEST_CASE("Output metadata uses per-file sampling rates when outputs differ", "[serial][metadata]")
+{
+	core::OutputMetadata metadata{.simulation_name = "mixed-rates",
+								  .output_directory = "/tmp/fers",
+								  .start_time = 0.0,
+								  .end_time = 1.0,
+								  .sampling_rate = 1'000.0,
+								  .oversample_ratio = 4,
+								  .files = {}};
+	metadata.files.push_back(core::OutputFileMetadata{
+		.receiver_id = 1, .receiver_name = "RawRx", .mode = "fmcw", .path = "raw.h5", .sampling_rate = 1'000.0});
+	metadata.files.push_back(core::OutputFileMetadata{
+		.receiver_id = 2, .receiver_name = "DechirpedRx", .mode = "fmcw", .path = "if.h5", .sampling_rate = 4'000.0});
+
+	const auto json = nlohmann::json::parse(core::outputMetadataToJsonString(metadata));
+
+	REQUIRE(json.at("sampling_rate").is_null());
+	REQUIRE(json.at("sampling_rates").size() == 2);
+	REQUIRE(json.at("files").at(0).at("sampling_rate") == 1'000.0);
+	REQUIRE(json.at("files").at(1).at("sampling_rate") == 4'000.0);
+}
+
+TEST_CASE("HDF5 writer exposes FMCW segment metadata without cw_segments JSON alias", "[serial][hdf5]")
+{
+	const std::string path = tempFilePath(uniqueFileName("fmcw_metadata"));
+	removeIfExists(path);
+
+	core::OutputFileMetadata file_metadata{.receiver_id = 7,
+										   .receiver_name = "RxFmcw",
+										   .mode = "fmcw",
+										   .path = path,
+										   .total_samples = 20,
+										   .sample_start = 0,
+										   .sample_end_exclusive = 20,
+										   .fmcw = core::FmcwMetadata{.chirp_bandwidth = 100.0,
+																	  .chirp_duration = 0.01,
+																	  .chirp_period = 0.02,
+																	  .chirp_rate = 10'000.0,
+																	  .chirp_rate_signed = -10'000.0,
+																	  .chirp_direction = "down",
+																	  .start_frequency_offset = -50.0,
+																	  .chirp_count = 3}};
+	file_metadata.streaming_segments.push_back({.start_time = 1.0,
+												.end_time = 1.2,
+												.sample_count = 10,
+												.sample_start = 0,
+												.sample_end_exclusive = 10,
+												.first_chirp_start_time = 1.0,
+												.emitted_chirp_count = 3});
+	file_metadata.streaming_segments.push_back({.start_time = 2.0,
+												.end_time = 2.1,
+												.sample_count = 10,
+												.sample_start = 10,
+												.sample_end_exclusive = 20,
+												.first_chirp_start_time = 2.0,
+												.emitted_chirp_count = 3});
+
+	{
+		HighFive::File file(path, HighFive::File::Overwrite);
+		std::scoped_lock lock(serial::hdf5_global_mutex);
+		serial::writeOutputFileMetadataAttributes(file, file_metadata);
+	}
+
+	{
+		HighFive::File file(path, HighFive::File::ReadOnly);
+		unsigned long long segment_count = 0;
+		RealType signed_rate = 0.0;
+		std::string direction;
+		std::vector<RealType> first_chirp_starts;
+		std::vector<unsigned long long> emitted_chirp_counts;
+		std::string metadata_json;
+
+		file.getAttribute("streaming_segment_count").read(segment_count);
+		file.getAttribute("fmcw_chirp_rate_signed").read(signed_rate);
+		file.getAttribute("fmcw_chirp_direction").read(direction);
+		file.getAttribute("streaming_first_chirp_start_time").read(first_chirp_starts);
+		file.getAttribute("streaming_emitted_chirp_count").read(emitted_chirp_counts);
+		file.getAttribute("fers_metadata_json").read(metadata_json);
+
+		REQUIRE(segment_count == 2ULL);
+		REQUIRE_THAT(signed_rate, WithinAbs(-10'000.0, 1e-12));
+		REQUIRE(direction == "down");
+		REQUIRE(first_chirp_starts.size() == 2u);
+		REQUIRE_THAT(first_chirp_starts[0], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(first_chirp_starts[1], WithinAbs(2.0, 1e-12));
+		REQUIRE(emitted_chirp_counts == std::vector<unsigned long long>{3ULL, 3ULL});
+		REQUIRE(metadata_json.find("\"streaming_segments\"") != std::string::npos);
+		REQUIRE(metadata_json.find("\"chirp_direction\": \"down\"") != std::string::npos);
+		REQUIRE(metadata_json.find("\"chirp_rate_signed\": -10000.0") != std::string::npos);
+		REQUIRE(metadata_json.find("\"cw_segments\"") == std::string::npos);
 	}
 
 	removeIfExists(path);

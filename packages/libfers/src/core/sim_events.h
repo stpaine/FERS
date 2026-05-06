@@ -29,10 +29,10 @@ namespace core
 		TX_PULSED_START, ///< A pulsed transmitter begins emitting a pulse.
 		RX_PULSED_WINDOW_START, ///< A pulsed receiver opens its listening window.
 		RX_PULSED_WINDOW_END, ///< A pulsed receiver closes its listening window.
-		TX_CW_START, ///< A continuous-wave transmitter starts transmitting.
-		TX_CW_END, ///< A continuous-wave transmitter stops transmitting.
-		RX_CW_START, ///< A continuous-wave receiver starts listening.
-		RX_CW_END, ///< A continuous-wave receiver stops listening.
+		TX_STREAMING_START, ///< A streaming transmitter starts transmitting.
+		TX_STREAMING_END, ///< A streaming transmitter stops transmitting.
+		RX_STREAMING_START, ///< A streaming receiver starts listening.
+		RX_STREAMING_END, ///< A streaming receiver stops listening.
 	};
 
 	/**
@@ -79,14 +79,14 @@ namespace core
 			return "RxPulsedWindowStart";
 		case EventType::RX_PULSED_WINDOW_END:
 			return "RxPulsedWindowEnd";
-		case EventType::TX_CW_START:
-			return "TxCwStart";
-		case EventType::TX_CW_END:
-			return "TxCwEnd";
-		case EventType::RX_CW_START:
-			return "RxCwStart";
-		case EventType::RX_CW_END:
-			return "RxCwEnd";
+		case EventType::TX_STREAMING_START:
+			return "TxStreamingStart";
+		case EventType::TX_STREAMING_END:
+			return "TxStreamingEnd";
+		case EventType::RX_STREAMING_START:
+			return "RxStreamingStart";
+		case EventType::RX_STREAMING_END:
+			return "RxStreamingEnd";
 		default:
 			return "UnknownEvent";
 		}

@@ -169,6 +169,32 @@ TEST_CASE("applyThermalNoise produces expected power", "[processing][signal]")
 	REQUIRE_THAT(var_imag, WithinRel(per_channel_power, 0.1));
 }
 
+TEST_CASE("applyThermalNoiseAtSampleRate scales complex variance to IF rate", "[processing][signal][fmcw][if]")
+{
+	ParamGuard guard;
+
+	const RealType temperature = 290.0;
+	const RealType if_rate = 64'000.0;
+	const RealType complex_power = params::boltzmannK() * temperature * if_rate;
+	const RealType per_channel_power = complex_power / 2.0;
+	const RealType stddev = std::sqrt(per_channel_power);
+
+	std::vector<ComplexType> window(60000, ComplexType{0.0, 0.0});
+	std::mt19937 rng(123u);
+
+	processing::applyThermalNoiseAtSampleRate(window, temperature, rng, if_rate);
+
+	const RealType mean_real = meanOfChannel(window, true);
+	const RealType mean_imag = meanOfChannel(window, false);
+	const RealType var_real = varianceOfChannel(window, true, mean_real);
+	const RealType var_imag = varianceOfChannel(window, false, mean_imag);
+
+	const RealType mean_tolerance = 5.0 * stddev / std::sqrt(static_cast<RealType>(window.size()));
+	REQUIRE_THAT(mean_real, WithinAbs(0.0, mean_tolerance));
+	REQUIRE_THAT(mean_imag, WithinAbs(0.0, mean_tolerance));
+	REQUIRE_THAT(var_real + var_imag, WithinRel(complex_power, 0.1));
+}
+
 TEST_CASE("quantizeAndScaleWindow normalizes when adc disabled", "[processing][signal]")
 {
 	ParamGuard guard;

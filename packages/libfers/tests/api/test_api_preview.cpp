@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cmath>
 #include <cstring>
 #include <libfers/api.h>
 
@@ -191,6 +192,7 @@ TEST_CASE("API preview links map link metadata into C structs", "[api][preview]"
 		const auto& link = links.get()->links[i];
 		REQUIRE(link.label[sizeof(link.label) - 1] == '\0');
 		REQUIRE(std::strlen(link.label) > 0);
+		REQUIRE(std::isfinite(link.display_value));
 
 		switch (link.type)
 		{
@@ -200,6 +202,7 @@ TEST_CASE("API preview links map link metadata into C structs", "[api][preview]"
 			REQUIRE(link.dest_id == target_id);
 			REQUIRE(link.origin_id == tx_id);
 			REQUIRE(link.quality == FERS_LINK_STRONG);
+			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
 			break;
 		case FERS_LINK_DIRECT_TX_RX:
 			saw_direct = true;
@@ -214,6 +217,7 @@ TEST_CASE("API preview links map link metadata into C structs", "[api][preview]"
 			REQUIRE(link.dest_id == rx_id);
 			REQUIRE(link.origin_id == tx_id);
 			REQUIRE(link.quality == FERS_LINK_STRONG);
+			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
 			break;
 		default:
 			break;

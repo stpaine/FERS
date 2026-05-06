@@ -12,10 +12,14 @@
 
 #include "world.h"
 
+#include <algorithm>
 #include <iomanip>
 #include <limits>
+#include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <unordered_map>
+#include <utility>
 
 #include "antenna/antenna_factory.h"
 #include "core/sim_events.h"
@@ -38,7 +42,11 @@ namespace core
 {
 	void World::add(std::unique_ptr<Platform> plat) noexcept { _platforms.push_back(std::move(plat)); }
 
-	void World::add(std::unique_ptr<Transmitter> trans) noexcept { _transmitters.push_back(std::move(trans)); }
+	void World::add(std::unique_ptr<Transmitter> trans) noexcept
+	{
+		_transmitters_by_name[trans->getName()] = trans.get();
+		_transmitters.push_back(std::move(trans));
+	}
 
 	void World::add(std::unique_ptr<Receiver> recv) noexcept { _receivers.push_back(std::move(recv)); }
 
@@ -51,6 +59,7 @@ namespace core
 		{
 			throw std::runtime_error("A waveform with the ID " + std::to_string(id) + " already exists.");
 		}
+		_waveform_ids_by_name[waveform->getName()] = id;
 		_waveforms[id] = std::move(waveform);
 	}
 
@@ -110,12 +119,88 @@ namespace core
 		return nullptr;
 	}
 
+	Transmitter* World::findTransmitterByName(const std::string& name)
+	{
+		const auto it = _transmitters_by_name.find(name);
+		return it != _transmitters_by_name.end() ? it->second : nullptr;
+	}
+
 	Receiver* World::findReceiver(const SimId id)
 	{
 		for (auto& rx : _receivers)
 			if (rx->getId() == id)
 				return rx.get();
 		return nullptr;
+	}
+
+	RadarSignal* World::findWaveformByName(const std::string& name)
+	{
+		const auto it = _waveform_ids_by_name.find(name);
+		return it != _waveform_ids_by_name.end() ? findWaveform(it->second) : nullptr;
+	}
+
+	RealType World::earliestPhaseNoiseLookupStart() const
+	{
+		const auto include_streaming_interval_start = [](std::optional<RealType>& earliest,
+														 const RealType segment_start, const RealType segment_end,
+														 const bool allow_pre_start)
+		{
+			const RealType sim_start = params::startTime();
+			const RealType sim_end = params::endTime();
+			if (segment_end <= sim_start || segment_start >= sim_end)
+			{
+				return;
+			}
+
+			const RealType required_start =
+				allow_pre_start && segment_start < sim_start ? segment_start : std::max(sim_start, segment_start);
+			earliest = earliest.has_value() ? std::min(*earliest, required_start) : required_start;
+		};
+
+		std::optional<RealType> earliest;
+		for (const auto& transmitter_ptr : _transmitters)
+		{
+			if (transmitter_ptr == nullptr || !transmitter_ptr->isStreamingMode())
+			{
+				continue;
+			}
+
+			const auto& schedule = transmitter_ptr->getSchedule();
+			if (schedule.empty())
+			{
+				include_streaming_interval_start(earliest, params::startTime(), params::endTime(), false);
+				continue;
+			}
+
+			for (const auto& period : schedule)
+			{
+				include_streaming_interval_start(earliest, period.start, period.end, true);
+			}
+		}
+
+		for (const auto& receiver_ptr : _receivers)
+		{
+			if (receiver_ptr == nullptr ||
+				(receiver_ptr->getMode() != radar::OperationMode::CW_MODE &&
+				 receiver_ptr->getMode() != radar::OperationMode::FMCW_MODE))
+			{
+				continue;
+			}
+
+			const auto& schedule = receiver_ptr->getSchedule();
+			if (schedule.empty())
+			{
+				include_streaming_interval_start(earliest, params::startTime(), params::endTime(), false);
+				continue;
+			}
+
+			for (const auto& period : schedule)
+			{
+				include_streaming_interval_start(earliest, period.start, period.end, false);
+			}
+		}
+
+		return earliest.value_or(params::startTime());
 	}
 
 	Target* World::findTarget(const SimId id)
@@ -175,6 +260,7 @@ namespace core
 	{
 		const SimId id = waveform->getId();
 		RadarSignal* new_ptr = waveform.get();
+		const std::string new_name = waveform->getName();
 
 		std::unique_ptr<RadarSignal> old_owned;
 		const RadarSignal* old_ptr = nullptr;
@@ -183,10 +269,13 @@ namespace core
 		{
 			old_owned = std::move(it->second);
 			old_ptr = old_owned.get();
+			_waveform_ids_by_name.erase(old_owned->getName());
+			_waveform_ids_by_name[new_name] = id;
 			it->second = std::move(waveform);
 		}
 		else
 		{
+			_waveform_ids_by_name[new_name] = id;
 			_waveforms[id] = std::move(waveform);
 		}
 
@@ -252,13 +341,32 @@ namespace core
 	{
 		_platforms.clear();
 		_transmitters.clear();
+		_transmitters_by_name.clear();
 		_receivers.clear();
 		_targets.clear();
 		_waveforms.clear();
+		_waveform_ids_by_name.clear();
 		_antennas.clear();
 		_timings.clear();
 		_event_queue = {};
 		_simulation_state = {};
+	}
+
+	void World::swap(World& other) noexcept
+	{
+		using std::swap;
+
+		_platforms.swap(other._platforms);
+		_transmitters.swap(other._transmitters);
+		_receivers.swap(other._receivers);
+		_targets.swap(other._targets);
+		_waveforms.swap(other._waveforms);
+		_waveform_ids_by_name.swap(other._waveform_ids_by_name);
+		_transmitters_by_name.swap(other._transmitters_by_name);
+		_antennas.swap(other._antennas);
+		_timings.swap(other._timings);
+		_event_queue.swap(other._event_queue);
+		swap(_simulation_state, other._simulation_state);
 	}
 
 	void World::scheduleInitialEvents()
@@ -279,27 +387,31 @@ namespace core
 					}
 				}
 			}
-			else // CW_MODE
+			else
 			{
 				const auto& schedule = transmitter->getSchedule();
 				if (schedule.empty())
 				{
-					// Legacy behavior: Always on for simulation duration
-					_event_queue.push({sim_start, EventType::TX_CW_START, transmitter.get()});
-					_event_queue.push({sim_end, EventType::TX_CW_END, transmitter.get()});
+					const RealType end = makeActiveSource(transmitter.get(), sim_start, sim_end).segment_end;
+					if (sim_start < end)
+					{
+						_event_queue.push({sim_start, EventType::TX_STREAMING_START, transmitter.get()});
+						_event_queue.push({end, EventType::TX_STREAMING_END, transmitter.get()});
+					}
 				}
 				else
 				{
 					for (const auto& period : schedule)
 					{
-						// Clip periods to simulation bounds
 						const RealType start = std::max(sim_start, period.start);
-						const RealType end = std::min(sim_end, period.end);
+						const RealType end =
+							makeActiveSource(transmitter.get(), period.start, std::min(sim_end, period.end))
+								.segment_end;
 
 						if (start < end)
 						{
-							_event_queue.push({start, EventType::TX_CW_START, transmitter.get()});
-							_event_queue.push({end, EventType::TX_CW_END, transmitter.get()});
+							_event_queue.push({start, EventType::TX_STREAMING_START, transmitter.get()});
+							_event_queue.push({end, EventType::TX_STREAMING_END, transmitter.get()});
 						}
 					}
 				}
@@ -317,14 +429,13 @@ namespace core
 					_event_queue.push({*start, EventType::RX_PULSED_WINDOW_START, receiver.get()});
 				}
 			}
-			else // CW_MODE
+			else
 			{
 				const auto& schedule = receiver->getSchedule();
 				if (schedule.empty())
 				{
-					// Legacy behavior: Always on for simulation duration
-					_event_queue.push({params::startTime(), EventType::RX_CW_START, receiver.get()});
-					_event_queue.push({params::endTime(), EventType::RX_CW_END, receiver.get()});
+					_event_queue.push({params::startTime(), EventType::RX_STREAMING_START, receiver.get()});
+					_event_queue.push({params::endTime(), EventType::RX_STREAMING_END, receiver.get()});
 				}
 				else
 				{
@@ -334,12 +445,142 @@ namespace core
 						const RealType end = std::min(params::endTime(), period.end);
 						if (start < end)
 						{
-							_event_queue.push({start, EventType::RX_CW_START, receiver.get()});
-							_event_queue.push({end, EventType::RX_CW_END, receiver.get()});
+							_event_queue.push({start, EventType::RX_STREAMING_START, receiver.get()});
+							_event_queue.push({end, EventType::RX_STREAMING_END, receiver.get()});
 						}
 					}
 				}
 			}
+		}
+	}
+
+	void World::resolveReceiverDechirpReferences()
+	{
+		const auto append_transmitter_sources = [](const Transmitter* const tx)
+		{
+			std::vector<ActiveStreamingSource> sources;
+			if (tx->getSchedule().empty())
+			{
+				auto source = makeActiveSource(tx, params::startTime(), params::endTime());
+				if (source.segment_start < source.segment_end)
+				{
+					sources.push_back(source);
+				}
+				return sources;
+			}
+
+			for (const auto& period : tx->getSchedule())
+			{
+				auto source = makeActiveSource(tx, period.start, std::min(params::endTime(), period.end));
+				if (source.segment_start < source.segment_end && source.segment_end > params::startTime())
+				{
+					sources.push_back(source);
+				}
+			}
+			return sources;
+		};
+
+		const auto append_waveform_sources = [](const RadarSignal* const waveform, const Receiver* const rx)
+		{
+			std::vector<ActiveStreamingSource> sources;
+			if (rx->getSchedule().empty())
+			{
+				auto source = makeActiveSourceFromWaveform(waveform, params::startTime(), params::endTime());
+				if (source.segment_start < source.segment_end)
+				{
+					sources.push_back(source);
+				}
+				return sources;
+			}
+
+			for (const auto& period : rx->getSchedule())
+			{
+				auto source =
+					makeActiveSourceFromWaveform(waveform, period.start, std::min(params::endTime(), period.end));
+				if (source.segment_start < source.segment_end && source.segment_end > params::startTime())
+				{
+					sources.push_back(source);
+				}
+			}
+			return sources;
+		};
+
+		const auto validate_transmitter = [](const Transmitter* const tx, const std::string& owner)
+		{
+			if (tx == nullptr)
+			{
+				throw std::runtime_error(owner + " references a missing dechirp transmitter.");
+			}
+			if (tx->getMode() != radar::OperationMode::FMCW_MODE || tx->getSignal() == nullptr ||
+				!tx->getSignal()->isFmcwFamily())
+			{
+				throw std::runtime_error(owner + " dechirp reference transmitter '" + tx->getName() +
+										 "' must be an FMCW transmitter with an FMCW waveform.");
+			}
+		};
+
+		for (const auto& rx_ptr : _receivers)
+		{
+			auto& rx = *rx_ptr;
+			rx.clearResolvedDechirpSources();
+			if (!rx.isDechirpEnabled())
+			{
+				continue;
+			}
+			if (rx.getMode() != radar::OperationMode::FMCW_MODE)
+			{
+				throw std::runtime_error("Receiver '" + rx.getName() + "' enables dechirping outside FMCW mode.");
+			}
+
+			auto reference = rx.getDechirpReference();
+			std::vector<ActiveStreamingSource> sources;
+			const std::string owner = "Receiver '" + rx.getName() + "'";
+			switch (reference.source)
+			{
+			case Receiver::DechirpReferenceSource::Attached:
+				{
+					const auto* const tx = dynamic_cast<const Transmitter*>(rx.getAttached());
+					validate_transmitter(tx, owner);
+					reference.transmitter_id = tx->getId();
+					reference.transmitter_name = tx->getName();
+					sources = append_transmitter_sources(tx);
+					break;
+				}
+			case Receiver::DechirpReferenceSource::Transmitter:
+				{
+					auto* const tx = findTransmitterByName(reference.name);
+					validate_transmitter(tx, owner);
+					reference.transmitter_id = tx->getId();
+					reference.transmitter_name = tx->getName();
+					sources = append_transmitter_sources(tx);
+					break;
+				}
+			case Receiver::DechirpReferenceSource::Custom:
+				{
+					auto* const waveform = findWaveformByName(reference.name);
+					if (waveform == nullptr || !waveform->isFmcwFamily())
+					{
+						throw std::runtime_error(owner + " custom dechirp reference waveform '" + reference.name +
+												 "' must be a top-level FMCW waveform.");
+					}
+					reference.waveform_id = waveform->getId();
+					reference.waveform_name = waveform->getName();
+					sources = append_waveform_sources(waveform, &rx);
+					break;
+				}
+			case Receiver::DechirpReferenceSource::None:
+				throw std::runtime_error(owner + " enables dechirping without a dechirp reference.");
+			}
+
+			if (sources.empty())
+			{
+				throw std::runtime_error(owner + " dechirp reference has no active LO segments in the simulation.");
+			}
+			std::sort(sources.begin(), sources.end(),
+					  [](const ActiveStreamingSource& lhs, const ActiveStreamingSource& rhs)
+					  { return lhs.segment_start < rhs.segment_start; });
+			rx.setDechirpReference(std::move(reference));
+			rx.setResolvedDechirpSources(std::move(sources));
 		}
 	}
 

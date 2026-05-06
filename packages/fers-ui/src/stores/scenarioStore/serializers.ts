@@ -24,6 +24,8 @@ type SerializedAntenna =
           efficiency: Antenna['efficiency'];
       };
 
+type TargetComponent = Extract<PlatformComponent, { type: 'target' }>;
+
 /**
  * Recursively removes null or undefined values from an object or array.
  */
@@ -43,25 +45,61 @@ export const cleanObject = <T>(obj: T): T => {
     return obj;
 };
 
+const serializeReferenceId = (id: string | null | undefined): string | 0 =>
+    typeof id === 'string' && id.trim().length > 0 ? id : 0;
+
+const serializeTargetRcs = (component: TargetComponent) => {
+    const filename = component.rcs_filename;
+    if (
+        component.rcs_type === 'file' &&
+        typeof filename === 'string' &&
+        filename.trim().length > 0
+    ) {
+        return {
+            type: 'file',
+            filename,
+        };
+    }
+
+    return {
+        type: 'isotropic',
+        value: component.rcs_value ?? 1,
+    };
+};
+
 /**
  * Serializes the inner properties of a component (unwrapped).
  * This is the exact format the C++ backend expects for granular updates.
  */
 export const serializeComponentInner = (component: PlatformComponent) => {
-    const mode =
-        'radarType' in component && component.radarType === 'pulsed'
-            ? {
-                  pulsed_mode: {
-                      prf: component.prf,
-                      ...(component.type !== 'transmitter' && {
-                          window_skip: component.window_skip,
-                          window_length: component.window_length,
-                      }),
-                  },
-              }
-            : 'radarType' in component && component.radarType === 'cw'
-              ? { cw_mode: {} }
-              : {};
+    const mode = (() => {
+        if (!('radarType' in component)) {
+            return {};
+        }
+
+        switch (component.radarType) {
+            case 'pulsed':
+                return {
+                    pulsed_mode: {
+                        prf: component.prf,
+                        ...(component.type !== 'transmitter' && {
+                            window_skip: component.window_skip,
+                            window_length: component.window_length,
+                        }),
+                    },
+                };
+            case 'cw':
+                return { cw_mode: {} };
+            case 'fmcw':
+                if (
+                    component.type === 'receiver' ||
+                    component.type === 'monostatic'
+                ) {
+                    return { fmcw_mode: component.fmcwModeConfig ?? {} };
+                }
+                return { fmcw_mode: {} };
+        }
+    })();
 
     switch (component.type) {
         case 'monostatic':
@@ -70,9 +108,9 @@ export const serializeComponentInner = (component: PlatformComponent) => {
                 rx_id: component.rxId,
                 name: component.name,
                 ...mode,
-                antenna: component.antennaId ?? 0,
-                waveform: component.waveformId ?? 0,
-                timing: component.timingId ?? 0,
+                antenna: serializeReferenceId(component.antennaId),
+                waveform: serializeReferenceId(component.waveformId),
+                timing: serializeReferenceId(component.timingId),
                 noise_temp: component.noiseTemperature,
                 nodirect: component.noDirectPaths,
                 nopropagationloss: component.noPropagationLoss,
@@ -83,9 +121,9 @@ export const serializeComponentInner = (component: PlatformComponent) => {
                 id: component.id,
                 name: component.name,
                 ...mode,
-                antenna: component.antennaId ?? 0,
-                waveform: component.waveformId ?? 0,
-                timing: component.timingId ?? 0,
+                antenna: serializeReferenceId(component.antennaId),
+                waveform: serializeReferenceId(component.waveformId),
+                timing: serializeReferenceId(component.timingId),
                 schedule: component.schedule,
             };
         case 'receiver':
@@ -93,8 +131,8 @@ export const serializeComponentInner = (component: PlatformComponent) => {
                 id: component.id,
                 name: component.name,
                 ...mode,
-                antenna: component.antennaId ?? 0,
-                timing: component.timingId ?? 0,
+                antenna: serializeReferenceId(component.antennaId),
+                timing: serializeReferenceId(component.timingId),
                 noise_temp: component.noiseTemperature,
                 nodirect: component.noDirectPaths,
                 nopropagationloss: component.noPropagationLoss,
@@ -104,11 +142,7 @@ export const serializeComponentInner = (component: PlatformComponent) => {
             const targetObj: Record<string, unknown> = {
                 id: component.id,
                 name: component.name,
-                rcs: {
-                    type: component.rcs_type,
-                    value: component.rcs_value,
-                    filename: component.rcs_filename,
-                },
+                rcs: serializeTargetRcs(component),
             };
             if (component.rcs_model !== 'constant') {
                 targetObj.model = {
@@ -167,10 +201,48 @@ export const serializePlatform = (p: Platform) => {
 };
 
 export const serializeWaveform = (w: Waveform) => {
-    const waveformContent =
-        w.waveformType === 'cw'
-            ? { cw: {} }
-            : { pulsed_from_file: { filename: w.filename } };
+    const waveformContent = (() => {
+        switch (w.waveformType) {
+            case 'cw':
+                return { cw: {} };
+            case 'pulsed_from_file':
+                return { pulsed_from_file: { filename: w.filename } };
+            case 'fmcw_linear_chirp':
+                return {
+                    fmcw_linear_chirp: {
+                        direction: w.direction,
+                        chirp_bandwidth: w.chirp_bandwidth,
+                        chirp_duration: w.chirp_duration,
+                        chirp_period: w.chirp_period,
+                        ...(w.start_frequency_offset
+                            ? {
+                                  start_frequency_offset:
+                                      w.start_frequency_offset,
+                              }
+                            : {}),
+                        ...(w.chirp_count !== null
+                            ? { chirp_count: w.chirp_count }
+                            : {}),
+                    },
+                };
+            case 'fmcw_triangle':
+                return {
+                    fmcw_triangle: {
+                        chirp_bandwidth: w.chirp_bandwidth,
+                        chirp_duration: w.chirp_duration,
+                        ...(w.start_frequency_offset
+                            ? {
+                                  start_frequency_offset:
+                                      w.start_frequency_offset,
+                              }
+                            : {}),
+                        ...(w.triangle_count !== null
+                            ? { triangle_count: w.triangle_count }
+                            : {}),
+                    },
+                };
+        }
+    })();
 
     return cleanObject({
         id: w.id,
@@ -216,15 +288,45 @@ export const serializeAntenna = (a: Antenna): SerializedAntenna => {
     return cleanObject(rest) as SerializedAntenna;
 };
 
+export function deriveUtmZone(longitude: number): number {
+    if (!Number.isFinite(longitude)) {
+        return 1;
+    }
+    const clampedLongitude = Math.max(-180, Math.min(180, longitude));
+    return Math.max(
+        1,
+        Math.min(60, Math.floor((clampedLongitude + 180) / 6) + 1)
+    );
+}
+
+const serializeCoordinateSystem = (
+    gp: GlobalParameters
+): GlobalParameters['coordinateSystem'] => {
+    if (gp.coordinateSystem.frame !== 'UTM') {
+        return {
+            frame: gp.coordinateSystem.frame,
+        };
+    }
+
+    return {
+        frame: 'UTM',
+        zone: gp.coordinateSystem.zone ?? deriveUtmZone(gp.origin.longitude),
+        hemisphere:
+            gp.coordinateSystem.hemisphere ??
+            (gp.origin.latitude < 0 ? 'S' : 'N'),
+    };
+};
+
 export const serializeGlobalParameters = (gp: GlobalParameters) => {
-    const {
-        start,
-        end,
-        random_seed,
-        oversample_ratio,
-        coordinateSystem,
-        ...gpRest
-    } = gp;
+    const { start, end, random_seed, oversample_ratio } = gp;
+    const gpRest = omit(
+        gp,
+        'start',
+        'end',
+        'random_seed',
+        'oversample_ratio',
+        'coordinateSystem'
+    );
 
     return cleanObject({
         ...gpRest,
@@ -233,6 +335,6 @@ export const serializeGlobalParameters = (gp: GlobalParameters) => {
         randomseed: random_seed,
         oversample: oversample_ratio,
         rotationangleunit: gp.rotationAngleUnit,
-        coordinatesystem: coordinateSystem,
+        coordinatesystem: serializeCoordinateSystem(gp),
     });
 };

@@ -33,10 +33,10 @@ namespace math
 		 */
 		enum class InterpType
 		{
-			INTERP_STATIC,
-			INTERP_CONSTANT,
-			INTERP_LINEAR,
-			INTERP_CUBIC
+			INTERP_STATIC, ///< Hold the first rotation for all query times.
+			INTERP_CONSTANT, ///< Hold the most recent rotation sample.
+			INTERP_LINEAR, ///< Linearly interpolate between neighboring rotations.
+			INTERP_CUBIC ///< Cubically interpolate between neighboring rotations.
 		};
 
 		/**

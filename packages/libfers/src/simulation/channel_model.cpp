@@ -18,6 +18,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <string_view>
 #include <unordered_map>
 
 #include "core/logging.h"
@@ -44,6 +46,58 @@ using radar::Transmitter;
 
 namespace
 {
+	/// Initializes an FMCW chirp tracker from a retarded time.
+	void initializeFmcwTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+							   core::FmcwChirpBoundaryTracker& tracker)
+	{
+		tracker.initialized = true;
+		if (t_ret >= source.segment_start)
+		{
+			const RealType time_since_segment_start = t_ret - source.segment_start;
+			tracker.n_current = static_cast<std::size_t>(std::floor(time_since_segment_start / source.chirp_period));
+			tracker.t_n = source.segment_start + static_cast<RealType>(tracker.n_current) * source.chirp_period;
+			return;
+		}
+
+		tracker.n_current = 0;
+		tracker.t_n = source.segment_start;
+	}
+
+	/// Initializes an FMCW triangle tracker from a retarded time.
+	void initializeFmcwTriangleTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+									   core::FmcwChirpBoundaryTracker& tracker)
+	{
+		tracker.triangle_initialized = true;
+		if (t_ret < source.segment_start)
+		{
+			tracker.triangle_index = 0;
+			tracker.triangle_leg = 0;
+			tracker.triangle_t_leg = source.segment_start;
+			tracker.triangle_phi_base = 0.0;
+			return;
+		}
+
+		const RealType delta = t_ret - source.segment_start;
+		tracker.triangle_index = static_cast<std::size_t>(std::floor(delta / source.triangle_period));
+		const RealType local_triangle_time =
+			delta - static_cast<RealType>(tracker.triangle_index) * source.triangle_period;
+		tracker.triangle_leg = local_triangle_time < source.chirp_duration ? 0U : 1U;
+		tracker.triangle_t_leg = source.segment_start +
+			static_cast<RealType>(tracker.triangle_index) * source.triangle_period +
+			(tracker.triangle_leg == 1U ? source.chirp_duration : 0.0);
+		tracker.triangle_phi_base =
+			std::fmod(static_cast<RealType>(tracker.triangle_index) * source.mod_phi_tri, 2.0 * PI) +
+			(tracker.triangle_leg == 1U ? source.mod_phi_up : 0.0);
+		if (tracker.triangle_phi_base >= 2.0 * PI)
+		{
+			tracker.triangle_phi_base -= 2.0 * PI;
+		}
+		if (tracker.triangle_phi_base < 0.0)
+		{
+			tracker.triangle_phi_base += 2.0 * PI;
+		}
+	}
+
 	/**
 	 * @struct LinkGeometry
 	 * @brief Holds geometric properties of a path segment between two points.
@@ -158,9 +212,33 @@ namespace
 		return 2 * PI * delta_f * time + delta_phi;
 	}
 
-	RealType computeTimingPhase(const Transmitter* tx, const Receiver* rx, const RealType rx_time,
-								const RealType tx_time, const simulation::CwPhaseNoiseLookup* phase_noise_lookup)
+	/// Computes deterministic timing phase for one timing source when no lookup is available.
+	RealType computeSingleTimingPhase(const timing::Timing* const timing, const RealType time)
 	{
+		if (timing == nullptr)
+		{
+			return 0.0;
+		}
+		return 2.0 * PI * timing->getFreqOffset() * time + timing->getPhaseOffset();
+	}
+
+	/// Computes timing phase with an optional lookup and streaming phase-application mode.
+	RealType computeTimingPhase(const Transmitter* tx, const Receiver* rx, const RealType rx_time,
+								const RealType tx_time, const simulation::CwPhaseNoiseLookup* phase_noise_lookup,
+								const simulation::StreamingTimingPhaseMode mode)
+	{
+		if (mode == simulation::StreamingTimingPhaseMode::None)
+		{
+			return 0.0;
+		}
+		if (mode == simulation::StreamingTimingPhaseMode::TransmitterOnly)
+		{
+			if (phase_noise_lookup == nullptr)
+			{
+				return computeSingleTimingPhase(tx->getTiming().get(), tx_time);
+			}
+			return phase_noise_lookup->sample(tx->getTiming().get(), tx_time);
+		}
 		if (phase_noise_lookup == nullptr)
 		{
 			return computeTimingPhase(tx, rx, rx_time);
@@ -168,7 +246,7 @@ namespace
 		return phase_noise_lookup->phaseDifference(rx->getTiming().get(), rx_time, tx->getTiming().get(), tx_time);
 	}
 
-	// Helper to check noise floor threshold (Signal > kTB)
+	/// Checks whether received power is above the thermal noise floor.
 	bool isSignalStrong(RealType power_watts, RealType temp_kelvin)
 	{
 		// Use configured rate or default to 1Hz if unconfigured to prevent divide-by-zero or silly values
@@ -229,6 +307,187 @@ namespace
 			}
 		}
 		return false;
+	}
+
+	/// Builds a compatibility streaming-source cache for classic CW paths.
+	core::ActiveStreamingSource makeClassicStreamingSource(const Transmitter* trans)
+	{
+		auto source = core::makeActiveSource(trans, params::startTime(), std::numeric_limits<RealType>::max());
+		if (source.kind == core::StreamingWaveformKind::Cw)
+		{
+			source.segment_start = std::numeric_limits<RealType>::lowest();
+		}
+		return source;
+	}
+
+	/// Computes streaming phase for CW or FMCW sources at a receiver time.
+	bool computeStreamingPhase(const core::ActiveStreamingSource& source, const RealType rx_time, const RealType tau,
+							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
+	{
+		if (source.carrier_freq <= 0.0)
+		{
+			return false;
+		}
+
+		const RealType t_ret = rx_time - tau;
+		if (t_ret < source.segment_start || t_ret >= source.segment_end)
+		{
+			return false;
+		}
+
+		if (source.kind == core::StreamingWaveformKind::FmcwLinear)
+		{
+			if (chirp_tracker == nullptr)
+			{
+				const RealType time_since_segment_start = t_ret - source.segment_start;
+				const auto chirp_index =
+					static_cast<std::size_t>(std::floor(time_since_segment_start / source.chirp_period));
+				if (source.chirp_count.has_value() && chirp_index >= *source.chirp_count)
+				{
+					return false;
+				}
+				const RealType chirp_time =
+					time_since_segment_start - static_cast<RealType>(chirp_index) * source.chirp_period;
+				if (chirp_time < 0.0 || chirp_time >= source.chirp_duration)
+				{
+					return false;
+				}
+				phase_out = -2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * chirp_time +
+					source.s_pi_alpha * chirp_time * chirp_time;
+				return true;
+			}
+
+			if (!chirp_tracker->initialized)
+			{
+				initializeFmcwTracker(source, t_ret, *chirp_tracker);
+			}
+
+			while (t_ret >= chirp_tracker->t_n + source.chirp_period)
+			{
+				chirp_tracker->t_n += source.chirp_period;
+				++chirp_tracker->n_current;
+			}
+
+			if (source.chirp_count.has_value() && chirp_tracker->n_current >= *source.chirp_count)
+			{
+				return false;
+			}
+
+			const RealType u_ret = t_ret - chirp_tracker->t_n;
+			// This lower-bound guard is required for causality: cold-path initialization pins the
+			// tracker to the segment start when the retarded time precedes the first chirp, and the
+			// advance loop can only move forward. Without the u_ret < 0 check, we'd evaluate the chirp
+			// polynomial at negative local time and extrapolate a non-causal signal before turn-on.
+			if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+			{
+				return false;
+			}
+
+			phase_out =
+				-2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * u_ret + source.s_pi_alpha * u_ret * u_ret;
+			return true;
+		}
+
+		if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
+		{
+			if (chirp_tracker == nullptr)
+			{
+				const RealType delta = t_ret - source.segment_start;
+				const auto triangle_index = static_cast<std::size_t>(std::floor(delta / source.triangle_period));
+				if (source.triangle_count.has_value() && triangle_index >= *source.triangle_count)
+				{
+					return false;
+				}
+				const RealType local_triangle_time =
+					delta - static_cast<RealType>(triangle_index) * source.triangle_period;
+				const bool down_leg = local_triangle_time >= source.chirp_duration;
+				const RealType u_ret = down_leg ? local_triangle_time - source.chirp_duration : local_triangle_time;
+				if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+				{
+					return false;
+				}
+				const RealType phi_base =
+					std::fmod(static_cast<RealType>(triangle_index) * source.mod_phi_tri, 2.0 * PI) +
+					(down_leg ? source.mod_phi_up : 0.0);
+				const RealType modular_phi_base = phi_base >= 2.0 * PI ? phi_base - 2.0 * PI : phi_base;
+				const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
+				const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
+				phase_out = -2.0 * PI * source.carrier_freq * tau + modular_phi_base + linear_coeff * u_ret +
+					quad_coeff * u_ret * u_ret;
+				return true;
+			}
+
+			if (!chirp_tracker->triangle_initialized)
+			{
+				initializeFmcwTriangleTracker(source, t_ret, *chirp_tracker);
+			}
+
+			while (t_ret >= chirp_tracker->triangle_t_leg + source.chirp_duration)
+			{
+				chirp_tracker->triangle_t_leg += source.chirp_duration;
+				chirp_tracker->triangle_leg = 1U - chirp_tracker->triangle_leg;
+				if (chirp_tracker->triangle_leg == 0U)
+				{
+					++chirp_tracker->triangle_index;
+				}
+				chirp_tracker->triangle_phi_base += source.mod_phi_up;
+				if (chirp_tracker->triangle_phi_base >= 2.0 * PI)
+				{
+					chirp_tracker->triangle_phi_base -= 2.0 * PI;
+				}
+			}
+
+			if (source.triangle_count.has_value() && chirp_tracker->triangle_index >= *source.triangle_count)
+			{
+				return false;
+			}
+
+			const RealType u_ret = t_ret - chirp_tracker->triangle_t_leg;
+			if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+			{
+				return false;
+			}
+
+			const bool down_leg = chirp_tracker->triangle_leg == 1U;
+			const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
+			const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
+			phase_out = -2.0 * PI * source.carrier_freq * tau + chirp_tracker->triangle_phi_base +
+				linear_coeff * u_ret + quad_coeff * u_ret * u_ret;
+			return true;
+		}
+
+		phase_out = -2.0 * PI * source.carrier_freq * tau;
+		return true;
+	}
+
+	/// Returns average radiated power for preview visualization.
+	RealType previewRadiatedPower(const RadarSignal* waveform)
+	{
+		if (waveform == nullptr)
+		{
+			return 0.0;
+		}
+		if (const auto* fmcw = waveform->getFmcwChirpSignal(); fmcw != nullptr)
+		{
+			return waveform->getPower() * (fmcw->getChirpDuration() / fmcw->getChirpPeriod());
+		}
+		if (waveform->isFmcwTriangle())
+		{
+			return waveform->getPower();
+		}
+		return waveform->getPower();
+	}
+
+	/// Formats received or radiated power as a dBm preview label.
+	std::string formatPreviewDbmLabel(const RealType watts, const std::string_view prefix = {})
+	{
+		return std::format("{}{:.1f} dBm", prefix, wattsToDbm(watts));
+	}
+
+	/// Formats target illumination density as a dBW-per-square-meter preview label.
+	std::string formatPreviewDbwPerSquareMeterLabel(const RealType watts)
+	{
+		return std::format("{:.1f} dBW/m\u00B2", wattsToDb(watts));
 	}
 }
 
@@ -422,6 +681,21 @@ namespace simulation
 	ComplexType calculateDirectPathContribution(const Transmitter* trans, const Receiver* recv, const RealType timeK,
 												const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
+		return calculateStreamingDirectPathContribution(makeClassicStreamingSource(trans), recv, timeK,
+														phase_noise_lookup);
+	}
+
+	ComplexType calculateStreamingDirectPathContribution(const core::ActiveStreamingSource& source,
+														 const Receiver* recv, const RealType timeK,
+														 const CwPhaseNoiseLookup* const phase_noise_lookup,
+														 core::FmcwChirpBoundaryTracker* const chirp_tracker,
+														 const StreamingTimingPhaseMode timing_phase_mode)
+	{
+		const auto* const trans = source.transmitter;
+		if (trans == nullptr)
+		{
+			return {0.0, 0.0};
+		}
 		// Check for co-location to prevent singularities.
 		// If they share the same platform, we assume they are isolated (no leakage) or explicit
 		// monostatic handling is required (which is not modeled via the far-field path).
@@ -444,9 +718,11 @@ namespace simulation
 		}
 
 		const RealType tau = link.dist / params::c();
-		auto* const signal = trans->getSignal();
-		const RealType carrier_freq = signal->getCarrier();
-		const RealType lambda = params::c() / carrier_freq;
+		if (source.carrier_freq <= 0.0)
+		{
+			return {0.0, 0.0};
+		}
+		const RealType lambda = params::c() / source.carrier_freq;
 
 		// Tx Gain: Direction Tx -> Rx
 		const RealType tx_gain = computeAntennaGain(trans, link.u_vec, timeK, lambda);
@@ -457,23 +733,50 @@ namespace simulation
 		const RealType scaling_factor = computeDirectPathPower(tx_gain, rx_gain, lambda, link.dist, no_loss);
 
 		// Include Signal Power
-		const RealType amplitude = std::sqrt(signal->getPower() * scaling_factor);
+		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
 		// Carrier Phase
-		const RealType phase = -2 * PI * carrier_freq * tau;
+		RealType phase = 0.0;
+		if (!computeStreamingPhase(source, timeK, tau, chirp_tracker, phase))
+		{
+			return {0.0, 0.0};
+		}
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
-		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup);
+		const RealType non_coherent_phase =
+			computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup, timing_phase_mode);
 		contribution *= std::polar(1.0, non_coherent_phase);
 
 		return contribution;
+	}
+
+	bool calculateStreamingReferencePhase(const core::ActiveStreamingSource& source, const RealType timeK,
+										  core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
+	{
+		return computeStreamingPhase(source, timeK, 0.0, chirp_tracker, phase_out);
 	}
 
 	ComplexType calculateReflectedPathContribution(const Transmitter* trans, const Receiver* recv, const Target* targ,
 												   const RealType timeK,
 												   const CwPhaseNoiseLookup* const phase_noise_lookup)
 	{
+		return calculateStreamingReflectedPathContribution(makeClassicStreamingSource(trans), recv, targ, timeK,
+														   phase_noise_lookup);
+	}
+
+	ComplexType calculateStreamingReflectedPathContribution(const core::ActiveStreamingSource& source,
+															const Receiver* recv, const Target* targ,
+															const RealType timeK,
+															const CwPhaseNoiseLookup* const phase_noise_lookup,
+															core::FmcwChirpBoundaryTracker* const chirp_tracker,
+															const StreamingTimingPhaseMode timing_phase_mode)
+	{
+		const auto* const trans = source.transmitter;
+		if (trans == nullptr)
+		{
+			return {0.0, 0.0};
+		}
 		// Check for co-location involving the target.
 		// We do not model a platform tracking itself (R=0) or illuminating itself (R=0).
 		if (trans->getPlatform() == targ->getPlatform() || recv->getPlatform() == targ->getPlatform())
@@ -499,9 +802,11 @@ namespace simulation
 		}
 
 		const RealType tau = (link_tx_tgt.dist + link_tgt_rx.dist) / params::c();
-		auto* const signal = trans->getSignal();
-		const RealType carrier_freq = signal->getCarrier();
-		const RealType lambda = params::c() / carrier_freq;
+		if (source.carrier_freq <= 0.0)
+		{
+			return {0.0, 0.0};
+		}
+		const RealType lambda = params::c() / source.carrier_freq;
 
 		// RCS Lookups: In (Tx->Tgt), Out (Rx->Tgt = - (Tgt->Rx))
 		SVec3 in_angle(link_tx_tgt.u_vec);
@@ -518,13 +823,18 @@ namespace simulation
 			computeReflectedPathPower(tx_gain, rx_gain, rcs, lambda, link_tx_tgt.dist, link_tgt_rx.dist, no_loss);
 
 		// Include Signal Power
-		const RealType amplitude = std::sqrt(signal->getPower() * scaling_factor);
+		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
-		const RealType phase = -2 * PI * carrier_freq * tau;
+		RealType phase = 0.0;
+		if (!computeStreamingPhase(source, timeK, tau, chirp_tracker, phase))
+		{
+			return {0.0, 0.0};
+		}
 		ComplexType contribution = std::polar(amplitude, phase);
 
 		// Non-coherent Local Oscillator Effects
-		const RealType non_coherent_phase = computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup);
+		const RealType non_coherent_phase =
+			computeTimingPhase(trans, recv, timeK, timeK - tau, phase_noise_lookup, timing_phase_mode);
 		contribution *= std::polar(1.0, non_coherent_phase);
 
 		return contribution;
@@ -619,7 +929,7 @@ namespace simulation
 
 			const auto p_tx = tx->getPosition(time);
 			const auto* waveform = tx->getSignal();
-			const RealType pt = (waveform != nullptr) ? waveform->getPower() : 0.0;
+			const RealType pt = previewRadiatedPower(waveform);
 			const RealType lambda = (waveform != nullptr) ? (params::c() / waveform->getCarrier()) : lambda_default;
 
 			// --- PRE-CALCULATE ILLUMINATOR PATHS (Tx -> Tgt) ---
@@ -647,7 +957,8 @@ namespace simulation
 
 				links.push_back({.type = LinkType::BistaticTxTgt,
 								 .quality = LinkQuality::Strong,
-								 .label = std::format("{:.1f} dBW/m\u00B2", wattsToDb(p_density)),
+								 .label = formatPreviewDbwPerSquareMeterLabel(p_density),
+								 .display_value = wattsToDb(p_density),
 								 .source_id = tx->getId(),
 								 .dest_id = tgt->getId(),
 								 .origin_id = tx->getId()});
@@ -710,7 +1021,8 @@ namespace simulation
 										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_unit_watts)),
+										 .label = formatPreviewDbmLabel(pr_unit_watts),
+										 .display_value = wattsToDbm(pr_unit_watts),
 										 .source_id = tx->getId(),
 										 .dest_id = tgt->getId(),
 										 .origin_id = tx->getId(),
@@ -742,7 +1054,8 @@ namespace simulation
 
 							links.push_back({.type = LinkType::DirectTxRx,
 											 .quality = LinkQuality::Strong,
-											 .label = std::format("Direct: {:.1f} dBm", wattsToDbm(pr_watts)),
+											 .label = formatPreviewDbmLabel(pr_watts, "Direct: "),
+											 .display_value = wattsToDbm(pr_watts),
 											 .source_id = tx->getId(),
 											 .dest_id = rx->getId(),
 											 .origin_id = tx->getId()});
@@ -789,7 +1102,8 @@ namespace simulation
 										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
 											 ? LinkQuality::Strong
 											 : LinkQuality::Weak,
-										 .label = std::format("{:.1f} dBm", wattsToDbm(pr_unit_watts)),
+										 .label = formatPreviewDbmLabel(pr_unit_watts),
+										 .display_value = wattsToDbm(pr_unit_watts),
 										 .source_id = tgt->getId(),
 										 .dest_id = rx->getId(),
 										 .origin_id = tx->getId(),

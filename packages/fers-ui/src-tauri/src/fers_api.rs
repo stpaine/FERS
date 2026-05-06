@@ -267,7 +267,7 @@ impl LogLevel {
     }
 
     fn from_ffi(level: ffi::fers_log_level_t) -> Self {
-        match level as u32 {
+        match level {
             0 => Self::Trace,
             1 => Self::Debug,
             2 => Self::Info,
@@ -281,7 +281,7 @@ impl LogLevel {
 }
 
 fn log_level_label(level: ffi::fers_log_level_t) -> &'static str {
-    match level as u32 {
+    match level {
         0 => "TRACE",
         1 => "DEBUG",
         2 => "INFO",
@@ -443,6 +443,8 @@ pub struct VisualLink {
     pub rcs: f64,
     /// Received power in dBm with actual RCS applied. -999 if not applicable.
     pub actual_power_dbm: f64,
+    /// Numeric value represented by `label`, in the label's unit.
+    pub display_value: f64,
 }
 
 impl FersContext {
@@ -908,6 +910,7 @@ impl FersContext {
                     origin_id,
                     rcs: l.rcs,
                     actual_power_dbm: l.actual_power_dbm,
+                    display_value: l.display_value,
                 });
             }
         }
@@ -1433,5 +1436,6 @@ mod tests {
             links.iter().find(|l| l.link_type == 3).expect("Expected a direct interference link");
         assert_eq!(direct_link.source_id, "101");
         assert_eq!(direct_link.dest_id, "201");
+        assert!(direct_link.display_value > -999.0);
     }
 }

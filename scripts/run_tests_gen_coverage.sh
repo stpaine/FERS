@@ -8,6 +8,20 @@ readonly SCRIPT_DIR
 readonly REPO_ROOT="${SCRIPT_DIR}/.."
 readonly COVERAGE_DIR="${REPO_ROOT}/build/coverage"
 
+TESTS_ONLY=false
+
+# --- argument parsing ---
+for arg in "$@"; do
+	case "$arg" in
+		--tests-only)
+			TESTS_ONLY=true
+			;;
+		*)
+			die "unknown argument: $arg"
+			;;
+	esac
+done
+
 die() {
 	printf 'Error: %s\n' "$*" >&2
 	exit 1
@@ -26,15 +40,27 @@ require_cmd() {
 
 trap on_err ERR
 
-for cmd in cmake ctest lcov genhtml; do
+# Only require lcov/genhtml if we actually use them
+for cmd in cmake ctest; do
 	require_cmd "$cmd"
 done
+
+if [ "$TESTS_ONLY" = false ]; then
+	for cmd in lcov genhtml; do
+		require_cmd "$cmd"
+	done
+fi
 
 cd "$REPO_ROOT"
 
 cmake --preset=coverage
 cmake --build --preset=coverage --parallel
 ctest --preset=coverage --parallel
+
+# --- early exit if tests-only ---
+if [ "$TESTS_ONLY" = true ]; then
+	exit 0
+fi
 
 cd "$COVERAGE_DIR"
 

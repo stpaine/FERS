@@ -161,11 +161,15 @@ export const NumberField = ({
     value,
     onChange,
     emptyBehavior = 'revert',
+    helperText,
+    externalError = false,
 }: {
     label: string;
     value: number | null;
     onChange: (val: number | null) => void;
     emptyBehavior?: EmptyFieldBehavior;
+    helperText?: string;
+    externalError?: boolean;
 }) => {
     const [draft, setDraft] = React.useState(() =>
         formatNumberFieldValue(value)
@@ -204,8 +208,8 @@ export const NumberField = ({
             size="small"
             fullWidth
             value={draft}
-            error={error !== null}
-            helperText={error ?? undefined}
+            error={error !== null || externalError}
+            helperText={error ?? helperText}
             onFocus={() => {
                 setIsFocused(true);
                 setError(null);

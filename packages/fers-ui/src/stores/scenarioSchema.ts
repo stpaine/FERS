@@ -52,30 +52,73 @@ export const GlobalParametersSchema = z.object({
 
 const SimIdSchema = z.string().regex(/^\d+$/, 'ID must be a numeric string.');
 
+const BaseWaveformSchema = z.object({
+    id: SimIdSchema,
+    type: z.literal('Waveform'),
+    name: z.string().min(1, 'Waveform name cannot be empty.'),
+    power: z.number().min(0, 'Power cannot be negative.'),
+    carrier_frequency: z
+        .number()
+        .positive('Carrier frequency must be positive.'),
+});
+
 export const WaveformSchema = z
-    .object({
-        id: SimIdSchema,
-        type: z.literal('Waveform'),
-        name: z.string().min(1, 'Waveform name cannot be empty.'),
-        waveformType: z.enum(['pulsed_from_file', 'cw']),
-        power: z.number().min(0, 'Power cannot be negative.'),
-        carrier_frequency: z
-            .number()
-            .positive('Carrier frequency must be positive.'),
-        filename: z.string().optional(),
-    })
-    .refine(
-        (data) => {
-            if (data.waveformType === 'pulsed_from_file') {
-                return data.filename !== undefined && data.filename.length > 0;
-            }
-            return true;
-        },
-        {
-            message: 'A filename is required for this waveform type.',
-            path: ['filename'],
+    .discriminatedUnion('waveformType', [
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('pulsed_from_file'),
+            filename: z
+                .string()
+                .min(1, 'A filename is required for this waveform type.'),
+        }),
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('cw'),
+        }),
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('fmcw_linear_chirp'),
+            direction: z.enum(['up', 'down']),
+            chirp_bandwidth: z
+                .number()
+                .positive('Chirp bandwidth must be positive.'),
+            chirp_duration: z
+                .number()
+                .positive('Chirp duration must be positive.'),
+            chirp_period: z.number().positive('Chirp period must be positive.'),
+            start_frequency_offset: nullableNumber.pipe(
+                z.number().finite().nullable()
+            ),
+            chirp_count: nullableNumber.pipe(
+                z.number().int().positive().nullable()
+            ),
+        }),
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('fmcw_triangle'),
+            chirp_bandwidth: z
+                .number()
+                .positive('Chirp bandwidth must be positive.'),
+            chirp_duration: z
+                .number()
+                .positive('Chirp duration must be positive.'),
+            start_frequency_offset: nullableNumber.pipe(
+                z.number().finite().nullable()
+            ),
+            triangle_count: nullableNumber.pipe(
+                z.number().int().positive().nullable()
+            ),
+        }),
+    ])
+    .superRefine((data, ctx) => {
+        if (
+            data.waveformType === 'fmcw_linear_chirp' &&
+            data.chirp_period < data.chirp_duration
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                message:
+                    'Chirp period must be greater than or equal to chirp duration.',
+                path: ['chirp_period'],
+            });
         }
-    );
+    });
 
 export const NoiseEntrySchema = z.object({
     id: SimIdSchema,
@@ -186,13 +229,29 @@ export const SchedulePeriodSchema = z.object({
     end: z.number().min(0, 'End time cannot be negative.'),
 });
 
+const DechirpReferenceSchema = z.object({
+    source: z.enum(['attached', 'transmitter', 'custom']),
+    transmitter_name: z.string().optional(),
+    waveform_name: z.string().optional(),
+});
+
+const FmcwModeConfigSchema = z
+    .object({
+        dechirp_mode: z.enum(['none', 'physical', 'ideal']).optional(),
+        dechirp_reference: DechirpReferenceSchema.optional(),
+        if_sample_rate: z.number().optional(),
+        if_filter_bandwidth: z.number().optional(),
+        if_filter_transition_width: z.number().optional(),
+    })
+    .optional();
+
 const MonostaticComponentSchema = z.object({
     id: SimIdSchema,
     type: z.literal('monostatic'),
     name: z.string().min(1),
     txId: SimIdSchema,
     rxId: SimIdSchema,
-    radarType: z.enum(['pulsed', 'cw']),
+    radarType: z.enum(['pulsed', 'cw', 'fmcw']),
     window_skip: nullableNumber,
     window_length: nullableNumber,
     prf: nullableNumber,
@@ -202,6 +261,7 @@ const MonostaticComponentSchema = z.object({
     noiseTemperature: nullableNumber.pipe(z.number().min(0).nullable()),
     noDirectPaths: z.boolean(),
     noPropagationLoss: z.boolean(),
+    fmcwModeConfig: FmcwModeConfigSchema,
     schedule: z.array(SchedulePeriodSchema).default([]),
 });
 
@@ -209,7 +269,7 @@ const TransmitterComponentSchema = z.object({
     id: SimIdSchema,
     type: z.literal('transmitter'),
     name: z.string().min(1),
-    radarType: z.enum(['pulsed', 'cw']),
+    radarType: z.enum(['pulsed', 'cw', 'fmcw']),
     prf: nullableNumber,
     antennaId: SimIdSchema.nullable(),
     waveformId: SimIdSchema.nullable(),
@@ -221,7 +281,7 @@ const ReceiverComponentSchema = z.object({
     id: SimIdSchema,
     type: z.literal('receiver'),
     name: z.string().min(1),
-    radarType: z.enum(['pulsed', 'cw']),
+    radarType: z.enum(['pulsed', 'cw', 'fmcw']),
     window_skip: nullableNumber,
     window_length: nullableNumber,
     prf: nullableNumber,
@@ -230,6 +290,7 @@ const ReceiverComponentSchema = z.object({
     noiseTemperature: nullableNumber.pipe(z.number().min(0).nullable()),
     noDirectPaths: z.boolean(),
     noPropagationLoss: z.boolean(),
+    fmcwModeConfig: FmcwModeConfigSchema,
     schedule: z.array(SchedulePeriodSchema).default([]),
 });
 

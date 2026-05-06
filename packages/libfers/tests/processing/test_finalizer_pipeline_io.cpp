@@ -107,7 +107,7 @@ TEST_CASE("applyDownsamplingAndQuantization fails fast when oversample ratio exc
 						ContainsSubstring("Oversampling ratios > 8 are not supported"));
 }
 
-TEST_CASE("exportCwToHdf5 writes physically meaningful datasets and metadata", "[processing][finalizer][io]")
+TEST_CASE("exportStreamingToHdf5 writes physically meaningful datasets and metadata", "[processing][finalizer][io]")
 {
 	ParamGuard guard;
 	params::setRate(2000.0);
@@ -117,7 +117,7 @@ TEST_CASE("exportCwToHdf5 writes physically meaningful datasets and metadata", "
 	removeIfExists(path);
 
 	const std::vector<ComplexType> iq_buffer = {ComplexType{1.5, -0.5}, ComplexType{-2.0, 3.0}};
-	processing::pipeline::exportCwToHdf5(path.string(), iq_buffer, 4096.0, 9.0e8);
+	processing::pipeline::exportStreamingToHdf5(path.string(), iq_buffer, 4096.0, 9.0e8);
 
 	HighFive::File file(path.string(), HighFive::File::ReadOnly);
 	std::vector<RealType> i_data;
@@ -148,7 +148,7 @@ TEST_CASE("exportCwToHdf5 writes physically meaningful datasets and metadata", "
 	removeIfExists(path);
 }
 
-TEST_CASE("exportCwToHdf5 handles file creation failures without throwing", "[processing][finalizer][io]")
+TEST_CASE("exportStreamingToHdf5 handles file creation failures without throwing", "[processing][finalizer][io]")
 {
 	const auto parent = std::filesystem::temp_directory_path() /
 		("missing_finalizer_dir_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
@@ -157,9 +157,9 @@ TEST_CASE("exportCwToHdf5 handles file creation failures without throwing", "[pr
 	std::error_code ec;
 	std::filesystem::remove_all(parent, ec);
 
-	REQUIRE_NOTHROW(processing::pipeline::exportCwToHdf5(path.string(), {}, 1.0, 2.0));
+	REQUIRE_NOTHROW(processing::pipeline::exportStreamingToHdf5(path.string(), {}, 1.0, 2.0));
 	REQUIRE_FALSE(std::filesystem::exists(path));
 }
 
-// TODO: The HDF5 error branch is observable only indirectly because exportCwToHdf5
+// TODO: The HDF5 error branch is observable only indirectly because exportStreamingToHdf5
 // logs failures instead of surfacing the exception details to the caller.

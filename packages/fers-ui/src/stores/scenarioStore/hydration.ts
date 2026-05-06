@@ -52,6 +52,7 @@ interface BackendPlatformComponentData {
     nopropagationloss?: boolean;
     pulsed_mode?: BackendPulsedMode;
     cw_mode?: object;
+    fmcw_mode?: Record<string, unknown>;
     schedule?: BackendSchedulePeriod[];
     rcs?: { type: 'isotropic' | 'file'; value?: number; filename?: string };
     model?: { type: 'constant' | 'chisquare' | 'gamma'; k?: number };
@@ -98,6 +99,20 @@ interface BackendWaveform {
     cw?: object;
     pulsed_from_file?: {
         filename: string;
+    };
+    fmcw_linear_chirp?: {
+        direction: 'up' | 'down';
+        chirp_bandwidth: number;
+        chirp_duration: number;
+        chirp_period: number;
+        start_frequency_offset?: number | null;
+        chirp_count?: number | null;
+    };
+    fmcw_triangle?: {
+        chirp_bandwidth: number;
+        chirp_duration: number;
+        start_frequency_offset?: number | null;
+        triangle_count?: number | null;
     };
 }
 
@@ -276,22 +291,52 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
         const waveforms: Waveform[] = (
             (data.waveforms as BackendWaveform[]) || []
         ).map((w) => {
-            const waveformType = w.cw
-                ? ('cw' as const)
-                : ('pulsed_from_file' as const);
-            const filename = w.pulsed_from_file?.filename ?? '';
-
             const waveformId =
                 normalizeIdOrNull(w.id) ?? generateSimId('Waveform');
-            const waveform: Waveform = {
+            const commonWaveform = {
                 id: waveformId,
-                type: 'Waveform',
+                type: 'Waveform' as const,
                 name: w.name,
-                waveformType,
                 power: w.power,
                 carrier_frequency: w.carrier_frequency,
-                filename,
             };
+            let waveform: Waveform;
+            if (w.fmcw_linear_chirp) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'fmcw_linear_chirp',
+                    direction: w.fmcw_linear_chirp.direction,
+                    chirp_bandwidth: w.fmcw_linear_chirp.chirp_bandwidth,
+                    chirp_duration: w.fmcw_linear_chirp.chirp_duration,
+                    chirp_period: w.fmcw_linear_chirp.chirp_period,
+                    start_frequency_offset:
+                        w.fmcw_linear_chirp.start_frequency_offset ?? null,
+                    chirp_count: w.fmcw_linear_chirp.chirp_count ?? null,
+                };
+            } else if (w.fmcw_triangle) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'fmcw_triangle',
+                    chirp_bandwidth: w.fmcw_triangle.chirp_bandwidth,
+                    chirp_duration: w.fmcw_triangle.chirp_duration,
+                    start_frequency_offset:
+                        w.fmcw_triangle.start_frequency_offset ?? null,
+                    triangle_count: w.fmcw_triangle.triangle_count ?? null,
+                };
+            } else if (w.cw) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'cw',
+                };
+            } else if (w.pulsed_from_file) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'pulsed_from_file',
+                    filename: w.pulsed_from_file.filename ?? '',
+                };
+            } else {
+                throw new Error(`Unsupported waveform type for '${w.name}'.`);
+            }
             nameToIdMap.set(waveform.name, waveform.id);
             reserveSimId(waveformId);
             return waveform;
@@ -417,8 +462,14 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                         ? 'pulsed'
                         : cData.cw_mode
                           ? 'cw'
-                          : 'pulsed';
+                          : cData.fmcw_mode
+                            ? 'fmcw'
+                            : 'pulsed';
                     const pulsed = cData.pulsed_mode;
+                    const fmcwModeConfig =
+                        radarType === 'fmcw' && cData.fmcw_mode
+                            ? cData.fmcw_mode
+                            : undefined;
 
                     const antennaId =
                         normalizeRefId(cData.antenna) ??
@@ -459,6 +510,7 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                                 window_length: pulsed?.window_length ?? null,
                                 prf: pulsed?.prf ?? null,
                                 waveformId,
+                                fmcwModeConfig,
                                 ...commonRadar,
                                 ...commonReceiver,
                             };
@@ -483,6 +535,7 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                                 window_skip: pulsed?.window_skip ?? null,
                                 window_length: pulsed?.window_length ?? null,
                                 prf: pulsed?.prf ?? null,
+                                fmcwModeConfig,
                                 ...commonRadar,
                                 ...commonReceiver,
                             };

@@ -27,6 +27,7 @@
 
 #include "core/config.h"
 #include "core/sim_id.h"
+#include "core/simulation_state.h"
 #include "math/geometry_ops.h"
 
 namespace core
@@ -58,27 +59,43 @@ namespace fers_signal
 
 namespace simulation
 {
+	/// Sampled phase-noise buffer for one timing source.
 	struct CwPhaseNoiseBuffer
 	{
-		RealType start_time{};
-		RealType dt{};
-		std::vector<RealType> samples;
+		RealType start_time{}; ///< First sample time in seconds.
+		RealType dt{}; ///< Time spacing between phase-noise samples in seconds.
+		std::vector<RealType> samples; ///< Phase-noise samples in radians.
 
+		/// Returns the interpolated phase-noise sample at the specified time.
 		[[nodiscard]] RealType sampleAt(RealType time) const noexcept;
 	};
 
+	/// Lookup table for CW phase noise across timing sources.
 	struct CwPhaseNoiseLookup
 	{
-		RealType start_time{};
-		RealType end_time{};
-		RealType dt{};
-		std::unordered_map<SimId, CwPhaseNoiseBuffer> buffers;
+		RealType start_time{}; ///< Lookup start time in seconds.
+		RealType end_time{}; ///< Lookup end time in seconds.
+		RealType dt{}; ///< Lookup sample spacing in seconds.
+		std::unordered_map<SimId, CwPhaseNoiseBuffer> buffers; ///< Per-timing-source phase-noise buffers.
 
+		/// Builds a phase-noise lookup for the requested timing sources and time range.
 		[[nodiscard]] static CwPhaseNoiseLookup build(std::span<const std::shared_ptr<timing::Timing>> timings,
 													  RealType start_time, RealType end_time);
+
+		/// Samples phase noise for one timing source at the specified time.
 		[[nodiscard]] RealType sample(const timing::Timing* timing, RealType time) const noexcept;
+
+		/// Computes receiver-minus-transmitter phase noise at two propagation times.
 		[[nodiscard]] RealType phaseDifference(const timing::Timing* rx_timing, RealType rx_time,
 											   const timing::Timing* tx_timing, RealType tx_time) const noexcept;
+	};
+
+	/// Selects how timing phase noise is applied to streaming channel contributions.
+	enum class StreamingTimingPhaseMode
+	{
+		ReceiverRelative, ///< Existing raw streaming convention: transmitter phase minus receiver LO phase.
+		TransmitterOnly, ///< Incoming RF/baseband signal before receiver LO subtraction.
+		None ///< Ignore timing phase noise entirely.
 	};
 
 	/**
@@ -157,6 +174,35 @@ namespace simulation
 												RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
 
 	/**
+	 * @brief Calculates a direct-path contribution from a cached streaming source.
+	 *
+	 * @param source Cached active streaming source to evaluate.
+	 * @param recv Receiver observing the source.
+	 * @param timeK Current receiver time in seconds.
+	 * @param phase_noise_lookup Optional lookup for timing phase noise samples.
+	 * @param chirp_tracker Optional caller-owned FMCW boundary tracker for this path.
+	 * @param timing_phase_mode Selects how timing phase noise is applied.
+	 * @return The complex I/Q sample contribution for this path.
+	 */
+	ComplexType calculateStreamingDirectPathContribution(
+		const core::ActiveStreamingSource& source, const radar::Receiver* recv, RealType timeK,
+		const CwPhaseNoiseLookup* phase_noise_lookup = nullptr, core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr,
+		StreamingTimingPhaseMode timing_phase_mode = StreamingTimingPhaseMode::ReceiverRelative);
+
+	/**
+	 * @brief Evaluates a receive-time streaming waveform phase for receiver LO/dechirp references.
+	 *
+	 * @param source Cached active streaming source to evaluate.
+	 * @param timeK Receiver time in seconds.
+	 * @param chirp_tracker Optional caller-owned FMCW boundary tracker for this source.
+	 * @param phase_out Receives the waveform phase in radians when evaluation succeeds.
+	 * @return True when the source is active and a phase was produced.
+	 */
+	[[nodiscard]] bool calculateStreamingReferencePhase(const core::ActiveStreamingSource& source, RealType timeK,
+														core::FmcwChirpBoundaryTracker* chirp_tracker,
+														RealType& phase_out);
+
+	/**
 	 * @brief Calculates the complex envelope contribution for a reflected path (Tx -> Tgt -> Rx) at a specific time.
 	 * This function is used for Continuous Wave (CW) simulations.
 	 *
@@ -169,6 +215,24 @@ namespace simulation
 	ComplexType calculateReflectedPathContribution(const radar::Transmitter* trans, const radar::Receiver* recv,
 												   const radar::Target* targ, RealType timeK,
 												   const CwPhaseNoiseLookup* phase_noise_lookup = nullptr);
+
+	/**
+	 * @brief Calculates a reflected-path contribution from a cached streaming source.
+	 *
+	 * @param source Cached active streaming source to evaluate.
+	 * @param recv Receiver observing the reflected signal.
+	 * @param targ Reflecting target.
+	 * @param timeK Current receiver time in seconds.
+	 * @param phase_noise_lookup Optional lookup for timing phase noise samples.
+	 * @param chirp_tracker Optional caller-owned FMCW boundary tracker for this path.
+	 * @param timing_phase_mode Selects how timing phase noise is applied.
+	 * @return The complex I/Q sample contribution for this reflected path.
+	 */
+	ComplexType calculateStreamingReflectedPathContribution(
+		const core::ActiveStreamingSource& source, const radar::Receiver* recv, const radar::Target* targ,
+		RealType timeK, const CwPhaseNoiseLookup* phase_noise_lookup = nullptr,
+		core::FmcwChirpBoundaryTracker* chirp_tracker = nullptr,
+		StreamingTimingPhaseMode timing_phase_mode = StreamingTimingPhaseMode::ReceiverRelative);
 
 	/**
 	 * @brief Creates a Response object by simulating a signal's interaction over its duration.
@@ -219,14 +283,15 @@ namespace simulation
 	 */
 	struct PreviewLink
 	{
-		LinkType type;
-		LinkQuality quality;
-		std::string label;
-		SimId source_id; // The start of this specific link segment
-		SimId dest_id; // The end of this specific link segment
-		SimId origin_id; // The original source of energy (Transmitter)
-		double rcs{-1.0}; // RCS in m^2 for this path; -1.0 if not applicable
-		double actual_power_dbm{-999.0}; // Received power with actual RCS applied; -999 if not applicable
+		LinkType type; ///< Visual link category.
+		LinkQuality quality; ///< Radiometric link quality.
+		std::string label; ///< Human-readable label for display.
+		double display_value{-999.0}; ///< Numeric value represented by label, in the label's unit.
+		SimId source_id; ///< SimId at the start of this specific link segment.
+		SimId dest_id; ///< SimId at the end of this specific link segment.
+		SimId origin_id; ///< Original transmitted-energy source SimId.
+		double rcs{-1.0}; ///< RCS in square meters, or -1.0 when not applicable.
+		double actual_power_dbm{-999.0}; ///< Received power in dBm with actual RCS, or sentinel when unavailable.
 	};
 
 	/**

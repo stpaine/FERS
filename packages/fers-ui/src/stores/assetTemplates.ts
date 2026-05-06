@@ -9,6 +9,11 @@ import {
     WaveformSchema,
 } from './scenarioSchema';
 import { generateSimId } from './scenarioStore/idUtils';
+import {
+    collectScenarioNames,
+    createUniqueName,
+    createUniqueScenarioCopyName,
+} from './scenarioStore/nameUtils';
 import type {
     Antenna,
     Platform,
@@ -225,22 +230,6 @@ export function createTemplateFromScenarioItem(
     return null;
 }
 
-function createCopyName(
-    baseName: string,
-    existingItems: Array<{ name: string }>
-): string {
-    const existingNames = new Set(existingItems.map((item) => item.name));
-    let candidate = `${baseName} Copy`;
-    let suffix = 2;
-
-    while (existingNames.has(candidate)) {
-        candidate = `${baseName} Copy ${suffix}`;
-        suffix += 1;
-    }
-
-    return candidate;
-}
-
 function cloneWaveform(
     waveform: Waveform,
     scenarioData: ScenarioData,
@@ -249,7 +238,7 @@ function cloneWaveform(
     return {
         ...deepClone(waveform),
         id: generateSimId('Waveform'),
-        name: createCopyName(baseName, scenarioData.waveforms),
+        name: createUniqueScenarioCopyName(scenarioData, baseName),
     };
 }
 
@@ -261,7 +250,7 @@ function cloneTiming(
     return {
         ...deepClone(timing),
         id: generateSimId('Timing'),
-        name: createCopyName(baseName, scenarioData.timings),
+        name: createUniqueScenarioCopyName(scenarioData, baseName),
         noiseEntries: timing.noiseEntries.map((entry) => ({
             ...deepClone(entry),
             id: generateSimId('Timing'),
@@ -277,7 +266,7 @@ function cloneAntenna(
     return {
         ...deepClone(antenna),
         id: generateSimId('Antenna'),
-        name: createCopyName(baseName, scenarioData.antennas),
+        name: createUniqueScenarioCopyName(scenarioData, baseName),
     };
 }
 
@@ -329,8 +318,14 @@ function cloneComponent(
     antennaIdMap: Map<string, string>,
     timingIdMap: Map<string, string>,
     waveformIdMap: Map<string, string>,
-    warnings: string[]
+    warnings: string[],
+    existingNames: Set<string>
 ): PlatformComponent {
+    const name = createUniqueName(component.name, existingNames, {
+        copy: true,
+    });
+    existingNames.add(name);
+
     switch (component.type) {
         case 'monostatic': {
             const txId = generateSimId('Transmitter');
@@ -339,6 +334,7 @@ function cloneComponent(
                 id: txId,
                 txId,
                 rxId: generateSimId('Receiver'),
+                name,
                 antennaId: remapReference(
                     component.antennaId,
                     antennaIdMap,
@@ -363,6 +359,7 @@ function cloneComponent(
             return {
                 ...deepClone(component),
                 id: generateSimId('Transmitter'),
+                name,
                 antennaId: remapReference(
                     component.antennaId,
                     antennaIdMap,
@@ -386,6 +383,7 @@ function cloneComponent(
             return {
                 ...deepClone(component),
                 id: generateSimId('Receiver'),
+                name,
                 antennaId: remapReference(
                     component.antennaId,
                     antennaIdMap,
@@ -403,6 +401,7 @@ function cloneComponent(
             return {
                 ...deepClone(component),
                 id: generateSimId('Target'),
+                name,
             };
     }
 }
@@ -501,17 +500,20 @@ export function cloneTemplateIntoScenarioData(
             }
 
             const platform = clonePlatformWaypointIds(template.payload);
-            platform.name = createCopyName(
-                template.name,
-                nextScenarioData.platforms
+            platform.name = createUniqueScenarioCopyName(
+                nextScenarioData,
+                template.name
             );
+            const existingNames = collectScenarioNames(nextScenarioData);
+            existingNames.add(platform.name);
             platform.components = template.payload.components.map((component) =>
                 cloneComponent(
                     component,
                     antennaIdMap,
                     timingIdMap,
                     waveformIdMap,
-                    warnings
+                    warnings,
+                    existingNames
                 )
             );
             nextScenarioData.platforms.push(platform);

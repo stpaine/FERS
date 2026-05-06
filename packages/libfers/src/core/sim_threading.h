@@ -19,13 +19,17 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <span>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "core/config.h"
 #include "core/output_metadata.h"
+#include "core/parameters.h"
 #include "core/sim_events.h"
+#include "core/simulation_state.h"
 #include "simulation/channel_model.h"
 
 namespace pool
@@ -36,6 +40,7 @@ namespace pool
 namespace radar
 {
 	class Receiver;
+	class Target;
 	class Transmitter;
 }
 
@@ -115,10 +120,10 @@ namespace core
 		void run();
 
 		/**
-		 * @brief Advances the time-stepped inner loop for active continuous-wave (CW) systems.
+		 * @brief Advances the time-stepped inner loop for active streaming systems.
 		 * @param t_event The timestamp of the next discrete event to process up to.
 		 */
-		void processCwPhysics(RealType t_event);
+		void processStreamingPhysics(RealType t_event);
 
 		/**
 		 * @brief Dispatches a discrete simulation event to its specific handler.
@@ -148,41 +153,78 @@ namespace core
 		void handleRxPulsedWindowEnd(radar::Receiver* rx, RealType t_event);
 
 		/**
-		 * @brief Handles a continuous-wave transmitter turning on.
+		 * @brief Handles a streaming transmitter turning on.
 		 * @param tx Pointer to the transmitting radar object.
 		 */
-		void handleTxCwStart(radar::Transmitter* tx);
+		void handleTxStreamingStart(const ActiveStreamingSource& source);
 
 		/**
-		 * @brief Handles a continuous-wave transmitter turning off.
+		 * @brief Handles a streaming transmitter turning off.
 		 * @param tx Pointer to the transmitting radar object.
 		 */
-		void handleTxCwEnd(radar::Transmitter* tx);
+		void handleTxStreamingEnd(radar::Transmitter* tx);
 
 		/**
-		 * @brief Handles a continuous-wave receiver starting to record.
+		 * @brief Handles a streaming receiver starting to record.
 		 * @param rx Pointer to the receiving radar object.
 		 */
-		void handleRxCwStart(radar::Receiver* rx);
+		void handleRxStreamingStart(radar::Receiver* rx);
 
 		/**
-		 * @brief Handles a continuous-wave receiver stopping recording.
+		 * @brief Handles a streaming receiver stopping recording.
 		 * @param rx Pointer to the receiving radar object.
 		 */
-		void handleRxCwEnd(radar::Receiver* rx);
-
-		/**
-		 * @brief Calculates the total complex I/Q sample for a receiver at a specific time step.
-		 * @param rx Pointer to the receiving radar object.
-		 * @param t_step The exact simulation time for the sample.
-		 * @param cw_sources A list of currently active continuous-wave transmitters.
-		 * @return The calculated complex I/Q sample combining direct and reflected paths.
-		 */
-		[[nodiscard]] ComplexType calculateCwSample(radar::Receiver* rx, RealType t_step,
-													const std::vector<radar::Transmitter*>& cw_sources) const;
+		void handleRxStreamingEnd(radar::Receiver* rx);
 
 	private:
+		/// Calculates one streaming I/Q sample for the receiver at the specified time step.
+		[[nodiscard]] ComplexType calculateStreamingSample(radar::Receiver* rx, RealType t_step,
+														   const std::vector<ActiveStreamingSource>& streaming_sources,
+														   ReceiverTrackerCache& tracker_cache) const;
+
+		/// Adds tracker storage for a newly active streaming source.
+		void appendStreamingTrackerSource();
+
+		/// Removes tracker storage for a streaming source that has ended.
+		void eraseStreamingTrackerSource(std::size_t source_index);
+
+		/// Removes ended streaming sources once no future receiver sample can observe their in-flight energy.
+		void cleanupInactiveStreamingSources(RealType from_time);
+
+		/// Builds and attaches IF resampling sinks for configured FMCW receivers.
+		void initializeFmcwIfResamplers();
+
+		/// Flushes all pending high-rate samples buffered for IF resamplers.
+		void flushFmcwIfBlocks();
+
+		/// Flushes one receiver's pending IF-resampling high-rate block.
+		void flushFmcwIfBlock(std::size_t receiver_index);
+
+		/// Adds one high-rate sample to a receiver's IF-resampling block buffer.
+		void appendFmcwIfSample(std::size_t receiver_index, RealType t_step, ComplexType sample);
+
+		/// Returns the latest conservative receive time at which an ended source must still be retained.
+		[[nodiscard]] std::optional<RealType> streamingSourceCleanupDeadline(const ActiveStreamingSource& source,
+																			 RealType from_time) const;
+
+		/// Returns the latest conservative receive time at which one receiver may still observe a source.
+		[[nodiscard]] std::optional<RealType> receiverCleanupDeadline(const ActiveStreamingSource& source,
+																	  const radar::Receiver* rx,
+																	  RealType from_time) const;
+
+		/// Creates the CW phase-noise lookup if any active timing source needs it.
 		void ensureCwPhaseNoiseLookup();
+
+		/// Returns the dechirp reference mixer for a receiver at one sample time.
+		[[nodiscard]] std::optional<ComplexType> calculateDechirpMixer(radar::Receiver* rx, RealType t_step,
+																	   ReceiverTrackerCache& tracker_cache) const;
+
+		/// Adds pulsed interference into a completed high-rate IF block before resampling.
+		void applyPulsedInterferenceToFmcwIfBlock(std::size_t receiver_index, std::span<ComplexType> block,
+												  RealType block_start_time);
+
+		/// Emits summary logs for streaming receiver buffers.
+		void logStreamingSummaries() const;
 
 		/**
 		 * @brief Starts dedicated finalizer threads for all pulsed receivers.
@@ -202,6 +244,15 @@ namespace core
 		void updateProgress();
 
 		/**
+		 * @brief Throttles and emits progress updates at an explicit simulation time.
+		 */
+		void reportSimulationProgress(RealType t_current);
+
+		/// Collects streaming sources active anywhere within the requested time window.
+		[[nodiscard]] std::vector<ActiveStreamingSource> collectStreamingSourcesForWindow(RealType start_time,
+																						  RealType end_time) const;
+
+		/**
 		 * @brief Initiates the shutdown phase, waiting for all asynchronous tasks to complete.
 		 */
 		void shutdown();
@@ -210,13 +261,18 @@ namespace core
 		pool::ThreadPool& _pool; ///< Reference to the global thread pool.
 		std::shared_ptr<ProgressReporter> _reporter; ///< Shared progress reporter instance.
 		std::vector<std::jthread> _finalizer_threads; ///< Collection of dedicated pulsed finalizer threads.
-		std::shared_ptr<OutputMetadataCollector> _metadata_collector;
+		std::shared_ptr<OutputMetadataCollector> _metadata_collector; ///< Collector for generated output metadata.
 
 		std::chrono::steady_clock::time_point _last_report_time; ///< Timestamp of the last progress report.
 		int _last_reported_percent = -1; ///< The last reported percentage to prevent redundant updates.
 
 		std::string _output_dir; ///< Output directory for the simulation files.
-		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup;
+		std::unique_ptr<simulation::CwPhaseNoiseLookup> _cw_phase_noise_lookup; ///< Cached CW phase-noise lookup.
+		std::vector<ReceiverTrackerCache> _streaming_tracker_caches; ///< Per-receiver streaming tracker caches.
+		std::vector<ReceiverTrackerCache> _if_pulse_tracker_caches; ///< Per-receiver dechirp trackers for pulse blocks.
+		std::vector<std::vector<ComplexType>> _fmcw_if_block_buffers; ///< Pending high-rate IF blocks.
+		std::vector<RealType> _fmcw_if_block_start_times; ///< Start time for each pending IF block.
+		RealType _internal_stop_time = 0.0; ///< Physics stop time including IF over-render margin.
 	};
 
 	/**

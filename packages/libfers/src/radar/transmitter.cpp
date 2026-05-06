@@ -13,9 +13,15 @@
 #include "transmitter.h"
 
 #include "core/parameters.h"
+#include "signal/radar_signal.h"
 
 namespace radar
 {
+	const fers_signal::FmcwChirpSignal* Transmitter::getFmcwSignal() const noexcept
+	{
+		return (_signal != nullptr) ? _signal->getFmcwChirpSignal() : nullptr;
+	}
+
 	void Transmitter::setPrf(const RealType mprf) noexcept
 	{
 		const RealType rate = params::rate() * params::oversampleRatio();

@@ -57,6 +57,58 @@ TEST_CASE("RadarSignal requires a signal", "[signal][radar]")
 					  std::runtime_error);
 }
 
+TEST_CASE("FmcwChirpSignal applies sweep direction to phase only", "[signal][radar][fmcw]")
+{
+	const RealType bandwidth = 2.0e6;
+	const RealType duration = 1.0e-3;
+	const RealType offset = 1.0e5;
+	const RealType u = 4.0e-4;
+
+	fers_signal::FmcwChirpSignal up(bandwidth, duration, duration, offset);
+	fers_signal::FmcwChirpSignal down(bandwidth, duration, duration, offset, std::nullopt,
+									  fers_signal::FmcwChirpDirection::Down);
+
+	const RealType alpha = bandwidth / duration;
+	REQUIRE_FALSE(up.isDownChirp());
+	REQUIRE(down.isDownChirp());
+	REQUIRE_THAT(up.getChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(down.getChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(up.getSignedChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(down.getSignedChirpRate(), WithinAbs(-alpha, 1e-6));
+	REQUIRE_THAT(up.basebandPhaseForChirpTime(u), WithinAbs(2.0 * PI * offset * u + PI * alpha * u * u, 1e-9));
+	REQUIRE_THAT(down.basebandPhaseForChirpTime(u), WithinAbs(2.0 * PI * offset * u - PI * alpha * u * u, 1e-9));
+}
+
+TEST_CASE("FmcwTriangleSignal keeps phase continuous at leg and period boundaries", "[signal][radar][fmcw]")
+{
+	const RealType bandwidth = 2.0e6;
+	const RealType duration = 1.0e-3;
+	const RealType offset = 1.0e5;
+	const RealType alpha = bandwidth / duration;
+	const RealType eps = 1.0e-10;
+
+	fers_signal::FmcwTriangleSignal triangle(bandwidth, duration, offset, 4);
+
+	REQUIRE(triangle.isFmcwFamily());
+	REQUIRE(triangle.isTriangle());
+	REQUIRE_THAT(triangle.getChirpRate(), WithinAbs(alpha, 1e-6));
+	REQUIRE_THAT(triangle.getTrianglePeriod(), WithinAbs(2.0 * duration, 1e-15));
+	REQUIRE_THAT(triangle.getDeltaPhiUp(),
+				 WithinAbs(2.0 * PI * offset * duration + PI * alpha * duration * duration, 1e-6));
+
+	const RealType apex_left = triangle.basebandPhaseForTriangleTime(duration - eps);
+	const RealType apex = triangle.basebandPhaseForTriangleTime(duration);
+	const RealType apex_right = triangle.basebandPhaseForTriangleTime(duration + eps);
+	REQUIRE_THAT(apex, WithinAbs(triangle.getDeltaPhiUp(), 1e-6));
+	REQUIRE(std::abs(apex - apex_left) < 2.0);
+	REQUIRE(std::abs(apex_right - apex) < 2.0);
+
+	const RealType period_phase = triangle.basebandPhaseForTriangleTime(triangle.getTrianglePeriod());
+	REQUIRE_THAT(period_phase, WithinAbs(2.0 * triangle.getDeltaPhiUp(), 1e-6));
+	REQUIRE(triangle.instantaneousBasebandPhase(3.5 * triangle.getTrianglePeriod()).has_value());
+	REQUIRE_FALSE(triangle.instantaneousBasebandPhase(4.0 * triangle.getTrianglePeriod()).has_value());
+}
+
 TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 {
 	ParamGuard guard;
@@ -223,4 +275,82 @@ TEST_CASE("Signal render responds to fractional delay", "[signal][radar]")
 	REQUIRE(sample_index < data.size());
 	REQUIRE_THAT(data[sample_index].real(), WithinAbs(expected.real(), 1e-6));
 	REQUIRE_THAT(data[sample_index].imag(), WithinAbs(expected.imag(), 1e-6));
+}
+
+TEST_CASE("Signal renderSlice matches cropped full response with padding", "[signal][radar]")
+{
+	ParamGuard guard;
+	params::setOversampleRatio(1);
+
+	const unsigned sample_count = params::renderFilterLength() * 6;
+	std::vector<ComplexType> input(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * static_cast<RealType>(i) / 17.0;
+		input[i] = {std::cos(phase), std::sin(phase)};
+	}
+
+	fers_signal::Signal signal;
+	signal.load(input, sample_count, 100.0);
+	const std::vector<interp::InterpPoint> points = {{1.0, 10.0, 0.0, 0.0}, {0.25, 12.0, 0.0, PI / 3.0}};
+
+	unsigned full_size = 0;
+	const auto full = signal.render(points, full_size, 0.0);
+	constexpr unsigned crop_start = 31;
+	constexpr unsigned crop_count = 47;
+	constexpr unsigned pad = 20;
+	const RealType slice_start = points.front().time + static_cast<RealType>(crop_start - pad) / 100.0;
+	const auto slice = signal.renderSlice(points, slice_start, 100.0, crop_count + 2 * pad, 0.0);
+
+	REQUIRE(full_size == sample_count);
+	REQUIRE(slice.size() == crop_count + 2 * pad);
+	for (unsigned i = 0; i < crop_count; ++i)
+	{
+		REQUIRE_THAT(slice[pad + i].real(), WithinAbs(full[crop_start + i].real(), 1e-9));
+		REQUIRE_THAT(slice[pad + i].imag(), WithinAbs(full[crop_start + i].imag(), 1e-9));
+	}
+}
+
+TEST_CASE("Signal renderSlice interpolates onto non-native output grids", "[signal][radar]")
+{
+	ParamGuard guard;
+	params::setOversampleRatio(1);
+
+	constexpr RealType native_rate_hz = 100.0;
+	constexpr RealType output_rate_hz = 137.0;
+	constexpr RealType tone_hz = 7.0;
+	constexpr RealType start_time = 3.0;
+	constexpr RealType slice_start_time = start_time + 6.0;
+	constexpr std::size_t slice_count = 256;
+	constexpr unsigned sample_count = 2048;
+
+	std::vector<ComplexType> input(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * tone_hz * static_cast<RealType>(i) / native_rate_hz;
+		input[i] = {std::cos(phase), std::sin(phase)};
+	}
+
+	fers_signal::Signal signal;
+	signal.load(input, sample_count, native_rate_hz);
+	const std::vector<interp::InterpPoint> points = {{1.0, start_time, 0.0, 0.0}};
+
+	const auto slice = signal.renderSlice(points, slice_start_time, output_rate_hz, slice_count, 0.0);
+
+	ComplexType correlation{0.0, 0.0};
+	RealType output_energy = 0.0;
+	RealType reference_energy = 0.0;
+	for (std::size_t i = 0; i < slice.size(); ++i)
+	{
+		const RealType elapsed = slice_start_time - start_time + static_cast<RealType>(i) / output_rate_hz;
+		const RealType phase = 2.0 * PI * tone_hz * elapsed;
+		const ComplexType expected{std::cos(phase), std::sin(phase)};
+		correlation += slice[i] * std::conj(expected);
+		output_energy += std::norm(slice[i]);
+		reference_energy += std::norm(expected);
+	}
+
+	const RealType normalized_correlation = std::abs(correlation) / std::sqrt(output_energy * reference_energy);
+	REQUIRE(normalized_correlation > 0.999);
+	REQUIRE(std::abs(std::arg(correlation)) < 0.01);
 }

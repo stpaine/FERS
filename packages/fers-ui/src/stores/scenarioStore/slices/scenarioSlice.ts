@@ -7,15 +7,19 @@ import { useSimulationProgressStore } from '../../simulationProgressStore';
 import { defaultGlobalParameters } from '../defaults';
 import { buildHydratedScenarioState, parseScenarioData } from '../hydration';
 import {
-    cleanObject,
+    createUniqueScenarioName,
+    getComponentIdentityIds,
+} from '../nameUtils';
+import {
     serializeAntenna,
-    serializeComponentInner,
     serializeGlobalParameters,
     serializePlatform,
     serializeTiming,
-    serializeWaveform,
 } from '../serializers';
-import { enqueueFullSync, enqueueGranularSync } from '../syncQueue';
+import {
+    enqueueFullSyncDetached,
+    enqueueGranularSyncDetached,
+} from '../syncQueue';
 import {
     Antenna,
     GlobalParameters,
@@ -23,7 +27,6 @@ import {
     ScenarioActions,
     ScenarioStore,
     Timing,
-    Waveform,
 } from '../types';
 import { setPropertyByPath } from '../utils';
 import { buildScenarioJson } from './backendSlice';
@@ -107,6 +110,7 @@ export const createScenarioSlice: StateCreator<
         let targetItemType = '';
         let targetItemId = '';
         let jsonPayload: string | null = null;
+        let requiresFullSync = false;
 
         set((state) => {
             if (itemId === 'global-parameters') {
@@ -123,6 +127,15 @@ export const createScenarioSlice: StateCreator<
                 }
 
                 state.isDirty = true;
+
+                if (
+                    ['start', 'end', 'rate', 'oversample_ratio'].includes(
+                        propertyPath
+                    )
+                ) {
+                    requiresFullSync = true;
+                    return;
+                }
 
                 targetItemType = 'GlobalParameters';
                 targetItemId = itemId;
@@ -145,16 +158,44 @@ export const createScenarioSlice: StateCreator<
                 );
                 if (!item) continue;
 
-                setPropertyByPath(item, propertyPath, value);
+                let nextValue = value;
+                if (typeof value === 'string') {
+                    if (propertyPath === 'name') {
+                        nextValue = createUniqueScenarioName(state, value, [
+                            item.id,
+                        ]);
+                    } else if (item.type === 'Platform') {
+                        const componentNameMatch = propertyPath.match(
+                            /^components\.(\d+)\.name$/
+                        );
+                        if (componentNameMatch) {
+                            const component =
+                                item.components[Number(componentNameMatch[1])];
+                            if (component) {
+                                nextValue = createUniqueScenarioName(
+                                    state,
+                                    value,
+                                    getComponentIdentityIds(component)
+                                );
+                            }
+                        }
+                    }
+                }
+
+                setPropertyByPath(item, propertyPath, nextValue);
                 state.isDirty = true;
                 if (item.type === 'Antenna') {
                     delete state.antennaPreviewErrors[item.id];
                 }
 
+                if (item.type === 'Waveform') {
+                    requiresFullSync = true;
+                    return;
+                }
+
                 if (
                     item.type !== 'Platform' &&
                     item.type !== 'Antenna' &&
-                    item.type !== 'Waveform' &&
                     item.type !== 'Timing'
                 ) {
                     return;
@@ -164,20 +205,11 @@ export const createScenarioSlice: StateCreator<
                     /^components\.(\d+)(?:\.|$)/
                 );
                 if (item.type === 'Platform' && componentMatch) {
-                    const compIndex = parseInt(componentMatch[1], 10);
-                    const component = (item as Platform).components[compIndex];
-                    if (component) {
-                        jsonPayload = JSON.stringify(
-                            cleanObject(serializeComponentInner(component))
-                        );
-                        // Map frontend component type to backend expected type string
-                        targetItemType =
-                            component.type === 'monostatic'
-                                ? 'Monostatic'
-                                : component.type.charAt(0).toUpperCase() +
-                                  component.type.slice(1);
-                        targetItemId = component.id;
-                    }
+                    // Backend full-scenario parsing skips incomplete child
+                    // components until required references or file paths exist.
+                    // Rebuild from the snapshot so draft components become real
+                    // as soon as their authoring state is complete.
+                    requiresFullSync = true;
                     return;
                 }
 
@@ -191,10 +223,6 @@ export const createScenarioSlice: StateCreator<
                     jsonPayload = JSON.stringify(
                         serializeAntenna(item as Antenna)
                     );
-                } else if (item.type === 'Waveform') {
-                    jsonPayload = JSON.stringify(
-                        serializeWaveform(item as Waveform)
-                    );
                 } else if (item.type === 'Timing') {
                     jsonPayload = JSON.stringify(
                         serializeTiming(item as Timing)
@@ -204,8 +232,14 @@ export const createScenarioSlice: StateCreator<
             }
         });
 
-        if (jsonPayload) {
-            void enqueueGranularSync(targetItemType, targetItemId, jsonPayload);
+        if (requiresFullSync) {
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
+        } else if (jsonPayload) {
+            enqueueGranularSyncDetached(
+                targetItemType,
+                targetItemId,
+                jsonPayload
+            );
         }
     },
     setRotationAngleUnit: (unit, convertExisting) => {
@@ -263,7 +297,7 @@ export const createScenarioSlice: StateCreator<
             state.isDirty = true;
         });
 
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
         for (const platform of get().platforms) {
             void get().fetchPlatformPath(platform.id);
         }
@@ -301,7 +335,7 @@ export const createScenarioSlice: StateCreator<
         });
         if (removed) {
             // libfers has no granular remove API — full sync is required.
-            void enqueueFullSync(() => buildScenarioJson(get()));
+            enqueueFullSyncDetached(() => buildScenarioJson(get()));
         }
     },
     resetScenario: () => {
@@ -319,7 +353,7 @@ export const createScenarioSlice: StateCreator<
         });
         useSimulationProgressStore.getState().clearSimulationProgress();
         useSimulationProgressStore.setState({ isSimulating: false });
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
     },
     loadScenario: (backendData: unknown) => {
         const scenarioData = parseScenarioData(backendData);
@@ -350,7 +384,7 @@ export const createScenarioSlice: StateCreator<
         // future options; nested component-only templates are intentionally out
         // of scope until whole-platform reuse proves insufficient.
         result.warnings.forEach((warning) => get().showWarning(warning));
-        void enqueueFullSync(() => buildScenarioJson(get()));
+        enqueueFullSyncDetached(() => buildScenarioJson(get()));
 
         return result;
     },
