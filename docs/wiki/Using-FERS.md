@@ -27,7 +27,7 @@ A scenario describes the radar scene, not the analysis you want to run afterward
 
 At a high level it contains:
 
-- Global simulation settings, such as start time, end time, sample rate, and coordinate system.
+- Global settings, such as start time, end time, sample rate, and KML/geospatial reference settings.
 - Waveforms, such as pulsed waveform files, CW tones, or FMCW chirps.
 - Timing sources, which model oscillator frequency, phase, and noise behavior.
 - Antennas, which determine gain as a function of direction.

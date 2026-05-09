@@ -139,7 +139,9 @@ Global Parameters controls:
 - Oversampling ratio.
 - Rotation angle unit.
 - Origin latitude, longitude, and altitude.
-- Coordinate system: ENU, UTM, or ECEF.
+- Coordinate system for KML/geospatial export: ENU, UTM, or ECEF.
+
+The coordinate system setting affects KML/geospatial export. Platform `x`, `y`, and `altitude` remain meter-valued coordinates and are used directly by the preview and simulation. The UI does not use latitude/longitude as platform waypoints.
 
 If you change the rotation angle unit after entering rotation values, the UI asks whether to convert existing values or keep the numbers unchanged.
 

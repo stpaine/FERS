@@ -11,7 +11,7 @@ This page documents the current user-facing XML format.
 - Times are in seconds.
 - Frequencies and sample rates are in Hz.
 - Power is in watts.
-- Distances and positions are in meters unless your coordinate system choice says otherwise.
+- Distances and platform positions are always linear meter-valued coordinates. The signal simulation uses the numeric platform vectors directly; `<coordinatesystem>` is for KML/geospatial export, not for transforming simulation geometry.
 - Angles are controlled by `<rotationangleunit>` for platform rotation values. Antenna-pattern XML axes declare their own angle unit.
 - Names are used for references. Keep names unique and descriptive.
 - XML schema validation checks structure. FERS also checks references, numeric limits, mode compatibility, and some physical constraints while loading or running.
@@ -72,8 +72,8 @@ Optional children, in order:
 | `<adc_bits>` | bits | `0` | ADC quantization depth. `0` disables quantization and stores normalized floating-point samples. |
 | `<oversample>` | multiplier | `1` | Internal oversampling factor. Valid range is `1` to `8`. It does not normally change final output sample rate. |
 | `<rotationangleunit>` | `deg` or `rad` | `deg` | Unit used by platform rotation values. |
-| `<origin>` | attributes | built-in default | Geodetic origin used for local coordinates and KML export. |
-| `<coordinatesystem>` | attributes | `ENU` behavior | Declares how platform coordinates should be interpreted. |
+| `<origin>` | attributes | built-in default | Geodetic reference used by ENU KML/geospatial export. |
+| `<coordinatesystem>` | attributes | `ENU` | Coordinate frame used when converting platform coordinates to geodetic coordinates for KML/geospatial export. It does not transform positions during simulation. |
 
 ### `<origin>`
 
@@ -90,6 +90,8 @@ Optional children, in order:
 If `<origin>` is omitted, FERS uses a built-in default origin. For real geospatial scenarios, set it explicitly.
 
 ### `<coordinatesystem>`
+
+`<coordinatesystem>` controls how FERS converts platform coordinates to latitude, longitude, and altitude for KML/geospatial export. It does not convert waypoints into another internal frame before simulation. During simulation, FERS uses the numeric `x`, `y`, and `altitude` values directly for platform geometry and distance calculations.
 
 ```xml
 <coordinatesystem frame="ENU"/>
@@ -111,9 +113,11 @@ Frames:
 
 | Frame | Meaning |
 | --- | --- |
-| `ENU` | Platform `x`, `y`, and `altitude` are east, north, and up offsets from `<origin>`. This is the easiest frame for local scenes. |
-| `UTM` | Platform `x` and `y` are UTM easting and northing. Set `zone` and `hemisphere`. |
-| `ECEF` | Platform coordinates are Earth-centered, Earth-fixed coordinates. |
+| `ENU` | KML export treats platform `x`, `y`, and `altitude` as east, north, and up offsets in meters from `<origin>`. This is the easiest frame for local scenes. |
+| `UTM` | KML export treats platform `x` and `y` as UTM easting and northing in meters. `altitude` is also meters. Set `zone` and `hemisphere`. |
+| `ECEF` | KML export treats platform `x`, `y`, and `altitude` as Earth-centered, Earth-fixed Cartesian coordinates in meters. In this frame, the XML element name `altitude` represents ECEF Z, not geodetic altitude. |
+
+FERS does not accept platform latitude/longitude waypoints. Latitude and longitude appear only in `<origin>`, where they define the geodetic reference used by ENU and KML export.
 
 ## `<waveform>`
 
@@ -390,9 +394,9 @@ Contains one or more `<positionwaypoint>` elements.
 
 | Element | Unit | Meaning |
 | --- | --- | --- |
-| `<x>` | coordinate units | East offset, UTM easting, or ECEF X depending on the coordinate system. |
-| `<y>` | coordinate units | North offset, UTM northing, or ECEF Y depending on the coordinate system. |
-| `<altitude>` | meters | Up offset, altitude, or ECEF Z depending on the coordinate system. |
+| `<x>` | meters | X coordinate used directly by the simulation. KML export treats it as ENU east offset, UTM easting, or ECEF X depending on `<coordinatesystem>`. |
+| `<y>` | meters | Y coordinate used directly by the simulation. KML export treats it as ENU north offset, UTM northing, or ECEF Y depending on `<coordinatesystem>`. |
+| `<altitude>` | meters | Z coordinate used directly by the simulation. KML export treats it as ENU up offset, UTM altitude, or ECEF Z depending on `<coordinatesystem>`. |
 | `<time>` | seconds | Time when the platform is at this waypoint. |
 
 For `static`, the first waypoint is normally enough. For `linear` or `cubic`, provide enough waypoints to describe the path over the simulation time.
