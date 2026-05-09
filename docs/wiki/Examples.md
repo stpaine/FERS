@@ -191,5 +191,4 @@ For early debugging:
 | Analysis script cannot find results | Pass the same output directory to `fers-cli` and the analysis script. |
 | HDF5 file exists but analysis gives zeros | Reconstruct I/Q with `fullscale` before calculating power or spectra. |
 | FMCW output sample count is unexpected | Check `if_sample_rate`, chirp duration, chirp count, and schedule duration. |
-| KML geometry looks misplaced | Set `<origin>` and `<coordinatesystem>` explicitly. |
-
+| KML geometry looks misplaced | Set the KML/geospatial `<origin>` and `<coordinatesystem>` explicitly. |

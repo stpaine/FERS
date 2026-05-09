@@ -24,7 +24,7 @@ namespace params
 {
 	/**
 	 * @enum CoordinateFrame
-	 * @brief Defines the coordinate systems supported for scenario definition.
+	 * @brief Defines the coordinate systems supported for KML/geospatial export.
 	 */
 	enum class CoordinateFrame
 	{
@@ -57,14 +57,14 @@ namespace params
 		RealType end = 0; ///< End time for the simulation.
 		RealType sim_sampling_rate = 1000; ///< Time-step sampling rate for radar pulse simulation.
 
-		// Default to the location of the University of Cape Town in South Africa
-		double origin_latitude = -33.957652; ///< Geodetic origin latitude
-		double origin_longitude = 18.4611991; ///< Geodetic origin longitude
-		double origin_altitude = 111.01; ///< Geodetic origin altitude (in meters)
-		CoordinateFrame coordinate_frame = CoordinateFrame::ENU; ///< Scenario coordinate frame
+		// KML/geospatial export defaults to the location of the University of Cape Town in South Africa.
+		double origin_latitude = -33.957652; ///< KML ENU geodetic origin latitude
+		double origin_longitude = 18.4611991; ///< KML ENU geodetic origin longitude
+		double origin_altitude = 111.01; ///< KML ENU geodetic origin altitude (in meters)
+		CoordinateFrame coordinate_frame = CoordinateFrame::ENU; ///< KML/geospatial export coordinate frame
 		RotationAngleUnit rotation_angle_unit = RotationAngleUnit::Degrees; ///< External rotation angle unit
-		int utm_zone = 0; ///< UTM zone (1-60), if applicable
-		bool utm_north_hemisphere = true; ///< UTM hemisphere, if applicable
+		int utm_zone = 0; ///< KML UTM zone (1-60), if applicable
+		bool utm_north_hemisphere = true; ///< KML UTM hemisphere, if applicable
 		RealType rate = 0; ///< Rendering sample rate.
 		std::optional<unsigned> random_seed; ///< Random seed for simulation.
 		unsigned adc_bits = 0; ///< ADC quantization bits.
@@ -252,34 +252,34 @@ namespace params
 	}
 
 	/**
-	 * @brief Set the geodetic origin for the KML generator.
-	 * @param lat The latitude of the origin.
-	 * @param lon The longitude of the origin.
-	 * @param alt The altitude of the origin (MSL).
+	 * @brief Set the geodetic origin for ENU KML/geospatial export.
+	 * @param lat The latitude of the KML origin.
+	 * @param lon The longitude of the KML origin.
+	 * @param alt The altitude of the KML origin (MSL).
 	 */
 	inline void setOrigin(const double lat, const double lon, const double alt) noexcept
 	{
 		params.origin_latitude = lat;
 		params.origin_longitude = lon;
 		params.origin_altitude = alt;
-		LOG(logging::Level::INFO, "Origin set to lat: {}, lon: {}, alt: {}", lat, lon, alt);
+		LOG(logging::Level::INFO, "KML origin set to lat: {}, lon: {}, alt: {}", lat, lon, alt);
 	}
 
 	/**
-	 * @brief Gets the geodetic origin latitude.
-	 * @return The origin latitude in degrees.
+	 * @brief Gets the KML/geospatial export origin latitude.
+	 * @return The KML origin latitude in degrees.
 	 */
 	inline double originLatitude() noexcept { return params.origin_latitude; }
 
 	/**
-	 * @brief Gets the geodetic origin longitude.
-	 * @return The origin longitude in degrees.
+	 * @brief Gets the KML/geospatial export origin longitude.
+	 * @return The KML origin longitude in degrees.
 	 */
 	inline double originLongitude() noexcept { return params.origin_longitude; }
 
 	/**
-	 * @brief Gets the geodetic origin altitude.
-	 * @return The origin altitude in meters.
+	 * @brief Gets the KML/geospatial export origin altitude.
+	 * @return The KML origin altitude in meters.
 	 */
 	inline double originAltitude() noexcept { return params.origin_altitude; }
 
@@ -301,10 +301,10 @@ namespace params
 	}
 
 	/**
-	 * @brief Set the coordinate system for the scenario.
-	 * @param frame The coordinate frame (ENU, UTM, ECEF).
-	 * @param zone The UTM zone, if applicable.
-	 * @param north The UTM hemisphere (true for North), if applicable.
+	 * @brief Set the coordinate system for KML/geospatial export.
+	 * @param frame The KML coordinate frame (ENU, UTM, ECEF).
+	 * @param zone The KML UTM zone, if applicable.
+	 * @param north The KML UTM hemisphere (true for North), if applicable.
 	 */
 	inline void setCoordinateSystem(const CoordinateFrame frame, const int zone, const bool north) noexcept
 	{
@@ -314,8 +314,8 @@ namespace params
 	}
 
 	/**
-	 * @brief Gets the active coordinate frame.
-	 * @return The active coordinate frame.
+	 * @brief Gets the KML/geospatial export coordinate frame.
+	 * @return The KML/geospatial export coordinate frame.
 	 */
 	inline CoordinateFrame coordinateFrame() noexcept { return params.coordinate_frame; }
 
@@ -326,13 +326,13 @@ namespace params
 	inline RotationAngleUnit rotationAngleUnit() noexcept { return params.rotation_angle_unit; }
 
 	/**
-	 * @brief Gets the configured UTM zone.
-	 * @return The UTM zone, or zero when UTM is not configured.
+	 * @brief Gets the configured KML UTM zone.
+	 * @return The KML UTM zone, or zero when UTM KML export is not configured.
 	 */
 	inline int utmZone() noexcept { return params.utm_zone; }
 
 	/**
-	 * @brief Gets the configured UTM hemisphere.
+	 * @brief Gets the configured KML UTM hemisphere.
 	 * @return true for northern hemisphere, false for southern hemisphere.
 	 */
 	inline bool utmNorthHemisphere() noexcept { return params.utm_north_hemisphere; }

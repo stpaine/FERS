@@ -26,8 +26,10 @@ namespace serial
 	 * @brief Generates KML files from FERS simulation scenarios for geographical visualization.
 	 *
 	 * This class generates KML files for geographical visualization of FERS scenarios. It
-	 * interprets the simulation coordinates based on the user-specified coordinate system
-	 * in the XML file, which can be one of:
+	 * converts the stored platform coordinates to geodetic KML output using the
+	 * user-specified KML/geospatial coordinate system in the XML file. This affects
+	 * KML conversion only; the signal simulation uses the raw platform vectors directly.
+	 * The KML/geospatial coordinate system can be one of:
 	 *
 	 * - ENU (East-North-Up): Default. Local Cartesian coordinates (x, y, z) are
 	 *   treated as meters in an ENU tangent plane centered at a geodetic `<origin>`.

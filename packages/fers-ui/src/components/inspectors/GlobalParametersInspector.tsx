@@ -159,29 +159,29 @@ export function GlobalParametersInspector({
                 onChange={(v) => handleChange('oversample_ratio', v)}
             />
 
-            <Section title="Georeference">
+            <Section title="KML / Geospatial Export">
                 <NumberField
-                    label="Origin Latitude (deg)"
+                    label="KML Origin Latitude (deg)"
                     value={item.origin.latitude}
                     emptyBehavior="revert"
                     onChange={(v) => handleChange('origin.latitude', v)}
                 />
                 <NumberField
-                    label="Origin Longitude (deg)"
+                    label="KML Origin Longitude (deg)"
                     value={item.origin.longitude}
                     emptyBehavior="revert"
                     onChange={(v) => handleChange('origin.longitude', v)}
                 />
                 <NumberField
-                    label="Origin Altitude (m)"
+                    label="KML Origin Altitude (m)"
                     value={item.origin.altitude}
                     emptyBehavior="revert"
                     onChange={(v) => handleChange('origin.altitude', v)}
                 />
                 <FormControl fullWidth size="small">
-                    <InputLabel>Coordinate System</InputLabel>
+                    <InputLabel>KML Coordinate System</InputLabel>
                     <Select
-                        label="Coordinate System"
+                        label="KML Coordinate System"
                         value={item.coordinateSystem.frame}
                         onChange={(e) =>
                             handleCoordinateSystemFrameChange(
@@ -198,7 +198,7 @@ export function GlobalParametersInspector({
                 {item.coordinateSystem.frame === 'UTM' && (
                     <>
                         <NumberField
-                            label="UTM Zone"
+                            label="KML UTM Zone"
                             value={item.coordinateSystem.zone ?? null}
                             emptyBehavior="revert"
                             onChange={(v) =>
@@ -206,9 +206,9 @@ export function GlobalParametersInspector({
                             }
                         />
                         <FormControl fullWidth size="small">
-                            <InputLabel>UTM Hemisphere</InputLabel>
+                            <InputLabel>KML UTM Hemisphere</InputLabel>
                             <Select
-                                label="UTM Hemisphere"
+                                label="KML UTM Hemisphere"
                                 value={item.coordinateSystem.hemisphere ?? 'N'}
                                 onChange={(e) =>
                                     handleChange(

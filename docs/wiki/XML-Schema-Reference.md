@@ -72,7 +72,7 @@ Optional children, in order:
 | `<adc_bits>` | bits | `0` | ADC quantization depth. `0` disables quantization and stores normalized floating-point samples. |
 | `<oversample>` | multiplier | `1` | Internal oversampling factor. Valid range is `1` to `8`. It does not normally change final output sample rate. |
 | `<rotationangleunit>` | `deg` or `rad` | `deg` | Unit used by platform rotation values. |
-| `<origin>` | attributes | built-in default | Geodetic reference used by ENU KML/geospatial export. |
+| `<origin>` | attributes | built-in KML default | Geodetic reference used only by ENU KML/geospatial export. It does not affect signal simulation geometry. |
 | `<coordinatesystem>` | attributes | `ENU` | Coordinate frame used when converting platform coordinates to geodetic coordinates for KML/geospatial export. It does not transform positions during simulation. |
 
 ### `<origin>`
@@ -83,11 +83,11 @@ Optional children, in order:
 
 | Attribute | Required | Unit | Meaning |
 | --- | --- | --- | --- |
-| `latitude` | Yes | degrees | Geodetic latitude. |
-| `longitude` | Yes | degrees | Geodetic longitude. |
-| `altitude` | No | meters | Height above the ellipsoid or map reference. Defaults to `0` when an origin is supplied without altitude. |
+| `latitude` | Yes | degrees | Geodetic latitude used for ENU KML/geospatial export. |
+| `longitude` | Yes | degrees | Geodetic longitude used for ENU KML/geospatial export. |
+| `altitude` | No | meters | Geodetic height used for ENU KML/geospatial export. Defaults to `0` when an origin is supplied without altitude. |
 
-If `<origin>` is omitted, FERS uses a built-in default origin. For real geospatial scenarios, set it explicitly.
+If `<origin>` is omitted, only ENU KML/geospatial export uses the built-in default origin. Omitting or changing `<origin>` does not move platforms during simulation and does not change ranges, delays, Doppler, or received power. Set `<origin>` only when you need KML output to appear at a specific real-world location.
 
 ### `<coordinatesystem>`
 
@@ -105,9 +105,9 @@ or:
 
 | Attribute | Required | Meaning |
 | --- | --- | --- |
-| `frame` | Yes | Coordinate frame. Use `ENU`, `UTM`, or `ECEF`. |
-| `zone` | Required for UTM | UTM zone, `1` to `60`. |
-| `hemisphere` | Required for UTM | `N` or `S`. |
+| `frame` | Yes | KML/geospatial export coordinate frame. Use `ENU`, `UTM`, or `ECEF`. |
+| `zone` | Required for UTM KML export | UTM zone, `1` to `60`. |
+| `hemisphere` | Required for UTM KML export | `N` or `S`. |
 
 Frames:
 
@@ -117,7 +117,7 @@ Frames:
 | `UTM` | KML export treats platform `x` and `y` as UTM easting and northing in meters. `altitude` is also meters. Set `zone` and `hemisphere`. |
 | `ECEF` | KML export treats platform `x`, `y`, and `altitude` as Earth-centered, Earth-fixed Cartesian coordinates in meters. In this frame, the XML element name `altitude` represents ECEF Z, not geodetic altitude. |
 
-FERS does not accept platform latitude/longitude waypoints. Latitude and longitude appear only in `<origin>`, where they define the geodetic reference used by ENU and KML export.
+FERS does not accept platform latitude/longitude waypoints. Latitude and longitude appear only in `<origin>`, where they define the geodetic reference used by ENU KML export.
 
 ## `<waveform>`
 
@@ -729,5 +729,5 @@ The XML schema is intentionally simple, so some important checks happen when FER
 - FMCW chirp period must be at least chirp duration.
 - FMCW sweep bandwidth must fit the effective sample rate.
 - Receiver noise temperature must not be negative.
-- UTM coordinates need a valid zone and hemisphere.
+- UTM KML/geospatial export needs a valid zone and hemisphere.
 - File-backed waveform, antenna, and RCS assets must exist and match the expected file structure.

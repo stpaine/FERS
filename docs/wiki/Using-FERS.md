@@ -159,9 +159,9 @@ Default output:
 <out-dir>/<scenario-name>.kml
 ```
 
-KML uses the scenario's `<origin>` and `<coordinatesystem>` settings.
+KML generation uses the scenario's KML/geospatial `<origin>` and `<coordinatesystem>` settings to place exported geometry in latitude/longitude. These settings do not affect the signal simulation.
 
-If KML generation fails, `fers-cli` exits with a nonzero status and logs the reason. Common causes are an invalid output path, missing parent directory, scenario loading failure, or invalid coordinate settings.
+If KML generation fails, `fers-cli` exits with a nonzero status and logs the reason. Common causes are an invalid output path, missing parent directory, scenario loading failure, or invalid KML/geospatial settings.
 
 ## Troubleshooting
 
@@ -172,7 +172,7 @@ If KML generation fails, `fers-cli` exits with a nonzero status and logs the rea
 | Output is all zeros | Receiver schedule/window may miss the return, antenna pointing may be wrong, target may be outside the simulated time span, or path loss may make the signal very small. |
 | Pulsed range looks offset | Check `window_skip`, `window_length`, waveform sample rate, and speed of propagation `c`. |
 | FMCW run fails validation | Check chirp bandwidth, chirp duration, chirp period, `<rate>`, and `<oversample>`. |
-| KML looks wrong geographically | Check `<origin>`, `<coordinatesystem>`, UTM zone, and hemisphere. |
+| KML looks wrong geographically | Check KML/geospatial `<origin>`, `<coordinatesystem>`, UTM zone, and hemisphere. |
 
 ## Old XML Files
 

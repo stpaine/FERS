@@ -92,7 +92,7 @@ Prefer this metadata over hard-coded output assumptions.
 
 `libfers` can generate a KML file from a loaded scenario. Use this when an application needs a "preview scene on a map" action without running the full simulation.
 
-The KML output depends on the scenario coordinate settings. Check `<origin>` and `<coordinatesystem>` if exported geometry looks wrong.
+The KML output depends on the scenario's KML/geospatial settings. Check `<origin>` and `<coordinatesystem>` if exported geometry looks wrong. These settings do not affect the signal simulation.
 
 ## Scenario Preview Features
 

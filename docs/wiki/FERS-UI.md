@@ -138,10 +138,10 @@ Global Parameters controls:
 - ADC bits.
 - Oversampling ratio.
 - Rotation angle unit.
-- Origin latitude, longitude, and altitude.
+- Origin latitude, longitude, and altitude for ENU KML/geospatial export.
 - Coordinate system for KML/geospatial export: ENU, UTM, or ECEF.
 
-The coordinate system setting affects KML/geospatial export. Platform `x`, `y`, and `altitude` remain meter-valued coordinates and are used directly by the preview and simulation. The UI does not use latitude/longitude as platform waypoints.
+The KML origin and KML coordinate system settings affect KML/geospatial export only. Platform `x`, `y`, and `altitude` remain meter-valued coordinates and are used directly by the preview and simulation. The UI does not use latitude/longitude as platform waypoints.
 
 If you change the rotation angle unit after entering rotation values, the UI asks whether to convert existing values or keep the numbers unchanged.
 
@@ -311,7 +311,7 @@ Use this to inspect:
 - Geospatial placement.
 - Antenna pointing.
 
-If KML geometry looks wrong, check Global Parameters, especially origin and coordinate system.
+If KML geometry looks wrong, check Global Parameters, especially KML origin and KML coordinate system.
 
 ## Logs And Diagnostics
 
