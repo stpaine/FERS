@@ -236,8 +236,6 @@ A timing source represents the clock or oscillator used by transmitters and rece
 ```xml
 <timing name="Clock" synconpulse="false">
     <frequency>10.0e6</frequency>
-    <freq_offset>0</freq_offset>
-    <phase_offset>0</phase_offset>
 </timing>
 ```
 
@@ -257,6 +255,8 @@ Children, in order:
 | `<random_phase_offset_stdev>` | No | radians | Standard deviation for random phase offset. |
 | `<noise_entry>` | No | see below | Phase-noise model entry. Multiple entries are allowed. |
 
+A minimal timing source only needs `<frequency>`. If the offset and noise fields are omitted, FERS uses zero constant frequency offset, zero constant phase offset, no random offset draw, and no timing phase-noise entries.
+
 ### `<noise_entry>`
 
 ```xml
@@ -271,7 +271,7 @@ Children, in order:
 | `<alpha>` | Phase-noise slope category used by the timing model. |
 | `<weight>` | Noise weighting for that category, conventionally written in dBc/Hz-style values. |
 
-Use timing noise only when your analysis needs oscillator effects. For first scenarios, leave the optional timing fields out.
+Add `<freq_offset>`, `<phase_offset>`, random-offset standard deviations, or `<noise_entry>` only when you intentionally want clock error or oscillator phase noise in the result.
 
 ## `<antenna>`
 
