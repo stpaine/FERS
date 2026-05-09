@@ -14,6 +14,7 @@
 #include <GeographicLib/Geocentric.hpp>
 #include <GeographicLib/LocalCartesian.hpp>
 #include <GeographicLib/UTMUPS.hpp>
+#include <expected>
 #include <fstream>
 #include <memory>
 
@@ -23,7 +24,8 @@
 
 namespace serial
 {
-	bool KmlGenerator::generateKml(const core::World& world, const std::string& outputKmlPath)
+	std::expected<void, std::string> KmlGenerator::generateKml(const core::World& world,
+															   const std::string& outputKmlPath)
 	{
 		try
 		{
@@ -65,8 +67,9 @@ namespace serial
 			std::ofstream kml_file(outputKmlPath.c_str());
 			if (!kml_file.is_open())
 			{
-				LOG(logging::Level::ERROR, "Error opening output KML file {}", outputKmlPath);
-				return false;
+				const std::string message = "Error opening output KML file " + outputKmlPath;
+				LOG(logging::Level::ERROR, "{}", message);
+				return std::unexpected(message);
 			}
 
 			kml_generator_utils::generateKmlToStream(kml_file, world, ctx);
@@ -74,14 +77,16 @@ namespace serial
 		}
 		catch (const std::exception& e)
 		{
-			LOG(logging::Level::ERROR, "Error generating KML file: {}", e.what());
-			return false;
+			const std::string message = "Error generating KML file: " + std::string(e.what());
+			LOG(logging::Level::ERROR, "{}", message);
+			return std::unexpected(message);
 		}
 		catch (...)
 		{
-			LOG(logging::Level::ERROR, "Unknown error occurred while generating KML file.");
-			return false;
+			const std::string message = "Unknown error occurred while generating KML file.";
+			LOG(logging::Level::ERROR, "{}", message);
+			return std::unexpected(message);
 		}
-		return true;
+		return {};
 	}
 }

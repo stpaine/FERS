@@ -5,6 +5,7 @@ include(Catch)
 
 add_executable(fers_cli_tests
 			   test_arg_parser.cpp
+			   test_cli_runner.cpp
 			   test_cli_paths.cpp
 )
 

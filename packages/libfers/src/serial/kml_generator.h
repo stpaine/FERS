@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include <expected>
 #include <string>
 
 namespace core
@@ -51,8 +52,8 @@ namespace serial
 		 *
 		 * @param world The simulation world containing all objects and paths.
 		 * @param outputKmlPath The path for the output KML file.
-		 * @return True on success, false on failure.
+		 * @return Success or an error message describing why generation failed.
 		 */
-		static bool generateKml(const core::World& world, const std::string& outputKmlPath);
+		static std::expected<void, std::string> generateKml(const core::World& world, const std::string& outputKmlPath);
 	};
 }

@@ -7,6 +7,7 @@ apply_fers_warnings(fers-cli-core)
 
 target_sources(fers-cli-core PRIVATE
 			   src/arg_parser.cpp
+			   src/cli_runner.cpp
 			   src/cli_paths.cpp
 )
 
