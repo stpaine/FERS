@@ -183,6 +183,8 @@ Antenna editing supports:
 
 The Properties panel includes `Mesh Scale Multiplier`, which affects only the size of the antenna-pattern preview mesh in the 3D viewport.
 
+The `Efficiency` field is saved for every antenna type. In the current libfers simulation it affects isotropic, sinc, square horn, parabolic, XML, and HDF5 file-backed antennas. It does not affect Gaussian antenna gain.
+
 For square horn and parabolic antennas, `Design Frequency` helps the UI preview a frequency-dependent pattern when the antenna is not attached to a waveform. It is a preview aid, not a replacement for the waveform carrier frequency used in simulation.
 
 ### Platforms

@@ -299,7 +299,7 @@ Optional child parameters:
 | `<diameter>` | `squarehorn`, `parabolic` | Aperture diameter or size in meters. |
 | `<azscale>` | `gaussian` | Azimuth spread for Gaussian pattern. |
 | `<elscale>` | `gaussian` | Elevation spread for Gaussian pattern. |
-| `<efficiency>` | most patterns | Efficiency multiplier. Defaults to `1`. |
+| `<efficiency>` | `isotropic`, `sinc`, `squarehorn`, `parabolic`, `xml`, `file` | Linear gain multiplier applied to the computed antenna gain. Defaults to `1`. |
 
 Pattern notes:
 
@@ -380,7 +380,9 @@ Children, in order:
 
 1. One `<motionpath>`.
 2. Either `<rotationpath>` or `<fixedrotation>`.
-3. Zero or more `<monostatic>`, `<transmitter>`, `<receiver>`, or `<target>` elements.
+3. Optional platform contents: any number of `<monostatic>`, `<transmitter>`, `<receiver>`, and `<target>` elements.
+
+A platform with no radar or target contents is valid. It only contributes a named moving/rotating body; by itself it does not transmit, receive, or scatter anything.
 
 ### `<motionpath>`
 
