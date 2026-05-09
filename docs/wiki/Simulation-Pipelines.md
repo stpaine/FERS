@@ -181,11 +181,13 @@ flowchart TD
     A[FMCW chirp waveform] --> B[Received raw baseband sample]
     C[Dechirp reference] --> D[Mix received signal with reference]
     B --> D
-    D --> E[Low-pass IF filtering if configured]
-    E --> F[Resample to if_sample_rate if configured]
+    D --> E[Low-pass IF filtering when if_sample_rate is configured]
+    E --> F[Resample to receiver-local if_sample_rate when configured]
     F --> G[Add applicable receiver effects]
     G --> H[Normalize and write I_data and Q_data]
 ```
+
+If `if_sample_rate` is omitted, dechirped FMCW is written as legacy full-rate IF output at `<rate> * <oversample>`.
 
 Reference choices:
 

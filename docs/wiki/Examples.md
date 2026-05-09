@@ -97,7 +97,7 @@ Use this example when you want to learn:
 
 - Basic FMCW XML structure.
 - How to request dechirped IF output.
-- How `if_sample_rate` affects the generated result.
+- How to analyze legacy full-rate dechirped IF output when no `if_sample_rate` is configured.
 
 ## FMCW Bistatic External Dechirp
 
@@ -190,5 +190,5 @@ For early debugging:
 | `pulse.h5` is missing | Run `python3 genpulse.py` in `examples/mixed_scenario`. |
 | Analysis script cannot find results | Pass the same output directory to `fers-cli` and the analysis script. |
 | HDF5 file exists but analysis gives zeros | Reconstruct I/Q with `fullscale` before calculating power or spectra. |
-| FMCW output sample count is unexpected | Check `if_sample_rate`, chirp duration, chirp count, and schedule duration. |
+| FMCW output sample count is unexpected | Check whether dechirped output is using `if_sample_rate` or legacy `<rate> * <oversample>` output. Also check chirp duration, chirp count or triangle count, and schedule duration. |
 | KML geometry looks misplaced | Set the KML/geospatial `<origin>` and `<coordinatesystem>` explicitly. |

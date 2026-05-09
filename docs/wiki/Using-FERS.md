@@ -122,12 +122,12 @@ The most important rates are:
 
 | Setting | Meaning |
 | --- | --- |
-| `<rate>` | Main output sample rate in Hz. |
+| `<rate>` | Base output sample rate in Hz. Raw CW/FMCW streaming output is written at this rate. |
 | `<simSamplingRate>` | Rate used for geometry interpolation in pulsed response generation. |
-| `<oversample>` | Internal oversampling multiplier. Final output is still usually written at `<rate>`. |
-| `<if_sample_rate>` | Optional FMCW IF output rate after dechirping and resampling. |
+| `<oversample>` | Internal oversampling multiplier. FMCW aliasing checks and legacy full-rate dechirped IF output use `<rate> * <oversample>`. |
+| `<if_sample_rate>` | Optional receiver-local FMCW IF output rate after dechirping and resampling. |
 
-Use a high enough `<rate>` to represent the signal bandwidth you expect. For FMCW, the waveform definition must also satisfy the anti-aliasing checks described in [[XML Schema Reference]].
+Use a high enough `<rate>` and `<oversample>` to represent the signal bandwidth you expect. For FMCW, the waveform definition must also satisfy the baseband sweep-edge checks described in [[XML Schema Reference]].
 
 ## Validation
 
@@ -171,7 +171,7 @@ If KML generation fails, `fers-cli` exits with a nonzero status and logs the rea
 | Scenario loads but does not run | A referenced waveform, antenna, timing source, or platform object name is wrong. |
 | Output is all zeros | Receiver schedule/window may miss the return, antenna pointing may be wrong, target may be outside the simulated time span, or path loss may make the signal very small. |
 | Pulsed range looks offset | Check `window_skip`, `window_length`, waveform sample rate, and speed of propagation `c`. |
-| FMCW run fails validation | Check chirp bandwidth, chirp duration, chirp period, `<rate>`, and `<oversample>`. |
+| FMCW run fails validation | Check chirp bandwidth, chirp duration, chirp period, count fields, `start_frequency_offset`, `<rate>`, `<oversample>`, and IF-chain settings. |
 | KML looks wrong geographically | Check KML/geospatial `<origin>`, `<coordinatesystem>`, UTM zone, and hemisphere. |
 
 ## Old XML Files

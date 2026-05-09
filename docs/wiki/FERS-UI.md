@@ -154,7 +154,7 @@ Waveform editing supports:
 - FMCW linear chirps.
 - FMCW triangular chirps.
 
-For FMCW waveforms, the UI warns or blocks when settings violate major FMCW constraints, such as chirp period shorter than chirp duration or sweep bandwidth too close to the effective sample-rate limit.
+For FMCW waveforms, the UI warns or blocks when settings violate major FMCW constraints, such as chirp period shorter than chirp duration or a baseband sweep edge too close to the effective sample-rate limit `<rate> * <oversample>`.
 
 ### Timings
 
@@ -229,6 +229,8 @@ For FMCW receivers and monostatic radars, the UI supports:
 - Optional IF sample rate.
 - Optional IF filter bandwidth.
 - Optional IF transition width.
+
+IF settings are valid only when dechirping is enabled. If dechirping is enabled without an IF sample rate, FERS writes legacy full-rate IF output at `<rate> * <oversample>`. If an IF sample rate is provided, it is receiver-local and must be no higher than `<rate> * <oversample>`.
 
 The UI blocks simulations and KML generation when it detects invalid FMCW settings that would fail later.
 

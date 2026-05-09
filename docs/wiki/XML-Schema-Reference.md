@@ -60,7 +60,7 @@ Required children, in order:
 | --- | --- | --- |
 | `<starttime>` | seconds | Start time of the simulation. Usually `0`. |
 | `<endtime>` | seconds | End time of the simulation. Must be after `starttime`. |
-| `<rate>` | Hz | Main output sample rate. This is the sample rate used for final receiver data unless an FMCW IF chain sets `if_sample_rate`. |
+| `<rate>` | Hz | Base output sample rate. Raw CW/FMCW streaming output is written at this rate. Dechirped FMCW without `<if_sample_rate>` is written at the effective simulation rate, `<rate> * <oversample>`. Dechirped FMCW with `<if_sample_rate>` is written at the realized IF output rate. |
 
 Optional children, in order:
 
@@ -70,7 +70,7 @@ Optional children, in order:
 | `<simSamplingRate>` | Hz | `1000` | Geometry interpolation rate used while building pulsed responses. Increase it when fast platform motion needs finer geometry sampling. |
 | `<randomseed>` | integer | random | Seed for repeatable noise and random models. Set this when you want repeatable runs. |
 | `<adc_bits>` | bits | `0` | ADC quantization depth. `0` disables quantization and stores normalized floating-point samples. |
-| `<oversample>` | multiplier | `1` | Internal oversampling factor. Valid range is `1` to `8`. It does not normally change final output sample rate. |
+| `<oversample>` | multiplier | `1` | Internal oversampling factor. Valid range is `1` to `8`. FMCW waveform aliasing checks use `<rate> * <oversample>`. Most final output is still written at `<rate>`, but legacy dechirped FMCW output without `<if_sample_rate>` is written at `<rate> * <oversample>`. |
 | `<rotationangleunit>` | `deg` or `rad` | `deg` | Unit used by platform rotation values. |
 | `<origin>` | attributes | built-in KML default | Geodetic reference used only by ENU KML/geospatial export. It does not affect signal simulation geometry. |
 | `<coordinatesystem>` | attributes | `ENU` | Coordinate frame used when converting platform coordinates to geodetic coordinates for KML/geospatial export. It does not transform positions during simulation. |
@@ -184,7 +184,7 @@ There are no child parameters. The signal is a continuous tone at the chosen car
 
 ### `<fmcw_linear_chirp>`
 
-Use this for sawtooth up-chirp or down-chirp FMCW.
+Use this for a repeated linear up-chirp or down-chirp train.
 
 ```xml
 <fmcw_linear_chirp direction="up">
@@ -198,17 +198,28 @@ Use this for sawtooth up-chirp or down-chirp FMCW.
 
 | Attribute | Required | Meaning |
 | --- | --- | --- |
-| `direction` | Yes | `up` increases frequency through the chirp. `down` decreases frequency. |
+| `direction` | Yes | `up` sweeps from `start_frequency_offset` to `start_frequency_offset + chirp_bandwidth`. `down` sweeps from `start_frequency_offset` to `start_frequency_offset - chirp_bandwidth`. |
 
 | Element | Required | Unit | Meaning |
 | --- | --- | --- | --- |
-| `<chirp_bandwidth>` | Yes | Hz | Frequency sweep width. Must be positive. |
+| `<chirp_bandwidth>` | Yes | Hz | Magnitude of the frequency sweep. Must be positive. |
 | `<chirp_duration>` | Yes | seconds | Active sweep duration. Must be positive. |
-| `<chirp_period>` | Yes | seconds | Time from one chirp start to the next. Must be at least `chirp_duration`. |
+| `<chirp_period>` | Yes | seconds | Time from one chirp start to the next. Must be at least `chirp_duration`. If it is larger than `chirp_duration`, the transmitter is silent between chirps. |
 | `<start_frequency_offset>` | No | Hz | Baseband offset at the start of the chirp. Defaults to `0`. |
-| `<chirp_count>` | No | count | Maximum chirps per schedule period. If omitted, the schedule duration determines how many chirps fit. |
+| `<chirp_count>` | No | count | Positive integer maximum chirps per active schedule period. If omitted, chirps continue until the active period ends. |
 
-FMCW chirps must fit the selected sample rate. If the sweep bandwidth is too large for `<rate> * <oversample>`, FERS rejects or warns about the scenario.
+For every active schedule period, the chirp train restarts at that period's start time. A period shorter than `chirp_duration` is rejected. A period shorter than `chirp_period` is allowed but logs a warning because it cannot contain a second chirp.
+
+FMCW linear chirps must fit the complex-baseband effective sample rate. FERS checks both sweep edges, not only the sweep bandwidth:
+
+```text
+effective_rate = <rate> * <oversample>
+up:   sweep edges = start_frequency_offset and start_frequency_offset + chirp_bandwidth
+down: sweep edges = start_frequency_offset and start_frequency_offset - chirp_bandwidth
+required: effective_rate > max(abs(edge_1), abs(edge_2))
+```
+
+FERS rejects the scenario if that requirement fails and warns when the effective rate is within 10% of the limit. FERS also rejects a waveform whose carrier frequency plus the lower baseband sweep edge is not positive.
 
 ### `<fmcw_triangle>`
 
@@ -224,10 +235,14 @@ Use this for triangular FMCW sweeps.
 
 | Element | Required | Unit | Meaning |
 | --- | --- | --- | --- |
-| `<chirp_bandwidth>` | Yes | Hz | Sweep width for each leg. |
-| `<chirp_duration>` | Yes | seconds | Duration of one leg. A full triangle takes `2 * chirp_duration`. |
-| `<start_frequency_offset>` | No | Hz | Baseband offset at the start of the triangle. Defaults to `0`. |
-| `<triangle_count>` | No | count | Maximum complete triangles per schedule period. |
+| `<chirp_bandwidth>` | Yes | Hz | Sweep width for each leg. Must be positive. |
+| `<chirp_duration>` | Yes | seconds | Duration of one up or down leg. Must be positive. A full triangle takes `2 * chirp_duration`. |
+| `<start_frequency_offset>` | No | Hz | Baseband offset at the start of the up leg. Defaults to `0`. The up leg sweeps to `start_frequency_offset + chirp_bandwidth`; the down leg returns to `start_frequency_offset`. |
+| `<triangle_count>` | No | count | Positive integer maximum complete up/down triangles per active schedule period. If omitted, complete triangles continue until the active period ends. |
+
+Triangular FMCW is strictly symmetric in the current implementation. The up leg and down leg use the same duration and bandwidth, there is no `<chirp_period>`, and there are no idle gaps inside a triangle train. If a schedule period is shorter than one full triangle, FERS rejects it. If a schedule period is not an integer multiple of the full triangle period, FERS emits complete triangles and leaves the leftover time silent.
+
+Triangle aliasing uses the same effective-rate rule as linear chirps, with sweep edges `start_frequency_offset` and `start_frequency_offset + chirp_bandwidth`.
 
 ## `<timing>`
 
@@ -629,11 +644,11 @@ Reference sources:
 
 | Element | Unit | Meaning |
 | --- | --- | --- |
-| `<if_sample_rate>` | Hz | Optional output sample rate after dechirp. Must be positive and no higher than the main simulation sample rate. |
-| `<if_filter_bandwidth>` | Hz | Optional IF low-pass bandwidth. Requires `if_sample_rate` and must be less than half of it. |
-| `<if_filter_transition_width>` | Hz | Optional transition width for the IF filter. Requires `if_sample_rate`. |
+| `<if_sample_rate>` | Hz | Optional receiver-local output sample rate after dechirp. Must be positive and no higher than `<rate> * <oversample>`. Valid only when `dechirp_mode` is `physical` or `ideal`. |
+| `<if_filter_bandwidth>` | Hz | Optional one-sided IF low-pass passband. Requires `if_sample_rate` and must be less than half of it. Desired IF content should fit inside `[-if_filter_bandwidth, +if_filter_bandwidth]`. |
+| `<if_filter_transition_width>` | Hz | Optional transition width for the IF filter. Requires `if_sample_rate`, must be positive, and must fit between `if_filter_bandwidth` and output Nyquist. |
 
-If you omit `if_filter_bandwidth` but request IF resampling, FERS chooses a conservative default based on the output rate.
+If `dechirp_mode="none"`, do not provide `dechirp_reference` or any IF-chain fields. If you omit `<if_sample_rate>` while dechirping, FERS writes legacy full-rate IF output at `<rate> * <oversample>`. If you provide `<if_sample_rate>` but omit `<if_filter_bandwidth>`, FERS uses `0.40 * if_sample_rate` as the passband. If you omit `<if_filter_transition_width>`, FERS uses the remaining gap to Nyquist. The IF resampler can still reject impossible or too-expensive filter plans; common fixes are increasing `if_sample_rate`, reducing `if_filter_bandwidth`, or increasing transition width.
 
 ## `<target>`
 
@@ -728,8 +743,10 @@ The XML schema is intentionally simple, so some important checks happen when FER
 - Pulsed receiver `prf` and `window_length` must be positive.
 - Pulsed receiver `window_skip` must not be negative.
 - FMCW chirp bandwidth and duration must be positive.
-- FMCW chirp period must be at least chirp duration.
-- FMCW sweep bandwidth must fit the effective sample rate.
+- FMCW linear chirp period must be at least chirp duration.
+- FMCW count fields must be positive integers when present.
+- FMCW sweep edges, including `start_frequency_offset`, must fit the effective sample rate `<rate> * <oversample>`.
+- FMCW receiver IF-chain fields are allowed only when dechirping is enabled.
 - Receiver noise temperature must not be negative.
 - UTM KML/geospatial export needs a valid zone and hemisphere.
 - File-backed waveform, antenna, and RCS assets must exist and match the expected file structure.
