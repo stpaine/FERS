@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Standalone target RCS asset for:
+    <rcs type="file" filename="example_target_rcs.xml"/>
+
+  RCS pattern angles are radians. The target RCS loader does not read unit,
+  format, or symmetry attributes. FERS interpolates the azimuth and elevation
+  axes separately and multiplies the two values to get the target RCS used by
+  the simulation.
+-->
+<target>
+    <azimuth>
+        <rcssample>
+            <angle>-3.141592653589793</angle>
+            <rcs>0.25</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>-1.570796326794897</angle>
+            <rcs>0.75</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>0</angle>
+            <rcs>12.0</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>1.570796326794897</angle>
+            <rcs>0.75</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>3.141592653589793</angle>
+            <rcs>0.25</rcs>
+        </rcssample>
+    </azimuth>
+    <elevation>
+        <rcssample>
+            <angle>-1.570796326794897</angle>
+            <rcs>0.5</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>-0.785398163397448</angle>
+            <rcs>0.8</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>0</angle>
+            <rcs>1.0</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>0.785398163397448</angle>
+            <rcs>0.8</rcs>
+        </rcssample>
+        <rcssample>
+            <angle>1.570796326794897</angle>
+            <rcs>0.5</rcs>
+        </rcssample>
+    </elevation>
+</target>

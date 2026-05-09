@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 
 #include "core/parameters.h"
 #include "core/world.h"
@@ -69,7 +70,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in ENU frame", "[serial][kml][
 	std::string out_path = getTempKmlPath("test_enu.kml");
 	std::filesystem::remove(out_path);
 
-	REQUIRE(serial::KmlGenerator::generateKml(world, out_path) == true);
+	REQUIRE(serial::KmlGenerator::generateKml(world, out_path));
 
 	std::string content = readFileContent(out_path);
 	REQUIRE_THAT(content, ContainsSubstring("<?xml version=\"1.0\""));
@@ -92,7 +93,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in UTM frame", "[serial][kml][
 	std::string out_path = getTempKmlPath("test_utm.kml");
 	std::filesystem::remove(out_path);
 
-	REQUIRE(serial::KmlGenerator::generateKml(world, out_path) == true);
+	REQUIRE(serial::KmlGenerator::generateKml(world, out_path));
 
 	std::string content = readFileContent(out_path);
 	REQUIRE_THAT(content, ContainsSubstring("<?xml version=\"1.0\""));
@@ -114,7 +115,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in ECEF frame", "[serial][kml]
 	std::string out_path = getTempKmlPath("test_ecef.kml");
 	std::filesystem::remove(out_path);
 
-	REQUIRE(serial::KmlGenerator::generateKml(world, out_path) == true);
+	REQUIRE(serial::KmlGenerator::generateKml(world, out_path));
 
 	std::string content = readFileContent(out_path);
 	REQUIRE_THAT(content, ContainsSubstring("<?xml version=\"1.0\""));
@@ -128,9 +129,15 @@ TEST_CASE("KmlGenerator: Fails gracefully on invalid file path", "[serial][kml][
 	ParamGuard guard;
 	core::World world;
 
-	std::string bad_path = "/root/invalid_dir_name_12345/test.kml";
+	const std::filesystem::path missing_parent =
+		std::filesystem::temp_directory_path() / "fers_missing_kml_generator_dir_12345";
+	std::error_code ec;
+	std::filesystem::remove_all(missing_parent, ec);
+	const std::string bad_path = (missing_parent / "test.kml").string();
 
-	REQUIRE(serial::KmlGenerator::generateKml(world, bad_path) == false);
+	const auto result = serial::KmlGenerator::generateKml(world, bad_path);
+	REQUIRE_FALSE(result);
+	REQUIRE_THAT(result.error(), ContainsSubstring("Error opening output KML file"));
 }
 
 TEST_CASE("KmlGenerator: Catches exceptions from invalid UTM zones", "[serial][kml][facade]")
@@ -145,8 +152,10 @@ TEST_CASE("KmlGenerator: Catches exceptions from invalid UTM zones", "[serial][k
 
 	std::string out_path = getTempKmlPath("test_utm_fail.kml");
 
-	// The KmlGenerator should catch the GeographicLib exception and return false
-	REQUIRE(serial::KmlGenerator::generateKml(world, out_path) == false);
+	// The KmlGenerator should catch the GeographicLib exception and return an error.
+	const auto result = serial::KmlGenerator::generateKml(world, out_path);
+	REQUIRE_FALSE(result);
+	REQUIRE_THAT(result.error(), ContainsSubstring("Error generating KML file"));
 
 	std::filesystem::remove(out_path);
 }

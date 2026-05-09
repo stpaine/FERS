@@ -407,7 +407,7 @@ int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callba
  * @param context A valid `fers_context_t` handle containing a loaded scenario.
  * @param output_kml_filepath A null-terminated UTF-8 string for the output KML file path.
  * @return 0 on success, a non-zero error code on failure. Use
- *         `fers_get_last_error_message()` to retrieve error details.
+ *         `fers_get_last_error_message()` to retrieve KML generation details.
  */
 int fers_generate_kml(const fers_context_t* context, const char* output_kml_filepath);
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" elementFormDefault="qualified">
+    <xs:complexType name="rcsSampleType">
+        <xs:sequence>
+            <xs:element name="angle" type="xs:string"/>
+            <xs:element name="rcs" type="xs:string"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="rcsAxisType">
+        <xs:sequence>
+            <xs:element name="rcssample" type="rcsSampleType" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:element name="target">
+        <xs:complexType>
+            <xs:sequence>
+                <xs:element name="azimuth" type="rcsAxisType"/>
+                <xs:element name="elevation" type="rcsAxisType"/>
+            </xs:sequence>
+        </xs:complexType>
+    </xs:element>
+</xs:schema>

@@ -504,15 +504,16 @@ namespace serial::xml_parser_utils
 				else
 				{
 					params_out.origin_altitude = 0.0;
-					LOG(logging::Level::DEBUG, "Origin altitude not specified. Defaulting to 0.");
+					LOG(logging::Level::DEBUG, "KML origin altitude not specified. Defaulting to 0.");
 				}
 				origin_set = true;
-				LOG(logging::Level::INFO, "Origin set to lat: {}, lon: {}, alt: {}", params_out.origin_latitude,
+				LOG(logging::Level::INFO, "KML origin set to lat: {}, lon: {}, alt: {}", params_out.origin_latitude,
 					params_out.origin_longitude, params_out.origin_altitude);
 			}
 			catch (const std::exception& e)
 			{
-				LOG(logging::Level::WARNING, "Could not parse origin from XML, using defaults. Error: {}", e.what());
+				LOG(logging::Level::WARNING, "Could not parse KML origin from XML, using defaults. Error: {}",
+					e.what());
 			}
 		}
 
@@ -531,7 +532,7 @@ namespace serial::xml_parser_utils
 					if (params_out.utm_zone < GeographicLib::UTMUPS::MINUTMZONE ||
 						params_out.utm_zone > GeographicLib::UTMUPS::MAXUTMZONE)
 					{
-						throw XmlException("UTM zone " + std::to_string(params_out.utm_zone) +
+						throw XmlException("KML UTM zone " + std::to_string(params_out.utm_zone) +
 										   " is invalid; must be in [1, 60].");
 					}
 					if (hem_str == "N" || hem_str == "n")
@@ -544,15 +545,15 @@ namespace serial::xml_parser_utils
 					}
 					else
 					{
-						throw XmlException("UTM hemisphere '" + hem_str + "' is invalid; must be 'N' or 'S'.");
+						throw XmlException("KML UTM hemisphere '" + hem_str + "' is invalid; must be 'N' or 'S'.");
 					}
-					LOG(logging::Level::INFO, "Coordinate system set to UTM, zone {}{}", params_out.utm_zone,
+					LOG(logging::Level::INFO, "KML coordinate system set to UTM, zone {}{}", params_out.utm_zone,
 						params_out.utm_north_hemisphere ? 'N' : 'S');
 				}
 				else if (frame_str == "ECEF")
 				{
 					params_out.coordinate_frame = params::CoordinateFrame::ECEF;
-					LOG(logging::Level::INFO, "Coordinate system set to ECEF.");
+					LOG(logging::Level::INFO, "KML coordinate system set to ECEF.");
 				}
 				else if (frame_str == "ENU")
 				{
@@ -560,19 +561,19 @@ namespace serial::xml_parser_utils
 					if (!origin_set)
 					{
 						LOG(logging::Level::WARNING,
-							"ENU frame specified but no <origin> tag found. Using default origin at UCT.");
+							"ENU KML frame specified but no <origin> tag found. Using default KML origin at UCT.");
 					}
-					LOG(logging::Level::INFO, "Coordinate system set to ENU local tangent plane.");
+					LOG(logging::Level::INFO, "KML coordinate system set to ENU local tangent plane.");
 				}
 				else
 				{
-					throw XmlException("Unsupported coordinate frame: " + frame_str);
+					throw XmlException("Unsupported KML coordinate frame: " + frame_str);
 				}
 			}
 			catch (const std::exception& e)
 			{
-				LOG(logging::Level::WARNING, "Could not parse <coordinatesystem> from XML: {}. Defaulting to ENU.",
-					e.what());
+				LOG(logging::Level::WARNING,
+					"Could not parse KML <coordinatesystem> from XML: {}. Defaulting KML export to ENU.", e.what());
 				params_out.coordinate_frame = params::CoordinateFrame::ENU;
 				params_out.utm_zone = 0;
 				params_out.utm_north_hemisphere = true;

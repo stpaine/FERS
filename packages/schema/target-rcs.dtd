@@ -1,0 +1,6 @@
+<!ELEMENT target (azimuth, elevation)>
+<!ELEMENT azimuth (rcssample+)>
+<!ELEMENT elevation (rcssample+)>
+<!ELEMENT rcssample (angle, rcs)>
+<!ELEMENT angle (#PCDATA)>
+<!ELEMENT rcs (#PCDATA)>

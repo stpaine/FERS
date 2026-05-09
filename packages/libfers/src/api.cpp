@@ -839,12 +839,13 @@ int fers_generate_kml(const fers_context_t* context, const char* output_kml_file
 
 	try
 	{
-		if (serial::KmlGenerator::generateKml(*ctx->getWorld(), output_kml_filepath))
+		const auto result = serial::KmlGenerator::generateKml(*ctx->getWorld(), output_kml_filepath);
+		if (result)
 		{
 			return 0; // Success
 		}
 
-		last_error_message = "KML generation failed for an unknown reason.";
+		last_error_message = result.error();
 		LOG(logging::Level::ERROR, last_error_message);
 		return 2; // Generation failed
 	}

@@ -57,7 +57,7 @@
         </xs:complexType>
     </xs:element>
 
-    <!-- Geodetic Origin Element -->
+    <!-- Geodetic origin used only for ENU KML/geospatial export -->
     <xs:element name="origin">
         <xs:complexType>
             <xs:attribute name="latitude" type="xs:double" use="required"/>
@@ -66,7 +66,7 @@
         </xs:complexType>
     </xs:element>
 
-    <!-- Coordinate System Element -->
+    <!-- Coordinate system used only for KML/geospatial export -->
     <xs:element name="coordinatesystem">
         <xs:complexType>
             <xs:attribute name="frame" use="required">

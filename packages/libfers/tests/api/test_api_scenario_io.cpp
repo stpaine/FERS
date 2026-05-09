@@ -332,7 +332,7 @@ TEST_CASE("API KML generation reports non-creatable output paths", "[api][scenar
 
 	api_test::ApiString error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
-	REQUIRE_THAT(error.str(), ContainsSubstring("KML generation failed"));
+	REQUIRE_THAT(error.str(), ContainsSubstring("Error opening output KML file"));
 }
 
 TEST_CASE("API granular updates modify specific objects", "[api][scenario]")

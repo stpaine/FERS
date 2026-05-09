@@ -1,7 +1,7 @@
 # FERS XML Schema
 
 This directory contains the schema definitions for FERS XML inputs. These schemas cover both top-level simulation
-scenario files and standalone XML asset formats that are validated by `libfers`.
+scenario files and standalone XML asset formats.
 
 ## Files
 
@@ -10,21 +10,26 @@ scenario files and standalone XML asset formats that are validated by `libfers`.
 - `fers-xml.dtd`: The **Document Type Definition (DTD)**, an older schema format retained for legacy purposes.
 - `antenna-pattern.xsd`: The XSD for standalone XML antenna-pattern assets loaded by `XmlAntenna`.
 - `antenna-pattern.dtd`: The legacy DTD counterpart for standalone XML antenna-pattern assets.
+- `target-rcs.xsd`: The XSD for standalone XML target-RCS assets referenced by `<rcs type="file">`.
+- `target-rcs.dtd`: The legacy DTD counterpart for standalone XML target-RCS assets.
 
 ## Role in the Monorepo
 
 The scenario schema serves as the formal contract between the `libfers` core library and its clients (`fers-cli`,
-`fers-ui`). The standalone antenna-pattern schema defines the contract for XML antenna asset files referenced by
-scenario documents.
+`fers-ui`). The standalone asset schemas define the expected structure for XML antenna and target-RCS files referenced
+by scenario documents.
 
 - **`fers-ui`** generates `.fersxml` files that conform to this schema.
 - **`libfers`** validates incoming `.fersxml` files against this schema before running a simulation.
 - **`libfers`** also validates standalone XML antenna-pattern assets against the embedded antenna-pattern schemas when
   those files are loaded.
+- **Target-RCS XML assets** are loaded by `libfers` according to the `target-rcs` structure. The schemas are provided for
+  user/tool validation of those standalone assets.
 
-During the build process of the `libfers` package, the schema files are converted into C header files and embedded
-directly into the library binary. This ensures that the simulator always has access to the correct schema versions for
-validation without relying on external files.
+During the build process of the `libfers` package, the scenario and antenna-pattern schema files are converted into C
+header files and embedded directly into the library binary. This ensures that the simulator always has access to those
+schema versions for validation without relying on external files. The target-RCS schemas are provided for standalone
+asset validation by users and tools.
 
 ## Modifying the Schema
 

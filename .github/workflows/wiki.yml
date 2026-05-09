@@ -1,0 +1,51 @@
+---
+name: Deploy Wiki
+
+on:
+    push:
+        branches:
+            - master
+        paths:
+            - 'docs/wiki/**'
+    workflow_dispatch:
+
+permissions:
+    contents: write
+
+concurrency:
+    group: 'wiki'
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: Deploy Wiki
+        runs-on: ubuntu-latest
+        env:
+            WIKI_REPOSITORY: ${{ github.repository }}.wiki
+            WIKI_TOKEN: ${{ secrets.WIKI_DEPLOY_TOKEN || github.token }}
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v6
+
+            - name: Clone associated wiki repository
+              run: |
+                  git clone "https://x-access-token:${WIKI_TOKEN}@github.com/${WIKI_REPOSITORY}.git" "$RUNNER_TEMP/fers-wiki-repo"
+
+            - name: Sync wiki content
+              run: |
+                  rsync -a --delete --exclude='.git/' docs/wiki/ "$RUNNER_TEMP/fers-wiki-repo/"
+
+            - name: Commit wiki changes
+              working-directory: ${{ runner.temp }}/fers-wiki-repo
+              run: |
+                  git config user.name "github-actions[bot]"
+                  git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+                  git add -A
+                  if git diff --cached --quiet; then
+                      echo "Wiki content is already up to date."
+                      exit 0
+                  fi
+
+                  git commit -m "docs: sync wiki from ${GITHUB_SHA}"
+                  git push

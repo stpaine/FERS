@@ -31,14 +31,14 @@
         <!ELEMENT oversample (#PCDATA)>
         <!-- Rotation angle unit for external interfaces -->
         <!ELEMENT rotationangleunit (#PCDATA)>
-        <!-- Geodetic Origin for the simulation coordinate system (used for ENU frame) -->
+        <!-- Geodetic origin used only for ENU KML/geospatial export -->
         <!ELEMENT origin EMPTY>
         <!ATTLIST origin
                 latitude  CDATA #REQUIRED
                 longitude CDATA #REQUIRED
                 altitude  CDATA "0"
                 >
-        <!-- Coordinate System for the simulation input coordinates -->
+        <!-- Coordinate system used only for KML/geospatial export -->
         <!ELEMENT coordinatesystem EMPTY>
         <!ATTLIST coordinatesystem
                 frame      (ENU|UTM|ECEF) #REQUIRED
