@@ -101,7 +101,7 @@ ctest --preset=coverage --output-on-failure
 
 ## Build The Desktop UI
 
-The UI is optional. It requires Bun, Rust, and Tauri prerequisites for your operating system.
+The UI is optional. It requires Bun, Rust, and Tauri prerequisites for your operating system. See [[FERS UI]] for the user workflow and current UI limitations.
 
 Development mode:
 
@@ -114,6 +114,8 @@ Release bundle:
 ```bash
 bun ui:build
 ```
+
+Run these commands from the repository root.
 
 ## Platform Notes
 
@@ -138,4 +140,3 @@ Install the normal build toolchain plus CMake, Ninja, and vcpkg. UI builds also 
 ## Docker
 
 Older FERS documentation described a legacy Docker image. That image is not part of the current repository and should not be treated as the supported install path. Use the native CMake/vcpkg build above.
-

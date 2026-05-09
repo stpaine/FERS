@@ -2,8 +2,8 @@
 
 FERS runs a `.fersxml` scenario and writes receiver I/Q data to HDF5 files. A normal workflow is:
 
-1. Create or choose a scenario.
-2. Run it with `fers-cli`.
+1. Create or choose a scenario. You can write XML directly or use [[FERS UI]] to build it visually.
+2. Run it with `fers-cli` or from the UI Simulation Run view.
 3. Open the generated HDF5 files in an analysis script.
 4. Compare the simulated signals with the radar effect you expected.
 
@@ -161,6 +161,8 @@ Default output:
 
 KML uses the scenario's `<origin>` and `<coordinatesystem>` settings.
 
+If KML generation fails, `fers-cli` exits with a nonzero status and logs the reason. Common causes are an invalid output path, missing parent directory, scenario loading failure, or invalid coordinate settings.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |
@@ -181,4 +183,3 @@ python3 scripts/migrate_fers_xml.py old.fersxml migrated.fersxml
 ```
 
 Then inspect the result manually. Old `<export>` and `<multipath>` settings are not supported in the current scenario format.
-

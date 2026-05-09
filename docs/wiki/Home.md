@@ -40,8 +40,8 @@ Current limitations to keep in mind:
 ## Common Workflow
 
 1. Install and build FERS.
-2. Write a `.fersxml` scenario.
-3. Run the scenario with `fers-cli`.
+2. Write a `.fersxml` scenario, or build one visually with `fers-ui`.
+3. Run the scenario with `fers-cli` or the Simulation Run view in `fers-ui`.
 4. Inspect the generated HDF5 result files.
 5. Analyze the I/Q data with your own scripts.
 6. Optionally export KML to inspect platform geometry.
@@ -55,6 +55,7 @@ Current limitations to keep in mind:
 - [[Installing FERS]]: install prerequisites, build the CLI, build tests, and install locally.
 - [[Using FERS]]: the normal end-to-end workflow from scenario file to HDF5 output.
 - [[FERS CLI]]: command-line options and examples.
+- [[FERS UI]]: visual scenario building, asset reuse, simulation runs, KML generation, and UI limitations.
 - [[libfers]]: when and how to use the FERS library from another application.
 - [[XML Schema Reference]]: every XML element, attribute, parameter, unit, and practical caveat.
 - [[Examples]]: walkthroughs of the scenarios in the `examples/` directory.
@@ -71,4 +72,3 @@ python3 scripts/migrate_fers_xml.py old_scenario.fersxml new_scenario.fersxml
 ```
 
 Always inspect migrated files before using them. The migrator removes deprecated `<export>` settings and unsupported legacy `<multipath>` blocks because they do not map to the current scenario model.
-

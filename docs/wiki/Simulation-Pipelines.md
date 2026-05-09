@@ -22,6 +22,24 @@ Key user settings:
 - `<rate>`, `<oversample>`, schedules, platform motion, and radar modes affect event generation and signal rendering.
 - Receiver names determine HDF5 output file names.
 
+## UI Scenario Workflow
+
+```mermaid
+flowchart TD
+    A[Scenario Builder] --> B[Edit global parameters, assets, platforms, and components]
+    B --> C[3D viewport previews geometry, pointing, paths, patterns, and RF links]
+    C --> D[Timeline previews motion over simulation time]
+    B --> E[Export .fersxml]
+    B --> F[Simulation Run view]
+    F --> G[Run simulation]
+    F --> H[Generate KML]
+    G --> I[Write HDF5 files]
+    G --> J[Show output metadata]
+    J --> K[Optional metadata JSON export]
+```
+
+The UI preview helps catch setup mistakes before a full run, but the generated HDF5 files are the simulation output. Use external analysis tools for signal processing and plots.
+
 ## Scenario Loading
 
 ```mermaid
@@ -208,4 +226,3 @@ Important output behavior:
 - Pulsed outputs write chunk datasets.
 - CW and FMCW outputs write `I_data` and `Q_data`.
 - Metadata attributes describe the receiver mode and sampling settings.
-

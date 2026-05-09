@@ -81,9 +81,9 @@ Use `TRACE` only when you need very detailed logs. It can produce a large amount
 
 ## Exit Status
 
-`fers-cli` returns `0` when help/version is shown or a simulation succeeds. It returns `1` for argument errors, scenario loading errors, output-directory errors, and simulation failures.
+`fers-cli` returns `0` when help/version is shown, a simulation succeeds, or KML export succeeds.
 
-Practical note: always check the log output for KML export errors. The current CLI can log a KML failure even when the process exit status is still `0`.
+It returns `1` for argument errors, scenario loading errors, output-directory errors, simulation failures, and KML export failures. This means scripts can treat a nonzero exit status as a failed run or failed KML export.
 
 ## Output Directory Behavior
 
