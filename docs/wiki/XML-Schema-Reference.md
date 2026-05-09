@@ -12,7 +12,7 @@ This page documents the current user-facing XML format.
 - Frequencies and sample rates are in Hz.
 - Power is in watts.
 - Distances and platform positions are always linear meter-valued coordinates. The signal simulation uses the numeric platform vectors directly; `<coordinatesystem>` is for KML/geospatial export, not for transforming simulation geometry.
-- Angles are controlled by `<rotationangleunit>` for platform rotation values. Antenna-pattern XML axes declare their own angle unit.
+- Angles are controlled by `<rotationangleunit>` for platform rotation values. Antenna-pattern XML axes declare their own angle unit. Target-RCS XML axes are read in radians and do not have a unit attribute.
 - Names are used for references. Keep names unique and descriptive.
 - XML schema validation checks structure. FERS also checks references, numeric limits, mode compatibility, and some physical constraints while loading or running.
 
@@ -696,7 +696,55 @@ For file-backed RCS:
 <rcs type="file" filename="target_rcs.xml"/>
 ```
 
-Target RCS files use azimuth and elevation sample axes with `<rcssample>` entries containing `<angle>` and `<rcs>`.
+The `filename` points to a standalone target-RCS XML file. FERS passes this filename to the target-RCS loader as written, so relative paths must be resolvable from the process working directory. Use an absolute path if that is ambiguous.
+
+### Standalone Target RCS XML
+
+Use `<rcs type="file">` when a target's RCS should vary with aspect angle instead of using one constant value.
+
+```xml
+<target>
+    <azimuth>
+        <rcssample>
+            <angle>0</angle>
+            <rcs>12.0</rcs>
+        </rcssample>
+    </azimuth>
+    <elevation>
+        <rcssample>
+            <angle>0</angle>
+            <rcs>1.0</rcs>
+        </rcssample>
+    </elevation>
+</target>
+```
+
+Standalone target-RCS files are not `.fersxml` scenario files. They are assets referenced by a scenario target.
+
+Structure:
+
+1. Root `<target>`.
+2. One `<azimuth>` axis.
+3. One `<elevation>` axis.
+4. One or more `<rcssample>` entries in each axis.
+
+Each `<rcssample>` contains:
+
+| Element | Unit | Meaning |
+| --- | --- | --- |
+| `<angle>` | radians | Aspect sample angle on that axis. This value is not affected by `<rotationangleunit>`. |
+| `<rcs>` | linear numeric value | Value at that angle. FERS interpolates the azimuth and elevation axes separately, then multiplies the two values to get the RCS used by the radar equation. |
+
+Important behavior:
+
+- Target-RCS XML does not support `unit`, `format`, or `symmetry` attributes.
+- Sample values are linear, not dB.
+- Between samples, FERS uses linear interpolation.
+- Outside the sampled angle range, FERS clamps to the nearest endpoint sample.
+- If an axis has no usable samples, the target may load but fail later when FERS tries to look up its RCS.
+- The file-backed RCS value can still be multiplied by a target `<model>` fluctuation model.
+
+For example, if the selected azimuth-axis value is `12.0` and the selected elevation-axis value is `1.0`, the target RCS used by the simulation is `12.0`. If both selected values are greater than `1`, they multiply. A practical pattern is to put the main square-meter RCS variation on one axis and use `1.0` or dimensionless scale factors on the other axis.
 
 ### `<model>`
 

@@ -17,7 +17,7 @@ FERS can model:
 - Platform motion with static, linear, or cubic interpolation.
 - Platform pointing with fixed-rate rotation or waypoint-based rotation.
 - Isotropic, analytic, XML, and file-backed antenna patterns.
-- Constant and fluctuating target RCS.
+- Constant, file-backed, and fluctuating target RCS.
 - Receiver thermal noise.
 - Timing frequency offset, phase offset, random offset, and phase-noise entries.
 - Optional schedules that turn transmitters and receivers on only during selected time periods.

@@ -13,7 +13,7 @@ Known practical limitations:
 - The 3D Scenario view requires working WebGL2 support.
 - Some macOS systems may experience WebGL context loss on launch.
 - The UI can edit the current FERS scenario model, but advanced or unusual XML files may still need manual review after import/export.
-- The UI does not author standalone antenna-pattern XML files directly. It can reference XML or HDF5 antenna-pattern files.
+- The UI does not author standalone antenna-pattern or target-RCS XML files directly. It can reference XML or HDF5 antenna-pattern files and XML target-RCS files.
 - The UI is not an HDF5 plotting tool. It shows output metadata after a run, but detailed signal analysis is still done in Python, MATLAB, Julia, or another analysis environment.
 
 ## Running The UI From Source

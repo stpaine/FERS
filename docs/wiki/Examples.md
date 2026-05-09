@@ -164,6 +164,32 @@ What to look at:
 - `format="dBi"` or `format="linear"` controls gain value format.
 - `symmetry="mirrored"` can mirror positive-angle samples to negative angles.
 
+## XML Target RCS Example
+
+File:
+
+```text
+examples/example_target_rcs.xml
+```
+
+This is a standalone target RCS asset. A scenario can reference it from a target like this:
+
+```xml
+<target name="AspectTarget">
+    <rcs type="file" filename="example_target_rcs.xml"/>
+</target>
+```
+
+The file defines separate azimuth and elevation RCS sample axes. Use this when a target should have a simple aspect-dependent RCS pattern instead of one isotropic value.
+
+What to look at:
+
+- Target-RCS file angles are radians.
+- Target-RCS files do not have `unit`, `format`, or `symmetry` attributes.
+- FERS interpolates the azimuth and elevation axes separately.
+- The final RCS used by the simulation is the selected azimuth-axis value multiplied by the selected elevation-axis value.
+- Relative RCS filenames must be resolvable from the directory where you run FERS. Use an absolute path if needed.
+
 ## Starting A New Scenario From An Example
 
 The fastest way to create a new scenario is to copy the closest example and change one thing at a time:
