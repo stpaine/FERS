@@ -64,7 +64,10 @@ The VITA epoch setter is optional. The full-scale setter is required before runn
 ```c
 fers_set_vita49_max_udp_payload(context, 1400);
 fers_set_vita49_queue_depth(context, 1024);
+fers_set_vita49_packet_trace_enabled(context, 1);
 ```
+
+For the full CLI/API contract, packet layout, metadata fields, and counter semantics, see [[VITA49 Streaming Implementation]].
 
 Do not put output transport selection in `.fersxml`; it remains a scenario/physics format.
 

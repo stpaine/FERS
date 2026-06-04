@@ -56,6 +56,7 @@ Current limitations to keep in mind:
 - [[Installing FERS]]: install prerequisites, build the CLI, build tests, and install locally.
 - [[Using FERS]]: the normal end-to-end workflow from scenario file to HDF5 output.
 - [[FERS CLI]]: command-line options and examples.
+- [[VITA49 Streaming Implementation]]: CLI/API VITA 49.2 UDP output contract, packet layout, metadata, pacing, and counters.
 - [[FERS UI]]: visual scenario building, asset reuse, simulation runs, KML generation, and UI limitations.
 - [[libfers]]: when and how to use the FERS library from another application.
 - [[XML Schema Reference]]: every XML element, attribute, parameter, unit, and practical caveat.
