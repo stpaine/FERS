@@ -70,7 +70,7 @@ TEST_CASE("Transmitter schedule resolves next pulse time", "[radar][transmitter]
 	{
 		const auto next = tx.getNextPulseTime(2.5);
 		REQUIRE(next.has_value());
-		REQUIRE_THAT(*next, WithinAbs(2.5, 1e-12));
+		REQUIRE_THAT(next.value_or(0.0), WithinAbs(2.5, 1e-12));
 	}
 
 	SECTION("Schedule enforces active windows")
@@ -82,11 +82,11 @@ TEST_CASE("Transmitter schedule resolves next pulse time", "[radar][transmitter]
 
 		const auto inside = tx.getNextPulseTime(1.5);
 		REQUIRE(inside.has_value());
-		REQUIRE_THAT(*inside, WithinAbs(1.5, 1e-12));
+		REQUIRE_THAT(inside.value_or(0.0), WithinAbs(1.5, 1e-12));
 
 		const auto before = tx.getNextPulseTime(3.0);
 		REQUIRE(before.has_value());
-		REQUIRE_THAT(*before, WithinAbs(4.0, 1e-12));
+		REQUIRE_THAT(before.value_or(0.0), WithinAbs(4.0, 1e-12));
 
 		const auto after = tx.getNextPulseTime(6.0);
 		REQUIRE_FALSE(after.has_value());

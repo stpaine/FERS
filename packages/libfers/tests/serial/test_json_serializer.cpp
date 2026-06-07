@@ -195,7 +195,9 @@ TEST_CASE("JSON: FMCW triangle round trips", "[serial][json][fmcw]")
 	REQUIRE(wf->isFmcwFamily());
 	REQUIRE(wf->isFmcwTriangle());
 	REQUIRE(wf->getFmcwTriangleSignal() != nullptr);
-	REQUIRE(wf->getFmcwTriangleSignal()->getTriangleCount().value() == 3);
+	const auto triangle_count = wf->getFmcwTriangleSignal()->getTriangleCount();
+	REQUIRE(triangle_count.has_value());
+	REQUIRE(triangle_count.value_or(0u) == 3u);
 
 	json serialized;
 	fers_signal::to_json(serialized, *wf);
@@ -206,7 +208,9 @@ TEST_CASE("JSON: FMCW triangle round trips", "[serial][json][fmcw]")
 	auto reparsed = serial::parse_waveform_from_json(serialized);
 	REQUIRE(reparsed != nullptr);
 	REQUIRE(reparsed->getFmcwTriangleSignal() != nullptr);
-	REQUIRE(reparsed->getFmcwTriangleSignal()->getTriangleCount().value() == 3);
+	const auto reparsed_triangle_count = reparsed->getFmcwTriangleSignal()->getTriangleCount();
+	REQUIRE(reparsed_triangle_count.has_value());
+	REQUIRE(reparsed_triangle_count.value_or(0u) == 3u);
 }
 
 TEST_CASE("JSON: FMCW triangle rejects fractional triangle count", "[serial][json][fmcw]")
@@ -765,9 +769,9 @@ TEST_CASE("JSON: FMCW dechirp configuration validates and round-trips", "[serial
 		REQUIRE(if_chain.sample_rate_hz.has_value());
 		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
 		REQUIRE(if_chain.filter_transition_width_hz.has_value());
-		REQUIRE_THAT(*if_chain.sample_rate_hz, WithinAbs(1.0e6, 1.0e-9));
-		REQUIRE_THAT(*if_chain.filter_bandwidth_hz, WithinAbs(4.0e5, 1.0e-9));
-		REQUIRE_THAT(*if_chain.filter_transition_width_hz, WithinAbs(1.0e5, 1.0e-9));
+		REQUIRE_THAT(if_chain.sample_rate_hz.value_or(0.0), WithinAbs(1.0e6, 1.0e-9));
+		REQUIRE_THAT(if_chain.filter_bandwidth_hz.value_or(0.0), WithinAbs(4.0e5, 1.0e-9));
+		REQUIRE_THAT(if_chain.filter_transition_width_hz.value_or(0.0), WithinAbs(1.0e5, 1.0e-9));
 
 		const json serialized = serial::world_to_json(world);
 		const auto& mode_json =
@@ -1121,10 +1125,10 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 		REQUIRE(updated_timing->getName() == "tim_updated");
 		REQUIRE_THAT(updated_timing->getFrequency(), WithinAbs(2e6, 1e-9));
 		REQUIRE(updated_timing->getSyncOnPulse() == true);
-		REQUIRE_THAT(updated_timing->getFreqOffset().value(), WithinAbs(10.0, 1e-9));
-		REQUIRE_THAT(updated_timing->getRandomFreqOffsetStdev().value(), WithinAbs(2.0, 1e-9));
-		REQUIRE_THAT(updated_timing->getPhaseOffset().value(), WithinAbs(0.5, 1e-9));
-		REQUIRE_THAT(updated_timing->getRandomPhaseOffsetStdev().value(), WithinAbs(0.1, 1e-9));
+		REQUIRE_THAT(updated_timing->getFreqOffset().value_or(0.0), WithinAbs(10.0, 1e-9));
+		REQUIRE_THAT(updated_timing->getRandomFreqOffsetStdev().value_or(0.0), WithinAbs(2.0, 1e-9));
+		REQUIRE_THAT(updated_timing->getPhaseOffset().value_or(0.0), WithinAbs(0.5, 1e-9));
+		REQUIRE_THAT(updated_timing->getRandomPhaseOffsetStdev().value_or(0.0), WithinAbs(0.1, 1e-9));
 
 		std::vector<RealType> alphas, weights;
 		updated_timing->copyAlphas(alphas, weights);
@@ -1223,7 +1227,7 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	REQUIRE(tx_ptr->getMode() == radar::OperationMode::FMCW_MODE);
 	REQUIRE(rx_ptr->getMode() == radar::OperationMode::FMCW_MODE);
 	REQUIRE(rx_ptr->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
-	REQUIRE_THAT(*rx_ptr->getIfSampleRate(), WithinAbs(100.0, 1e-12));
-	REQUIRE_THAT(*rx_ptr->getIfFilterBandwidth(), WithinAbs(40.0, 1e-12));
-	REQUIRE_THAT(*rx_ptr->getIfFilterTransitionWidth(), WithinAbs(10.0, 1e-12));
+	REQUIRE_THAT(rx_ptr->getIfSampleRate().value_or(0.0), WithinAbs(100.0, 1e-12));
+	REQUIRE_THAT(rx_ptr->getIfFilterBandwidth().value_or(0.0), WithinAbs(40.0, 1e-12));
+	REQUIRE_THAT(rx_ptr->getIfFilterTransitionWidth().value_or(0.0), WithinAbs(10.0, 1e-12));
 }

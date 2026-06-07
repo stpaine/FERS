@@ -316,7 +316,7 @@ TEST_CASE("buildReceiverSampleBlock captures receiver identity, timing, and samp
 	REQUIRE_THAT(block.stream.fmcw.chirp_period, WithinAbs(3.0e-3, 1e-12));
 	REQUIRE_THAT(block.stream.fmcw.chirp_rate, WithinAbs(20.0e9, 1e-3));
 	REQUIRE(block.stream.fmcw.chirp_count.has_value());
-	REQUIRE(*block.stream.fmcw.chirp_count == 7u);
+	REQUIRE(block.stream.fmcw.chirp_count.value_or(0u) == 7u);
 	REQUIRE_THAT(block.stream.sample_rate, WithinAbs(2.0e6, 1e-12));
 	REQUIRE_THAT(block.stream.reference_frequency, WithinAbs(10.5e9, 1e-6));
 	REQUIRE_THAT(block.first_sample_time, WithinAbs(1.25, 1e-12));
@@ -389,11 +389,13 @@ TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detache
 	REQUIRE_THAT(source_metadata.waveform.chirp_rate_signed, WithinAbs(200'000.0, 1e-12));
 	REQUIRE(source_metadata.waveform.chirp_count == std::optional<std::uint64_t>{4});
 	REQUIRE(source_metadata.segments.size() == 1u);
-	REQUIRE_THAT(*source_metadata.segments.front().first_chirp_start_time, WithinAbs(0.0, 1e-12));
+	REQUIRE(source_metadata.segments.front().first_chirp_start_time.has_value());
+	REQUIRE_THAT(source_metadata.segments.front().first_chirp_start_time.value_or(1.0), WithinAbs(0.0, 1e-12));
 	REQUIRE(source_metadata.segments.front().emitted_chirp_count == std::optional<std::uint64_t>{4});
 
 	const auto& streaming_segment = metadata.streaming_segments.front();
-	REQUIRE_THAT(*streaming_segment.first_chirp_start_time, WithinAbs(0.0, 1e-12));
+	REQUIRE(streaming_segment.first_chirp_start_time.has_value());
+	REQUIRE_THAT(streaming_segment.first_chirp_start_time.value_or(1.0), WithinAbs(0.0, 1e-12));
 	REQUIRE(streaming_segment.emitted_chirp_count == std::optional<std::uint64_t>{4});
 }
 
@@ -440,7 +442,8 @@ TEST_CASE("buildStreamingOutputMetadata writes IF-rate FMCW metadata", "[process
 	REQUIRE(metadata.fmcw_if_resample_numerator == 1u);
 	REQUIRE(metadata.fmcw_if_resample_denominator == 4u);
 	REQUIRE(metadata.fmcw_if_sample_rate == std::optional<RealType>{64.0});
-	REQUIRE_THAT(*metadata.fmcw_if_filter_group_delay_seconds, WithinAbs(plan.group_delay_seconds, 1e-12));
+	REQUIRE(metadata.fmcw_if_filter_group_delay_seconds.has_value());
+	REQUIRE_THAT(metadata.fmcw_if_filter_group_delay_seconds.value_or(0.0), WithinAbs(plan.group_delay_seconds, 1e-12));
 	REQUIRE(metadata.fmcw_if_group_delay_compensated);
 	REQUIRE(metadata.streaming_segments.front().sample_count == 64u);
 }

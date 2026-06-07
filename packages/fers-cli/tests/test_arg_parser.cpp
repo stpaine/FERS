@@ -90,7 +90,7 @@ TEST_CASE("parseArguments applies recognized options", "[fers-cli][arg-parser]")
 	CHECK(result->vita49_host == "localhost");
 	CHECK(result->vita49_port == 4991);
 	REQUIRE(result->vita49_fullscale.has_value());
-	CHECK(*result->vita49_fullscale == 2.5);
+	CHECK(result->vita49_fullscale.value_or(0.0) == 2.5);
 	CHECK(result->vita49_epoch_unix_nanoseconds == std::optional<std::uint64_t>{1700000000123456789ULL});
 	CHECK(result->vita49_max_udp_payload == std::optional<std::uint16_t>{900});
 	CHECK(result->vita49_queue_depth == std::optional<std::uint32_t>{17});

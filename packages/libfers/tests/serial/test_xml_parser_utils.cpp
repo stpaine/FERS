@@ -195,7 +195,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 
 		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(500.0, 1e-5));
 		REQUIRE(p.random_seed.has_value());
-		REQUIRE(p.random_seed.value() == 42);
+		REQUIRE(p.random_seed.value_or(0) == 42);
 		REQUIRE(p.rotation_angle_unit == params::RotationAngleUnit::Radians);
 		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
 	}
@@ -213,7 +213,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
 
 		REQUIRE(p.random_seed.has_value());
-		REQUIRE(p.random_seed.value() == 42);
+		REQUIRE(p.random_seed.value_or(0) == 42);
 		REQUIRE(p.adc_bits == 12);
 		REQUIRE(p.oversample_ratio == 4);
 	}
@@ -462,7 +462,8 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 		REQUIRE(triangle != nullptr);
 		REQUIRE(wave->isFmcwFamily());
 		REQUIRE_THAT(wave->getLength(), WithinAbs(2.0e-3, 1.0e-12));
-		REQUIRE(triangle->getTriangleCount().value() == 4);
+		REQUIRE(triangle->getTriangleCount().has_value());
+		REQUIRE(triangle->getTriangleCount().value_or(0u) == 4u);
 	}
 
 	SECTION("chirp period shorter than duration is rejected")
@@ -555,10 +556,10 @@ TEST_CASE("parseTiming extracts clock parameters and noise entries", "[serial][x
 	REQUIRE_THAT(timing->getFrequency(), WithinAbs(1e6, 1e-5));
 
 	REQUIRE(timing->getFreqOffset().has_value());
-	REQUIRE_THAT(timing->getFreqOffset().value(), WithinAbs(10.0, 1e-5));
+	REQUIRE_THAT(timing->getFreqOffset().value_or(0.0), WithinAbs(10.0, 1e-5));
 
 	REQUIRE(timing->getPhaseOffset().has_value());
-	REQUIRE_THAT(timing->getPhaseOffset().value(), WithinAbs(3.14, 1e-5));
+	REQUIRE_THAT(timing->getPhaseOffset().value_or(0.0), WithinAbs(3.14, 1e-5));
 
 	REQUIRE(timing->getSyncOnPulse() == true);
 	// Noise entries are added internally, we just verify it didn't crash
@@ -1048,9 +1049,9 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 		REQUIRE(if_chain.sample_rate_hz.has_value());
 		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
 		REQUIRE(if_chain.filter_transition_width_hz.has_value());
-		REQUIRE_THAT(*if_chain.sample_rate_hz, WithinAbs(1000.0, 1.0e-9));
-		REQUIRE_THAT(*if_chain.filter_bandwidth_hz, WithinAbs(400.0, 1.0e-9));
-		REQUIRE_THAT(*if_chain.filter_transition_width_hz, WithinAbs(100.0, 1.0e-9));
+		REQUIRE_THAT(if_chain.sample_rate_hz.value_or(0.0), WithinAbs(1000.0, 1.0e-9));
+		REQUIRE_THAT(if_chain.filter_bandwidth_hz.value_or(0.0), WithinAbs(400.0, 1.0e-9));
+		REQUIRE_THAT(if_chain.filter_transition_width_hz.value_or(0.0), WithinAbs(100.0, 1.0e-9));
 	}
 
 	SECTION("FMCW receiver rejects orphan dechirp reference")

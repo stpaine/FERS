@@ -131,7 +131,7 @@ TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 	REQUIRE(radar.getRate() == 1000.0);
 	REQUIRE(radar.getId() == 42);
 	REQUIRE(radar.getFilename().has_value());
-	REQUIRE(radar.getFilename().value() == "waveform.bin");
+	REQUIRE(radar.getFilename().value_or("") == "waveform.bin");
 }
 
 TEST_CASE("RadarSignal autogenerates waveform ids", "[signal][radar]")

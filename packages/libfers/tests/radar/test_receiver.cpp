@@ -393,7 +393,7 @@ TEST_CASE("Receiver schedule determines next window time", "[radar][receiver]")
 	{
 		const auto next = rx.getNextWindowTime(2.0);
 		REQUIRE(next.has_value());
-		REQUIRE_THAT(*next, WithinAbs(2.0, 1e-12));
+		REQUIRE_THAT(next.value_or(0.0), WithinAbs(2.0, 1e-12));
 	}
 
 	SECTION("Schedule enforces active windows")
@@ -404,11 +404,11 @@ TEST_CASE("Receiver schedule determines next window time", "[radar][receiver]")
 
 		const auto inside = rx.getNextWindowTime(1.25);
 		REQUIRE(inside.has_value());
-		REQUIRE_THAT(*inside, WithinAbs(1.25, 1e-12));
+		REQUIRE_THAT(inside.value_or(0.0), WithinAbs(1.25, 1e-12));
 
 		const auto before = rx.getNextWindowTime(3.5);
 		REQUIRE(before.has_value());
-		REQUIRE_THAT(*before, WithinAbs(4.0, 1e-12));
+		REQUIRE_THAT(before.value_or(0.0), WithinAbs(4.0, 1e-12));
 
 		const auto after = rx.getNextWindowTime(6.0);
 		REQUIRE_FALSE(after.has_value());

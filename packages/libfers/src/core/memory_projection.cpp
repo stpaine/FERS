@@ -384,9 +384,10 @@ namespace core
 			{
 				++projection.streaming_receiver_count;
 				bool if_count_overflowed = false;
-				const bool if_rate_dechirped = receiver.isDechirpEnabled() && receiver.hasFmcwIfSampleRate();
+				const auto if_sample_rate = receiver.getIfSampleRate();
+				const bool if_rate_dechirped = receiver.isDechirpEnabled() && if_sample_rate.has_value();
 				const auto if_sample_count = if_rate_dechirped
-					? countSamplesForDuration(projection.duration_seconds, *receiver.getIfSampleRate(),
+					? countSamplesForDuration(projection.duration_seconds, if_sample_rate.value_or(0.0),
 											  if_count_overflowed)
 					: std::uint64_t{0};
 				const auto rendered_samples = if_rate_dechirped

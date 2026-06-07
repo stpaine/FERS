@@ -104,6 +104,12 @@ namespace core
 
 		if (config.vita49_enabled)
 		{
+			if (!config.vita49_fullscale.has_value())
+			{
+				log(FERS_LOG_FATAL, "Failed to configure VITA49 fullscale: missing required fullscale.");
+				fers_context_destroy(context);
+				return 1;
+			}
 			if (fers_enable_vita49_udp_output(context, config.vita49_host.c_str(), config.vita49_port) != 0)
 			{
 				char* err = fers_get_last_error_message();
@@ -112,7 +118,7 @@ namespace core
 				fers_context_destroy(context);
 				return 1;
 			}
-			if (fers_set_vita49_fullscale(context, *config.vita49_fullscale) != 0)
+			if (fers_set_vita49_fullscale(context, config.vita49_fullscale.value_or(0.0)) != 0)
 			{
 				char* err = fers_get_last_error_message();
 				log(FERS_LOG_FATAL, "Failed to configure VITA49 fullscale: {}", err ? err : "Unknown error");

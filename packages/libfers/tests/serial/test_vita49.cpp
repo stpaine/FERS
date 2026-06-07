@@ -971,12 +971,14 @@ TEST_CASE("VITA output sink emits live telemetry snapshots and packet traces", "
 	REQUIRE(stream_stats.end_sample_time.has_value());
 	REQUIRE(stream_stats.first_timestamp.has_value());
 	REQUIRE(stream_stats.end_timestamp.has_value());
-	CHECK(*stream_stats.first_sample_time == 0.0);
-	CHECK(*stream_stats.end_sample_time == 0.5);
-	CHECK(stream_stats.first_timestamp->integer_seconds == 1700000000u);
-	CHECK(stream_stats.first_timestamp->fractional_picoseconds == 0u);
-	CHECK(stream_stats.end_timestamp->integer_seconds == 1700000000u);
-	CHECK(stream_stats.end_timestamp->fractional_picoseconds == 500000000000u);
+	const auto first_timestamp = stream_stats.first_timestamp.value_or(core::Vita49Timestamp{});
+	const auto end_timestamp = stream_stats.end_timestamp.value_or(core::Vita49Timestamp{});
+	CHECK(stream_stats.first_sample_time.value_or(0.0) == 0.0);
+	CHECK(stream_stats.end_sample_time.value_or(0.0) == 0.5);
+	CHECK(first_timestamp.integer_seconds == 1700000000u);
+	CHECK(first_timestamp.fractional_picoseconds == 0u);
+	CHECK(end_timestamp.integer_seconds == 1700000000u);
+	CHECK(end_timestamp.fractional_picoseconds == 500000000000u);
 	CHECK(stats_snapshots.back().streams.size() == 1u);
 	CHECK(stats_snapshots.back().streams.front().receiver_id == 7u);
 	CHECK(std::ranges::any_of(packet_traces, [](const auto& trace) { return trace.event == "context"; }));
@@ -986,8 +988,9 @@ TEST_CASE("VITA output sink emits live telemetry snapshots and packet traces", "
 		std::ranges::find_if(packet_traces, [](const auto& trace) { return trace.event == "data"; });
 	REQUIRE(data_trace != packet_traces.end());
 	REQUIRE(data_trace->timestamp.has_value());
-	CHECK(data_trace->timestamp->integer_seconds == 1700000000u);
-	CHECK(data_trace->timestamp->fractional_picoseconds == 0u);
+	const auto data_timestamp = data_trace->timestamp.value_or(core::Vita49Timestamp{});
+	CHECK(data_timestamp.integer_seconds == 1700000000u);
+	CHECK(data_timestamp.fractional_picoseconds == 0u);
 }
 
 TEST_CASE("VITA output sink batches packet trace telemetry", "[serial][vita49][telemetry]")

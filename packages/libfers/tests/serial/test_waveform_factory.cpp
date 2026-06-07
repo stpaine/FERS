@@ -112,8 +112,9 @@ TEST_CASE("Waveform factory loads CSV waveform metadata", "[serial][waveform_fac
 	REQUIRE_THAT(waveform->getPower(), WithinAbs(power, 1e-12));
 	REQUIRE_THAT(waveform->getCarrier(), WithinAbs(carrier, 1e-3));
 	REQUIRE(waveform->getId() == explicitId);
-	REQUIRE(waveform->getFilename().has_value());
-	REQUIRE(*waveform->getFilename() == path.string());
+	const auto filename = waveform->getFilename();
+	REQUIRE(filename.has_value());
+	REQUIRE(filename.value_or("") == path.string());
 	REQUIRE_THAT(waveform->getRate(), WithinAbs(csvRate * params::oversampleRatio(), 1e-12));
 	REQUIRE_THAT(waveform->getLength(), WithinAbs(static_cast<RealType>(samples.size()) / csvRate, 1e-12));
 
@@ -147,8 +148,9 @@ TEST_CASE("Waveform factory loads HDF5 waveform metadata", "[serial][waveform_fa
 	REQUIRE_THAT(waveform->getPower(), WithinAbs(power, 1e-12));
 	REQUIRE_THAT(waveform->getCarrier(), WithinAbs(carrier, 1e-3));
 	REQUIRE(waveform->getId() == explicitId);
-	REQUIRE(waveform->getFilename().has_value());
-	REQUIRE(*waveform->getFilename() == path.string());
+	const auto filename = waveform->getFilename();
+	REQUIRE(filename.has_value());
+	REQUIRE(filename.value_or("") == path.string());
 	REQUIRE_THAT(waveform->getRate(), WithinAbs(params::rate(), 1e-12));
 	REQUIRE_THAT(waveform->getLength(), WithinAbs(static_cast<RealType>(samples.size()) / params::rate(), 1e-12));
 

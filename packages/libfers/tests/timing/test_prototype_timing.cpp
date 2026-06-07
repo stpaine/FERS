@@ -47,8 +47,8 @@ TEST_CASE("PrototypeTiming manages offsets and noise parameters", "[timing][prot
 	REQUIRE(proto.getPhaseOffset().has_value());
 	REQUIRE(proto.getRandomFreqOffsetStdev().has_value());
 	REQUIRE(proto.getRandomPhaseOffsetStdev().has_value());
-	REQUIRE_THAT(proto.getFreqOffset().value(), WithinAbs(0.25, 1e-12));
-	REQUIRE_THAT(proto.getPhaseOffset().value(), WithinAbs(-0.5, 1e-12));
+	REQUIRE_THAT(proto.getFreqOffset().value_or(0.0), WithinAbs(0.25, 1e-12));
+	REQUIRE_THAT(proto.getPhaseOffset().value_or(0.0), WithinAbs(-0.5, 1e-12));
 }
 
 TEST_CASE("PrototypeTiming allows clearing optional parameters and updating name", "[timing][prototype]")

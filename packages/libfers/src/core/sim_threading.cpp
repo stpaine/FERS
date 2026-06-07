@@ -794,7 +794,7 @@ namespace core
 			}
 
 			const auto& request = receiver_ptr->getFmcwIfChainRequest();
-			const RealType output_rate = *request.sample_rate_hz;
+			const RealType output_rate = request.sample_rate_hz.value_or(0.0);
 			const RealType bandwidth = request.filter_bandwidth_hz.value_or(0.40 * output_rate);
 			fers_signal::FmcwIfResamplerRequest resampler_request{
 				.input_sample_rate_hz = params::rate() * static_cast<RealType>(params::oversampleRatio()),
@@ -824,16 +824,17 @@ namespace core
 												 if_plan->actual_output_sample_rate_hz, samples, sample_start);
 					});
 			}
+			const RealType actual_output_sample_rate_hz = plan.actual_output_sample_rate_hz;
+			const auto overall_ratio = plan.overall_ratio;
+			const RealType filter_bandwidth_hz = plan.filter_bandwidth_hz;
+			const RealType filter_transition_width_hz = plan.filter_transition_width_hz;
 			receiver_ptr->initializeFmcwIfResampling(std::move(plan));
 			LOG(Level::INFO,
 				"Receiver '{}' enabled FMCW IF resampling: input_rate={} Hz requested_output_rate={} Hz "
 				"actual_output_rate={} Hz ratio={}/{} passband={} Hz transition={} Hz.",
 				receiver_ptr->getName(), resampler_request.input_sample_rate_hz, output_rate,
-				receiver_ptr->getFmcwIfResamplerPlan()->actual_output_sample_rate_hz,
-				receiver_ptr->getFmcwIfResamplerPlan()->overall_ratio.numerator,
-				receiver_ptr->getFmcwIfResamplerPlan()->overall_ratio.denominator,
-				receiver_ptr->getFmcwIfResamplerPlan()->filter_bandwidth_hz,
-				receiver_ptr->getFmcwIfResamplerPlan()->filter_transition_width_hz);
+				actual_output_sample_rate_hz, overall_ratio.numerator, overall_ratio.denominator, filter_bandwidth_hz,
+				filter_transition_width_hz);
 		}
 
 		if (_internal_stop_time <= params::endTime())

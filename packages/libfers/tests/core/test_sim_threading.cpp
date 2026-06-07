@@ -470,7 +470,7 @@ TEST_CASE("makeActiveSource caches streaming scalars and clips FMCW chirp count"
 	REQUIRE_THAT(source.two_pi_f0, WithinAbs(2.0 * PI * 1.0e6, 1.0e-9));
 	REQUIRE_THAT(source.s_pi_alpha, WithinAbs(PI * 200.0e9, 1.0e-3));
 	REQUIRE(source.chirp_count.has_value());
-	REQUIRE(*source.chirp_count == std::size_t{1000});
+	REQUIRE(source.chirp_count.value_or(0u) == std::size_t{1000});
 }
 
 TEST_CASE("makeActiveSource caches signed FMCW down-chirp coefficient", "[core][threading][fmcw]")

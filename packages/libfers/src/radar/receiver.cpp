@@ -250,11 +250,12 @@ namespace radar
 		{
 			throw std::logic_error("FMCW IF resampling sink has not been initialized.");
 		}
+		const auto input_sample_rate_hz = _fmcw_if_plan->input_sample_rate_hz;
 		if (!_fmcw_if_segment_active)
 		{
 			beginFmcwIfResamplingSegment(block_start_time);
 		}
-		const auto block_start_index = ceilSampleIndexAtOrAfter(block_start_time, _fmcw_if_plan->input_sample_rate_hz);
+		const auto block_start_index = ceilSampleIndexAtOrAfter(block_start_time, input_sample_rate_hz);
 		if (block_start_index < _fmcw_if_input_cursor)
 		{
 			throw std::logic_error("FMCW IF resampling input blocks must be supplied in chronological order.");

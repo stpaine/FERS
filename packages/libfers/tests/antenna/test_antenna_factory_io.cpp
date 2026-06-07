@@ -169,8 +169,8 @@ TEST_CASE("XmlAntenna interpolates normalized axis gains", "[antenna][io]")
 	const auto elevation_value = antenna.getElevationSamples()->getValueAt(0.25);
 	REQUIRE(azimuth_value.has_value());
 	REQUIRE(elevation_value.has_value());
-	REQUIRE_THAT(*azimuth_value, WithinAbs(0.75, 1e-12));
-	REQUIRE_THAT(*elevation_value, WithinAbs(0.75, 1e-12));
+	REQUIRE_THAT(azimuth_value.value_or(0.0), WithinAbs(0.75, 1e-12));
+	REQUIRE_THAT(elevation_value.value_or(0.0), WithinAbs(0.75, 1e-12));
 
 	const RealType expected = 0.75 * 0.75 * 8.0 * 0.5;
 	REQUIRE_THAT(antenna.getGain(unitDirection(-0.5, 0.25), unitDirection(0.0, 0.0), 1.0), WithinAbs(expected, 1e-12));
