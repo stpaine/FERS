@@ -62,7 +62,7 @@ TEST_CASE("Radar attachment enforces single attached object", "[radar][radar_obj
 	radar::Platform platform("RadarPlatform");
 	radar::Radar radar_a(&platform, "RadarA");
 	radar::Radar radar_b(&platform, "RadarB");
-	radar::Radar radar_c(&platform, "RadarC");
+	radar::Radar const radar_c(&platform, "RadarC");
 
 	REQUIRE(radar_a.getAttached() == nullptr);
 

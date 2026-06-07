@@ -34,7 +34,7 @@ TEST_CASE("advanceTimingModel safely ignores null and disabled timing models", "
 	processing::pipeline::advanceTimingModel(nullptr, nullptr, 1000.0);
 
 	radar::Platform platform("RxPlatform");
-	radar::Receiver receiver(&platform, "RxA", 1, radar::OperationMode::PULSED_MODE);
+	radar::Receiver const receiver(&platform, "RxA", 1, radar::OperationMode::PULSED_MODE);
 	auto timing_model = std::make_unique<timing::Timing>("clk", 123);
 
 	processing::pipeline::advanceTimingModel(timing_model.get(), &receiver, 1000.0);
@@ -45,7 +45,7 @@ TEST_CASE("advanceTimingModel safely ignores null and disabled timing models", "
 TEST_CASE("advanceTimingModel resets sync-on-pulse timing before skipping receiver dead time",
 		  "[processing][finalizer][timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 
@@ -72,7 +72,7 @@ TEST_CASE("advanceTimingModel resets sync-on-pulse timing before skipping receiv
 
 TEST_CASE("advanceTimingModel free-running mode skips only the inter-pulse interval", "[processing][finalizer][timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 

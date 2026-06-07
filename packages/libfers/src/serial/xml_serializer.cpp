@@ -25,9 +25,9 @@ namespace serial
 {
 	std::string world_to_xml_string(const core::World& world)
 	{
-		XmlDocument doc;
+		XmlDocument const doc;
 		xmlNodePtr sim_node = xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("simulation"));
-		XmlElement root(sim_node);
+		XmlElement const root(sim_node);
 		doc.setRootElement(root);
 
 		const auto& p = params::params;
@@ -46,22 +46,22 @@ namespace serial
 
 		for (const auto& waveform : world.getWaveforms() | std::views::values)
 		{
-			XmlElement waveform_elem = root.addChild("waveform");
+			XmlElement const waveform_elem = root.addChild("waveform");
 			xml_serializer_utils::serializeWaveform(*waveform, waveform_elem);
 		}
 		for (const auto& timing : world.getTimings() | std::views::values)
 		{
-			XmlElement timing_elem = root.addChild("timing");
+			XmlElement const timing_elem = root.addChild("timing");
 			xml_serializer_utils::serializeTiming(*timing, timing_elem);
 		}
 		for (const auto& antenna : world.getAntennas() | std::views::values)
 		{
-			XmlElement antenna_elem = root.addChild("antenna");
+			XmlElement const antenna_elem = root.addChild("antenna");
 			xml_serializer_utils::serializeAntenna(*antenna, antenna_elem);
 		}
 		for (const auto& platform : world.getPlatforms())
 		{
-			XmlElement plat_elem = root.addChild("platform");
+			XmlElement const plat_elem = root.addChild("platform");
 			xml_serializer_utils::serializePlatform(*platform, world, plat_elem);
 		}
 

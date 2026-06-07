@@ -327,7 +327,7 @@ namespace
 		void* user_data = nullptr;
 
 		{
-			std::scoped_lock lock(log_callback_mutex);
+			std::scoped_lock const lock(log_callback_mutex);
 			callback = log_callback;
 			user_data = log_callback_user_data;
 		}
@@ -370,7 +370,7 @@ fers_log_level_t fers_get_log_level() { return map_internal_log_level(logging::l
 void fers_set_log_callback(fers_log_callback_t callback, void* user_data)
 {
 	{
-		std::scoped_lock lock(log_callback_mutex);
+		std::scoped_lock const lock(log_callback_mutex);
 		log_callback = callback;
 		log_callback_user_data = user_data;
 	}
@@ -607,7 +607,7 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 	try
 	{
 		// Set default output directory to the scenario file's directory
-		std::filesystem::path p(xml_filepath);
+		std::filesystem::path const p(xml_filepath);
 		auto parent = p.parent_path();
 		if (parent.empty())
 			parent = ".";
@@ -986,9 +986,9 @@ int fers_update_monostatic_from_json(fers_context_t* context, const char* json)
 	try
 	{
 		auto j = nlohmann::json::parse(json);
-		uint64_t tx_id =
+		uint64_t const tx_id =
 			j.at("tx_id").is_string() ? std::stoull(j.at("tx_id").get<std::string>()) : j.at("tx_id").get<uint64_t>();
-		uint64_t rx_id =
+		uint64_t const rx_id =
 			j.at("rx_id").is_string() ? std::stoull(j.at("rx_id").get<std::string>()) : j.at("rx_id").get<uint64_t>();
 		auto* tx = ctx->getWorld()->findTransmitter(tx_id);
 		auto* rx = ctx->getWorld()->findReceiver(rx_id);
@@ -1461,7 +1461,7 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 	try
 	{
 		const auto* ctx = reinterpret_cast<const FersContext*>(context);
-		antenna::Antenna* ant = ctx->getWorld()->findAntenna(static_cast<SimId>(antenna_id));
+		antenna::Antenna const* ant = ctx->getWorld()->findAntenna(static_cast<SimId>(antenna_id));
 
 		if (ant == nullptr)
 		{

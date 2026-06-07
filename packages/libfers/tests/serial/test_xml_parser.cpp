@@ -62,7 +62,7 @@ namespace
 
 TEST_CASE("parseSimulationFromString successfully parses a valid scenario", "[serial][xml_parser]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
@@ -78,11 +78,11 @@ TEST_CASE("parseSimulationFromString successfully parses a valid scenario", "[se
 
 TEST_CASE("parseSimulationFromString throws on malformed XML", "[serial][xml_parser]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
-	std::string bad_xml = "<simulation><parameters><starttime>0</starttime></parameters>"; // Missing closing tags
+	std::string const bad_xml = "<simulation><parameters><starttime>0</starttime></parameters>"; // Missing closing tags
 
 	REQUIRE_THROWS_WITH(serial::parseSimulationFromString(bad_xml, &world, false, seeder),
 						ContainsSubstring("Failed to parse XML from memory string"));
@@ -90,12 +90,12 @@ TEST_CASE("parseSimulationFromString throws on malformed XML", "[serial][xml_par
 
 TEST_CASE("parseSimulationFromString throws on schema validation failure", "[serial][xml_parser]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
 	// Missing required <parameters> block
-	std::string invalid_schema_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+	std::string const invalid_schema_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
 		<simulation name="TestSim">
 		  <waveform name="w1"><power>1000</power><carrier_frequency>1e9</carrier_frequency><cw/></waveform>
 		</simulation>)";
@@ -106,16 +106,16 @@ TEST_CASE("parseSimulationFromString throws on schema validation failure", "[ser
 
 TEST_CASE("parseSimulation handles file loading and includes", "[serial][xml_parser]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
-	std::string include_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+	std::string const include_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
 		<simulation name="IncludeSim">
 		  <antenna name="a1" pattern="isotropic"/>
 		</simulation>)";
 
-	std::string main_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
+	std::string const main_xml = R"(<?xml version="1.0" encoding="UTF-8"?>
 		<simulation name="MainSim">
 		  <parameters>
 		    <starttime>0</starttime>
@@ -140,7 +140,7 @@ TEST_CASE("parseSimulation handles file loading and includes", "[serial][xml_par
 
 TEST_CASE("parseSimulation throws on missing file", "[serial][xml_parser]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 

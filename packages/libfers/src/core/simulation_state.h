@@ -29,7 +29,7 @@ namespace fers_signal
 namespace core
 {
 	/// Streaming waveform shape cached for a currently active source.
-	enum class StreamingWaveformKind
+	enum class StreamingWaveformKind : std::uint8_t
 	{
 		Cw,
 		FmcwLinear,

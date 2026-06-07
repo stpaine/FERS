@@ -20,7 +20,7 @@ TEST_CASE("InterpFilter Kaiser window symmetry", "[interpolation][filter]")
 {
 	const auto length = params::renderFilterLength();
 	const RealType alpha = std::floor(length / 2.0);
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 
 	auto left = filter.kaiserWinCompute(alpha - 0.25);
 	auto right = filter.kaiserWinCompute(alpha + 0.25);
@@ -33,7 +33,7 @@ TEST_CASE("InterpFilter Kaiser window normalization", "[interpolation][filter]")
 {
 	const auto length = params::renderFilterLength();
 	const RealType alpha = std::floor(length / 2.0);
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 
 	auto center = filter.kaiserWinCompute(alpha);
 	REQUIRE(center.has_value());
@@ -44,7 +44,7 @@ TEST_CASE("InterpFilter Kaiser window clamps outside support", "[interpolation][
 {
 	const auto length = params::renderFilterLength();
 	const RealType alpha = std::floor(length / 2.0);
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 
 	auto below = filter.kaiserWinCompute(-0.1);
 	REQUIRE(below.has_value());
@@ -57,7 +57,7 @@ TEST_CASE("InterpFilter Kaiser window clamps outside support", "[interpolation][
 
 TEST_CASE("InterpFilter windowed sinc at zero", "[interpolation][filter]")
 {
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 	auto value = filter.interpFilter(0.0);
 	REQUIRE(value.has_value());
 	REQUIRE_THAT(*value, WithinAbs(1.0, 1e-9));
@@ -67,7 +67,7 @@ TEST_CASE("InterpFilter windowed sinc outside support", "[interpolation][filter]
 {
 	const auto length = params::renderFilterLength();
 	const RealType alpha = std::floor(length / 2.0);
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 
 	auto value = filter.interpFilter(-alpha - 0.5);
 	REQUIRE(value.has_value());
@@ -78,7 +78,7 @@ TEST_CASE("InterpFilter getFilter returns length and center", "[interpolation][f
 {
 	const auto length = params::renderFilterLength();
 	const RealType alpha = std::floor(length / 2.0);
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 
 	auto span = filter.getFilter(0.0);
 	REQUIRE(span.size() == length);
@@ -87,14 +87,14 @@ TEST_CASE("InterpFilter getFilter returns length and center", "[interpolation][f
 
 TEST_CASE("InterpFilter getFilter rejects out of range", "[interpolation][filter]")
 {
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 	REQUIRE_THROWS_AS(filter.getFilter(1.1), std::runtime_error);
 	REQUIRE_THROWS_AS(filter.getFilter(-1.1), std::runtime_error);
 }
 
 TEST_CASE("InterpFilter getFilter keeps the upper boundary in range", "[interpolation][filter]")
 {
-	interp::InterpFilter& filter = interp::InterpFilter::getInstance();
+	interp::InterpFilter const& filter = interp::InterpFilter::getInstance();
 
 	const auto last_filter = filter.getFilter(1.0);
 	const auto near_last_filter = filter.getFilter(0.999);

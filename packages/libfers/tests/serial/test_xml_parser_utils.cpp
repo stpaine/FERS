@@ -89,8 +89,8 @@ TEST_CASE("get_child_real_type extracts floating point values", "[serial][xml_pa
 
 TEST_CASE("get_attribute_bool extracts boolean values safely", "[serial][xml_parser_utils]")
 {
-	LogLevelGuard log_level(logging::Level::WARNING);
-	CerrCapture capture;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
 	auto doc = loadXml("<root flag_true=\"true\" flag_false=\"false\" flag_invalid=\"yes\"/>");
 	auto root = doc.getRootElement();
 
@@ -104,7 +104,7 @@ TEST_CASE("get_attribute_bool extracts boolean values safely", "[serial][xml_par
 TEST_CASE("resolve_reference_id maps string names to SimIds", "[serial][xml_parser_utils]")
 {
 	auto doc = loadXml("<root ref=\"target_a\"/>");
-	std::unordered_map<std::string, SimId> map = {{"target_a", 42}, {"target_b", 99}};
+	std::unordered_map<std::string, SimId> const map = {{"target_a", 42}, {"target_b", 99}};
 
 	REQUIRE(serial::xml_parser_utils::resolve_reference_id(doc.getRootElement(), "ref", "owner", map) == 42);
 	REQUIRE_THROWS_AS(serial::xml_parser_utils::resolve_reference_id(doc.getRootElement(), "missing", "owner", map),
@@ -117,7 +117,7 @@ TEST_CASE("resolve_reference_id maps string names to SimIds", "[serial][xml_pars
 
 TEST_CASE("parseSchedule handles valid and invalid periods", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 
 	auto doc = loadXml("<parent>"
@@ -136,7 +136,7 @@ TEST_CASE("parseSchedule handles valid and invalid periods", "[serial][xml_parse
 
 TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 
 	SECTION("Full parameters with UTM South")
 	{
@@ -208,8 +208,8 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 
 	SECTION("Missing optional parameters use defaults without warnings")
 	{
-		LogLevelGuard log_level(logging::Level::WARNING);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::WARNING);
+		CerrCapture const capture;
 		auto doc = loadXml("<parameters>"
 						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
 						   "</parameters>");
@@ -226,8 +226,8 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 
 	SECTION("Origin altitude defaults to zero when omitted")
 	{
-		LogLevelGuard log_level(logging::Level::WARNING);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::WARNING);
+		CerrCapture const capture;
 		auto doc = loadXml("<parameters>"
 						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
 						   "  <origin latitude=\"-33.0\" longitude=\"18.0\"/>"
@@ -312,7 +312,7 @@ TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser
 
 TEST_CASE("parseParameters throws on invalid UTM zones", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	auto doc = loadXml("<parameters>"
 					   "  <starttime>0</starttime>"
 					   "  <endtime>1</endtime>"
@@ -359,9 +359,9 @@ TEST_CASE("parseWaveform handles CW and delegates file loading", "[serial][xml_p
 
 TEST_CASE("parseWaveform warns for large FMCW streaming allocation", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
-	LogLevelGuard log_level(logging::Level::WARNING);
-	CerrCapture capture;
+	ParamGuard const guard;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
 
 	params::setRate(1.0e9);
 	params::setOversampleRatio(1);
@@ -393,7 +393,7 @@ TEST_CASE("parseWaveform warns for large FMCW streaming allocation", "[serial][x
 
 TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml_parser_utils][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
@@ -554,8 +554,8 @@ TEST_CASE("parseTiming extracts clock parameters and noise entries", "[serial][x
 
 TEST_CASE("parseTiming accepts omitted defaults without warnings", "[serial][xml_parser_utils]")
 {
-	LogLevelGuard log_level(logging::Level::WARNING);
-	CerrCapture capture;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
 	core::World world;
 	serial::xml_parser_utils::ParserContext ctx;
 	ctx.world = &world;
@@ -651,8 +651,8 @@ TEST_CASE("parseAntenna instantiates correct antenna types", "[serial][xml_parse
 
 TEST_CASE("parseAntenna accepts omitted efficiency without warnings", "[serial][xml_parser_utils]")
 {
-	LogLevelGuard log_level(logging::Level::WARNING);
-	CerrCapture capture;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
 	core::World world;
 	serial::xml_parser_utils::ParserContext ctx;
 	ctx.world = &world;
@@ -702,8 +702,8 @@ TEST_CASE("parseMotionPath handles all interpolation types", "[serial][xml_parse
 
 	SECTION("Missing interpolation defaults to static without warnings")
 	{
-		LogLevelGuard log_level(logging::Level::WARNING);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::WARNING);
+		CerrCapture const capture;
 		auto doc = loadXml("<motionpath>"
 						   "  <positionwaypoint><x>1</x><y>2</y><altitude>3</altitude><time>0</time></positionwaypoint>"
 						   "</motionpath>");
@@ -775,8 +775,8 @@ TEST_CASE("parseFixedRotation sets constant rate rotation", "[serial][xml_parser
 
 TEST_CASE("parseRotationPath warns when values look like the opposite unit", "[serial][xml_parser_utils]")
 {
-	LogLevelGuard log_guard(logging::Level::WARNING);
-	CerrCapture capture;
+	LogLevelGuard const log_guard(logging::Level::WARNING);
+	CerrCapture const capture;
 	radar::Platform platform("warning-platform", 77);
 	auto doc =
 		loadXml("<rotationpath interpolation=\"static\">"
@@ -792,7 +792,7 @@ TEST_CASE("parseRotationPath warns when values look like the opposite unit", "[s
 
 TEST_CASE("parseTransmitter resolves references and builds object with schedule", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -814,10 +814,10 @@ TEST_CASE("parseTransmitter resolves references and builds object with schedule"
 	world.add(std::move(ant));
 	world.add(std::move(tim));
 
-	std::unordered_map<std::string, SimId> w_refs = {{"w1", 10}};
-	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
-	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs = {{"w1", 10}};
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	radar::Platform platform("plat");
 
@@ -837,7 +837,7 @@ TEST_CASE("parseTransmitter resolves references and builds object with schedule"
 
 TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial][xml_parser_utils][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -855,10 +855,10 @@ TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial
 	timing_proto->setFrequency(1e6);
 	world.add(std::move(timing_proto));
 
-	std::unordered_map<std::string, SimId> w_refs = {{"fmcw_wave", 10}};
-	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
-	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs = {{"fmcw_wave", 10}};
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	radar::Platform platform("plat");
 
@@ -886,7 +886,7 @@ TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial
 
 TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timing", "[serial][xml_parser_utils][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -904,10 +904,10 @@ TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timin
 	timing_proto->setFrequency(1e6);
 	world.add(std::move(timing_proto));
 
-	std::unordered_map<std::string, SimId> w_refs = {{"fmcw_wave", 10}};
-	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
-	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs = {{"fmcw_wave", 10}};
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	radar::Platform platform("plat");
 
@@ -924,8 +924,8 @@ TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timin
 
 	SECTION("period shorter than T_rep but at least T_c only warns")
 	{
-		LogLevelGuard log_level(logging::Level::WARNING);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::WARNING);
+		CerrCapture const capture;
 		auto doc = loadXml("<transmitter name=\"tx_short_trep\" waveform=\"fmcw_wave\" antenna=\"a1\" timing=\"t1\">"
 						   "  <fmcw_mode/>"
 						   "  <schedule><period start=\"0.1\" end=\"0.1015\"/></schedule>"
@@ -939,7 +939,7 @@ TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timin
 
 TEST_CASE("parseReceiver resolves references and builds object with flags and schedule", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -956,10 +956,10 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 	world.add(std::move(ant));
 	world.add(std::move(tim));
 
-	std::unordered_map<std::string, SimId> w_refs;
-	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
-	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs;
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	radar::Platform platform("plat");
 
@@ -989,8 +989,8 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 
 	SECTION("Missing receiver defaults do not warn")
 	{
-		LogLevelGuard log_level(logging::Level::WARNING);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::WARNING);
+		CerrCapture const capture;
 		auto doc = loadXml("<receiver name=\"rx_defaults\" antenna=\"a1\" timing=\"t1\">"
 						   "  <cw_mode/>"
 						   "</receiver>");
@@ -1103,7 +1103,7 @@ TEST_CASE("parseReceiver resolves references and builds object with flags and sc
 
 TEST_CASE("parseMonostatic reuses one shared timing instance for a common timing id", "[serial][xml_parser_utils]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -1121,10 +1121,10 @@ TEST_CASE("parseMonostatic reuses one shared timing instance for a common timing
 	timing_proto->setFrequency(1e6);
 	world.add(std::move(timing_proto));
 
-	std::unordered_map<std::string, SimId> w_refs = {{"w1", 10}};
-	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
-	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs = {{"w1", 10}};
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	radar::Platform platform("plat");
 
@@ -1142,7 +1142,7 @@ TEST_CASE("parseMonostatic reuses one shared timing instance for a common timing
 TEST_CASE("parseMonostatic derives FMCW mode from the monostatic block without receiver override",
 		  "[serial][xml_parser_utils][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -1160,10 +1160,10 @@ TEST_CASE("parseMonostatic derives FMCW mode from the monostatic block without r
 	timing_proto->setFrequency(1e6);
 	world.add(std::move(timing_proto));
 
-	std::unordered_map<std::string, SimId> w_refs = {{"w1", 10}};
-	std::unordered_map<std::string, SimId> a_refs = {{"a1", 20}};
-	std::unordered_map<std::string, SimId> t_refs = {{"t1", 30}};
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs = {{"w1", 10}};
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	radar::Platform platform("plat");
 
@@ -1212,10 +1212,10 @@ TEST_CASE("parsePlatform prefers rotationpath over fixedrotation and supports fi
 	serial::xml_parser_utils::ParserContext ctx;
 	ctx.world = &world;
 
-	std::unordered_map<std::string, SimId> w_refs;
-	std::unordered_map<std::string, SimId> a_refs;
-	std::unordered_map<std::string, SimId> t_refs;
-	serial::xml_parser_utils::ReferenceLookup refs{&w_refs, &a_refs, &t_refs};
+	std::unordered_map<std::string, SimId> const w_refs;
+	std::unordered_map<std::string, SimId> const a_refs;
+	std::unordered_map<std::string, SimId> const t_refs;
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
 
 	auto register_name = [](const XmlElement&, std::string_view) {};
 

@@ -22,7 +22,7 @@
 
 namespace fers_signal
 {
-	enum class FmcwIfResamplerStageKind
+	enum class FmcwIfResamplerStageKind : std::uint8_t
 	{
 		HalfBandDecimateBy2,
 		RationalPolyphase

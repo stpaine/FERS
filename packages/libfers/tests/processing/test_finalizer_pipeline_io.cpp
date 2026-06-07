@@ -41,7 +41,7 @@ namespace
 TEST_CASE("applyDownsamplingAndQuantization reduces to direct normalization when no oversampling is configured",
 		  "[processing][finalizer][io]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 	params::setAdcBits(0);
 
@@ -59,7 +59,7 @@ TEST_CASE("applyDownsamplingAndQuantization reduces to direct normalization when
 TEST_CASE("applyDownsamplingAndQuantization preserves low-frequency oversampled content after decimation",
 		  "[processing][finalizer][io]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.filter_length = 8;
 	params::setOversampleRatio(2);
 	params::setAdcBits(0);
@@ -97,7 +97,7 @@ TEST_CASE("applyDownsamplingAndQuantization preserves low-frequency oversampled 
 
 TEST_CASE("DownsamplingSink matches whole-buffer downsample across chunk boundaries", "[processing][finalizer][io]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.filter_length = 8;
 	params::setOversampleRatio(2);
 
@@ -134,7 +134,7 @@ TEST_CASE("DownsamplingSink matches whole-buffer downsample across chunk boundar
 TEST_CASE("applyDownsamplingAndQuantization fails fast when oversample ratio exceeds fixed-filter limit",
 		  "[processing][finalizer][io]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.oversample_ratio = 16;
 	params::setAdcBits(0);
 
@@ -146,7 +146,7 @@ TEST_CASE("applyDownsamplingAndQuantization fails fast when oversample ratio exc
 
 TEST_CASE("exportStreamingToHdf5 writes physically meaningful datasets and metadata", "[processing][finalizer][io]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2000.0);
 	params::setTime(1.25, 3.0);
 
@@ -156,7 +156,7 @@ TEST_CASE("exportStreamingToHdf5 writes physically meaningful datasets and metad
 	const std::vector<ComplexType> iq_buffer = {ComplexType{1.5, -0.5}, ComplexType{-2.0, 3.0}};
 	processing::pipeline::exportStreamingToHdf5(path.string(), iq_buffer, 4096.0, 9.0e8);
 
-	HighFive::File file(path.string(), HighFive::File::ReadOnly);
+	HighFive::File const file(path.string(), HighFive::File::ReadOnly);
 	std::vector<RealType> i_data;
 	std::vector<RealType> q_data;
 	file.getDataSet("I_data").read(i_data);

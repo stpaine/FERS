@@ -34,7 +34,7 @@ namespace
 
 TEST_CASE("Platform exposes default paths and identity", "[radar][platform]")
 {
-	radar::Platform platform("TestPlatform", 4242);
+	radar::Platform const platform("TestPlatform", 4242);
 
 	REQUIRE(platform.getMotionPath() != nullptr);
 	REQUIRE(platform.getRotationPath() != nullptr);

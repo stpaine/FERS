@@ -5,7 +5,7 @@
 
 TEST_CASE("EventComparator orders earliest timestamps first", "[core][events]")
 {
-	core::EventComparator comparator;
+	core::EventComparator const comparator;
 
 	const core::Event early{1.0, core::EventType::TX_PULSED_START, nullptr};
 	const core::Event late{5.0, core::EventType::RX_STREAMING_END, nullptr};

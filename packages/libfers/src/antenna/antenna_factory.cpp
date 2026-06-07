@@ -16,6 +16,7 @@
 #include <cctype>
 #include <cmath>
 #include <complex>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <stdexcept>
@@ -35,14 +36,14 @@ using math::Vec3;
 namespace
 {
 	/// Unit used for XML antenna axis sample angles.
-	enum class AxisUnit
+	enum class AxisUnit : std::uint8_t
 	{
 		Radians, ///< Axis samples are expressed in radians.
 		Degrees, ///< Axis samples are expressed in degrees.
 	};
 
 	/// Gain format used for XML antenna axis sample values.
-	enum class AxisGainFormat
+	enum class AxisGainFormat : std::uint8_t
 	{
 		Linear, ///< Gain samples are already linear.
 		DBi, ///< Gain samples are expressed in dBi.
@@ -239,9 +240,9 @@ namespace
 
 		while (sample.isValid())
 		{
-			XmlElement angle_element = sample.childElement("angle", 0);
+			XmlElement const angle_element = sample.childElement("angle", 0);
 
-			if (XmlElement gain_element = sample.childElement("gain", 0);
+			if (XmlElement const gain_element = sample.childElement("gain", 0);
 				angle_element.isValid() && gain_element.isValid())
 			{
 				const RealType raw_angle = parseRealValue(angle_element.getText(), "<" + axis_name + "> sample angle");

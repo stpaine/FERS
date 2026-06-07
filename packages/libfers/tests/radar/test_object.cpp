@@ -36,7 +36,7 @@ namespace
 TEST_CASE("Object exposes platform linkage and identity", "[radar][object]")
 {
 	radar::Platform platform("ObjectPlatform");
-	radar::Object object(&platform, "TestObject", ObjectType::Transmitter, 9001);
+	radar::Object const object(&platform, "TestObject", ObjectType::Transmitter, 9001);
 
 	REQUIRE(object.getPlatform() == &platform);
 	REQUIRE(object.getName() == "TestObject");
@@ -59,7 +59,7 @@ TEST_CASE("Object delegates position and rotation to platform", "[radar][object]
 	platform.setMotionPath(makeLinearPath({0.0, 0.0, 0.0}, 0.0, {100.0, 0.0, 0.0}, 10.0));
 	platform.setRotationPath(makeLinearRotation({0.0, 0.0, 0.0}, {1.0, 0.5, 4.0}));
 
-	radar::Object object(&platform, "MovingObject", ObjectType::Target);
+	radar::Object const object(&platform, "MovingObject", ObjectType::Target);
 
 	const math::Vec3 position = object.getPosition(2.5);
 	REQUIRE_THAT(position.x, WithinAbs(25.0, 1e-9));

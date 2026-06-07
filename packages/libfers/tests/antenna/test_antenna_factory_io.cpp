@@ -212,7 +212,7 @@ TEST_CASE("XmlAntenna supports explicit no-symmetry asymmetric lookup", "[antenn
 	removeIfExists(path);
 	writeXmlAntennaFile(path, xmlAsymmetricPatternFixture(true));
 
-	antenna::XmlAntenna antenna("xml", path.string(), 15);
+	antenna::XmlAntenna const antenna("xml", path.string(), 15);
 
 	const RealType negative_gain = antenna.getGain(unitDirection(-PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
 	const RealType positive_gain = antenna.getGain(unitDirection(PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
@@ -228,7 +228,7 @@ TEST_CASE("XmlAntenna auto-detects direct signed-angle lookup from negative samp
 	removeIfExists(path);
 	writeXmlAntennaFile(path, xmlAsymmetricPatternFixture(false));
 
-	antenna::XmlAntenna antenna("xml", path.string(), 16);
+	antenna::XmlAntenna const antenna("xml", path.string(), 16);
 
 	const RealType negative_gain = antenna.getGain(unitDirection(-PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
 	const RealType positive_gain = antenna.getGain(unitDirection(PI / 2.0, 0.0), unitDirection(0.0, 0.0), 1.0);
@@ -367,7 +367,7 @@ TEST_CASE("H5Antenna preserves explicit antenna id", "[antenna][io]")
 	writeHdf5PatternFile(path, {{2.0, 4.0}, {6.0, 8.0}});
 
 	constexpr SimId explicitId = (static_cast<SimId>(0xABCD) << 32) | 0x1234;
-	antenna::H5Antenna antenna("h5", path.string(), explicitId);
+	antenna::H5Antenna const antenna("h5", path.string(), explicitId);
 
 	REQUIRE(antenna.getId() == explicitId);
 

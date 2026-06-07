@@ -89,7 +89,7 @@ namespace core
 		{
 			if (_callback)
 			{
-				std::scoped_lock lock(_mutex);
+				std::scoped_lock const lock(_mutex);
 				_callback(msg, current, total);
 			}
 		}

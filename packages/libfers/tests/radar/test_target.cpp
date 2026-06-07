@@ -123,7 +123,7 @@ TEST_CASE("RcsChiSquare sample mean matches configured mean power", "[radar][tar
 TEST_CASE("IsoTarget returns constant RCS", "[radar][target]")
 {
 	radar::Platform platform("TargetPlatform");
-	radar::IsoTarget target(&platform, "Iso", 12.5, 42, 9002);
+	radar::IsoTarget const target(&platform, "Iso", 12.5, 42, 9002);
 
 	math::SVec3 in_angle(1.0, 0.0, 0.0);
 	math::SVec3 out_angle(1.0, 0.0, 0.0);
@@ -175,7 +175,7 @@ TEST_CASE("Target RNG is deterministic per seed", "[radar][target]")
 TEST_CASE("IsoTarget defaults to no fluctuation model and target-typed id", "[radar][target]")
 {
 	radar::Platform platform("TargetPlatform");
-	radar::IsoTarget target(&platform, "Iso", 1.0, 99);
+	radar::IsoTarget const target(&platform, "Iso", 1.0, 99);
 
 	REQUIRE(target.getFluctuationModel() == nullptr);
 	REQUIRE(SimIdGenerator::getType(target.getId()) == ObjectType::Target);
@@ -191,7 +191,7 @@ TEST_CASE("FileTarget multiplies interpolated azimuth and elevation RCS in the t
 	setStaticRotation(platform);
 
 	constexpr SimId explicit_id = 4001;
-	radar::FileTarget target(&platform, "File", path.string(), 12, explicit_id);
+	radar::FileTarget const target(&platform, "File", path.string(), 12, explicit_id);
 
 	math::SVec3 in_angle = unitDirection(0.6, 0.2);
 	math::SVec3 out_angle = unitDirection(0.4, 0.6);
@@ -216,7 +216,7 @@ TEST_CASE("FileTarget uses time-dependent platform rotation to look up body-fram
 	radar::Platform platform("TargetPlatform");
 	setConstantRotation(platform, 0.1, 0.2, 0.2, 0.1);
 
-	radar::FileTarget target(&platform, "File", path.string(), 34, 5002);
+	radar::FileTarget const target(&platform, "File", path.string(), 34, 5002);
 
 	math::SVec3 in_angle = unitDirection(0.4, 0.2);
 	math::SVec3 out_angle = unitDirection(0.5, 0.4);
@@ -292,7 +292,7 @@ TEST_CASE("FileTarget skips incomplete sample nodes and uses the valid samples t
 	radar::Platform platform("TargetPlatform");
 	setStaticRotation(platform);
 
-	radar::FileTarget target(&platform, "File", path.string(), 90, 8005);
+	radar::FileTarget const target(&platform, "File", path.string(), 90, 8005);
 	math::SVec3 in_angle = unitDirection(1.0, 1.0);
 	math::SVec3 out_angle = unitDirection(1.0, 1.0);
 
@@ -346,7 +346,7 @@ TEST_CASE("FileTarget currently throws at lookup time when an RCS axis has no sa
 	radar::Platform platform("TargetPlatform");
 	setStaticRotation(platform);
 
-	radar::FileTarget target(&platform, "File", path.string(), 333, 11008);
+	radar::FileTarget const target(&platform, "File", path.string(), 333, 11008);
 	math::SVec3 in_angle = unitDirection(0.0, 0.0);
 	math::SVec3 out_angle = unitDirection(0.0, 0.0);
 
@@ -358,7 +358,7 @@ TEST_CASE("FileTarget currently throws at lookup time when an RCS axis has no sa
 TEST_CASE("Target exposes initial seed", "[radar][target]")
 {
 	radar::Platform platform("TargetPlatform");
-	radar::IsoTarget target(&platform, "Iso", 1.0, 12345);
+	radar::IsoTarget const target(&platform, "Iso", 1.0, 12345);
 	REQUIRE(target.getSeed() == 12345);
 }
 

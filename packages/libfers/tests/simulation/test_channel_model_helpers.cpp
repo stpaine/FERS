@@ -87,7 +87,7 @@ TEST_CASE("ReResults holds assigned values", "[simulation][channel_model][helper
 TEST_CASE("solveReDirect throws RangeError when Tx and Rx are at the same position",
 		  "[simulation][channel_model][helpers]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	// Two platforms at the exact same position
@@ -120,7 +120,7 @@ TEST_CASE("solveReDirect throws RangeError when Tx and Rx are at the same positi
 
 TEST_CASE("solveRe throws RangeError when target is at transmitter position", "[simulation][channel_model][helpers]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	// Tx and target at same position; Rx elsewhere
@@ -158,7 +158,7 @@ TEST_CASE("solveRe throws RangeError when target is at transmitter position", "[
 
 TEST_CASE("solveRe throws RangeError when target is at receiver position", "[simulation][channel_model][helpers]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	radar::Platform tx_plat("tx_plat");
@@ -240,7 +240,7 @@ TEST_CASE("PreviewLink holds assigned values", "[simulation][channel_model][help
 TEST_CASE("calculateDirectPathContribution returns zero for co-located Tx and Rx on same platform",
 		  "[simulation][channel_model][helpers]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	radar::Platform shared_plat("shared");
@@ -268,7 +268,7 @@ TEST_CASE("calculateDirectPathContribution returns zero for co-located Tx and Rx
 TEST_CASE("calculateReflectedPathContribution returns zero when target shares platform with Tx",
 		  "[simulation][channel_model][helpers]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	radar::Platform tx_plat("tx_plat");
@@ -302,7 +302,7 @@ TEST_CASE("calculateReflectedPathContribution returns zero when target shares pl
 TEST_CASE("calculateReflectedPathContribution returns zero when target shares platform with Rx",
 		  "[simulation][channel_model][helpers]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	radar::Platform tx_plat("tx_plat");

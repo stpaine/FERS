@@ -28,13 +28,13 @@ TEST_CASE("Isotropic antenna gain equals efficiency factor", "[antenna]")
 
 TEST_CASE("Antenna ids default to antenna type", "[antenna]")
 {
-	antenna::Isotropic antenna("iso-default");
+	antenna::Isotropic const antenna("iso-default");
 	REQUIRE(SimIdGenerator::getType(antenna.getId()) == ObjectType::Antenna);
 }
 
 TEST_CASE("Antenna base noise temperature defaults to zero", "[antenna]")
 {
-	antenna::Isotropic antenna("iso");
+	antenna::Isotropic const antenna("iso");
 	REQUIRE_THAT(antenna.getNoiseTemperature(unitDirection(0.3, -0.2)), WithinAbs(0.0, 0.0));
 }
 
@@ -63,7 +63,7 @@ TEST_CASE("Gaussian antenna gain follows expected Gaussian surface", "[antenna]"
 {
 	const RealType azscale = 0.5;
 	const RealType elscale = 1.5;
-	antenna::Gaussian antenna("gauss", azscale, elscale);
+	antenna::Gaussian const antenna("gauss", azscale, elscale);
 
 	const auto ref = unitDirection(0.0, 0.0);
 	const auto angle = unitDirection(0.2, 0.1);
@@ -89,7 +89,7 @@ TEST_CASE("Sinc antenna gain is symmetric about boresight", "[antenna]")
 
 TEST_CASE("Gaussian antenna gain is symmetric about boresight", "[antenna]")
 {
-	antenna::Gaussian antenna("gauss", 0.75, 1.25);
+	antenna::Gaussian const antenna("gauss", 0.75, 1.25);
 
 	const auto ref = unitDirection(0.0, 0.0);
 	const auto positive = unitDirection(0.2, -0.15);

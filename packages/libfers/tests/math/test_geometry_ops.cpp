@@ -11,12 +11,12 @@ constexpr RealType PI_VAL = std::numbers::pi_v<RealType>;
 
 TEST_CASE("Vec3 Construction and Basic Access", "[math][geometry][vec3]")
 {
-	Vec3 v_default;
+	Vec3 const v_default;
 	REQUIRE(v_default.x == 0.0);
 	REQUIRE(v_default.y == 0.0);
 	REQUIRE(v_default.z == 0.0);
 
-	Vec3 v_param(1.0, -2.5, 3.14);
+	Vec3 const v_param(1.0, -2.5, 3.14);
 	REQUIRE(v_param.x == 1.0);
 	REQUIRE(v_param.y == -2.5);
 	REQUIRE(v_param.z == 3.14);
@@ -64,7 +64,7 @@ TEST_CASE("Vec3 Arithmetic Operators", "[math][geometry][vec3]")
 TEST_CASE("Vec3 Scalar Operations", "[math][geometry][vec3]")
 {
 	Vec3 v(2.0, 4.0, 8.0);
-	RealType s = 2.0;
+	RealType const s = 2.0;
 
 	SECTION("Multiplication")
 	{
@@ -87,15 +87,15 @@ TEST_CASE("Vec3 Scalar Operations", "[math][geometry][vec3]")
 
 TEST_CASE("Vec3 Advanced Math", "[math][geometry][vec3]")
 {
-	Vec3 v(3.0, 4.0, 0.0);
+	Vec3 const v(3.0, 4.0, 0.0);
 
 	SECTION("Length") { REQUIRE_THAT(v.length(), WithinAbs(5.0, 1e-9)); }
 
 	SECTION("Dot Product")
 	{
-		Vec3 a(1, 0, 0);
-		Vec3 b(0, 1, 0);
-		Vec3 c(2, 2, 0);
+		Vec3 const a(1, 0, 0);
+		Vec3 const b(0, 1, 0);
+		Vec3 const c(2, 2, 0);
 		REQUIRE_THAT(dotProduct(a, b), WithinAbs(0.0, 1e-9)); // Orthogonal
 		REQUIRE_THAT(dotProduct(a, c), WithinAbs(2.0, 1e-9));
 	}
@@ -114,12 +114,12 @@ TEST_CASE("SVec3 (Spherical) Operations", "[math][geometry][svec3]")
 {
 	SECTION("Conversion from Vec3")
 	{
-		Vec3 vx(10.0, 0.0, 0.0);
+		Vec3 const vx(10.0, 0.0, 0.0);
 		SVec3 svx(vx);
 		REQUIRE_THAT(svx.length, WithinAbs(10.0, 1e-9));
 		REQUIRE_THAT(svx.azimuth, WithinAbs(0.0, 1e-9));
 
-		Vec3 vz(0.0, 0.0, 5.0);
+		Vec3 const vz(0.0, 0.0, 5.0);
 		SVec3 svz(vz);
 		REQUIRE_THAT(svz.elevation, WithinAbs(PI_VAL / 2.0, 1e-9));
 
@@ -139,14 +139,14 @@ TEST_CASE("SVec3 (Spherical) Operations", "[math][geometry][svec3]")
 	SECTION("Addition with Wrapping")
 	{
 		// Normal addition
-		SVec3 s1(1.0, 0.5, 0.0);
-		SVec3 s2(1.0, 0.5, 0.0);
+		SVec3 const s1(1.0, 0.5, 0.0);
+		SVec3 const s2(1.0, 0.5, 0.0);
 		SVec3 sum = s1 + s2;
 		REQUIRE_THAT(sum.azimuth, WithinAbs(1.0, 1e-9));
 
 		// fmod(-1.5 * PI, 2 * PI) = -1.5 * PI in C++. We must wrap this to +0.5 * PI.
-		SVec3 s3(1.0, -PI_VAL, 0.0);
-		SVec3 s4(1.0, -PI_VAL / 2.0, 0.0);
+		SVec3 const s3(1.0, -PI_VAL, 0.0);
+		SVec3 const s4(1.0, -PI_VAL / 2.0, 0.0);
 		SVec3 sum_neg = s3 + s4;
 		REQUIRE_THAT(sum_neg.azimuth, WithinAbs(PI_VAL / 2.0, 1e-9)); // Physically correct wrapping
 	}
@@ -154,20 +154,20 @@ TEST_CASE("SVec3 (Spherical) Operations", "[math][geometry][svec3]")
 	SECTION("Subtraction with Shortest Path Wrapping")
 	{
 		// Normal subtraction
-		SVec3 s1(1.0, 1.0, 0.0);
-		SVec3 s2(1.0, 0.5, 0.0);
+		SVec3 const s1(1.0, 1.0, 0.0);
+		SVec3 const s2(1.0, 0.5, 0.0);
 		SVec3 diff = s1 - s2;
 		REQUIRE_THAT(diff.azimuth, WithinAbs(0.5, 1e-9));
 
 		// 10 degrees - 350 degrees = -340 degrees -> should wrap to +20 degrees
-		SVec3 s3(1.0, 0.1, 0.0);
-		SVec3 s4(1.0, 2 * PI_VAL - 0.1, 0.0);
+		SVec3 const s3(1.0, 0.1, 0.0);
+		SVec3 const s4(1.0, 2 * PI_VAL - 0.1, 0.0);
 		SVec3 diff_neg_wrap = s3 - s4;
 		REQUIRE_THAT(diff_neg_wrap.azimuth, WithinAbs(0.2, 1e-9));
 
 		// 350 degrees - 10 degrees = 340 degrees -> should wrap to -20 degrees
-		SVec3 s5(1.0, 2 * PI_VAL - 0.1, 0.0);
-		SVec3 s6(1.0, 0.1, 0.0);
+		SVec3 const s5(1.0, 2 * PI_VAL - 0.1, 0.0);
+		SVec3 const s6(1.0, 0.1, 0.0);
 		SVec3 diff_pos_wrap = s5 - s6;
 		REQUIRE_THAT(diff_pos_wrap.azimuth, WithinAbs(-0.2, 1e-9)); // Physically shortest path
 	}

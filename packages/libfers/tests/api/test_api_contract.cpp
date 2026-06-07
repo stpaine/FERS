@@ -13,16 +13,16 @@ TEST_CASE("API destroying a null context is a safe no-op", "[api][core]")
 
 	fers_context_destroy(nullptr);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() == nullptr);
 }
 
 TEST_CASE("API context creation returns a valid handle", "[api][core]")
 {
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() == nullptr);
 }
 
@@ -38,7 +38,7 @@ TEST_CASE("API last error is null when no failure has occurred", "[api][core]")
 {
 	api_test::clearLastError();
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() == nullptr);
 }
 
@@ -52,13 +52,13 @@ TEST_CASE("API free helpers accept null pointers", "[api][core]")
 	fers_free_antenna_pattern_data(nullptr);
 	fers_free_preview_links(nullptr);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() == nullptr);
 }
 
 TEST_CASE("API set thread count clears stale error state on success", "[api][core]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
 
 	REQUIRE(fers_set_thread_count(0) != 0);
@@ -72,7 +72,7 @@ TEST_CASE("API set thread count clears stale error state on success", "[api][cor
 
 TEST_CASE("API successful calls clear stale thread-local errors beyond thread-count changes", "[api][core]")
 {
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	REQUIRE(fers_get_scenario_as_json(nullptr) == nullptr);

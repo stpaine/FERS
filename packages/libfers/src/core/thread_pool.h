@@ -63,7 +63,7 @@ namespace pool
 
 			std::future<ReturnType> res = task->get_future();
 			{
-				std::unique_lock lock(_queue_mutex);
+				std::unique_lock const lock(_queue_mutex);
 				if (_stop)
 				{
 					throw std::runtime_error("enqueue on stopped ThreadPool");

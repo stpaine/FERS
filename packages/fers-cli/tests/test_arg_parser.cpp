@@ -35,7 +35,7 @@ namespace
 	template <typename Fn>
 	std::string captureStdout(Fn&& fn)
 	{
-		std::ostringstream buffer;
+		std::ostringstream const buffer;
 		auto* const original = std::cout.rdbuf(buffer.rdbuf());
 		fn();
 		std::cout.rdbuf(original);

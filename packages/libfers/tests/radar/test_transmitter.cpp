@@ -44,7 +44,7 @@ TEST_CASE("Transmitter basic accessors and signal setters", "[radar][transmitter
 
 TEST_CASE("Transmitter setPrf quantizes to sample rate", "[radar][transmitter]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 
@@ -71,7 +71,7 @@ TEST_CASE("Transmitter schedule resolves next pulse time", "[radar][transmitter]
 
 	SECTION("Schedule enforces active windows")
 	{
-		std::vector<radar::SchedulePeriod> schedule = {{1.0, 2.0}, {4.0, 5.0}};
+		std::vector<radar::SchedulePeriod> const schedule = {{1.0, 2.0}, {4.0, 5.0}};
 		tx.setSchedule(schedule);
 
 		REQUIRE(tx.getSchedule().size() == 2);

@@ -127,7 +127,7 @@ TEST_CASE("MultirateGenerator skipSamples handles short and long skips", "[noise
 
 TEST_CASE("ClockModelGenerator applies offsets and respects sample count", "[noise][clock]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.rate = 100.0;
 
 	std::mt19937 rng(11);
@@ -154,7 +154,7 @@ TEST_CASE("ClockModelGenerator applies offsets and respects sample count", "[noi
 
 TEST_CASE("ClockModelGenerator handles weight scaling branches", "[noise][clock]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.rate = 100.0;
 
 	std::mt19937 rng(29);

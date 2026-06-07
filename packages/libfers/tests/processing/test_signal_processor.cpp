@@ -80,24 +80,24 @@ namespace
 
 TEST_CASE("renderWindow accumulates overlapping responses with offsets", "[processing][signal]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(4.0);
 	params::setOversampleRatio(1);
 
 	radar::Platform platform("RxPlatform");
-	radar::Transmitter transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 11);
+	radar::Transmitter const transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 11);
 
 	auto signal_a = std::make_unique<TestSignal>();
 	signal_a->data = {ComplexType{1.0, 0.0}, ComplexType{2.0, 1.0}, ComplexType{3.0, -1.0}};
-	fers_signal::RadarSignal wave_a("wave_a", 1.0, 1.0, 1.0, std::move(signal_a), 101);
+	fers_signal::RadarSignal const wave_a("wave_a", 1.0, 1.0, 1.0, std::move(signal_a), 101);
 
 	auto signal_b = std::make_unique<TestSignal>();
 	signal_b->data = {ComplexType{1.0, 1.0}, ComplexType{1.0, -1.0}};
-	fers_signal::RadarSignal wave_b("wave_b", 1.0, 1.0, 1.0, std::move(signal_b), 102);
+	fers_signal::RadarSignal const wave_b("wave_b", 1.0, 1.0, 1.0, std::move(signal_b), 102);
 
 	auto signal_c = std::make_unique<TestSignal>();
 	signal_c->data = {ComplexType{9.0, 9.0}};
-	fers_signal::RadarSignal wave_c("wave_c", 1.0, 1.0, 1.0, std::move(signal_c), 103);
+	fers_signal::RadarSignal const wave_c("wave_c", 1.0, 1.0, 1.0, std::move(signal_c), 103);
 
 	std::vector<std::unique_ptr<serial::Response>> responses;
 	responses.emplace_back(makeResponse(wave_a, transmitter, {{1.0, -0.25, 0.0, 0.0}, {1.0, 0.1, 0.0, 0.0}}));
@@ -128,7 +128,7 @@ TEST_CASE("renderWindow accumulates overlapping responses with offsets", "[proce
 
 TEST_CASE("applyThermalNoise respects zero temperature", "[processing][signal]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 
@@ -145,7 +145,7 @@ TEST_CASE("applyThermalNoise respects zero temperature", "[processing][signal]")
 
 TEST_CASE("applyThermalNoise produces expected power", "[processing][signal]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2000.0);
 	params::setOversampleRatio(2);
 
@@ -174,7 +174,7 @@ TEST_CASE("applyThermalNoise produces expected power", "[processing][signal]")
 
 TEST_CASE("applyThermalNoiseAtSampleRate scales complex variance to IF rate", "[processing][signal][fmcw][if]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 
 	const RealType temperature = 290.0;
 	const RealType if_rate = 64'000.0;
@@ -200,7 +200,7 @@ TEST_CASE("applyThermalNoiseAtSampleRate scales complex variance to IF rate", "[
 
 TEST_CASE("quantizeAndScaleWindow normalizes when adc disabled", "[processing][signal]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setAdcBits(0);
 
 	std::vector<ComplexType> window = {ComplexType{2.0, 0.0}, ComplexType{-1.0, -3.0}};
@@ -216,7 +216,7 @@ TEST_CASE("quantizeAndScaleWindow normalizes when adc disabled", "[processing][s
 
 TEST_CASE("quantizeAndScaleWindow applies adc quantization", "[processing][signal]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setAdcBits(3);
 
 	std::vector<ComplexType> window = {ComplexType{2.0, -2.0}, ComplexType{1.0, -0.5}};
@@ -232,7 +232,7 @@ TEST_CASE("quantizeAndScaleWindow applies adc quantization", "[processing][signa
 
 TEST_CASE("quantizeAndScaleWindow leaves zeros unchanged", "[processing][signal]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setAdcBits(0);
 
 	std::vector<ComplexType> window = {ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0}};

@@ -121,7 +121,7 @@ namespace
 		void releaseFirstSend()
 		{
 			{
-				std::lock_guard lock(mutex);
+				std::lock_guard const lock(mutex);
 				release_first_send = true;
 			}
 			cv.notify_all();
@@ -471,7 +471,7 @@ TEST_CASE("VITA packetizer uses first sample timestamp, packet cap, and big-endi
 {
 	using namespace serial::vita49;
 
-	Vita49Packetizer packetizer(1'700'000'000'123'456'789ull, 1.0, 1400);
+	Vita49Packetizer const packetizer(1'700'000'000'123'456'789ull, 1.0, 1400);
 	REQUIRE(packetizer.maxComplexSamplesPerPacket() == 342u);
 
 	std::vector<ComplexType> samples(1000, ComplexType(0.5, -0.5));
@@ -601,7 +601,7 @@ TEST_CASE("VITA paced sender blocks at queue depth instead of dropping", "[seria
 TEST_CASE("VITA packetizer encodes explicit sample loss flags", "[serial][vita49]")
 {
 	using namespace serial::vita49;
-	Vita49Packetizer packetizer(1'700'000'000'000'000'000ull, 1.0, 1400);
+	Vita49Packetizer const packetizer(1'700'000'000'000'000'000ull, 1.0, 1400);
 	std::vector<ComplexType> samples{ComplexType(0.0, 0.0)};
 	const core::ReceiverStreamDescriptor stream{.receiver_id = 9,
 												.receiver_name = "rx",
@@ -1083,7 +1083,7 @@ TEST_CASE("VITA output sink starts pacing at simulation start time", "[serial][v
 {
 	using namespace serial::vita49;
 
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(2.0, 3.0);
 
 	auto recording = std::make_unique<RecordingSender>();
@@ -1123,7 +1123,7 @@ TEST_CASE("VITA output sink drains future packets before final stats", "[serial]
 {
 	using namespace serial::vita49;
 
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 
 	auto recording = std::make_unique<RecordingSender>();

@@ -16,31 +16,31 @@ TEST_CASE("API antenna pattern validates context and antenna existence", "[api][
 
 	SECTION("null context")
 	{
-		api_test::AntennaPattern pattern(fers_get_antenna_pattern(nullptr, 1, 4, 3, 1.0e9));
+		api_test::AntennaPattern const pattern(fers_get_antenna_pattern(nullptr, 1, 4, 3, 1.0e9));
 		REQUIRE(pattern.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context must be non-null"));
 	}
 
 	SECTION("unknown antenna id")
 	{
-		api_test::Context context;
+		api_test::Context const context;
 		REQUIRE(context.get() != nullptr);
 		const std::string xml = api_test::previewScenarioXml();
 		REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
-		api_test::AntennaPattern pattern(fers_get_antenna_pattern(context.get(), 999999, 4, 3, 1.0e9));
+		api_test::AntennaPattern const pattern(fers_get_antenna_pattern(context.get(), 999999, 4, 3, 1.0e9));
 		REQUIRE(pattern.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("not found in the world"));
 	}
 }
 
 TEST_CASE("API antenna pattern normalizes isotropic gains", "[api][preview]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::previewScenarioXml();
@@ -49,7 +49,7 @@ TEST_CASE("API antenna pattern normalizes isotropic gains", "[api][preview]")
 	const auto scenario = api_test::parseScenarioJson(context.get());
 	const auto antenna_id = api_test::parseId(scenario.at("simulation").at("antennas").at(0).at("id"));
 
-	api_test::AntennaPattern pattern(fers_get_antenna_pattern(context.get(), antenna_id, 4, 3, 1.0e9));
+	api_test::AntennaPattern const pattern(fers_get_antenna_pattern(context.get(), antenna_id, 4, 3, 1.0e9));
 	REQUIRE(pattern.get() != nullptr);
 	REQUIRE(pattern.get()->az_count == 4u);
 	REQUIRE(pattern.get()->el_count == 3u);
@@ -63,9 +63,9 @@ TEST_CASE("API antenna pattern normalizes isotropic gains", "[api][preview]")
 
 TEST_CASE("API antenna pattern accepts zero frequency for isotropic previews", "[api][preview]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::previewScenarioXml();
@@ -74,16 +74,16 @@ TEST_CASE("API antenna pattern accepts zero frequency for isotropic previews", "
 	const auto scenario = api_test::parseScenarioJson(context.get());
 	const auto antenna_id = api_test::parseId(scenario.at("simulation").at("antennas").at(0).at("id"));
 
-	api_test::AntennaPattern pattern(fers_get_antenna_pattern(context.get(), antenna_id, 2, 2, 0.0));
+	api_test::AntennaPattern const pattern(fers_get_antenna_pattern(context.get(), antenna_id, 2, 2, 0.0));
 	REQUIRE(pattern.get() != nullptr);
 	REQUIRE(pattern.get()->max_gain > 0.0);
 }
 
 TEST_CASE("API antenna pattern previews XML antennas loaded from standalone files", "[api][preview]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const api_test::ScopedPath antenna_path(api_test::uniqueTempPath("api_preview_xml_antenna", ".xml"));
@@ -121,7 +121,7 @@ TEST_CASE("API antenna pattern previews XML antennas loaded from standalone file
 	const auto scenario = api_test::parseScenarioJson(context.get());
 	const auto antenna_id = api_test::parseId(scenario.at("simulation").at("antennas").at(0).at("id"));
 
-	api_test::AntennaPattern pattern(fers_get_antenna_pattern(context.get(), antenna_id, 5, 3, 1.0e9));
+	api_test::AntennaPattern const pattern(fers_get_antenna_pattern(context.get(), antenna_id, 5, 3, 1.0e9));
 	REQUIRE(pattern.get() != nullptr);
 	REQUIRE(pattern.get()->max_gain > 0.0);
 	REQUIRE_THAT(pattern.get()->gains[1 + 5], WithinAbs(1.0, 1e-12));
@@ -131,10 +131,10 @@ TEST_CASE("API antenna pattern previews XML antennas loaded from standalone file
 TEST_CASE("API preview links return empty list for empty world", "[api][preview]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
-	api_test::PreviewLinks links(fers_calculate_preview_links(context.get(), 0.0));
+	api_test::PreviewLinks const links(fers_calculate_preview_links(context.get(), 0.0));
 	REQUIRE(links.get() != nullptr);
 	REQUIRE(links.get()->count == 0u);
 	REQUIRE(links.get()->links == nullptr);
@@ -142,9 +142,9 @@ TEST_CASE("API preview links return empty list for empty world", "[api][preview]
 
 TEST_CASE("API preview links map link metadata into C structs", "[api][preview]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::previewScenarioXml();
@@ -179,7 +179,7 @@ TEST_CASE("API preview links map link metadata into C structs", "[api][preview]"
 	REQUIRE(rx_id != 0);
 	REQUIRE(target_id != 0);
 
-	api_test::PreviewLinks links(fers_calculate_preview_links(context.get(), 0.0));
+	api_test::PreviewLinks const links(fers_calculate_preview_links(context.get(), 0.0));
 	REQUIRE(links.get() != nullptr);
 	REQUIRE(links.get()->count > 0u);
 
@@ -231,9 +231,9 @@ TEST_CASE("API preview links map link metadata into C structs", "[api][preview]"
 
 TEST_CASE("API preview links map monostatic link types into C enums", "[api][preview]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::monostaticPreviewScenarioXml();
@@ -265,7 +265,7 @@ TEST_CASE("API preview links map monostatic link types into C enums", "[api][pre
 	REQUIRE(rx_id != 0);
 	REQUIRE(target_id != 0);
 
-	api_test::PreviewLinks links(fers_calculate_preview_links(context.get(), 0.0));
+	api_test::PreviewLinks const links(fers_calculate_preview_links(context.get(), 0.0));
 	REQUIRE(links.get() != nullptr);
 
 	bool saw_monostatic = false;

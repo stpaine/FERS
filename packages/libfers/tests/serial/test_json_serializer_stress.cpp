@@ -145,7 +145,7 @@ namespace
 	void buildStressWorld(core::World& world, size_t num_platforms, std::mt19937& rng)
 	{
 		std::uniform_real_distribution<RealType> dist_real(0.1, 1000.0);
-		std::uniform_int_distribution<int> dist_mode(0, 1);
+		std::uniform_int_distribution<int> const dist_mode(0, 1);
 		std::uniform_int_distribution<unsigned> seed_dist;
 
 		std::vector<SimId> wave_ids, ant_ids, time_ids;
@@ -153,14 +153,14 @@ namespace
 		// 1. Generate Assets (Waveforms, Antennas, Timings)
 		for (size_t i = 0; i < 20; ++i)
 		{
-			SimId w_id = SimIdGenerator::instance().generateId(ObjectType::Waveform);
+			SimId const w_id = SimIdGenerator::instance().generateId(ObjectType::Waveform);
 			auto sig = std::make_unique<fers_signal::CwSignal>();
 			auto wave = std::make_unique<fers_signal::RadarSignal>("wave_" + std::to_string(i), dist_real(rng),
 																   1e9 + dist_real(rng), 1.0, std::move(sig), w_id);
 			world.add(std::move(wave));
 			wave_ids.push_back(w_id);
 
-			SimId a_id = SimIdGenerator::instance().generateId(ObjectType::Antenna);
+			SimId const a_id = SimIdGenerator::instance().generateId(ObjectType::Antenna);
 			std::unique_ptr<antenna::Antenna> ant;
 			switch (i % 5)
 			{
@@ -184,7 +184,7 @@ namespace
 			world.add(std::move(ant));
 			ant_ids.push_back(a_id);
 
-			SimId t_id = SimIdGenerator::instance().generateId(ObjectType::Timing);
+			SimId const t_id = SimIdGenerator::instance().generateId(ObjectType::Timing);
 			auto tim = std::make_unique<timing::PrototypeTiming>("time_" + std::to_string(i), t_id);
 			tim->setFrequency(10e6);
 			tim->setFreqOffset(dist_real(rng));
@@ -202,7 +202,7 @@ namespace
 		// 2. Generate Platforms and Components
 		for (size_t i = 0; i < num_platforms; ++i)
 		{
-			SimId p_id = SimIdGenerator::instance().generateId(ObjectType::Platform);
+			SimId const p_id = SimIdGenerator::instance().generateId(ObjectType::Platform);
 			auto plat = std::make_unique<radar::Platform>("platform_" + std::to_string(i), p_id);
 
 			// Motion Path (Cubic)
@@ -231,8 +231,8 @@ namespace
 			else
 			{
 				plat->getRotationPath()->setInterp(math::RotationPath::InterpType::INTERP_CONSTANT);
-				math::RotationCoord start{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
-				math::RotationCoord rate{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
+				math::RotationCoord const start{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
+				math::RotationCoord const rate{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
 				plat->getRotationPath()->setConstantRate(start, rate);
 			}
 			plat->getRotationPath()->finalize();
@@ -312,7 +312,7 @@ namespace
 
 TEST_CASE("JSON Serializer Stress Test and Round-Trip Validation", "[serial][json][stress]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	// Keep time and rate low to prevent massive CW buffer allocations during json_to_world
@@ -365,7 +365,7 @@ TEST_CASE("JSON Serializer Stress Test and Round-Trip Validation", "[serial][jso
 
 		// Use the smart comparator instead of == to handle float drift
 		// and to print exact JSON paths on failure.
-		bool is_match = compareJson(j_original, j_roundtrip, "/root");
+		bool const is_match = compareJson(j_original, j_roundtrip, "/root");
 		REQUIRE(is_match);
 	}
 

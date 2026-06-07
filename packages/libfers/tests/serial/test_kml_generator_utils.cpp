@@ -66,22 +66,22 @@ TEST_CASE("KML Math: 3dB Drop Angles", "[serial][kml][math]")
 
 	SECTION("Gaussian Antenna")
 	{
-		antenna::Gaussian valid_gaussian("gauss", 1.0, 1.0);
+		antenna::Gaussian const valid_gaussian("gauss", 1.0, 1.0);
 		// theta = sqrt(ln(2) / scale) * 180 / PI
-		double expected_deg = std::sqrt(std::log(2.0) / 1.0) * 180.0 / PI;
+		double const expected_deg = std::sqrt(std::log(2.0) / 1.0) * 180.0 / PI;
 		REQUIRE_THAT(serial::kml_generator_utils::findGaussian3DbDropAngle(&valid_gaussian),
 					 WithinAbs(expected_deg, 1e-4));
 
-		antenna::Gaussian invalid_gaussian("gauss_bad", -1.0, 1.0);
+		antenna::Gaussian const invalid_gaussian("gauss_bad", -1.0, 1.0);
 		REQUIRE_THAT(serial::kml_generator_utils::findGaussian3DbDropAngle(&invalid_gaussian), WithinAbs(0.0, 1e-6));
 	}
 
 	SECTION("Parabolic Antenna")
 	{
-		antenna::Parabolic valid_parabolic("dish", 1.0);
+		antenna::Parabolic const valid_parabolic("dish", 1.0);
 		// arg = 1.6 * lambda / (PI * D). For lambda=0.1, D=1.0 -> arg = 0.16 / PI
-		double arg = 0.16 / PI;
-		double expected_deg = std::asin(arg) * 180.0 / PI;
+		double const arg = 0.16 / PI;
+		double const expected_deg = std::asin(arg) * 180.0 / PI;
 		REQUIRE_THAT(serial::kml_generator_utils::findParabolic3DbDropAngle(&valid_parabolic, 0.1),
 					 WithinAbs(expected_deg, 1e-4));
 
@@ -90,17 +90,17 @@ TEST_CASE("KML Math: 3dB Drop Angles", "[serial][kml][math]")
 					 WithinAbs(90.0, 1e-6));
 
 		// Invalid diameter
-		antenna::Parabolic invalid_parabolic("dish_bad", 0.0);
+		antenna::Parabolic const invalid_parabolic("dish_bad", 0.0);
 		REQUIRE_THAT(serial::kml_generator_utils::findParabolic3DbDropAngle(&invalid_parabolic, 0.1),
 					 WithinAbs(0.0, 1e-6));
 	}
 
 	SECTION("SquareHorn Antenna")
 	{
-		antenna::SquareHorn valid_horn("horn", 1.0);
+		antenna::SquareHorn const valid_horn("horn", 1.0);
 		// arg = 1.39155 * lambda / (PI * D). For lambda=0.1, D=1.0 -> arg = 0.139155 / PI
-		double arg = 0.139155 / PI;
-		double expected_deg = std::asin(arg) * 180.0 / PI;
+		double const arg = 0.139155 / PI;
+		double const expected_deg = std::asin(arg) * 180.0 / PI;
 		REQUIRE_THAT(serial::kml_generator_utils::findSquareHorn3DbDropAngle(&valid_horn, 0.1),
 					 WithinAbs(expected_deg, 1e-4));
 
@@ -108,7 +108,7 @@ TEST_CASE("KML Math: 3dB Drop Angles", "[serial][kml][math]")
 		REQUIRE_THAT(serial::kml_generator_utils::findSquareHorn3DbDropAngle(&valid_horn, 10.0), WithinAbs(90.0, 1e-6));
 
 		// Invalid dimension
-		antenna::SquareHorn invalid_horn("horn_bad", -0.5);
+		antenna::SquareHorn const invalid_horn("horn_bad", -0.5);
 		REQUIRE_THAT(serial::kml_generator_utils::findSquareHorn3DbDropAngle(&invalid_horn, 0.1), WithinAbs(0.0, 1e-6));
 	}
 }
@@ -230,7 +230,7 @@ TEST_CASE("KML Generation: Antenna Visualization", "[serial][kml][generation]")
 TEST_CASE("KML Generation: Path Visualization", "[serial][kml][generation]")
 {
 	auto ctx = createTestContext();
-	radar::Platform plat("plat");
+	radar::Platform const plat("plat");
 
 	SECTION("Static Path")
 	{
@@ -386,7 +386,7 @@ TEST_CASE("KML Generation: Antenna Wavelength and Dispatch", "[serial][kml][gene
 	SECTION("XmlAntenna (Symbolic)")
 	{
 		// Create a minimal valid XML file to satisfy the XmlAntenna constructor
-		std::string temp_xml = (std::filesystem::temp_directory_path() / "dummy_ant.xml").string();
+		std::string const temp_xml = (std::filesystem::temp_directory_path() / "dummy_ant.xml").string();
 		std::ofstream out(temp_xml);
 		out << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 			<< "<antenna>\n"
@@ -420,7 +420,7 @@ TEST_CASE("KML Generation: Antenna Wavelength and Dispatch", "[serial][kml][gene
 TEST_CASE("KML Generation: Dynamic Path Edge Cases", "[serial][kml][generation]")
 {
 	auto ctx = createTestContext();
-	radar::Platform plat("plat");
+	radar::Platform const plat("plat");
 	plat.getMotionPath()->setInterp(math::Path::InterpType::INTERP_LINEAR);
 
 	SECTION("Single coordinate (zero duration)")
@@ -462,8 +462,8 @@ TEST_CASE("KML Generation: Dynamic Path Edge Cases", "[serial][kml][generation]"
 TEST_CASE("KML Generation: processPlatform Early Return", "[serial][kml][generation]")
 {
 	auto ctx = createTestContext();
-	radar::Platform plat("plat");
-	std::vector<const radar::Object*> objects;
+	radar::Platform const plat("plat");
+	std::vector<const radar::Object*> const objects;
 
 	std::ostringstream oss;
 	// Platform has an empty motion path, so it should return immediately

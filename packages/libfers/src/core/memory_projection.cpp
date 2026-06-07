@@ -238,7 +238,7 @@ namespace core
 		[[nodiscard]] std::optional<std::uint64_t> currentResidentSetBytes() noexcept
 		{
 #if defined(__linux__)
-			long page_size = sysconf(_SC_PAGESIZE);
+			long const page_size = sysconf(_SC_PAGESIZE);
 			if (page_size <= 0)
 			{
 				return std::nullopt;

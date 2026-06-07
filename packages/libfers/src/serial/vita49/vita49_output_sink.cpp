@@ -71,7 +71,7 @@ namespace serial::vita49
 
 	void Vita49OutputSink::initializeRun(const core::OutputConfig& config, std::string simulation_name)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		if (config.mode != core::OutputMode::Vita49Udp)
 		{
 			throw std::invalid_argument("Vita49OutputSink requires VITA output mode");
@@ -105,7 +105,7 @@ namespace serial::vita49
 
 	std::uint32_t Vita49OutputSink::registerStream(const core::ReceiverStreamDescriptor& stream)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto stream_id = _registry.registerStream(stream);
 		if (!_streams.contains(stream_id))
 		{
@@ -125,7 +125,7 @@ namespace serial::vita49
 
 	void Vita49OutputSink::openStream(const std::uint32_t stream_id, const RealType first_sample_time)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		emitContext(stream_id, first_sample_time, true, false);
 		stateFor(stream_id).opened = true;
 		emitTelemetry({}, true);
@@ -133,7 +133,7 @@ namespace serial::vita49
 
 	void Vita49OutputSink::submitBlock(const core::ReceiverSampleBlock& block)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		if (!_initialized || !_packetizer)
 		{
 			throw std::logic_error("VITA output sink has not been initialized");
@@ -183,7 +183,7 @@ namespace serial::vita49
 
 	void Vita49OutputSink::emitContextHeartbeat(const RealType simulation_time)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		emitTelemetry(consumeSenderDropsLocked(), false);
 		for (auto& [stream_id, state] : _streams)
 		{
@@ -196,7 +196,7 @@ namespace serial::vita49
 
 	void Vita49OutputSink::closeStream(const std::uint32_t stream_id)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		emitTelemetry(consumeSenderDropsLocked(), false);
 		auto& state = stateFor(stream_id);
 		if (!state.closed)
@@ -209,7 +209,7 @@ namespace serial::vita49
 
 	core::OutputStats Vita49OutputSink::finalize()
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		if (_finalized)
 		{
 			auto stats = snapshotStatsLocked();
@@ -258,7 +258,7 @@ namespace serial::vita49
 
 	core::OutputStats Vita49OutputSink::snapshotStats() const
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		return snapshotStatsLocked();
 	}
 

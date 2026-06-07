@@ -14,7 +14,7 @@
 
 namespace core
 {
-	enum class OutputMode
+	enum class OutputMode : std::uint8_t
 	{
 		Hdf5,
 		Vita49Udp

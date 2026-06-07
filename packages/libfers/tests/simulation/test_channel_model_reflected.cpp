@@ -71,7 +71,7 @@ namespace
 
 TEST_CASE("solveRe computes correct bistatic power for isotropic antennas", "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	// Setup: Tx at (0,0,0), Target at (500,0,0), Rx at (500,500,0)
@@ -133,7 +133,7 @@ TEST_CASE("solveRe computes correct bistatic power for isotropic antennas", "[si
 TEST_CASE("CW streaming reflected path gates schedules by retarded transmit time",
 		  "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setC(100.0);
 
@@ -181,7 +181,7 @@ TEST_CASE("CW streaming reflected path gates schedules by retarded transmit time
 TEST_CASE("FMCW monostatic reflected path dechirps to expected stationary-target beat frequency",
 		  "[simulation][channel_model][reflected][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1.0e6);
 	params::setSimSamplingRate(1.0e6);
@@ -251,7 +251,7 @@ TEST_CASE("FMCW monostatic reflected path dechirps to expected stationary-target
 TEST_CASE("FMCW native dechirp convention produces positive up-chirp beat frequency",
 		  "[simulation][channel_model][reflected][fmcw][dechirp]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1.0e6);
 	params::setSimSamplingRate(1.0e6);
@@ -323,7 +323,7 @@ TEST_CASE("FMCW native dechirp convention produces positive up-chirp beat freque
 TEST_CASE("FMCW physical dechirp preserves timing decorrelation while ideal mode removes it",
 		  "[simulation][channel_model][reflected][fmcw][dechirp]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(2.0e6);
 	params::setSimSamplingRate(2.0e6);
@@ -390,7 +390,7 @@ TEST_CASE("FMCW physical dechirp preserves timing decorrelation while ideal mode
 TEST_CASE("FMCW down-chirp monostatic reflected path reverses stationary-target beat sign",
 		  "[simulation][channel_model][reflected][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1.0e6);
 	params::setSimSamplingRate(1.0e6);
@@ -461,7 +461,7 @@ TEST_CASE("FMCW down-chirp monostatic reflected path reverses stationary-target 
 TEST_CASE("FMCW chirp-boundary tracker matches cold-path direct contribution across chirps",
 		  "[simulation][channel_model][direct][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1.0e6);
 	params::setSimSamplingRate(1.0e6);
@@ -518,7 +518,7 @@ TEST_CASE("FMCW chirp-boundary tracker matches cold-path direct contribution acr
 
 TEST_CASE("solveRe power scales linearly with RCS", "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	// RCS is a linear multiplier in the bistatic equation
@@ -582,7 +582,7 @@ TEST_CASE("solveRe power scales linearly with RCS", "[simulation][channel_model]
 
 TEST_CASE("solveRe delay is sum of Tx-Tgt and Tgt-Rx distances divided by c", "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const RealType c = params::c();
@@ -628,7 +628,7 @@ TEST_CASE("solveRe delay is sum of Tx-Tgt and Tgt-Rx distances divided by c", "[
 
 TEST_CASE("solveRe with noproploss flag ignores distance in power", "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const RealType c = params::c();
@@ -674,7 +674,7 @@ TEST_CASE("solveRe with noproploss flag ignores distance in power", "[simulation
 
 TEST_CASE("solveRe power follows R^-4 for monostatic geometry", "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	// For monostatic-like geometry (Tx and Rx co-located, target along x-axis):
@@ -749,7 +749,7 @@ TEST_CASE("solveRe power follows R^-4 for monostatic geometry", "[simulation][ch
 TEST_CASE("calculateReflectedPathContribution amplitude matches bistatic equation with signal power",
 		  "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const RealType c = params::c();
@@ -802,7 +802,7 @@ TEST_CASE("calculateReflectedPathContribution amplitude matches bistatic equatio
 TEST_CASE("calculateReflectedPathContribution phase matches bistatic propagation delay",
 		  "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const RealType c = params::c();
@@ -861,7 +861,7 @@ TEST_CASE("calculateReflectedPathContribution phase matches bistatic propagation
 TEST_CASE("calculateReflectedPathContribution preserves stronger phase-noise cancellation for shorter delays",
 		  "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
@@ -923,7 +923,7 @@ TEST_CASE("calculateReflectedPathContribution preserves stronger phase-noise can
 
 TEST_CASE("solveRe with 3D geometry computes correct bistatic range", "[simulation][channel_model][reflected]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const RealType c = params::c();

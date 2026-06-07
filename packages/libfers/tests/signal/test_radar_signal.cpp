@@ -41,7 +41,7 @@ namespace
 
 TEST_CASE("CwSignal render returns empty data", "[signal][radar][cw]")
 {
-	fers_signal::CwSignal signal;
+	fers_signal::CwSignal const signal;
 	unsigned size = 99;
 	const std::vector<interp::InterpPoint> points = {{1.0, 0.0, 0.0, 0.0}};
 
@@ -64,9 +64,9 @@ TEST_CASE("FmcwChirpSignal applies sweep direction to phase only", "[signal][rad
 	const RealType offset = 1.0e5;
 	const RealType u = 4.0e-4;
 
-	fers_signal::FmcwChirpSignal up(bandwidth, duration, duration, offset);
-	fers_signal::FmcwChirpSignal down(bandwidth, duration, duration, offset, std::nullopt,
-									  fers_signal::FmcwChirpDirection::Down);
+	fers_signal::FmcwChirpSignal const up(bandwidth, duration, duration, offset);
+	fers_signal::FmcwChirpSignal const down(bandwidth, duration, duration, offset, std::nullopt,
+											fers_signal::FmcwChirpDirection::Down);
 
 	const RealType alpha = bandwidth / duration;
 	REQUIRE_FALSE(up.isDownChirp());
@@ -87,7 +87,7 @@ TEST_CASE("FmcwTriangleSignal keeps phase continuous at leg and period boundarie
 	const RealType alpha = bandwidth / duration;
 	const RealType eps = 1.0e-10;
 
-	fers_signal::FmcwTriangleSignal triangle(bandwidth, duration, offset, 4);
+	fers_signal::FmcwTriangleSignal const triangle(bandwidth, duration, offset, 4);
 
 	REQUIRE(triangle.isFmcwFamily());
 	REQUIRE(triangle.isTriangle());
@@ -111,7 +111,7 @@ TEST_CASE("FmcwTriangleSignal keeps phase continuous at leg and period boundarie
 
 TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 	std::vector<ComplexType> data = {ComplexType{1.0, 0.0}};
 	auto signal = std::make_unique<fers_signal::Signal>();
@@ -133,7 +133,7 @@ TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 TEST_CASE("RadarSignal autogenerates waveform ids", "[signal][radar]")
 {
 	auto signal = std::make_unique<fers_signal::Signal>();
-	fers_signal::RadarSignal radar("waveform", 1.0, 1.0, 1.0, std::move(signal), 0);
+	fers_signal::RadarSignal const radar("waveform", 1.0, 1.0, 1.0, std::move(signal), 0);
 
 	REQUIRE(SimIdGenerator::getType(radar.getId()) == ObjectType::Waveform);
 }
@@ -154,7 +154,7 @@ TEST_CASE("RadarSignal scales rendered data by power", "[signal][radar]")
 	auto signal = std::make_unique<TestSignal>();
 	signal->stored = {ComplexType{1.0, 0.0}, ComplexType{2.0, -1.0}};
 
-	fers_signal::RadarSignal radar("scaled", 4.0, 1.0, 1.0, std::move(signal), 7);
+	fers_signal::RadarSignal const radar("scaled", 4.0, 1.0, 1.0, std::move(signal), 7);
 
 	unsigned size = 0;
 	const std::vector<interp::InterpPoint> points = {{1.0, 0.0, 0.0, 0.0}};
@@ -169,7 +169,7 @@ TEST_CASE("RadarSignal scales rendered data by power", "[signal][radar]")
 
 TEST_CASE("Signal load updates size and rate", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(2);
 	std::vector<ComplexType> input = {ComplexType{1.0, 0.0}, ComplexType{0.5, -0.5}};
 
@@ -187,7 +187,7 @@ TEST_CASE("Signal load updates size and rate", "[signal][radar]")
 
 TEST_CASE("Signal render matches constant input physics", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 
 	const unsigned filter_length = params::renderFilterLength();
@@ -216,7 +216,7 @@ TEST_CASE("Signal render matches constant input physics", "[signal][radar]")
 
 TEST_CASE("Signal render interpolates power and phase", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 
 	const unsigned filter_length = params::renderFilterLength();
@@ -252,7 +252,7 @@ TEST_CASE("Signal render interpolates power and phase", "[signal][radar]")
 
 TEST_CASE("Signal render responds to fractional delay", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 
 	const unsigned filter_length = params::renderFilterLength();
@@ -279,7 +279,7 @@ TEST_CASE("Signal render responds to fractional delay", "[signal][radar]")
 
 TEST_CASE("Signal renderSlice matches cropped full response with padding", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 
 	const unsigned sample_count = params::renderFilterLength() * 6;
@@ -313,7 +313,7 @@ TEST_CASE("Signal renderSlice matches cropped full response with padding", "[sig
 
 TEST_CASE("Signal renderSlice interpolates onto non-native output grids", "[signal][radar]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(1);
 
 	constexpr RealType native_rate_hz = 100.0;

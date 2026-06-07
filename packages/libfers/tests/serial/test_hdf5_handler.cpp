@@ -114,7 +114,7 @@ TEST_CASE("addChunkToFile writes I/Q datasets with attributes", "[serial][hdf5]"
 	const std::string path = tempFilePath(uniqueFileName("chunks"));
 	removeIfExists(path);
 
-	RateGuard rate_guard(2'000.0);
+	RateGuard const rate_guard(2'000.0);
 	const std::vector<ComplexType> samples = {ComplexType(1.25, -0.75), ComplexType(-2.5, 3.0)};
 	const RealType time = 1.5;
 	const RealType fullscale = 4096.0;
@@ -125,7 +125,7 @@ TEST_CASE("addChunkToFile writes I/Q datasets with attributes", "[serial][hdf5]"
 	}
 
 	{
-		HighFive::File file(path, HighFive::File::ReadOnly);
+		HighFive::File const file(path, HighFive::File::ReadOnly);
 		const auto i_dataset = file.getDataSet("chunk_000007_I");
 		const auto q_dataset = file.getDataSet("chunk_000007_Q");
 
@@ -169,7 +169,7 @@ TEST_CASE("HDF5 writer adds backward-compatible output metadata attributes", "[s
 	const std::string path = tempFilePath(uniqueFileName("metadata"));
 	removeIfExists(path);
 
-	RateGuard rate_guard(4'000.0);
+	RateGuard const rate_guard(4'000.0);
 	core::OutputFileMetadata file_metadata{.receiver_id = 42,
 										   .receiver_name = "RxMetadata",
 										   .mode = "pulsed",
@@ -181,24 +181,24 @@ TEST_CASE("HDF5 writer adds backward-compatible output metadata attributes", "[s
 										   .min_pulse_length_samples = 2,
 										   .max_pulse_length_samples = 2,
 										   .uniform_pulse_length = true};
-	core::PulseChunkMetadata chunk_metadata{.chunk_index = 0,
-											.i_dataset = "chunk_000000_I",
-											.q_dataset = "chunk_000000_Q",
-											.start_time = 1.25,
-											.sample_count = 2,
-											.sample_start = 0,
-											.sample_end_exclusive = 2};
+	core::PulseChunkMetadata const chunk_metadata{.chunk_index = 0,
+												  .i_dataset = "chunk_000000_I",
+												  .q_dataset = "chunk_000000_Q",
+												  .start_time = 1.25,
+												  .sample_count = 2,
+												  .sample_start = 0,
+												  .sample_end_exclusive = 2};
 	file_metadata.chunks.push_back(chunk_metadata);
 
 	{
 		HighFive::File file(path, HighFive::File::Overwrite);
 		serial::addChunkToFile(file, {ComplexType(1.0, 0.0), ComplexType(2.0, 0.5)}, 1.25, 8.0, 0, &chunk_metadata);
-		std::scoped_lock lock(serial::hdf5_global_mutex);
+		std::scoped_lock const lock(serial::hdf5_global_mutex);
 		serial::writeOutputFileMetadataAttributes(file, file_metadata);
 	}
 
 	{
-		HighFive::File file(path, HighFive::File::ReadOnly);
+		HighFive::File const file(path, HighFive::File::ReadOnly);
 		unsigned schema_version = 0;
 		unsigned long long total_samples = 0;
 		std::string receiver_name;
@@ -285,12 +285,12 @@ TEST_CASE("HDF5 writer exposes FMCW segment metadata without cw_segments JSON al
 
 	{
 		HighFive::File file(path, HighFive::File::Overwrite);
-		std::scoped_lock lock(serial::hdf5_global_mutex);
+		std::scoped_lock const lock(serial::hdf5_global_mutex);
 		serial::writeOutputFileMetadataAttributes(file, file_metadata);
 	}
 
 	{
-		HighFive::File file(path, HighFive::File::ReadOnly);
+		HighFive::File const file(path, HighFive::File::ReadOnly);
 		unsigned long long segment_count = 0;
 		RealType signed_rate = 0.0;
 		std::string direction;
@@ -326,7 +326,7 @@ TEST_CASE("addChunkToFile throws when dataset already exists", "[serial][hdf5]")
 	const std::string path = tempFilePath(uniqueFileName("chunk_exists"));
 	removeIfExists(path);
 
-	RateGuard rate_guard(1'000.0);
+	RateGuard const rate_guard(1'000.0);
 	const std::vector<ComplexType> samples = {ComplexType(1.0, 1.0)};
 
 	{
@@ -345,7 +345,7 @@ TEST_CASE("readPattern returns 2D dataset", "[serial][hdf5]")
 
 	{
 		HighFive::File file(path, HighFive::File::Overwrite);
-		std::vector<std::vector<RealType>> pattern = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
+		std::vector<std::vector<RealType>> const pattern = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}};
 		auto dataset = file.createDataSet<RealType>("pattern", HighFive::DataSpace::From(pattern));
 		dataset.write(pattern);
 	}
@@ -368,7 +368,7 @@ TEST_CASE("readPattern throws for non-2D dataset", "[serial][hdf5]")
 
 	{
 		HighFive::File file(path, HighFive::File::Overwrite);
-		std::vector<RealType> values = {1.0, 2.0, 3.0};
+		std::vector<RealType> const values = {1.0, 2.0, 3.0};
 		auto dataset = file.createDataSet<RealType>("pattern", HighFive::DataSpace::From(values));
 		dataset.write(values);
 	}
@@ -385,7 +385,7 @@ TEST_CASE("readPattern throws when dataset missing", "[serial][hdf5]")
 
 	{
 		HighFive::File file(path, HighFive::File::Overwrite);
-		std::vector<std::vector<RealType>> pattern = {{0.0}};
+		std::vector<std::vector<RealType>> const pattern = {{0.0}};
 		auto dataset = file.createDataSet<RealType>("other", HighFive::DataSpace::From(pattern));
 		dataset.write(pattern);
 	}

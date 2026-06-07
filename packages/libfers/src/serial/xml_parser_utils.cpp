@@ -356,7 +356,7 @@ namespace serial::xml_parser_utils
 			unsigned p_idx = 0;
 			while (true)
 			{
-				XmlElement period_element = schedule_element.childElement("period", p_idx++);
+				XmlElement const period_element = schedule_element.childElement("period", p_idx++);
 				if (!period_element.isValid())
 				{
 					break;
@@ -696,7 +696,7 @@ namespace serial::xml_parser_utils
 		unsigned noise_index = 0;
 		while (true)
 		{
-			XmlElement noise_element = timing.childElement("noise_entry", noise_index++);
+			XmlElement const noise_element = timing.childElement("noise_entry", noise_index++);
 			if (!noise_element.isValid())
 			{
 				break;
@@ -841,7 +841,7 @@ namespace serial::xml_parser_utils
 		unsigned waypoint_index = 0;
 		while (true)
 		{
-			XmlElement waypoint = motionPath.childElement("positionwaypoint", waypoint_index);
+			XmlElement const waypoint = motionPath.childElement("positionwaypoint", waypoint_index);
 			if (!waypoint.isValid())
 			{
 				break;
@@ -900,7 +900,7 @@ namespace serial::xml_parser_utils
 		unsigned waypoint_index = 0;
 		while (true)
 		{
-			XmlElement waypoint = rotation.childElement("rotationwaypoint", waypoint_index);
+			XmlElement const waypoint = rotation.childElement("rotationwaypoint", waypoint_index);
 			if (!waypoint.isValid())
 			{
 				break;
@@ -1012,7 +1012,7 @@ namespace serial::xml_parser_utils
 			resolve_reference_id(transmitter, "timing", "transmitter '" + name + "'", *refs.timings);
 		transmitter_obj->setTiming(resolve_timing_instance(timing_id, ctx, "transmitter '" + name + "'"));
 
-		RealType pri = is_pulsed ? (1.0 / transmitter_obj->getPrf()) : 0.0;
+		RealType const pri = is_pulsed ? (1.0 / transmitter_obj->getPrf()) : 0.0;
 		auto schedule = parseSchedule(transmitter, name, is_pulsed, pri);
 		if (wave->isFmcwFamily())
 		{
@@ -1114,7 +1114,7 @@ namespace serial::xml_parser_utils
 				receiver_obj->getName().c_str());
 		}
 
-		RealType pri = is_pulsed ? (1.0 / receiver_obj->getWindowPrf()) : 0.0;
+		RealType const pri = is_pulsed ? (1.0 / receiver_obj->getWindowPrf()) : 0.0;
 		auto schedule = parseSchedule(receiver, name, is_pulsed, pri);
 		if (!schedule.empty())
 		{
@@ -1247,7 +1247,7 @@ namespace serial::xml_parser_utils
 					   const std::function<void(const XmlElement&, std::string_view)>& register_name,
 					   const ReferenceLookup& refs)
 	{
-		std::string name = XmlElement::getSafeAttribute(platform, "name");
+		std::string const name = XmlElement::getSafeAttribute(platform, "name");
 		const SimId id = assign_id_from_attribute("platform '" + name + "'", ObjectType::Platform);
 		auto plat = std::make_unique<radar::Platform>(name, id);
 
@@ -1285,18 +1285,18 @@ namespace serial::xml_parser_utils
 		unsigned index = 0;
 		while (true)
 		{
-			XmlElement include_element = doc.getRootElement().childElement("include", index++);
+			XmlElement const include_element = doc.getRootElement().childElement("include", index++);
 			if (!include_element.isValid())
 				break;
 
-			std::string include_filename = include_element.getText();
+			std::string const include_filename = include_element.getText();
 			if (include_filename.empty())
 			{
 				LOG(logging::Level::ERROR, "<include> element is missing the filename!");
 				continue;
 			}
 
-			fs::path include_path = currentDir / include_filename;
+			fs::path const include_path = currentDir / include_filename;
 			includePaths.push_back(include_path);
 
 			XmlDocument included_doc;
@@ -1394,7 +1394,7 @@ namespace serial::xml_parser_utils
 			unsigned index = 0;
 			while (true)
 			{
-				XmlElement element = parent.childElement(elementName, index++);
+				XmlElement const element = parent.childElement(elementName, index++);
 				if (!element.isValid())
 					break;
 				parseFunction(element, parser_ctx);

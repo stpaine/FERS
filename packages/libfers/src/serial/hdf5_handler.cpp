@@ -255,7 +255,7 @@ namespace serial
 
 	void readPulseData(const std::string& name, std::vector<ComplexType>& data)
 	{
-		std::scoped_lock lock(hdf5_global_mutex);
+		std::scoped_lock const lock(hdf5_global_mutex);
 
 		if (!std::filesystem::exists(name))
 		{
@@ -305,7 +305,7 @@ namespace serial
 	void addChunkToFile(HighFive::File& file, const std::vector<ComplexType>& data, const RealType time,
 						const RealType fullscale, const unsigned count, const core::PulseChunkMetadata* metadata)
 	{
-		std::scoped_lock lock(hdf5_global_mutex);
+		std::scoped_lock const lock(hdf5_global_mutex);
 
 		const std::size_t size = data.size();
 
@@ -365,7 +365,7 @@ namespace serial
 
 	std::vector<std::vector<RealType>> readPattern(const std::string& name, const std::string& datasetName)
 	{
-		std::scoped_lock lock(hdf5_global_mutex);
+		std::scoped_lock const lock(hdf5_global_mutex);
 		try
 		{
 			LOG(Level::TRACE, "Reading dataset '{}' from file '{}'", datasetName, name);

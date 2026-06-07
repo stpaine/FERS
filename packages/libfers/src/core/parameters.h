@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <string>
@@ -26,7 +27,7 @@ namespace params
 	 * @enum CoordinateFrame
 	 * @brief Defines the coordinate systems supported for KML/geospatial export.
 	 */
-	enum class CoordinateFrame
+	enum class CoordinateFrame : std::uint8_t
 	{
 		ENU, ///< East-North-Up local tangent plane (default)
 		UTM, ///< Universal Transverse Mercator
@@ -37,7 +38,7 @@ namespace params
 	 * @enum RotationAngleUnit
 	 * @brief Defines the units used at external rotation-path boundaries.
 	 */
-	enum class RotationAngleUnit
+	enum class RotationAngleUnit : std::uint8_t
 	{
 		Degrees, ///< Compass azimuth and elevation expressed in degrees
 		Radians ///< Compass azimuth and elevation expressed in radians

@@ -34,7 +34,7 @@ TEST_CASE("ThreadPool wait tracks pending tasks", "[core][thread_pool]")
 	pool::ThreadPool pool(2);
 
 	std::promise<void> gate;
-	std::shared_future<void> gate_future = gate.get_future().share();
+	std::shared_future<void> const gate_future = gate.get_future().share();
 	std::atomic<int> started{0};
 
 	auto task = [&started, gate_future]

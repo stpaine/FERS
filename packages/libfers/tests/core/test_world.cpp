@@ -418,13 +418,13 @@ TEST_CASE("World clear resets storage and state", "[core][world]")
 
 TEST_CASE("World schedules pulsed transmitter events", "[core][world]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 
 	core::World world;
 	auto platform = std::make_unique<radar::Platform>("Platform-Tx", 1);
 	auto tx = std::make_unique<radar::Transmitter>(platform.get(), "Tx-Pulsed", radar::OperationMode::PULSED_MODE, 2);
-	std::vector<radar::SchedulePeriod> schedule = {{2.0, 3.0}, {6.0, 7.0}};
+	std::vector<radar::SchedulePeriod> const schedule = {{2.0, 3.0}, {6.0, 7.0}};
 	tx->setSchedule(schedule);
 	world.add(std::move(platform));
 	world.add(std::move(tx));
@@ -440,13 +440,13 @@ TEST_CASE("World schedules pulsed transmitter events", "[core][world]")
 
 TEST_CASE("World schedules CW transmitter events with bounds", "[core][world]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 
 	core::World world;
 	auto platform = std::make_unique<radar::Platform>("Platform-Tx", 1);
 	auto tx = std::make_unique<radar::Transmitter>(platform.get(), "Tx-CW", radar::OperationMode::CW_MODE, 2);
-	std::vector<radar::SchedulePeriod> schedule = {{-5.0, 1.0}, {3.0, 5.0}, {9.0, 12.0}};
+	std::vector<radar::SchedulePeriod> const schedule = {{-5.0, 1.0}, {3.0, 5.0}, {9.0, 12.0}};
 	tx->setSchedule(schedule);
 	world.add(std::move(platform));
 	world.add(std::move(tx));
@@ -475,7 +475,7 @@ TEST_CASE("World schedules CW transmitter events with bounds", "[core][world]")
 
 TEST_CASE("World schedules CW transmitter always-on when schedule empty", "[core][world]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(1.5, 4.5);
 
 	core::World world;
@@ -496,7 +496,7 @@ TEST_CASE("World schedules CW transmitter always-on when schedule empty", "[core
 
 TEST_CASE("World schedules pulsed receiver events", "[core][world]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
@@ -506,7 +506,7 @@ TEST_CASE("World schedules pulsed receiver events", "[core][world]")
 	auto rx = std::make_unique<radar::Receiver>(platform.get(), "Rx-Pulsed", 3, radar::OperationMode::PULSED_MODE, 4);
 	rx->setWindowProperties(1.0, 2.0, 0.5);
 	rx->setTiming(std::make_shared<timing::Timing>("RxClock", 11));
-	std::vector<radar::SchedulePeriod> schedule = {{2.0, 3.0}, {6.0, 7.0}};
+	std::vector<radar::SchedulePeriod> const schedule = {{2.0, 3.0}, {6.0, 7.0}};
 	rx->setSchedule(schedule);
 	world.add(std::move(platform));
 	world.add(std::move(rx));
@@ -522,13 +522,13 @@ TEST_CASE("World schedules pulsed receiver events", "[core][world]")
 
 TEST_CASE("World schedules CW receiver events with bounds", "[core][world]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 
 	core::World world;
 	auto platform = std::make_unique<radar::Platform>("Platform-Rx", 1);
 	auto rx = std::make_unique<radar::Receiver>(platform.get(), "Rx-CW", 3, radar::OperationMode::CW_MODE, 4);
-	std::vector<radar::SchedulePeriod> schedule = {{-1.0, 2.0}, {4.0, 6.0}, {9.0, 11.0}};
+	std::vector<radar::SchedulePeriod> const schedule = {{-1.0, 2.0}, {4.0, 6.0}, {9.0, 11.0}};
 	rx->setSchedule(schedule);
 	world.add(std::move(platform));
 	world.add(std::move(rx));
@@ -557,7 +557,7 @@ TEST_CASE("World schedules CW receiver events with bounds", "[core][world]")
 
 TEST_CASE("World schedules CW receiver always-on when schedule empty", "[core][world]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(2.0, 5.0);
 
 	core::World world;

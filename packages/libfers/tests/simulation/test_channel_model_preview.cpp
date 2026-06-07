@@ -72,10 +72,10 @@ namespace
 
 TEST_CASE("calculatePreviewLinks returns empty for empty world", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
-	core::World world;
+	core::World const world;
 	const auto links = simulation::calculatePreviewLinks(world, 0.0);
 	REQUIRE(links.empty());
 }
@@ -87,7 +87,7 @@ TEST_CASE("calculatePreviewLinks returns empty for empty world", "[simulation][c
 TEST_CASE("calculatePreviewLinks monostatic produces Monostatic and BistaticTxTgt links",
 		  "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -142,7 +142,7 @@ TEST_CASE("calculatePreviewLinks monostatic produces Monostatic and BistaticTxTg
 
 TEST_CASE("calculatePreviewLinks monostatic link references correct IDs", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -212,7 +212,7 @@ TEST_CASE("calculatePreviewLinks monostatic link references correct IDs", "[simu
 
 TEST_CASE("calculatePreviewLinks bistatic produces correct link types", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -275,7 +275,7 @@ TEST_CASE("calculatePreviewLinks bistatic produces correct link types", "[simula
 
 TEST_CASE("calculatePreviewLinks bistatic with NODIRECT flag omits direct link", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -334,7 +334,7 @@ TEST_CASE("calculatePreviewLinks bistatic with NODIRECT flag omits direct link",
 
 TEST_CASE("calculatePreviewLinks respects transmitter schedule", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -390,7 +390,7 @@ TEST_CASE("calculatePreviewLinks respects transmitter schedule", "[simulation][c
 
 TEST_CASE("calculatePreviewLinks respects receiver schedule", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -457,7 +457,7 @@ TEST_CASE("calculatePreviewLinks respects receiver schedule", "[simulation][chan
 
 TEST_CASE("calculatePreviewLinks scales link count with number of targets", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -516,7 +516,7 @@ TEST_CASE("calculatePreviewLinks scales link count with number of targets", "[si
 
 TEST_CASE("calculatePreviewLinks classifies very weak signals as Weak", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6); // 1 MHz bandwidth for noise floor calculation
 
@@ -577,7 +577,7 @@ TEST_CASE("calculatePreviewLinks classifies very weak signals as Weak", "[simula
 
 TEST_CASE("calculatePreviewLinks classifies strong signals as Strong", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -639,7 +639,7 @@ TEST_CASE("calculatePreviewLinks classifies strong signals as Strong", "[simulat
 
 TEST_CASE("calculatePreviewLinks handles transmitter with no waveform", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -688,7 +688,7 @@ TEST_CASE("calculatePreviewLinks handles transmitter with no waveform", "[simula
 
 TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 
@@ -758,7 +758,7 @@ TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][c
 
 TEST_CASE("calculatePreviewLinks FMCW labels use single-value preview style", "[simulation][channel_model][preview]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
 

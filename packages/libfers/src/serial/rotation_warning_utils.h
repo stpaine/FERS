@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -16,14 +17,14 @@
 namespace serial::rotation_warning_utils
 {
 	/// Kind of rotation value being inspected for unit mistakes.
-	enum class ValueKind
+	enum class ValueKind : std::uint8_t
 	{
 		Angle, ///< Absolute rotation angle.
 		Rate ///< Rotation rate.
 	};
 
 	/// Confidence level for an inferred rotation unit.
-	enum class Confidence
+	enum class Confidence : std::uint8_t
 	{
 		None, ///< No useful inference could be made.
 		Low, ///< Weak evidence for the inferred unit.
@@ -32,7 +33,7 @@ namespace serial::rotation_warning_utils
 	};
 
 	/// Minimum confidence threshold for emitting rotation-unit warnings.
-	enum class WarningSensitivity
+	enum class WarningSensitivity : std::uint8_t
 	{
 		HighConfidence, ///< Warn only on high-confidence mismatches.
 		MediumOrHigh, ///< Warn on medium or high-confidence mismatches.

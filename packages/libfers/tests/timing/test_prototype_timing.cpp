@@ -8,7 +8,7 @@ using Catch::Matchers::WithinAbs;
 TEST_CASE("PrototypeTiming stores basic metadata", "[timing][prototype]")
 {
 	const SimId id = 12345;
-	timing::PrototypeTiming proto("reference", id);
+	timing::PrototypeTiming const proto("reference", id);
 
 	REQUIRE(proto.getName() == "reference");
 	REQUIRE(proto.getId() == id);

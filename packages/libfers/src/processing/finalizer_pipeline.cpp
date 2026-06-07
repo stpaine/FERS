@@ -253,7 +253,7 @@ namespace processing::pipeline
 							   const RealType fullscale, const RealType ref_freq,
 							   const core::OutputFileMetadata* metadata, const RealType sample_rate)
 	{
-		std::scoped_lock lock(serial::hdf5_global_mutex);
+		std::scoped_lock const lock(serial::hdf5_global_mutex);
 		try
 		{
 			HighFive::File file(filename, HighFive::File::Truncate);

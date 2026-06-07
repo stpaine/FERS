@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "coord.h"
@@ -32,7 +33,7 @@ namespace math
 		/**
 		 * @brief Types of interpolation supported by the Path class.
 		 */
-		enum class InterpType
+		enum class InterpType : std::uint8_t
 		{
 			INTERP_STATIC, ///< Hold the first coordinate for all query times.
 			INTERP_LINEAR, ///< Linearly interpolate between neighboring coordinates.

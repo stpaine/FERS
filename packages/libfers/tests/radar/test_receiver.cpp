@@ -115,7 +115,7 @@ TEST_CASE("Receiver exposes RNG", "[radar][receiver]")
 
 TEST_CASE("Receiver windows quantize to sampling rate", "[radar][receiver]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
@@ -148,7 +148,7 @@ TEST_CASE("Receiver inbox and interference log", "[radar][receiver]")
 {
 	radar::Platform platform("RxPlatform");
 	radar::Receiver rx(&platform, "RxA", 5, radar::OperationMode::CW_MODE);
-	radar::Transmitter tx(&platform, "TxA", radar::OperationMode::CW_MODE, 9001);
+	radar::Transmitter const tx(&platform, "TxA", radar::OperationMode::CW_MODE, 9001);
 
 	std::vector<std::unique_ptr<fers_signal::RadarSignal>> waves;
 	rx.addResponseToInbox(makeResponse(&tx, waves));
@@ -166,7 +166,7 @@ TEST_CASE("Receiver inbox and interference log", "[radar][receiver]")
 
 TEST_CASE("Receiver IF resampling preserves absolute output positions across schedule gaps", "[radar][receiver][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(1);
@@ -206,7 +206,7 @@ TEST_CASE("Receiver IF resampling preserves absolute output positions across sch
 
 TEST_CASE("Receiver IF live output reports absolute sample positions", "[radar][receiver][fmcw][vita49]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(1);
@@ -249,7 +249,7 @@ TEST_CASE("Receiver IF live output reports absolute sample positions", "[radar][
 
 TEST_CASE("Receiver IF resampling aligns off-grid segments to the global IF grid", "[radar][receiver][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(100.0);
 	params::setOversampleRatio(1);
@@ -296,7 +296,7 @@ TEST_CASE("Receiver IF resampling aligns off-grid segments to the global IF grid
 TEST_CASE("Receiver IF resampling flushes filtered tail samples after scheduled segment ends",
 		  "[radar][receiver][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(100.0);
 	params::setOversampleRatio(1);
@@ -343,7 +343,7 @@ TEST_CASE("Receiver IF resampling flushes filtered tail samples after scheduled 
 
 TEST_CASE("Receiver IF resampling skips long inactive gaps without zero-sample work", "[radar][receiver][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1000.0);
 	params::setRate(100000.0);
 	params::setOversampleRatio(1);
@@ -394,7 +394,7 @@ TEST_CASE("Receiver schedule determines next window time", "[radar][receiver]")
 
 	SECTION("Schedule enforces active windows")
 	{
-		std::vector<radar::SchedulePeriod> schedule = {{1.0, 2.0}, {4.0, 5.0}};
+		std::vector<radar::SchedulePeriod> const schedule = {{1.0, 2.0}, {4.0, 5.0}};
 		rx.setSchedule(schedule);
 		REQUIRE(rx.getSchedule().size() == 2);
 

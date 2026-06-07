@@ -39,7 +39,7 @@ TEST_CASE("RotationPath: Accessors and State", "[math][rotation_path]")
 
 	SECTION("Start Coordinate Accessor")
 	{
-		RotationCoord start_val(1.5, 2.5, 0.0);
+		RotationCoord const start_val(1.5, 2.5, 0.0);
 		rp.setStart(start_val);
 
 		RotationCoord s = rp.getStart();
@@ -49,7 +49,7 @@ TEST_CASE("RotationPath: Accessors and State", "[math][rotation_path]")
 
 	SECTION("Rate Accessor")
 	{
-		RotationCoord rate_val(0.1, 0.2, 0.0);
+		RotationCoord const rate_val(0.1, 0.2, 0.0);
 		rp.setRate(rate_val);
 
 		RotationCoord r = rp.getRate();
@@ -84,8 +84,8 @@ TEST_CASE("RotationPath: Cubic Interpolation", "[math][rotation_path]")
 TEST_CASE("RotationPath: Constant Rate", "[math][rotation_path]")
 {
 	RotationPath rp;
-	RotationCoord start(0.0, 0.0, 0.0);
-	RotationCoord rate(PI_VAL, 0.0, 0.0);
+	RotationCoord const start(0.0, 0.0, 0.0);
+	RotationCoord const rate(PI_VAL, 0.0, 0.0);
 
 	rp.setConstantRate(start, rate);
 

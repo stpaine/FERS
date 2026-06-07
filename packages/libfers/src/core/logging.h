@@ -19,6 +19,7 @@
 #define LOG(level, ...) log(level, std::source_location::current(), __VA_ARGS__)
 
 #include <atomic>
+#include <cstdint>
 #include <expected>
 #include <format>
 #include <fstream>
@@ -34,7 +35,7 @@ namespace logging
 	 * @class Level
 	 * @brief Enum class representing the log levels.
 	 */
-	enum class Level
+	enum class Level : std::uint8_t
 	{
 		TRACE, ///< Trace level for detailed debugging information.
 		DEBUG, ///< Debug level for general debugging information.

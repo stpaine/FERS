@@ -43,7 +43,7 @@ namespace serial::xml_serializer_utils
 		const XmlElement sched_elem = parent.addChild("schedule");
 		for (const auto& period : schedule)
 		{
-			XmlElement p_elem = sched_elem.addChild("period");
+			XmlElement const p_elem = sched_elem.addChild("period");
 			p_elem.setAttribute("start", std::to_string(period.start));
 			p_elem.setAttribute("end", std::to_string(period.end));
 		}
@@ -180,7 +180,7 @@ namespace serial::xml_serializer_utils
 		timing.copyAlphas(alphas, weights);
 		for (size_t i = 0; i < alphas.size(); ++i)
 		{
-			XmlElement entry = parent.addChild("noise_entry");
+			XmlElement const entry = parent.addChild("noise_entry");
 			addChildWithNumber(entry, "alpha", alphas[i]);
 			addChildWithNumber(entry, "weight", weights[i]);
 		}
@@ -251,7 +251,7 @@ namespace serial::xml_serializer_utils
 
 		for (const auto& [pos, t] : path.getCoords())
 		{
-			XmlElement wp_elem = parent.addChild("positionwaypoint");
+			XmlElement const wp_elem = parent.addChild("positionwaypoint");
 			addChildWithNumber(wp_elem, "x", pos.x);
 			addChildWithNumber(wp_elem, "y", pos.y);
 			addChildWithNumber(wp_elem, "altitude", pos.z);
@@ -302,7 +302,7 @@ namespace serial::xml_serializer_utils
 			const auto unit = params::rotationAngleUnit();
 			for (const auto& wp : rotPath.getCoords())
 			{
-				XmlElement wp_elem = rot_elem.addChild("rotationwaypoint");
+				XmlElement const wp_elem = rot_elem.addChild("rotationwaypoint");
 				RealType azimuth = rotation_angle_utils::internal_azimuth_to_external(wp.azimuth, unit);
 				if (unit == params::RotationAngleUnit::Degrees)
 				{
@@ -466,7 +466,7 @@ namespace serial::xml_serializer_utils
 		{
 			if (const auto* chi = dynamic_cast<const radar::RcsChiSquare*>(model))
 			{
-				XmlElement model_elem = target_elem.addChild("model");
+				XmlElement const model_elem = target_elem.addChild("model");
 				model_elem.setAttribute("type", "chisquare");
 				addChildWithNumber(model_elem, "k", chi->getK());
 			}

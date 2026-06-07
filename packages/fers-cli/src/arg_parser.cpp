@@ -257,7 +257,7 @@ namespace
 	 */
 	std::expected<void, std::string> handleLogFile(const std::string& arg, core::Config& config) noexcept
 	{
-		std::string log_file_path = arg.substr(11);
+		std::string const log_file_path = arg.substr(11);
 		if (isValidLogFileExtension(log_file_path))
 		{
 			config.log_file = log_file_path;

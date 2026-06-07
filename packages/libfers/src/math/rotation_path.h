@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include "coord.h"
@@ -31,7 +32,7 @@ namespace math
 		 * @enum InterpType
 		 * @brief Enumeration for types of interpolation.
 		 */
-		enum class InterpType
+		enum class InterpType : std::uint8_t
 		{
 			INTERP_STATIC, ///< Hold the first rotation for all query times.
 			INTERP_CONSTANT, ///< Hold the most recent rotation sample.

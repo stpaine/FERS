@@ -49,8 +49,8 @@ namespace
 
 TEST_CASE("serializeParameters creates correct tags across frames", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	params::Parameters p;
@@ -114,7 +114,7 @@ TEST_CASE("serializeParameters creates correct tags across frames", "[serial][xm
 
 	SECTION("Defaults parameters omitted gracefully")
 	{
-		params::Parameters p2; // Default constructor
+		params::Parameters const p2; // Default constructor
 		serial::xml_serializer_utils::serializeParameters(root, p2);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, !ContainsSubstring("<c>"));
@@ -128,14 +128,14 @@ TEST_CASE("serializeParameters creates correct tags across frames", "[serial][xm
 
 TEST_CASE("serializeWaveform processes CW and Pulsed correctly", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	SECTION("CW Mode")
 	{
 		auto sig = std::make_unique<fers_signal::CwSignal>();
-		fers_signal::RadarSignal wave("w1", 10.0, 1e9, 1.0, std::move(sig));
+		fers_signal::RadarSignal const wave("w1", 10.0, 1e9, 1.0, std::move(sig));
 		serial::xml_serializer_utils::serializeWaveform(wave, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("name=\"w1\""));
@@ -156,7 +156,7 @@ TEST_CASE("serializeWaveform processes CW and Pulsed correctly", "[serial][xml_s
 	SECTION("Pulsed Missing Filename safely defaults")
 	{
 		auto sig = std::make_unique<fers_signal::Signal>();
-		fers_signal::RadarSignal wave("w3", 20.0, 2e9, 1.0, std::move(sig));
+		fers_signal::RadarSignal const wave("w3", 20.0, 2e9, 1.0, std::move(sig));
 		serial::xml_serializer_utils::serializeWaveform(wave, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("<pulsed_from_file filename=\"\"/>"));
@@ -165,18 +165,18 @@ TEST_CASE("serializeWaveform processes CW and Pulsed correctly", "[serial][xml_s
 
 TEST_CASE("serializeWaveform round trips FMCW linear chirp direction", "[serial][xml_serializer][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
 
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("waveform")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("waveform")));
 	doc.setRootElement(root);
 
 	auto sig = std::make_unique<fers_signal::FmcwChirpSignal>(1.0e6, 1.0e-3, 1.0e-3, 0.0, std::nullopt,
 															  fers_signal::FmcwChirpDirection::Down);
-	fers_signal::RadarSignal wave("down", 20.0, 2e9, 1.0e-3, std::move(sig));
+	fers_signal::RadarSignal const wave("down", 20.0, 2e9, 1.0e-3, std::move(sig));
 
 	serial::xml_serializer_utils::serializeWaveform(wave, root);
 	const std::string serialized = dumpElement(root);
@@ -200,8 +200,8 @@ TEST_CASE("serializeWaveform round trips FMCW linear chirp direction", "[serial]
 
 TEST_CASE("serializeTiming preserves clock phase and jitter characteristics", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	timing::PrototypeTiming t("t1");
@@ -227,8 +227,8 @@ TEST_CASE("serializeTiming preserves clock phase and jitter characteristics", "[
 
 TEST_CASE("serializeAntenna dispatches to correct pattern forms", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	SECTION("Isotropic")
@@ -243,7 +243,7 @@ TEST_CASE("serializeAntenna dispatches to correct pattern forms", "[serial][xml_
 
 	SECTION("Sinc")
 	{
-		antenna::Sinc ant("a2", 1.0, 2.0, 3.0);
+		antenna::Sinc const ant("a2", 1.0, 2.0, 3.0);
 		serial::xml_serializer_utils::serializeAntenna(ant, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("pattern=\"sinc\""));
@@ -252,7 +252,7 @@ TEST_CASE("serializeAntenna dispatches to correct pattern forms", "[serial][xml_
 
 	SECTION("Gaussian")
 	{
-		antenna::Gaussian ant("a3", 1.5, 2.5);
+		antenna::Gaussian const ant("a3", 1.5, 2.5);
 		serial::xml_serializer_utils::serializeAntenna(ant, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("pattern=\"gaussian\""));
@@ -261,7 +261,7 @@ TEST_CASE("serializeAntenna dispatches to correct pattern forms", "[serial][xml_
 
 	SECTION("SquareHorn")
 	{
-		antenna::SquareHorn ant("a4", 0.5);
+		antenna::SquareHorn const ant("a4", 0.5);
 		serial::xml_serializer_utils::serializeAntenna(ant, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("pattern=\"squarehorn\""));
@@ -270,7 +270,7 @@ TEST_CASE("serializeAntenna dispatches to correct pattern forms", "[serial][xml_
 
 	SECTION("Parabolic")
 	{
-		antenna::Parabolic ant("a5", 2.0);
+		antenna::Parabolic const ant("a5", 2.0);
 		serial::xml_serializer_utils::serializeAntenna(ant, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("pattern=\"parabolic\""));
@@ -282,8 +282,8 @@ TEST_CASE("serializeAntenna dispatches to correct pattern forms", "[serial][xml_
 
 TEST_CASE("serializeMotionPath sets right interpolation models", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	math::Path path;
@@ -316,8 +316,8 @@ TEST_CASE("serializeMotionPath sets right interpolation models", "[serial][xml_s
 
 TEST_CASE("serializeRotation translates internal math to compass correctly", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	math::RotationPath rot;
@@ -325,9 +325,9 @@ TEST_CASE("serializeRotation translates internal math to compass correctly", "[s
 	SECTION("Fixed Constant")
 	{
 		// Internal math equivalent to Compass 90 (East), Elevation 0
-		math::RotationCoord start{(90.0 - 90.0) * PI / 180.0, 0, 0};
+		math::RotationCoord const start{(90.0 - 90.0) * PI / 180.0, 0, 0};
 		// Rotate +10 deg/sec in compass, up 5 deg/sec in elevation
-		math::RotationCoord rate{-10.0 * PI / 180.0, 5.0 * PI / 180.0, 0};
+		math::RotationCoord const rate{-10.0 * PI / 180.0, 5.0 * PI / 180.0, 0};
 		rot.setConstantRate(start, rate);
 
 		serial::xml_serializer_utils::serializeRotation(rot, root);
@@ -379,11 +379,11 @@ TEST_CASE("serializeRotation translates internal math to compass correctly", "[s
 
 TEST_CASE("serializeTransmitter", "[serial][xml_serializer]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10000.0);
 
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	radar::Platform plat("p1");
@@ -414,8 +414,8 @@ TEST_CASE("serializeTransmitter", "[serial][xml_serializer]")
 
 TEST_CASE("serializeReceiver", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	radar::Platform plat("p1");
@@ -475,8 +475,8 @@ TEST_CASE("serializeReceiver", "[serial][xml_serializer]")
 
 TEST_CASE("serializeMonostatic pairs matching attached Transmitter/Receiver", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	radar::Platform plat("p1");
@@ -500,8 +500,8 @@ TEST_CASE("serializeMonostatic pairs matching attached Transmitter/Receiver", "[
 
 TEST_CASE("serializeTarget models", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	radar::Platform plat("p1");
@@ -529,8 +529,8 @@ TEST_CASE("serializeTarget models", "[serial][xml_serializer]")
 
 TEST_CASE("serializePlatform iterates correctly linked nodes", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	core::World world;
@@ -566,8 +566,8 @@ TEST_CASE("serializePlatform iterates correctly linked nodes", "[serial][xml_ser
 
 TEST_CASE("world_to_xml_string outputs a full well-formed simulation", "[serial][xml_serializer]")
 {
-	ParamGuard guard;
-	core::World world;
+	ParamGuard const guard;
+	core::World const world;
 	SECTION("Custom Name")
 	{
 		params::params.simulation_name = "Custom Name";
@@ -590,8 +590,8 @@ TEST_CASE("world_to_xml_string outputs a full well-formed simulation", "[serial]
 
 TEST_CASE("addChildWithNumber handles various floating point values", "[serial][xml_serializer]")
 {
-	XmlDocument doc;
-	XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	XmlDocument const doc;
+	XmlElement const root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
 	serial::xml_serializer_utils::addChildWithNumber(root, "nan_val", std::numeric_limits<double>::quiet_NaN());

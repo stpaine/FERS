@@ -26,7 +26,7 @@ namespace
 
 TEST_CASE("XmlElement handles invalid nodes", "[serial][xml]")
 {
-	XmlElement element(nullptr);
+	XmlElement const element(nullptr);
 	REQUIRE_FALSE(element.isValid());
 	REQUIRE(element.getText().empty());
 	REQUIRE_FALSE(element.childElement("child").isValid());
@@ -34,7 +34,7 @@ TEST_CASE("XmlElement handles invalid nodes", "[serial][xml]")
 
 TEST_CASE("XmlElement reads and writes text", "[serial][xml]")
 {
-	XmlDocument doc;
+	XmlDocument const doc;
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 	root.setText("alpha");
@@ -49,7 +49,7 @@ TEST_CASE("XmlElement reads and writes text", "[serial][xml]")
 
 TEST_CASE("XmlElement manages attributes", "[serial][xml]")
 {
-	XmlDocument doc;
+	XmlDocument const doc;
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 	root.setAttribute("mode", "cw");
@@ -60,7 +60,7 @@ TEST_CASE("XmlElement manages attributes", "[serial][xml]")
 
 TEST_CASE("XmlElement handles child indexing and filtering", "[serial][xml]")
 {
-	XmlDocument doc;
+	XmlDocument const doc;
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 
@@ -105,7 +105,7 @@ TEST_CASE("XmlDocument loads files and persists output", "[serial][xml]")
 	REQUIRE(doc.saveFile(output_path));
 
 	std::ifstream in(output_path, std::ios::binary);
-	std::string saved((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+	std::string const saved((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 	REQUIRE(saved.find("<value>17</value>") != std::string::npos);
 
 	std::remove(input_path.c_str());
@@ -114,7 +114,7 @@ TEST_CASE("XmlDocument loads files and persists output", "[serial][xml]")
 
 TEST_CASE("XmlDocument requires root element", "[serial][xml]")
 {
-	XmlDocument doc;
+	XmlDocument const doc;
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	doc.setRootElement(root);
 	REQUIRE(doc.getRootElement().name() == "root");
@@ -122,14 +122,14 @@ TEST_CASE("XmlDocument requires root element", "[serial][xml]")
 
 TEST_CASE("XmlDocument throws when root is missing", "[serial][xml]")
 {
-	XmlDocument doc;
+	XmlDocument const doc;
 	REQUIRE_THROWS_AS(doc.getRootElement(), std::runtime_error);
 }
 
 TEST_CASE("XmlDocument throws when setting root on moved-from doc", "[serial][xml]")
 {
 	XmlDocument doc;
-	XmlDocument moved_doc(std::move(doc));
+	XmlDocument const moved_doc(std::move(doc));
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	moved_doc.setRootElement(root);
 	REQUIRE_THROWS_AS(doc.setRootElement(root), std::runtime_error);
@@ -138,7 +138,7 @@ TEST_CASE("XmlDocument throws when setting root on moved-from doc", "[serial][xm
 TEST_CASE("XmlDocument throws when getting root on moved-from doc", "[serial][xml]")
 {
 	XmlDocument doc;
-	XmlDocument moved_doc(std::move(doc));
+	XmlDocument const moved_doc(std::move(doc));
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	moved_doc.setRootElement(root);
 	REQUIRE_THROWS_AS(doc.getRootElement(), std::runtime_error);
@@ -245,8 +245,8 @@ TEST_CASE("XmlDocument loadFile fails for missing file", "[serial][xml]")
 
 TEST_CASE("mergeXmlDocuments merges element children", "[serial][xml]")
 {
-	XmlDocument main_doc;
-	XmlDocument included_doc;
+	XmlDocument const main_doc;
+	XmlDocument const included_doc;
 
 	const XmlElement main_root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	main_root.addChild("main").setText("1");
@@ -267,7 +267,7 @@ TEST_CASE("mergeXmlDocuments merges element children", "[serial][xml]")
 
 TEST_CASE("removeIncludeElements removes all include nodes", "[serial][xml]")
 {
-	XmlDocument doc;
+	XmlDocument const doc;
 	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
 	root.addChild("include").setText("first");
 	root.addChild("keep").setText("value");

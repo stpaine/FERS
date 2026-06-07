@@ -203,7 +203,7 @@ void removeIncludeElements(const XmlDocument& doc)
 
 	while (true)
 	{
-		if (XmlElement include_element = root.childElement("include", 0); include_element.isValid())
+		if (const XmlElement include_element = root.childElement("include", 0); include_element.isValid())
 		{
 			xmlUnlinkNode(include_element.getNode());
 			xmlFreeNode(include_element.getNode());

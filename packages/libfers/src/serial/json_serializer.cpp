@@ -1272,7 +1272,7 @@ namespace
 			return;
 		}
 
-		radar::OperationMode mode =
+		radar::OperationMode const mode =
 			parse_mode(comp_json, "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
 		if (mode == radar::OperationMode::FMCW_MODE && comp_json.contains("fmcw_mode") &&
 			has_dechirp_fields(comp_json.at("fmcw_mode")))
@@ -1347,7 +1347,7 @@ namespace
 			return;
 		}
 
-		radar::OperationMode mode =
+		radar::OperationMode const mode =
 			parse_mode(comp_json, "Receiver component '" + comp_json.value("name", "Unnamed") + "'");
 
 		const auto recv_id = parse_json_id(comp_json, "id", "Receiver");
@@ -1483,7 +1483,7 @@ namespace
 			return;
 		}
 
-		radar::OperationMode mode =
+		radar::OperationMode const mode =
 			parse_mode(comp_json, "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 
 		// Transmitter part
@@ -1858,7 +1858,7 @@ namespace serial
 			auto timing_id = parse_json_id(j, "timing", "Transmitter");
 			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
-				unsigned seed = tx->getTiming() ? tx->getTiming()->getSeed() : 0;
+				unsigned const seed = tx->getTiming() ? tx->getTiming()->getSeed() : 0;
 				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
 				timing->initializeModel(timing_proto);
 				tx->setTiming(timing);
@@ -1948,7 +1948,7 @@ namespace serial
 			auto timing_id = parse_json_id(j, "timing", "Receiver");
 			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
-				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
+				unsigned const seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
 				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
 				timing->initializeModel(timing_proto);
 				rx->setTiming(timing);
@@ -2020,7 +2020,7 @@ namespace serial
 			auto timing_id = parse_json_id(j, "timing", "Monostatic");
 			if (auto* const timing_proto = world.findTiming(timing_id))
 			{
-				unsigned seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
+				unsigned const seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
 				auto shared_timing =
 					std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
 				shared_timing->initializeModel(timing_proto);
@@ -2073,7 +2073,7 @@ namespace serial
 
 		const auto target_id = existing_tgt->getId();
 		const auto name = j.value("name", existing_tgt->getName());
-		unsigned seed = existing_tgt->getSeed();
+		unsigned const seed = existing_tgt->getSeed();
 
 		if (rcs_type == "isotropic")
 		{

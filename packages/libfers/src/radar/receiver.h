@@ -52,14 +52,14 @@ namespace radar
 		 * @enum RecvFlag
 		 * @brief Enumeration for receiver configuration flags.
 		 */
-		enum class RecvFlag
+		enum class RecvFlag : std::uint8_t
 		{
 			FLAG_NODIRECT = 1, ///< Disable direct-path reception.
 			FLAG_NOPROPLOSS = 2 ///< Disable propagation-loss scaling.
 		};
 
 		/// Receiver-side FMCW dechirping mode.
-		enum class DechirpMode
+		enum class DechirpMode : std::uint8_t
 		{
 			None, ///< Output raw pre-mix streaming IQ.
 			Physical, ///< Preserve timing phase-noise decorrelation in the IF output.
@@ -67,7 +67,7 @@ namespace radar
 		};
 
 		/// Source used to construct the receiver LO reference.
-		enum class DechirpReferenceSource
+		enum class DechirpReferenceSource : std::uint8_t
 		{
 			None, ///< No reference configured.
 			Attached, ///< Use the attached transmitter.

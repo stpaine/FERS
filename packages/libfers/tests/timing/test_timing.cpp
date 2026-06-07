@@ -39,7 +39,7 @@ TEST_CASE("Timing defaults to disabled", "[timing]")
 
 TEST_CASE("Timing initializes model and produces deterministic offsets", "[timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 
 	timing::PrototypeTiming proto("clock", 77);
@@ -67,7 +67,7 @@ TEST_CASE("Timing initializes model and produces deterministic offsets", "[timin
 
 TEST_CASE("Timing applies random frequency and phase offsets", "[timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 
 	const unsigned seed = 4242;
@@ -99,7 +99,7 @@ TEST_CASE("Timing applies random frequency and phase offsets", "[timing]")
 
 TEST_CASE("Timing handles zero frequency initialization", "[timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 
 	timing::PrototypeTiming proto("zero");
@@ -117,7 +117,7 @@ TEST_CASE("Timing handles zero frequency initialization", "[timing]")
 
 TEST_CASE("Timing reports disabled when no offsets or noise", "[timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 
 	timing::PrototypeTiming proto("quiet");
@@ -132,14 +132,14 @@ TEST_CASE("Timing reports disabled when no offsets or noise", "[timing]")
 
 TEST_CASE("Timing clone requires initialized prototype", "[timing]")
 {
-	timing::Timing timing_source("clock", 11, 5);
+	timing::Timing const timing_source("clock", 11, 5);
 
 	REQUIRE_THROWS_AS(timing_source.clone(), std::logic_error);
 }
 
 TEST_CASE("Timing clone reproduces prototype behavior", "[timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 
 	timing::PrototypeTiming proto("cloneable", 19);
@@ -165,7 +165,7 @@ TEST_CASE("Timing clone reproduces prototype behavior", "[timing]")
 
 TEST_CASE("Timing initializeModel is idempotent", "[timing]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 
 	timing::PrototypeTiming proto_a("clock", 3);
@@ -191,6 +191,6 @@ TEST_CASE("Timing initializeModel is idempotent", "[timing]")
 
 TEST_CASE("Timing exposes initial seed", "[timing]")
 {
-	timing::Timing timing_source("clk", 54321, 9);
+	timing::Timing const timing_source("clk", 54321, 9);
 	REQUIRE(timing_source.getSeed() == 54321);
 }

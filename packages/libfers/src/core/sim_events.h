@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "config.h"
 
 namespace radar
@@ -24,7 +26,7 @@ namespace core
 	 * @enum EventType
 	 * @brief Enumerates the types of events that can occur in the simulation.
 	 */
-	enum class EventType
+	enum class EventType : std::uint8_t
 	{
 		TX_PULSED_START, ///< A pulsed transmitter begins emitting a pulse.
 		RX_PULSED_WINDOW_START, ///< A pulsed receiver opens its listening window.

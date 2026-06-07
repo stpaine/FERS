@@ -59,7 +59,7 @@ TEST_CASE("FirFilter applies coefficients to complex samples", "[signal][dsp][fi
 	const std::vector<RealType> coeffs = {1.0, 2.0};
 	std::vector<ComplexType> samples = {ComplexType{1.0, 1.0}, ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0}};
 
-	fers_signal::FirFilter filter(coeffs);
+	fers_signal::FirFilter const filter(coeffs);
 	filter.filter(samples);
 
 	REQUIRE(samples.size() == 3);
@@ -98,14 +98,14 @@ TEST_CASE("FirFilter real-span overload is a no-op", "[signal][dsp][fir]")
 
 TEST_CASE("DecadeUpsampler rejects incorrect output size", "[signal][dsp][upsample]")
 {
-	fers_signal::DecadeUpsampler upsampler;
+	fers_signal::DecadeUpsampler const upsampler;
 	std::vector<RealType> out(9, 0.0);
 	REQUIRE_THROWS_AS(upsampler.upsample(1.0, out), std::invalid_argument);
 }
 
 TEST_CASE("DecadeUpsampler produces zeros for zero input", "[signal][dsp][upsample]")
 {
-	fers_signal::DecadeUpsampler upsampler;
+	fers_signal::DecadeUpsampler const upsampler;
 	std::vector<RealType> out(10, 1.0);
 
 	upsampler.upsample(0.0, out);
@@ -118,7 +118,7 @@ TEST_CASE("DecadeUpsampler produces zeros for zero input", "[signal][dsp][upsamp
 
 TEST_CASE("Upsample and downsample preserve low-frequency content", "[signal][dsp][resample]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.filter_length = 8;
 	params::setOversampleRatio(2);
 
@@ -147,7 +147,7 @@ TEST_CASE("Upsample and downsample preserve low-frequency content", "[signal][ds
 
 TEST_CASE("Upsample and downsample preserve boundary-ratio low-frequency content", "[signal][dsp][resample]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.filter_length = 33;
 	params::setOversampleRatio(8);
 
@@ -186,7 +186,7 @@ TEST_CASE("Upsample and downsample preserve boundary-ratio low-frequency content
 
 TEST_CASE("Downsample truncates non-divisible oversampled buffers", "[signal][dsp][downsample]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setOversampleRatio(8);
 
 	const std::vector<ComplexType> oversampled(17, ComplexType{0.0, 0.0});
@@ -197,7 +197,7 @@ TEST_CASE("Downsample truncates non-divisible oversampled buffers", "[signal][ds
 
 TEST_CASE("Resampler fails fast when oversample ratio exceeds fixed-filter limit", "[signal][dsp][resample]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.oversample_ratio = 9;
 
 	const std::vector<ComplexType> input = {ComplexType{1.0, 0.0}, ComplexType{0.0, 1.0}};

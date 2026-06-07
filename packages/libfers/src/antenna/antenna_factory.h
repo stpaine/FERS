@@ -12,6 +12,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -438,7 +439,7 @@ namespace antenna
 	{
 	public:
 		/// Symmetry mode for one-dimensional XML antenna gain axes.
-		enum class AxisSymmetry
+		enum class AxisSymmetry : std::uint8_t
 		{
 			Mirrored, ///< Mirror positive-axis samples onto negative angles.
 			None, ///< Use the axis samples exactly as provided.

@@ -896,10 +896,10 @@ namespace simulation
 					solveReDirect(trans, recv, current_time, signal, results);
 				}
 
-				interp::InterpPoint point{.power = results.power,
-										  .time = current_time.count() + results.delay,
-										  .delay = results.delay,
-										  .phase = results.phase};
+				interp::InterpPoint const point{.power = results.power,
+												.time = current_time.count() + results.delay,
+												.delay = results.delay,
+												.phase = results.phase};
 				response->addInterpPoint(point);
 			}
 		}

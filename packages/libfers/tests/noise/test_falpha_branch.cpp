@@ -67,7 +67,7 @@ TEST_CASE("FAlphaBranch non-last branch matches upsampled pre-offset buffer", "[
 	noise::FAlphaBranch branch(rng_branch, ffrac, fint, std::move(pre), false);
 
 	fers_signal::IirFilter highpass(kHighpassDen.data(), kHighpassNum.data(), kHighpassDen.size());
-	fers_signal::DecadeUpsampler upsampler;
+	fers_signal::DecadeUpsampler const upsampler;
 	std::normal_distribution<> dist_main(0.0, 1.0);
 	std::normal_distribution<> dist_pre(0.0, 1.0);
 

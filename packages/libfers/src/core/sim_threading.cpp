@@ -960,7 +960,7 @@ namespace core
 						 receiver_ptr->getMode() == OperationMode::FMCW_MODE) &&
 						receiver_ptr->isActive())
 					{
-						ComplexType sample =
+						ComplexType const sample =
 							calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
 													 _streaming_tracker_caches[receiver_index]);
 						if (receiver_ptr->hasFmcwIfResamplingSink())

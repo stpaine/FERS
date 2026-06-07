@@ -49,7 +49,7 @@ int main(int argc, char* argv[])
 	logging::logger.setLevel(testLogLevel);
 
 	// Run the Catch2 test session
-	int result = Catch::Session().run(argc, argv);
+	int const result = Catch::Session().run(argc, argv);
 
 	return result;
 }

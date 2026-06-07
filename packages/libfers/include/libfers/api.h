@@ -188,7 +188,7 @@ int fers_set_vita49_packet_trace_enabled(fers_context_t* context, int enabled);
 /**
  * @brief Log levels for the FERS library.
  */
-typedef enum // NOLINT(*-use-using)
+typedef enum // NOLINT(*-use-using,performance-enum-size)
 {
 	FERS_LOG_TRACE, ///< Trace-level diagnostic logging.
 	FERS_LOG_DEBUG, ///< Debug-level diagnostic logging.
@@ -590,7 +590,7 @@ void fers_free_antenna_pattern_data(fers_antenna_pattern_data_t* data);
  * This enum provides a language-agnostic way to specify the desired
  * interpolation algorithm when calling the path generation functions.
  */
-typedef enum // NOLINT(*-use-using)
+typedef enum // NOLINT(*-use-using,performance-enum-size)
 {
 	FERS_INTERP_STATIC,
 	FERS_INTERP_LINEAR,
@@ -600,7 +600,7 @@ typedef enum // NOLINT(*-use-using)
 /**
  * @brief Units used for external rotation angles and rates.
  */
-typedef enum // NOLINT(*-use-using)
+typedef enum // NOLINT(*-use-using,performance-enum-size)
 {
 	FERS_ANGLE_UNIT_DEG,
 	FERS_ANGLE_UNIT_RAD
@@ -727,7 +727,7 @@ void fers_free_interpolated_rotation_path(fers_interpolated_rotation_path_t* pat
 /**
  * @brief Quality of the radio link based on SNR.
  */
-typedef enum // NOLINT(*-use-using)
+typedef enum // NOLINT(*-use-using,performance-enum-size)
 {
 	FERS_LINK_STRONG, // SNR > 0 dB
 	FERS_LINK_WEAK // SNR < 0 dB (Geometric possibility but sub-noise)
@@ -736,7 +736,7 @@ typedef enum // NOLINT(*-use-using)
 /**
  * @brief Type of visual link to render.
  */
-typedef enum // NOLINT(*-use-using)
+typedef enum // NOLINT(*-use-using,performance-enum-size)
 {
 	FERS_LINK_MONOSTATIC, // Combined Tx/Rx path
 	FERS_LINK_BISTATIC_TX_TGT, // Illuminator path

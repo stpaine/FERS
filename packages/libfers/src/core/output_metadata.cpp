@@ -389,13 +389,13 @@ namespace core
 
 	void OutputMetadataCollector::addFile(OutputFileMetadata file_metadata)
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		_metadata.files.push_back(std::move(file_metadata));
 	}
 
 	OutputMetadata OutputMetadataCollector::snapshot() const
 	{
-		std::scoped_lock lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		return _metadata;
 	}
 

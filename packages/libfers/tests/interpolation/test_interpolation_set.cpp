@@ -18,7 +18,7 @@ TEST_CASE("InterpPoint defaults to zeros", "[interpolation][point]")
 
 TEST_CASE("InterpSetData returns nullopt when empty", "[interpolation][set]")
 {
-	interp::InterpSetData data;
+	interp::InterpSetData const data;
 	REQUIRE_FALSE(data.value(0.0).has_value());
 	REQUIRE_THAT(data.max(), WithinAbs(0.0, 0.0));
 }
@@ -109,7 +109,7 @@ TEST_CASE("InterpSetData divide rejects zero", "[interpolation][set]")
 
 TEST_CASE("InterpSet wrapper supports float interpolation", "[interpolation][set]")
 {
-	interp::InterpSet set;
+	interp::InterpSet const set;
 	set.insertSample(0.0f, 0.0f);
 	set.insertSample(1.0f, 1.0f);
 
@@ -125,7 +125,7 @@ TEST_CASE("InterpSet wrapper supports float interpolation", "[interpolation][set
 
 TEST_CASE("InterpSet wrapper exposes max", "[interpolation][set]")
 {
-	interp::InterpSet set;
+	interp::InterpSet const set;
 	set.insertSample(0.0, -2.0);
 	set.insertSample(1.0, 1.0);
 	REQUIRE_THAT(set.getMax(), WithinAbs(2.0, 1e-12));

@@ -34,12 +34,12 @@ namespace
 TEST_CASE("Response start/end time default to zero", "[serial][response]")
 {
 	radar::Platform platform("TxPlatform");
-	radar::Transmitter transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 7);
+	radar::Transmitter const transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 7);
 
 	auto signal = std::make_unique<CaptureSignal>();
-	fers_signal::RadarSignal wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
+	fers_signal::RadarSignal const wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
 
-	serial::Response response(&wave, &transmitter);
+	serial::Response const response(&wave, &transmitter);
 
 	REQUIRE_THAT(response.startTime(), WithinAbs(0.0, 0.0));
 	REQUIRE_THAT(response.endTime(), WithinAbs(0.0, 0.0));
@@ -49,10 +49,10 @@ TEST_CASE("Response start/end time default to zero", "[serial][response]")
 TEST_CASE("Response records interpolation points", "[serial][response]")
 {
 	radar::Platform platform("TxPlatform");
-	radar::Transmitter transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 7);
+	radar::Transmitter const transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 7);
 
 	auto signal = std::make_unique<CaptureSignal>();
-	fers_signal::RadarSignal wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
+	fers_signal::RadarSignal const wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
 
 	serial::Response response(&wave, &transmitter);
 	response.addInterpPoint({1.0, 0.25, 0.0, 0.0});
@@ -66,26 +66,26 @@ TEST_CASE("Response records interpolation points", "[serial][response]")
 TEST_CASE("Response exposes transmitter id", "[serial][response]")
 {
 	radar::Platform platform("TxPlatform");
-	radar::Transmitter transmitter(&platform, "TxA", radar::OperationMode::CW_MODE, 1234);
+	radar::Transmitter const transmitter(&platform, "TxA", radar::OperationMode::CW_MODE, 1234);
 
 	auto signal = std::make_unique<CaptureSignal>();
-	fers_signal::RadarSignal wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
+	fers_signal::RadarSignal const wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
 
-	serial::Response response(&wave, &transmitter);
+	serial::Response const response(&wave, &transmitter);
 	REQUIRE(response.getTransmitterId() == 1234);
 }
 
 TEST_CASE("Response renderBinary delegates to signal", "[serial][response]")
 {
 	radar::Platform platform("TxPlatform");
-	radar::Transmitter transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 7);
+	radar::Transmitter const transmitter(&platform, "TxA", radar::OperationMode::PULSED_MODE, 7);
 
 	auto signal = std::make_unique<CaptureSignal>();
 	signal->data = {ComplexType{1.0, -1.0}, ComplexType{0.5, 0.25}};
 	std::vector<ComplexType> dummy = {ComplexType{0.0, 0.0}};
 	signal->load(dummy, static_cast<unsigned>(dummy.size()), 1250.0);
 
-	fers_signal::RadarSignal wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
+	fers_signal::RadarSignal const wave("wave", 1.0, 1.0, 1.0, std::move(signal), 100);
 
 	serial::Response response(&wave, &transmitter);
 	response.addInterpPoint({1.0, 0.0, 0.0, 0.0});

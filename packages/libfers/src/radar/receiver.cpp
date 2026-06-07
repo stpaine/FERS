@@ -115,26 +115,26 @@ namespace radar
 
 	void Receiver::addResponseToInbox(std::unique_ptr<serial::Response> response) noexcept
 	{
-		std::scoped_lock lock(_inbox_mutex);
+		std::scoped_lock const lock(_inbox_mutex);
 		_inbox.push_back(std::move(response));
 	}
 
 	void Receiver::addInterferenceToLog(std::unique_ptr<serial::Response> response) noexcept
 	{
-		std::scoped_lock lock(_interference_log_mutex);
+		std::scoped_lock const lock(_interference_log_mutex);
 		_pulsed_interference_log.push_back(std::move(response));
 	}
 
 	void Receiver::prunePulsedInterferenceEndingBefore(const RealType cutoff_time) noexcept
 	{
-		std::scoped_lock lock(_interference_log_mutex);
+		std::scoped_lock const lock(_interference_log_mutex);
 		std::erase_if(_pulsed_interference_log,
 					  [cutoff_time](const auto& response) { return response && response->endTime() <= cutoff_time; });
 	}
 
 	std::vector<std::unique_ptr<serial::Response>> Receiver::drainInbox() noexcept
 	{
-		std::scoped_lock lock(_inbox_mutex);
+		std::scoped_lock const lock(_inbox_mutex);
 		std::vector<std::unique_ptr<serial::Response>> drained_responses;
 		drained_responses.swap(_inbox);
 		return drained_responses;
@@ -143,7 +143,7 @@ namespace radar
 	void Receiver::enqueueFinalizerJob(core::RenderingJob&& job)
 	{
 		{
-			std::scoped_lock lock(_finalizer_queue_mutex);
+			std::scoped_lock const lock(_finalizer_queue_mutex);
 			_finalizer_queue.push(std::move(job));
 		}
 		_finalizer_queue_cv.notify_one();

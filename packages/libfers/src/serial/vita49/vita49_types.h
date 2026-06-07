@@ -83,7 +83,7 @@ namespace serial::vita49
 		Cif0ReferenceFrequency | Cif0IfOffset | Cif0Bandwidth | Cif0ReferenceLevel | Cif0DeviceIdentifier |
 		Cif0AsciiMetadata;
 
-	enum ContextFlags : std::uint32_t
+	enum ContextFlags : std::uint32_t // NOLINT(performance-enum-size)
 	{
 		ContextFlagDechirped = 1u << 0u,
 		ContextFlagIfResampled = 1u << 1u,

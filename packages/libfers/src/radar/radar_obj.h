@@ -12,6 +12,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "core/sim_id.h"
 #include "object.h"
 
@@ -33,7 +35,7 @@ namespace radar
 	 * @enum OperationMode
 	 * @brief Defines the operational mode of a radar component.
 	 */
-	enum class OperationMode
+	enum class OperationMode : std::uint8_t
 	{
 		PULSED_MODE, ///< The component operates in a pulsed mode.
 		CW_MODE, ///< The component operates in a continuous-wave mode.

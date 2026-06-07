@@ -15,33 +15,33 @@ TEST_CASE("API motion path interpolation validates arguments", "[api][paths]")
 
 	SECTION("null waypoints")
 	{
-		api_test::MotionPath path(fers_get_interpolated_motion_path(nullptr, 1, FERS_INTERP_LINEAR, 2));
+		api_test::MotionPath const path(fers_get_interpolated_motion_path(nullptr, 1, FERS_INTERP_LINEAR, 2));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("waypoints cannot be null"));
 	}
 
 	SECTION("zero waypoint count")
 	{
-		api_test::MotionPath path(fers_get_interpolated_motion_path(&point, 0, FERS_INTERP_LINEAR, 2));
+		api_test::MotionPath const path(fers_get_interpolated_motion_path(&point, 0, FERS_INTERP_LINEAR, 2));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("counts must be > 0"));
 	}
 
 	SECTION("zero output count")
 	{
-		api_test::MotionPath path(fers_get_interpolated_motion_path(&point, 1, FERS_INTERP_LINEAR, 0));
+		api_test::MotionPath const path(fers_get_interpolated_motion_path(&point, 1, FERS_INTERP_LINEAR, 0));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("counts must be > 0"));
 	}
 
 	SECTION("cubic needs more waypoints")
 	{
-		api_test::MotionPath path(fers_get_interpolated_motion_path(&point, 1, FERS_INTERP_CUBIC, 2));
+		api_test::MotionPath const path(fers_get_interpolated_motion_path(&point, 1, FERS_INTERP_CUBIC, 2));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Cubic interpolation requires at least 2 waypoints"));
 	}
 }
@@ -50,7 +50,7 @@ TEST_CASE("API motion path interpolation returns constant positions for static i
 {
 	api_test::clearLastError();
 	const fers_motion_waypoint_t waypoint{5.0, 1.5, -2.0, 8.25};
-	api_test::MotionPath path(fers_get_interpolated_motion_path(&waypoint, 1, FERS_INTERP_STATIC, 4));
+	api_test::MotionPath const path(fers_get_interpolated_motion_path(&waypoint, 1, FERS_INTERP_STATIC, 4));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 4u);
@@ -75,7 +75,7 @@ TEST_CASE("API motion path interpolation falls back to repeated positions for no
 		{1.0, 2.0, 3.0, 4.0},
 		{1.0, 2.0, 3.0, 4.0},
 	};
-	api_test::MotionPath path(fers_get_interpolated_motion_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
+	api_test::MotionPath const path(fers_get_interpolated_motion_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -99,7 +99,7 @@ TEST_CASE("API motion path interpolation returns expected linear positions and v
 		{0.0, 0.0, 0.0, 0.0},
 		{10.0, 10.0, 20.0, 30.0},
 	};
-	api_test::MotionPath path(fers_get_interpolated_motion_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
+	api_test::MotionPath const path(fers_get_interpolated_motion_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -134,7 +134,7 @@ TEST_CASE("API motion path interpolation maps cubic enum to cubic behavior", "[a
 		{1.0, 1.0, 0.0, 0.0},
 		{2.0, 2.0, 0.0, 0.0},
 	};
-	api_test::MotionPath path(fers_get_interpolated_motion_path(waypoints, 3, FERS_INTERP_CUBIC, 3));
+	api_test::MotionPath const path(fers_get_interpolated_motion_path(waypoints, 3, FERS_INTERP_CUBIC, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -149,37 +149,37 @@ TEST_CASE("API rotation path interpolation validates arguments", "[api][paths]")
 
 	SECTION("null waypoints")
 	{
-		api_test::RotationPath path(
+		api_test::RotationPath const path(
 			fers_get_interpolated_rotation_path(nullptr, 1, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 2));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("waypoints cannot be null"));
 	}
 
 	SECTION("zero waypoint count")
 	{
-		api_test::RotationPath path(
+		api_test::RotationPath const path(
 			fers_get_interpolated_rotation_path(&point, 0, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 2));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("counts must be > 0"));
 	}
 
 	SECTION("zero output count")
 	{
-		api_test::RotationPath path(
+		api_test::RotationPath const path(
 			fers_get_interpolated_rotation_path(&point, 1, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 0));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("counts must be > 0"));
 	}
 
 	SECTION("cubic needs more waypoints")
 	{
-		api_test::RotationPath path(
+		api_test::RotationPath const path(
 			fers_get_interpolated_rotation_path(&point, 1, FERS_INTERP_CUBIC, FERS_ANGLE_UNIT_DEG, 2));
 		REQUIRE(path.get() == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Cubic interpolation requires at least 2 waypoints"));
 	}
 }
@@ -188,7 +188,7 @@ TEST_CASE("API rotation path interpolation returns constant compass angles for s
 {
 	api_test::clearLastError();
 	const fers_rotation_waypoint_t waypoint{0.0, 15.0, -10.0};
-	api_test::RotationPath path(
+	api_test::RotationPath const path(
 		fers_get_interpolated_rotation_path(&waypoint, 1, FERS_INTERP_STATIC, FERS_ANGLE_UNIT_DEG, 4));
 
 	REQUIRE(path.get() != nullptr);
@@ -208,7 +208,7 @@ TEST_CASE("API rotation path interpolation preserves compass-angle semantics", "
 		{0.0, 0.0, -10.0},
 		{10.0, 180.0, 20.0},
 	};
-	api_test::RotationPath path(
+	api_test::RotationPath const path(
 		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
@@ -230,7 +230,7 @@ TEST_CASE("API rotation path interpolation maps cubic enum to cubic behavior", "
 		{1.0, 32.7042204869, 57.2957795131},
 		{2.0, -24.5915590262, 114.5915590262},
 	};
-	api_test::RotationPath path(
+	api_test::RotationPath const path(
 		fers_get_interpolated_rotation_path(waypoints, 3, FERS_INTERP_CUBIC, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
@@ -246,7 +246,7 @@ TEST_CASE("API rotation path interpolation preserves unnormalized winding angles
 		{0.0, -30.0, 0.0},
 		{10.0, 390.0, 0.0},
 	};
-	api_test::RotationPath path(
+	api_test::RotationPath const path(
 		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
@@ -264,7 +264,7 @@ TEST_CASE("API rotation path interpolation supports radians", "[api][paths]")
 		{0.0, 0.0, 0.0},
 		{1.0, PI / 2.0, PI / 4.0},
 	};
-	api_test::RotationPath path(
+	api_test::RotationPath const path(
 		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_RAD, 3));
 
 	REQUIRE(path.get() != nullptr);

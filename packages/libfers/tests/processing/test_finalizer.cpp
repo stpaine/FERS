@@ -225,7 +225,7 @@ namespace
 TEST_CASE("Hdf5OutputSink writes streaming blocks through the receiver output contract",
 		  "[processing][finalizer][hdf5]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setAdcBits(0);
 
 	const std::string receiver_name = uniqueName("hdf5_sink");
@@ -254,7 +254,7 @@ TEST_CASE("Hdf5OutputSink writes streaming blocks through the receiver output co
 	sink.finalize();
 
 	{
-		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		HighFive::File const file(output_path.string(), HighFive::File::ReadOnly);
 		const auto i_data = readDataset(file, "I_data");
 		const auto q_data = readDataset(file, "Q_data");
 
@@ -271,7 +271,7 @@ TEST_CASE("Hdf5OutputSink writes streaming blocks through the receiver output co
 TEST_CASE("buildReceiverSampleBlock captures receiver identity, timing, and sample basis",
 		  "[processing][finalizer][vita49]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setAdcBits(12);
 	params::setOrigin(-33.5, 18.25, 123.0);
 	params::setCoordinateSystem(params::CoordinateFrame::UTM, 34, false);
@@ -323,7 +323,7 @@ TEST_CASE("buildReceiverSampleBlock captures receiver identity, timing, and samp
 TEST_CASE("buildReceiverStreamDescriptor keeps CW metadata isolated from active FMCW sources",
 		  "[processing][finalizer][vita49]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(1'000.0);
 	params::setOversampleRatio(1);
@@ -333,7 +333,7 @@ TEST_CASE("buildReceiverStreamDescriptor keeps CW metadata isolated from active 
 	auto timing_owner = makeQuietTiming("cw_metadata_clk", 27, 5.0e9);
 	receiver.setTiming(timing_owner.timing);
 
-	FmcwTxFixture source_fixture("MixedFmcwTx", 1101, 1102, 200.0, 0.001, 0.002, 0.0, std::size_t{4});
+	FmcwTxFixture const source_fixture("MixedFmcwTx", 1101, 1102, 200.0, 0.001, 0.002, 0.0, std::size_t{4});
 	const std::vector sources = {core::makeActiveSource(&source_fixture.transmitter, 0.0, params::endTime())};
 
 	const auto descriptor = processing::buildReceiverStreamDescriptor(&receiver, params::rate(), sources);
@@ -347,7 +347,7 @@ TEST_CASE("buildReceiverStreamDescriptor keeps CW metadata isolated from active 
 TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detached receivers",
 		  "[processing][finalizer][fmcw][metadata]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 0.01);
 	params::setRate(1'000.0);
 	params::setOversampleRatio(1);
@@ -363,7 +363,7 @@ TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detache
 	receiver.setTiming(timing_owner.timing);
 	receiver.setNoiseTemperature(0.0);
 
-	FmcwTxFixture source_fixture("DetachedTx", 901, 902, 200.0, 0.001, 0.002, 5.0, std::size_t{4});
+	FmcwTxFixture const source_fixture("DetachedTx", 901, 902, 200.0, 0.001, 0.002, 5.0, std::size_t{4});
 	const auto source = core::makeActiveSource(&source_fixture.transmitter, 0.0, params::endTime());
 
 	const auto metadata =
@@ -395,7 +395,7 @@ TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detache
 
 TEST_CASE("buildStreamingOutputMetadata writes IF-rate FMCW metadata", "[processing][finalizer][fmcw][if]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(256.0);
 	params::setOversampleRatio(1);
@@ -417,7 +417,7 @@ TEST_CASE("buildStreamingOutputMetadata writes IF-rate FMCW metadata", "[process
 								  .waveform_name = ""});
 	receiver.setFmcwIfChainRequest(
 		{.sample_rate_hz = 64.0, .filter_bandwidth_hz = 16.0, .filter_transition_width_hz = 8.0});
-	FmcwTxFixture source_fixture("IfTx", 1001, 1002, 1.0, 1.0, 1.0, 0.0, std::size_t{1});
+	FmcwTxFixture const source_fixture("IfTx", 1001, 1002, 1.0, 1.0, 1.0, 0.0, std::size_t{1});
 	const auto source = core::makeActiveSource(&source_fixture.transmitter, params::startTime(), params::endTime());
 	receiver.setResolvedDechirpSources({source});
 
@@ -444,7 +444,7 @@ TEST_CASE("buildStreamingOutputMetadata writes IF-rate FMCW metadata", "[process
 TEST_CASE("buildStreamingOutputMetadata keeps multiple FMCW sources unambiguous",
 		  "[processing][finalizer][fmcw][metadata]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 0.01);
 	params::setRate(1'000.0);
 	params::setOversampleRatio(1);
@@ -460,8 +460,8 @@ TEST_CASE("buildStreamingOutputMetadata keeps multiple FMCW sources unambiguous"
 	receiver.setTiming(timing_owner.timing);
 	receiver.setNoiseTemperature(0.0);
 
-	FmcwTxFixture first_source("FirstTx", 911, 912, 200.0, 0.001, 0.002, 0.0, std::size_t{4});
-	FmcwTxFixture second_source("SecondTx", 921, 922, 300.0, 0.0015, 0.003, 10.0, std::size_t{2});
+	FmcwTxFixture const first_source("FirstTx", 911, 912, 200.0, 0.001, 0.002, 0.0, std::size_t{4});
+	FmcwTxFixture const second_source("SecondTx", 921, 922, 300.0, 0.0015, 0.003, 10.0, std::size_t{2});
 
 	const std::vector sources = {core::makeActiveSource(&first_source.transmitter, 0.0, params::endTime()),
 								 core::makeActiveSource(&second_source.transmitter, 0.0, params::endTime())};
@@ -479,7 +479,7 @@ TEST_CASE("buildStreamingOutputMetadata keeps multiple FMCW sources unambiguous"
 
 TEST_CASE("runPulsedFinalizer writes jittered chunks and emits completion progress", "[processing][finalizer]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(8.0);
 	params::setOversampleRatio(1);
 	params::setAdcBits(0);
@@ -501,7 +501,7 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits completion progre
 	receiver.setWindowProperties(0.5, 1.0, 0.125);
 
 	radar::Platform tx_platform("TxPlatform");
-	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 701);
+	radar::Transmitter const transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 701);
 	std::vector<std::unique_ptr<fers_signal::RadarSignal>> wave_store;
 
 	core::RenderingJob first_job{};
@@ -534,7 +534,7 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits completion progre
 	hdf5_sink->finalize();
 
 	{
-		HighFive::File file(output_path.string(), HighFive::File::ReadOnly);
+		HighFive::File const file(output_path.string(), HighFive::File::ReadOnly);
 		const auto i_chunk_0 = readDataset(file, "chunk_000000_I");
 		const auto q_chunk_0 = readDataset(file, "chunk_000000_Q");
 		const auto i_chunk_1 = readDataset(file, "chunk_000001_I");
@@ -580,7 +580,7 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits completion progre
 TEST_CASE("runPulsedFinalizer routes completed acquisition windows to an output sink without HDF5",
 		  "[processing][finalizer][vita49]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(4.0);
 	params::setOversampleRatio(1);
@@ -603,7 +603,7 @@ TEST_CASE("runPulsedFinalizer routes completed acquisition windows to an output 
 	receiver.setWindowProperties(0.5, 1.0, 0.0);
 
 	radar::Platform tx_platform("TxPlatform");
-	radar::Transmitter transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 701);
+	radar::Transmitter const transmitter(&tx_platform, "TxA", radar::OperationMode::PULSED_MODE, 701);
 	std::vector<std::unique_ptr<fers_signal::RadarSignal>> wave_store;
 
 	core::RenderingJob job{};

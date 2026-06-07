@@ -17,21 +17,21 @@ using Catch::Matchers::WithinAbs;
 TEST_CASE("API loading scenario from XML string rejects null arguments", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 	const std::string xml = api_test::minimalScenarioXml();
 
 	SECTION("null context")
 	{
 		REQUIRE(fers_load_scenario_from_xml_string(nullptr, xml.c_str(), 0) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or xml_content is NULL"));
 	}
 
 	SECTION("null xml")
 	{
 		REQUIRE(fers_load_scenario_from_xml_string(context.get(), nullptr, 0) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or xml_content is NULL"));
 	}
 }
@@ -39,20 +39,20 @@ TEST_CASE("API loading scenario from XML string rejects null arguments", "[api][
 TEST_CASE("API set output directory rejects null arguments", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	SECTION("null context")
 	{
 		REQUIRE(fers_set_output_directory(nullptr, "/tmp") == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or out_dir is NULL"));
 	}
 
 	SECTION("null out_dir")
 	{
 		REQUIRE(fers_set_output_directory(context.get(), nullptr) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or out_dir is NULL"));
 	}
 }
@@ -60,50 +60,50 @@ TEST_CASE("API set output directory rejects null arguments", "[api][scenario]")
 TEST_CASE("API set output directory succeeds with valid arguments", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	REQUIRE(fers_set_output_directory(context.get(), "/tmp/custom_dir") == 0);
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() == nullptr);
 }
 
 TEST_CASE("API loading scenario from XML file rejects null arguments", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 	const auto xml_path = api_test::uniqueTempPath("api_minimal_scenario", ".xml");
-	api_test::ScopedPath xml_guard(xml_path);
+	api_test::ScopedPath const xml_guard(xml_path);
 	api_test::writeTextFile(xml_path, api_test::minimalScenarioXml());
 	const std::string xml_path_string = api_test::pathString(xml_path);
 
 	SECTION("null context")
 	{
 		REQUIRE(fers_load_scenario_from_xml_file(nullptr, xml_path_string.c_str(), 0) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or xml_filepath is NULL"));
 	}
 
 	SECTION("null path")
 	{
 		REQUIRE(fers_load_scenario_from_xml_file(context.get(), nullptr, 0) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or xml_filepath is NULL"));
 	}
 }
 
 TEST_CASE("API loads a minimal scenario from XML string and exports JSON", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::minimalScenarioXml("XML String Scenario");
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
-	api_test::ApiString json_text = api_test::scenarioAsJson(context.get());
+	api_test::ApiString const json_text = api_test::scenarioAsJson(context.get());
 	REQUIRE(json_text.get() != nullptr);
 
 	const json scenario = json::parse(json_text.str());
@@ -114,19 +114,19 @@ TEST_CASE("API loads a minimal scenario from XML string and exports JSON", "[api
 
 TEST_CASE("API loads a minimal scenario from XML file and exports XML", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const auto xml_path = api_test::uniqueTempPath("api_minimal_scenario", ".xml");
-	api_test::ScopedPath xml_guard(xml_path);
+	api_test::ScopedPath const xml_guard(xml_path);
 	api_test::writeTextFile(xml_path, api_test::minimalScenarioXml("XML File Scenario"));
 	const std::string xml_path_string = api_test::pathString(xml_path);
 
 	REQUIRE(fers_load_scenario_from_xml_file(context.get(), xml_path_string.c_str(), 0) == 0);
 
-	api_test::ApiString xml_text = api_test::scenarioAsXml(context.get());
+	api_test::ApiString const xml_text = api_test::scenarioAsXml(context.get());
 	REQUIRE(xml_text.get() != nullptr);
 	REQUIRE_FALSE(xml_text.view().empty());
 	REQUIRE_THAT(xml_text.str(), ContainsSubstring("<simulation"));
@@ -134,15 +134,15 @@ TEST_CASE("API loads a minimal scenario from XML file and exports XML", "[api][s
 
 TEST_CASE("API exposes memory projection JSON", "[api][scenario][memory_projection]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::previewScenarioXml("Memory Projection Scenario");
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
-	api_test::ApiString projection_text(fers_get_memory_projection_json(context.get()));
+	api_test::ApiString const projection_text(fers_get_memory_projection_json(context.get()));
 	REQUIRE(projection_text.get() != nullptr);
 
 	const json projection = json::parse(projection_text.str());
@@ -153,7 +153,7 @@ TEST_CASE("API exposes memory projection JSON", "[api][scenario][memory_projecti
 	REQUIRE(projection["projected_total_footprint"].contains("bytes"));
 
 	REQUIRE(fers_get_memory_projection_json(nullptr) == nullptr);
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
 	REQUIRE_THAT(error.str(), ContainsSubstring("Invalid context provided to fers_get_memory_projection_json"));
 }
@@ -161,57 +161,57 @@ TEST_CASE("API exposes memory projection JSON", "[api][scenario][memory_projecti
 TEST_CASE("API scenario serialization and update helpers reject null arguments", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	SECTION("json export rejects null context")
 	{
 		REQUIRE(fers_get_scenario_as_json(nullptr) == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Invalid context provided to fers_get_scenario_as_json"));
 	}
 
 	SECTION("xml export rejects null context")
 	{
 		REQUIRE(fers_get_scenario_as_xml(nullptr) == nullptr);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Invalid context provided to fers_get_scenario_as_xml"));
 	}
 
 	SECTION("json update rejects null context")
 	{
 		REQUIRE(fers_update_scenario_from_json(nullptr, "{}") == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or scenario_json is NULL"));
 	}
 
 	SECTION("json update rejects null content")
 	{
 		REQUIRE(fers_update_scenario_from_json(context.get(), nullptr) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or scenario_json is NULL"));
 	}
 
 	SECTION("kml generation rejects null context")
 	{
 		REQUIRE(fers_generate_kml(nullptr, "out.kml") == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or output_kml_filepath is NULL"));
 	}
 
 	SECTION("kml generation rejects null path")
 	{
 		REQUIRE(fers_generate_kml(context.get(), nullptr) == -1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("context or output_kml_filepath is NULL"));
 	}
 }
 
 TEST_CASE("API update scenario from JSON modifies serialized state", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::minimalScenarioXml("Before Update");
@@ -228,9 +228,9 @@ TEST_CASE("API update scenario from JSON modifies serialized state", "[api][scen
 
 TEST_CASE("API failed JSON scenario update preserves previous world for later granular edits", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::minimalScenarioXml("Before Failed Update");
@@ -255,28 +255,28 @@ TEST_CASE("API failed JSON scenario update preserves previous world for later gr
 TEST_CASE("API update scenario from malformed JSON returns JSON-specific error code", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	REQUIRE(fers_update_scenario_from_json(context.get(), api_test::malformedJson().c_str()) == 2);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
 	REQUIRE_THAT(error.str(), ContainsSubstring("JSON parsing/deserialization error:"));
 }
 
 TEST_CASE("API generate KML writes a file for a loaded scenario", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::minimalScenarioXml("KML Scenario");
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
 	const auto kml_path = api_test::uniqueTempPath("api_scenario", ".kml");
-	api_test::ScopedPath kml_guard(kml_path);
+	api_test::ScopedPath const kml_guard(kml_path);
 	const std::string kml_path_string = api_test::pathString(kml_path);
 	REQUIRE(fers_generate_kml(context.get(), kml_path_string.c_str()) == 0);
 	REQUIRE(std::filesystem::exists(kml_path));
@@ -286,16 +286,16 @@ TEST_CASE("API generate KML writes a file for a loaded scenario", "[api][scenari
 TEST_CASE("API missing XML file returns a populated last error", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const auto missing_path = api_test::uniqueTempPath("api_missing", ".xml");
-	api_test::ScopedPath missing_guard(missing_path);
+	api_test::ScopedPath const missing_guard(missing_path);
 	const std::string missing_path_string = api_test::pathString(missing_path);
 
 	REQUIRE(fers_load_scenario_from_xml_file(context.get(), missing_path_string.c_str(), 0) == 1);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
 	REQUIRE_THAT(error.str(), ContainsSubstring("Failed to load main XML file"));
 }
@@ -303,43 +303,43 @@ TEST_CASE("API missing XML file returns a populated last error", "[api][scenario
 TEST_CASE("API malformed XML string returns a populated last error", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), api_test::malformedXml().c_str(), 0) == 1);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
 	REQUIRE_THAT(error.str(), ContainsSubstring("Failed to parse XML from memory string"));
 }
 
 TEST_CASE("API KML generation reports non-creatable output paths", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::minimalScenarioXml("Bad KML Path");
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
 	const auto missing_parent = api_test::uniqueTempPath("api_missing_kml_dir");
-	api_test::ScopedPath missing_guard(missing_parent);
+	api_test::ScopedPath const missing_guard(missing_parent);
 	const auto kml_path = missing_parent / "out.kml";
 	const std::string kml_path_string = api_test::pathString(kml_path);
 
 	REQUIRE(fers_generate_kml(context.get(), kml_path_string.c_str()) == 2);
 
-	api_test::ApiString error = api_test::lastError();
+	api_test::ApiString const error = api_test::lastError();
 	REQUIRE(error.get() != nullptr);
 	REQUIRE_THAT(error.str(), ContainsSubstring("Error opening output KML file"));
 }
 
 TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::minimalScenarioXml("Granular Update Test");
@@ -364,7 +364,7 @@ TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 	SECTION("Platform update")
 	{
 		auto plat = scenario["simulation"]["platforms"][0];
-		uint64_t plat_id = api_test::parseId(plat["id"]);
+		uint64_t const plat_id = api_test::parseId(plat["id"]);
 		plat["name"] = "UpdatedPlatform";
 
 		REQUIRE(fers_update_platform_from_json(context.get(), plat_id, plat.dump().c_str()) == 0);
@@ -402,9 +402,9 @@ TEST_CASE("API granular updates modify specific objects", "[api][scenario]")
 
 TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::previewScenarioXml("Granular Update Preview");
@@ -415,7 +415,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 	SECTION("Transmitter update")
 	{
 		auto tx = scenario["simulation"]["platforms"][0]["components"][0]["transmitter"];
-		uint64_t tx_id = api_test::parseId(tx["id"]);
+		uint64_t const tx_id = api_test::parseId(tx["id"]);
 		tx["name"] = "UpdatedTx";
 		tx["cw_mode"] = json::object();
 		tx.erase("pulsed_mode");
@@ -431,7 +431,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 	SECTION("Receiver update")
 	{
 		auto rx = scenario["simulation"]["platforms"][1]["components"][0]["receiver"];
-		uint64_t rx_id = api_test::parseId(rx["id"]);
+		uint64_t const rx_id = api_test::parseId(rx["id"]);
 		rx["name"] = "UpdatedRx";
 		rx["noise_temp"] = 400.0;
 
@@ -446,7 +446,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 	SECTION("Target update")
 	{
 		auto tgt = scenario["simulation"]["platforms"][2]["components"][0]["target"];
-		uint64_t tgt_id = api_test::parseId(tgt["id"]);
+		uint64_t const tgt_id = api_test::parseId(tgt["id"]);
 		tgt["name"] = "UpdatedTgt";
 		tgt["rcs"]["value"] = 99.0;
 
@@ -461,7 +461,7 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 	SECTION("Timing update")
 	{
 		auto timing = scenario["simulation"]["timings"][0];
-		uint64_t timing_id = api_test::parseId(timing["id"]);
+		uint64_t const timing_id = api_test::parseId(timing["id"]);
 		timing["name"] = "UpdatedTiming";
 		timing["frequency"] = 2e6;
 
@@ -476,9 +476,9 @@ TEST_CASE("API granular updates modify specific objects (Preview Scenario)", "[a
 
 TEST_CASE("API granular updates modify specific objects (Monostatic Scenario)", "[api][scenario]")
 {
-	api_test::ParamGuard guard;
+	api_test::ParamGuard const guard;
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
 	const std::string xml = api_test::monostaticPreviewScenarioXml("Granular Update Monostatic");
@@ -504,7 +504,7 @@ TEST_CASE("API granular updates modify specific objects (Monostatic Scenario)", 
 TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 {
 	api_test::clearLastError();
-	api_test::Context context;
+	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 	const std::string xml = api_test::minimalScenarioXml();
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
@@ -547,7 +547,7 @@ TEST_CASE("API granular updates handle errors gracefully", "[api][scenario]")
 	SECTION("Object not found")
 	{
 		REQUIRE(fers_update_platform_from_json(context.get(), 999999, "{}") == 1);
-		api_test::ApiString error = api_test::lastError();
+		api_test::ApiString const error = api_test::lastError();
 		REQUIRE_THAT(error.str(), ContainsSubstring("Platform not found"));
 
 		REQUIRE(fers_update_transmitter_from_json(context.get(), 999999, "{}") == 1);

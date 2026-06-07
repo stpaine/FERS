@@ -8,7 +8,7 @@
 
 TEST_CASE("FersContext constructs world and seeder", "[core][context]")
 {
-	FersContext context;
+	FersContext const context;
 
 	core::World* world_ptr = context.getWorld();
 	REQUIRE(world_ptr != nullptr);

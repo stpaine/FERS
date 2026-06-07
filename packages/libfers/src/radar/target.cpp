@@ -35,9 +35,10 @@ namespace
 		XmlElement tmp = axisXml.childElement("rcssample");
 		while (tmp.isValid())
 		{
-			XmlElement angle_element = tmp.childElement("angle", 0);
+			XmlElement const angle_element = tmp.childElement("angle", 0);
 
-			if (XmlElement gain_element = tmp.childElement("rcs", 0); angle_element.isValid() && gain_element.isValid())
+			if (XmlElement const gain_element = tmp.childElement("rcs", 0);
+				angle_element.isValid() && gain_element.isValid())
 			{
 				const RealType angle = std::stof(angle_element.getText());
 				const RealType gain = std::stof(gain_element.getText());

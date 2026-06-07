@@ -109,7 +109,7 @@ namespace
 
 TEST_CASE("Simulation memory projection totals core categories", "[core][memory_projection]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(2);
@@ -139,7 +139,7 @@ TEST_CASE("Simulation memory projection totals core categories", "[core][memory_
 
 TEST_CASE("Simulation memory projection counts dechirped streaming output at RF rate", "[core][memory_projection]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(2);
@@ -167,7 +167,7 @@ TEST_CASE("Simulation memory projection counts dechirped streaming output at RF 
 TEST_CASE("Simulation memory projection counts IF-rate dechirped output at receiver rate",
 		  "[core][memory_projection][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(2);
@@ -198,7 +198,7 @@ TEST_CASE("Simulation memory projection counts IF-rate dechirped output at recei
 TEST_CASE("Simulation memory projection starts phase-noise lookup at earliest streaming receiver",
 		  "[core][memory_projection]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 2.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(1);
@@ -215,14 +215,14 @@ TEST_CASE("Simulation memory projection starts phase-noise lookup at earliest st
 
 TEST_CASE("Simulation memory projection log names required categories", "[core][memory_projection][logging]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	params::setRate(10.0);
 	params::setOversampleRatio(2);
 
 	const auto world = makeProjectionWorld();
-	LogLevelGuard level_guard(logging::Level::DEBUG);
-	CerrCapture capture;
+	LogLevelGuard const level_guard(logging::Level::DEBUG);
+	CerrCapture const capture;
 
 	core::logSimulationMemoryProjection(*world);
 

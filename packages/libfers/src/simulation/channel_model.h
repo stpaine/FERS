@@ -19,6 +19,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <exception>
 #include <memory>
 #include <span>
@@ -91,7 +92,7 @@ namespace simulation
 	};
 
 	/// Selects how timing phase noise is applied to streaming channel contributions.
-	enum class StreamingTimingPhaseMode
+	enum class StreamingTimingPhaseMode : std::uint8_t
 	{
 		ReceiverRelative, ///< Existing raw streaming convention: transmitter phase minus receiver LO phase.
 		TransmitterOnly, ///< Incoming RF/baseband signal before receiver LO subtraction.
@@ -259,7 +260,7 @@ namespace simulation
 	 * @enum LinkType
 	 * @brief Categorizes the visual link for rendering.
 	 */
-	enum class LinkType
+	enum class LinkType : std::uint8_t
 	{
 		Monostatic, ///< Combined Tx/Rx path
 		BistaticTxTgt, ///< Illuminator path
@@ -271,7 +272,7 @@ namespace simulation
 	 * @enum LinkQuality
 	 * @brief Describes the radiometric quality of the link.
 	 */
-	enum class LinkQuality
+	enum class LinkQuality : std::uint8_t
 	{
 		Strong, ///< SNR > 0 dB
 		Weak ///< SNR < 0 dB (Geometric line of sight, but below noise floor)

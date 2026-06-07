@@ -82,7 +82,7 @@ namespace
 
 TEST_CASE("Waveform factory loads CSV waveform metadata", "[serial][waveform_factory]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(9999.0);
 	params::setOversampleRatio(2);
@@ -118,7 +118,7 @@ TEST_CASE("Waveform factory loads CSV waveform metadata", "[serial][waveform_fac
 
 TEST_CASE("Waveform factory loads HDF5 waveform metadata", "[serial][waveform_factory]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(64.0);
 
@@ -153,7 +153,7 @@ TEST_CASE("Waveform factory loads HDF5 waveform metadata", "[serial][waveform_fa
 
 TEST_CASE("Waveform factory preserves explicit waveform id", "[serial][waveform_factory]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_id", ".csv"));
@@ -184,7 +184,7 @@ TEST_CASE("Waveform factory throws for missing CSV file", "[serial][waveform_fac
 
 TEST_CASE("Waveform factory throws for missing HDF5 file", "[serial][waveform_factory]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(100.0);
 

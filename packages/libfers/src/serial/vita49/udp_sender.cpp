@@ -89,7 +89,7 @@ namespace serial::vita49
 		{
 			throw std::runtime_error("VITA UDP destination resolution failed: " + host + ":" + port_string);
 		}
-		std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> result_guard(result, freeaddrinfo);
+		std::unique_ptr<addrinfo, decltype(&freeaddrinfo)> const result_guard(result, freeaddrinfo);
 
 		for (auto* candidate = result; candidate != nullptr; candidate = candidate->ai_next)
 		{

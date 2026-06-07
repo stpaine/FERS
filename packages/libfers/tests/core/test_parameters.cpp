@@ -21,7 +21,7 @@ namespace
 
 TEST_CASE("Parameters default values are consistent", "[core][parameters]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	REQUIRE_THAT(params::c(), WithinAbs(params::Parameters::DEFAULT_C, 0.0));
@@ -43,7 +43,7 @@ TEST_CASE("Parameters default values are consistent", "[core][parameters]")
 
 TEST_CASE("Parameters setters update getters", "[core][parameters]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	params::setC(300000000.0);
@@ -74,7 +74,7 @@ TEST_CASE("Parameters setters update getters", "[core][parameters]")
 
 TEST_CASE("Parameters setters validate inputs", "[core][parameters]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	REQUIRE_THROWS_AS(params::setRate(0.0), std::runtime_error);
@@ -86,7 +86,7 @@ TEST_CASE("Parameters setters validate inputs", "[core][parameters]")
 
 TEST_CASE("Parameters origin and coordinate settings", "[core][parameters]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	params::setOrigin(1.5, 2.5, 3.5);
@@ -102,7 +102,7 @@ TEST_CASE("Parameters origin and coordinate settings", "[core][parameters]")
 
 TEST_CASE("Parameters setThreads returns expected", "[core][parameters]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 
 	const auto error = params::setThreads(0);
@@ -115,7 +115,7 @@ TEST_CASE("Parameters setThreads returns expected", "[core][parameters]")
 
 TEST_CASE("Parameters reset restores defaults", "[core][parameters]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setC(1.0);
 	params::setTime(5.0, 10.0);
 	params::setSimSamplingRate(500.0);

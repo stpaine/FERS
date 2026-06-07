@@ -105,11 +105,11 @@ namespace
 TEST_CASE("runCli returns nonzero when KML generation fails", "[fers-cli][runner][kml]")
 {
 	const auto scenario_path = uniqueTempPath("fers_cli_kml_exit", ".fersxml");
-	ScopedPath scenario_guard(scenario_path);
+	ScopedPath const scenario_guard(scenario_path);
 	writeTextFile(scenario_path, minimalScenarioXml());
 
 	const auto missing_parent = uniqueTempPath("fers_cli_missing_kml_dir");
-	ScopedPath missing_parent_guard(missing_parent);
+	ScopedPath const missing_parent_guard(missing_parent);
 	std::error_code ec;
 	std::filesystem::remove_all(missing_parent, ec);
 	const auto kml_path = missing_parent / "out.kml";

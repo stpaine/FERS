@@ -28,8 +28,8 @@ TEST_CASE("Coord Struct Operations", "[math][coord]")
 
 	SECTION("Coord Arithmetic")
 	{
-		Coord c1{Vec3(1, 2, 3), 1.0};
-		Coord c2{Vec3(4, 5, 6), 1.0};
+		Coord const c1{Vec3(1, 2, 3), 1.0};
+		Coord const c2{Vec3(4, 5, 6), 1.0};
 
 		Coord sum = c1 + c2;
 		REQUIRE_THAT(sum.pos.x, WithinAbs(5.0, 1e-9));
@@ -47,7 +47,7 @@ TEST_CASE("Coord Struct Operations", "[math][coord]")
 
 	SECTION("Coord Scalar Arithmetic")
 	{
-		Coord c{Vec3(2, 4, 8), 10.0};
+		Coord const c{Vec3(2, 4, 8), 10.0};
 
 		Coord res = c * 2.0;
 		REQUIRE_THAT(res.pos.x, WithinAbs(4.0, 1e-9));
@@ -68,7 +68,7 @@ TEST_CASE("RotationCoord Struct Operations", "[math][coord]")
 {
 	SECTION("Constructors and Assignment")
 	{
-		RotationCoord r1;
+		RotationCoord const r1;
 		REQUIRE(r1.azimuth == 0.0);
 
 		RotationCoord r2(5.0);
@@ -89,8 +89,8 @@ TEST_CASE("RotationCoord Struct Operations", "[math][coord]")
 
 	SECTION("Arithmetic")
 	{
-		RotationCoord a(1.0, 2.0, 10.0);
-		RotationCoord b(2.0, 3.0, 20.0);
+		RotationCoord const a(1.0, 2.0, 10.0);
+		RotationCoord const b(2.0, 3.0, 20.0);
 
 		RotationCoord c = a + b;
 		REQUIRE_THAT(c.azimuth, WithinAbs(3.0, 1e-9));
@@ -108,7 +108,7 @@ TEST_CASE("RotationCoord Struct Operations", "[math][coord]")
 
 	SECTION("Scalar Arithmetic")
 	{
-		RotationCoord a(2.0, 4.0, 10.0);
+		RotationCoord const a(2.0, 4.0, 10.0);
 
 		RotationCoord c = a * 2.0;
 		REQUIRE_THAT(c.elevation, WithinAbs(8.0, 1e-9));

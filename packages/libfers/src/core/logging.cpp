@@ -51,7 +51,7 @@ namespace logging
 			std::string line;
 
 			{
-				std::scoped_lock lock(_log_mutex);
+				std::scoped_lock const lock(_log_mutex);
 
 				const std::string filename = std::filesystem::path(location.file_name()).filename().string();
 				const std::string file_line = filename + ":" + std::to_string(location.line());
@@ -82,14 +82,14 @@ namespace logging
 
 	void Logger::setCallback(Callback callback, void* user_data) noexcept
 	{
-		std::scoped_lock lock(_log_mutex);
+		std::scoped_lock const lock(_log_mutex);
 		_callback = callback;
 		_callback_user_data = user_data;
 	}
 
 	std::expected<void, std::string> Logger::logToFile(const std::string& filePath) noexcept
 	{
-		std::scoped_lock lock(_log_mutex);
+		std::scoped_lock const lock(_log_mutex);
 
 		std::ofstream file(filePath, std::ios::out | std::ios::trunc);
 		if (!file)

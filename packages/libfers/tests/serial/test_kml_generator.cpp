@@ -58,7 +58,7 @@ namespace
 
 TEST_CASE("KmlGenerator: Generates valid KML file in ENU frame", "[serial][kml][facade]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setCoordinateSystem(params::CoordinateFrame::ENU, 0, true);
 	params::setOrigin(-33.957652, 18.4611991, 111.01); // UCT
@@ -67,7 +67,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in ENU frame", "[serial][kml][
 	// ENU coordinates are local offsets in meters
 	populateMinimalWorld(world, {100.0, 200.0, 300.0});
 
-	std::string out_path = getTempKmlPath("test_enu.kml");
+	std::string const out_path = getTempKmlPath("test_enu.kml");
 	std::filesystem::remove(out_path);
 
 	REQUIRE(serial::KmlGenerator::generateKml(world, out_path));
@@ -81,7 +81,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in ENU frame", "[serial][kml][
 
 TEST_CASE("KmlGenerator: Generates valid KML file in UTM frame", "[serial][kml][facade]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	// Zone 34S (South Africa)
 	params::setCoordinateSystem(params::CoordinateFrame::UTM, 34, false);
@@ -90,7 +90,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in UTM frame", "[serial][kml][
 	// Valid UTM coordinates: Easting = 500000 (center), Northing = 6234000 (~34 deg South)
 	populateMinimalWorld(world, {500000.0, 6234000.0, 300.0});
 
-	std::string out_path = getTempKmlPath("test_utm.kml");
+	std::string const out_path = getTempKmlPath("test_utm.kml");
 	std::filesystem::remove(out_path);
 
 	REQUIRE(serial::KmlGenerator::generateKml(world, out_path));
@@ -104,7 +104,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in UTM frame", "[serial][kml][
 
 TEST_CASE("KmlGenerator: Generates valid KML file in ECEF frame", "[serial][kml][facade]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setCoordinateSystem(params::CoordinateFrame::ECEF, 0, true);
 
@@ -112,7 +112,7 @@ TEST_CASE("KmlGenerator: Generates valid KML file in ECEF frame", "[serial][kml]
 	// Valid ECEF coordinates: Surface of the Earth at the equator/prime meridian
 	populateMinimalWorld(world, {6378137.0, 0.0, 0.0});
 
-	std::string out_path = getTempKmlPath("test_ecef.kml");
+	std::string const out_path = getTempKmlPath("test_ecef.kml");
 	std::filesystem::remove(out_path);
 
 	REQUIRE(serial::KmlGenerator::generateKml(world, out_path));
@@ -126,8 +126,8 @@ TEST_CASE("KmlGenerator: Generates valid KML file in ECEF frame", "[serial][kml]
 
 TEST_CASE("KmlGenerator: Fails gracefully on invalid file path", "[serial][kml][facade]")
 {
-	ParamGuard guard;
-	core::World world;
+	ParamGuard const guard;
+	core::World const world;
 
 	const std::filesystem::path missing_parent =
 		std::filesystem::temp_directory_path() / "fers_missing_kml_generator_dir_12345";
@@ -142,7 +142,7 @@ TEST_CASE("KmlGenerator: Fails gracefully on invalid file path", "[serial][kml][
 
 TEST_CASE("KmlGenerator: Catches exceptions from invalid UTM zones", "[serial][kml][facade]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	// Zone 99 is invalid and will cause GeographicLib to throw an exception
 	params::setCoordinateSystem(params::CoordinateFrame::UTM, 99, true);
@@ -150,7 +150,7 @@ TEST_CASE("KmlGenerator: Catches exceptions from invalid UTM zones", "[serial][k
 	core::World world;
 	populateMinimalWorld(world, {500000.0, 6234000.0, 300.0});
 
-	std::string out_path = getTempKmlPath("test_utm_fail.kml");
+	std::string const out_path = getTempKmlPath("test_utm_fail.kml");
 
 	// The KmlGenerator should catch the GeographicLib exception and return an error.
 	const auto result = serial::KmlGenerator::generateKml(world, out_path);

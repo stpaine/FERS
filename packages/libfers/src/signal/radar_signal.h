@@ -13,6 +13,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <span>
@@ -32,7 +33,7 @@ namespace interp
 namespace fers_signal
 {
 	/// Sweep direction for a linear FMCW chirp.
-	enum class FmcwChirpDirection
+	enum class FmcwChirpDirection : std::uint8_t
 	{
 		Up, ///< Instantaneous baseband frequency increases over the chirp.
 		Down ///< Instantaneous baseband frequency decreases over the chirp.

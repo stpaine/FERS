@@ -71,11 +71,11 @@ namespace
 
 TEST_CASE("JSON: Granular parsing of Antenna and Waveform", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 
 	SECTION("Parse Antenna")
 	{
-		json ant_json = {{"id", 123}, {"name", "TestAntenna"}, {"pattern", "isotropic"}, {"efficiency", 0.85}};
+		json const ant_json = {{"id", 123}, {"name", "TestAntenna"}, {"pattern", "isotropic"}, {"efficiency", 0.85}};
 
 		auto ant = serial::parse_antenna_from_json(ant_json);
 		REQUIRE(ant != nullptr);
@@ -86,11 +86,11 @@ TEST_CASE("JSON: Granular parsing of Antenna and Waveform", "[serial][json]")
 
 	SECTION("Parse Waveform")
 	{
-		json wf_json = {{"id", 456},
-						{"name", "TestWaveform"},
-						{"power", 500.0},
-						{"carrier_frequency", 2e9},
-						{"cw", json::object()}};
+		json const wf_json = {{"id", 456},
+							  {"name", "TestWaveform"},
+							  {"power", 500.0},
+							  {"carrier_frequency", 2e9},
+							  {"cw", json::object()}};
 
 		auto wf = serial::parse_waveform_from_json(wf_json);
 		REQUIRE(wf != nullptr);
@@ -103,15 +103,15 @@ TEST_CASE("JSON: Granular parsing of Antenna and Waveform", "[serial][json]")
 
 TEST_CASE("JSON: FMCW waveform emits large-buffer warning", "[serial][json]")
 {
-	ParamGuard guard;
-	LogLevelGuard log_level(logging::Level::WARNING);
-	CerrCapture capture;
+	ParamGuard const guard;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
 
 	params::setRate(1.0e9);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 5.0);
 
-	json wf_json = {
+	json const wf_json = {
 		{"id", 456},
 		{"name", "HugeFmcw"},
 		{"power", 500.0},
@@ -126,22 +126,22 @@ TEST_CASE("JSON: FMCW waveform emits large-buffer warning", "[serial][json]")
 
 TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
 
 	for (const auto direction : {"up", "down"})
 	{
-		json wf_json = {{"id", 457},
-						{"name", std::string("Fmcw") + direction},
-						{"power", 500.0},
-						{"carrier_frequency", 2.4e9},
-						{"fmcw_linear_chirp",
-						 {{"direction", direction},
-						  {"chirp_bandwidth", 1.0e6},
-						  {"chirp_duration", 1.0e-3},
-						  {"chirp_period", 1.0e-3}}}};
+		json const wf_json = {{"id", 457},
+							  {"name", std::string("Fmcw") + direction},
+							  {"power", 500.0},
+							  {"carrier_frequency", 2.4e9},
+							  {"fmcw_linear_chirp",
+							   {{"direction", direction},
+								{"chirp_bandwidth", 1.0e6},
+								{"chirp_duration", 1.0e-3},
+								{"chirp_period", 1.0e-3}}}};
 
 		auto wf = serial::parse_waveform_from_json(wf_json);
 		REQUIRE(wf != nullptr);
@@ -163,20 +163,20 @@ TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]
 
 TEST_CASE("JSON: FMCW triangle round trips", "[serial][json][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
 
-	json wf_json = {{"id", 458},
-					{"name", "Tri"},
-					{"power", 500.0},
-					{"carrier_frequency", 2.4e9},
-					{"fmcw_triangle",
-					 {{"chirp_bandwidth", 1.0e6},
-					  {"chirp_duration", 1.0e-3},
-					  {"start_frequency_offset", 1.0e3},
-					  {"triangle_count", 3}}}};
+	json const wf_json = {{"id", 458},
+						  {"name", "Tri"},
+						  {"power", 500.0},
+						  {"carrier_frequency", 2.4e9},
+						  {"fmcw_triangle",
+						   {{"chirp_bandwidth", 1.0e6},
+							{"chirp_duration", 1.0e-3},
+							{"start_frequency_offset", 1.0e3},
+							{"triangle_count", 3}}}};
 
 	auto wf = serial::parse_waveform_from_json(wf_json);
 	REQUIRE(wf != nullptr);
@@ -199,12 +199,12 @@ TEST_CASE("JSON: FMCW triangle round trips", "[serial][json][fmcw]")
 
 TEST_CASE("JSON: FMCW triangle rejects fractional triangle count", "[serial][json][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
 
-	json wf_json = {
+	json const wf_json = {
 		{"id", 459},
 		{"name", "TriFractional"},
 		{"power", 500.0},
@@ -216,7 +216,7 @@ TEST_CASE("JSON: FMCW triangle rejects fractional triangle count", "[serial][jso
 
 TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World w;
 
 	// 1. Setup Platform with Math Paths
@@ -228,8 +228,8 @@ TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 	p->getMotionPath()->addCoord({math::Vec3(4.1, 5.2, 6.3), 7.5});
 	p->getMotionPath()->finalize();
 
-	math::RotationCoord start(0.0, 0.0, 0.0);
-	math::RotationCoord rate(-PI / 2.0, PI / 4.0, 0.0);
+	math::RotationCoord const start(0.0, 0.0, 0.0);
+	math::RotationCoord const rate(-PI / 2.0, PI / 4.0, 0.0);
 	p->getRotationPath()->setInterp(math::RotationPath::InterpType::INTERP_CONSTANT);
 	p->getRotationPath()->setConstantRate(start, rate);
 	p->getRotationPath()->finalize();
@@ -279,7 +279,7 @@ TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 
 TEST_CASE("JSON: Serialization of Assets and Radar Components", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 
 	// MUST initialize global simulation parameters to avoid division-by-zero
 	// Without this, params::rate() is 0.0, causing the PRF math to evaluate to NaN.
@@ -377,12 +377,12 @@ TEST_CASE("JSON: Serialization of Assets and Radar Components", "[serial][json]"
 
 TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
 	// Safely construct JSON using initializer lists
-	json scenario = {
+	json const scenario = {
 		{"simulation",
 		 {{"parameters",
 		   {{"starttime", 0.0},
@@ -440,11 +440,11 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 
 TEST_CASE("JSON: Full world skips incomplete numeric-placeholder radar components", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
-	json scenario = {
+	json const scenario = {
 		{"simulation",
 		 {{"parameters",
 		   {{"starttime", 0.0},
@@ -490,40 +490,40 @@ TEST_CASE("JSON: Full world skips incomplete numeric-placeholder radar component
 
 TEST_CASE("JSON: Full world rejects duplicate scenario object names", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
-	json scenario = {{"simulation",
-					  {{"parameters",
-						{{"starttime", 0.0},
-						 {"endtime", 1.0},
-						 {"rate", 1000.0},
-						 {"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
-						 {"coordinatesystem", {{"frame", "ENU"}}}}},
-					   {"platforms",
-						json::array({{{"id", 100},
-									  {"name", "MonoRadar"},
-									  {"components",
-									   json::array({{{"monostatic",
-													  {{"name", "MonoRadar Monostatic"},
-													   {"tx_id", 101},
-													   {"rx_id", 102},
-													   {"waveform", 10},
-													   {"antenna", 20},
-													   {"timing", 30},
-													   {"cw_mode", json::object()}}}}})}},
-									 {{"id", 103},
-									  {"name", "MonoRadar Copy"},
-									  {"components",
-									   json::array({{{"monostatic",
-													  {{"name", "MonoRadar Monostatic"},
-													   {"tx_id", 104},
-													   {"rx_id", 105},
-													   {"waveform", 11},
-													   {"antenna", 21},
-													   {"timing", 31},
-													   {"cw_mode", json::object()}}}}})}}})}}}};
+	json const scenario = {{"simulation",
+							{{"parameters",
+							  {{"starttime", 0.0},
+							   {"endtime", 1.0},
+							   {"rate", 1000.0},
+							   {"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+							   {"coordinatesystem", {{"frame", "ENU"}}}}},
+							 {"platforms",
+							  json::array({{{"id", 100},
+											{"name", "MonoRadar"},
+											{"components",
+											 json::array({{{"monostatic",
+															{{"name", "MonoRadar Monostatic"},
+															 {"tx_id", 101},
+															 {"rx_id", 102},
+															 {"waveform", 10},
+															 {"antenna", 20},
+															 {"timing", 30},
+															 {"cw_mode", json::object()}}}}})}},
+										   {{"id", 103},
+											{"name", "MonoRadar Copy"},
+											{"components",
+											 json::array({{{"monostatic",
+															{{"name", "MonoRadar Monostatic"},
+															 {"tx_id", 104},
+															 {"rx_id", 105},
+															 {"waveform", 11},
+															 {"antenna", 21},
+															 {"timing", 31},
+															 {"cw_mode", json::object()}}}}})}}})}}}};
 
 	REQUIRE_THROWS_WITH(
 		serial::json_to_world(scenario, world, seeder),
@@ -533,13 +533,13 @@ TEST_CASE("JSON: Full world rejects duplicate scenario object names", "[serial][
 
 TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit", "[serial][json]")
 {
-	ParamGuard guard;
-	LogLevelGuard log_guard(logging::Level::WARNING);
-	CerrCapture capture;
+	ParamGuard const guard;
+	LogLevelGuard const log_guard(logging::Level::WARNING);
+	CerrCapture const capture;
 	core::World world;
 	std::mt19937 seeder(42);
 
-	json scenario = {
+	json const scenario = {
 		{"simulation",
 		 {{"name", "Warning Scenario"},
 		  {"parameters",
@@ -565,13 +565,13 @@ TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit"
 
 TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
 
 	auto run_bad_scenario = [&](const json& test_comps)
 	{
-		json scenario = {
+		json const scenario = {
 			{"simulation",
 			 {{"parameters",
 			   {{"starttime", 0.0},
@@ -590,7 +590,7 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 
 	SECTION("Missing mode throws")
 	{
-		json test_comps = json::array(
+		json const test_comps = json::array(
 			{{{"transmitter", {{"id", 1}, {"name", "tx1"}, {"waveform", 10}, {"antenna", 20}, {"timing", 30}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps),
 							ContainsSubstring("must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block"));
@@ -598,25 +598,25 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 
 	SECTION("Unsupported RCS type throws")
 	{
-		json test_comps =
+		json const test_comps =
 			json::array({{{"target", {{"id", 1}, {"name", "bad-target"}, {"rcs", {{"type", "magic"}}}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps), ContainsSubstring("Unsupported target RCS type: magic"));
 	}
 
 	SECTION("Unsupported Fluctuation model type throws")
 	{
-		json test_comps = json::array({{{"target",
-										 {{"id", 1},
-										  {"name", "bad-target"},
-										  {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
-										  {"model", {{"type", "magic"}}}}}}});
+		json const test_comps = json::array({{{"target",
+											   {{"id", 1},
+												{"name", "bad-target"},
+												{"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
+												{"model", {{"type", "magic"}}}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps),
 							ContainsSubstring("Unsupported fluctuation model type: magic"));
 	}
 
 	SECTION("Negative ID throws")
 	{
-		json test_comps = json::array(
+		json const test_comps = json::array(
 			{{{"target", {{"id", -5}, {"name", "bad-target"}, {"rcs", {{"type", "isotropic"}, {"value", 1.0}}}}}}});
 		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps), ContainsSubstring("negative id"));
 	}
@@ -624,7 +624,7 @@ TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
 
 TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	std::mt19937 seeder(42);
 
 	const auto make_scenario = [](const json& schedule)
@@ -671,8 +671,8 @@ TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json]
 	SECTION("period shorter than T_rep but at least T_c only warns")
 	{
 		core::World world;
-		LogLevelGuard log_level(logging::Level::WARNING);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::WARNING);
+		CerrCapture const capture;
 		const auto scenario = make_scenario(json::array({{{"start", 0.1}, {"end", 0.1015}}}));
 		REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
 		REQUIRE(world.getTransmitters().size() == 1);
@@ -682,7 +682,7 @@ TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json]
 
 TEST_CASE("JSON: FMCW dechirp configuration validates and round-trips", "[serial][json][fmcw][dechirp]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	std::mt19937 seeder(42);
 
 	const auto make_scenario = [](json fmcw_mode)
@@ -819,7 +819,7 @@ TEST_CASE("JSON: FMCW dechirp configuration validates and round-trips", "[serial
 
 TEST_CASE("JSON: Vec3 Serialization and Deserialization", "[serial][json]")
 {
-	math::Vec3 v_orig(1.2, 3.4, 5.6);
+	math::Vec3 const v_orig(1.2, 3.4, 5.6);
 	json j = v_orig;
 
 	REQUIRE_THAT(j["x"].get<double>(), WithinAbs(1.2, 1e-9));
@@ -834,7 +834,7 @@ TEST_CASE("JSON: Vec3 Serialization and Deserialization", "[serial][json]")
 
 TEST_CASE("JSON: Focused PrototypeTiming Serialization", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	core::World w;
 
 	auto pt = std::make_unique<timing::PrototypeTiming>("FocusTiming", 99);
@@ -850,7 +850,7 @@ TEST_CASE("JSON: Focused PrototypeTiming Serialization", "[serial][json]")
 
 TEST_CASE("JSON: Monostatic Radar Serialization", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10000.0); // 10 kHz -> 1e-4s sample period
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -921,7 +921,7 @@ TEST_CASE("JSON: Monostatic Radar Serialization", "[serial][json]")
 
 TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -964,11 +964,11 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Parameters")
 	{
-		json j = {{"starttime", 1.0},
-				  {"endtime", 20.0},
-				  {"rate", 2000.0},
-				  {"origin", {{"latitude", 10.0}, {"longitude", 20.0}, {"altitude", 30.0}}},
-				  {"coordinatesystem", {{"frame", "ECEF"}}}};
+		json const j = {{"starttime", 1.0},
+						{"endtime", 20.0},
+						{"rate", 2000.0},
+						{"origin", {{"latitude", 10.0}, {"longitude", 20.0}, {"altitude", 30.0}}},
+						{"coordinatesystem", {{"frame", "ECEF"}}}};
 		serial::update_parameters_from_json(j, seeder);
 
 		REQUIRE_THAT(params::startTime(), WithinAbs(1.0, 1e-9));
@@ -979,12 +979,12 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Parameters rejects unsupported oversample ratios")
 	{
-		json j = {{"starttime", 1.0},
-				  {"endtime", 20.0},
-				  {"rate", 2000.0},
-				  {"oversample", 9},
-				  {"origin", {{"latitude", 10.0}, {"longitude", 20.0}, {"altitude", 30.0}}},
-				  {"coordinatesystem", {{"frame", "ECEF"}}}};
+		json const j = {{"starttime", 1.0},
+						{"endtime", 20.0},
+						{"rate", 2000.0},
+						{"oversample", 9},
+						{"origin", {{"latitude", 10.0}, {"longitude", 20.0}, {"altitude", 30.0}}},
+						{"coordinatesystem", {{"frame", "ECEF"}}}};
 
 		REQUIRE_THROWS_WITH(serial::update_parameters_from_json(j, seeder),
 							ContainsSubstring("Oversampling ratios > 8 are not supported"));
@@ -993,7 +993,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 	SECTION("Update Antenna In-Place")
 	{
 		auto* ant_ptr = w.findAntenna(20);
-		json j = {{"id", 20}, {"name", "ant_updated"}, {"pattern", "isotropic"}, {"efficiency", 0.5}};
+		json const j = {{"id", 20}, {"name", "ant_updated"}, {"pattern", "isotropic"}, {"efficiency", 0.5}};
 		serial::update_antenna_from_json(j, ant_ptr, w);
 
 		REQUIRE(ant_ptr->getName() == "ant_updated");
@@ -1003,8 +1003,8 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 	SECTION("Update Antenna Replacement")
 	{
 		auto* ant_ptr = w.findAntenna(20);
-		json j = {{"id", 20},	 {"name", "ant_replaced"}, {"pattern", "sinc"}, {"alpha", 1.0}, {"beta", 2.0},
-				  {"gamma", 3.0}};
+		json const j = {{"id", 20},	   {"name", "ant_replaced"}, {"pattern", "sinc"}, {"alpha", 1.0}, {"beta", 2.0},
+						{"gamma", 3.0}};
 		serial::update_antenna_from_json(j, ant_ptr, w);
 
 		auto* new_ant = w.findAntenna(20);
@@ -1017,7 +1017,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 	SECTION("Update Antenna Rejects Empty File Replacement")
 	{
 		auto* ant_ptr = w.findAntenna(20);
-		json j = {{"id", 20}, {"name", "draft_h5"}, {"pattern", "file"}, {"filename", ""}};
+		json const j = {{"id", 20}, {"name", "draft_h5"}, {"pattern", "file"}, {"filename", ""}};
 
 		REQUIRE_THROWS_WITH(serial::update_antenna_from_json(j, ant_ptr, w), ContainsSubstring("without a filename"));
 		REQUIRE(w.findAntenna(20) == ant_ptr);
@@ -1027,9 +1027,9 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Transmitter")
 	{
-		json j = {{"name", "tx_updated"}, {"cw_mode", json::object()},
-				  {"waveform", 10},		  {"antenna", 20},
-				  {"timing", 30},		  {"schedule", json::array({{{"start", 0.1}, {"end", 0.5}}})}};
+		json const j = {{"name", "tx_updated"}, {"cw_mode", json::object()},
+						{"waveform", 10},		{"antenna", 20},
+						{"timing", 30},			{"schedule", json::array({{{"start", 0.1}, {"end", 0.5}}})}};
 		serial::update_transmitter_from_json(j, tx_ptr, w, seeder);
 
 		REQUIRE(tx_ptr->getName() == "tx_updated");
@@ -1043,7 +1043,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Transmitter PRF")
 	{
-		json j = {{"pulsed_mode", {{"prf", 1250.0}}}};
+		json const j = {{"pulsed_mode", {{"prf", 1250.0}}}};
 		serial::update_transmitter_from_json(j, tx_ptr, w, seeder);
 
 		REQUIRE(tx_ptr->getMode() == radar::OperationMode::PULSED_MODE);
@@ -1052,13 +1052,13 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Receiver")
 	{
-		json j = {{"name", "rx_updated"},
-				  {"pulsed_mode", {{"prf", 1250.0}, {"window_length", 1e-4}, {"window_skip", 1e-5}}},
-				  {"noise_temp", 400.0},
-				  {"nodirect", true},
-				  {"nopropagationloss", true},
-				  {"antenna", 20},
-				  {"timing", 30}};
+		json const j = {{"name", "rx_updated"},
+						{"pulsed_mode", {{"prf", 1250.0}, {"window_length", 1e-4}, {"window_skip", 1e-5}}},
+						{"noise_temp", 400.0},
+						{"nodirect", true},
+						{"nopropagationloss", true},
+						{"antenna", 20},
+						{"timing", 30}};
 		serial::update_receiver_from_json(j, rx_ptr, w, seeder);
 
 		REQUIRE(rx_ptr->getName() == "rx_updated");
@@ -1072,9 +1072,9 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 	SECTION("Update Target")
 	{
-		json j = {{"name", "tgt_updated"},
-				  {"rcs", {{"type", "isotropic"}, {"value", 50.0}}},
-				  {"model", {{"type", "chisquare"}, {"k", 3.0}}}};
+		json const j = {{"name", "tgt_updated"},
+						{"rcs", {{"type", "isotropic"}, {"value", 50.0}}},
+						{"model", {{"type", "chisquare"}, {"k", 3.0}}}};
 		serial::update_target_from_json(j, tgt_ptr, w, seeder);
 
 		// Note: update_target_from_json replaces the target in the world.
@@ -1092,14 +1092,14 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 	SECTION("Update Timing")
 	{
 		auto* pt_ptr = w.findTiming(30);
-		json j = {{"name", "tim_updated"},
-				  {"frequency", 2e6},
-				  {"synconpulse", true},
-				  {"freq_offset", 10.0},
-				  {"random_freq_offset_stdev", 2.0},
-				  {"phase_offset", 0.5},
-				  {"random_phase_offset_stdev", 0.1},
-				  {"noise_entries", json::array({{{"alpha", 1.0}, {"weight", 0.5}}})}};
+		json const j = {{"name", "tim_updated"},
+						{"frequency", 2e6},
+						{"synconpulse", true},
+						{"freq_offset", 10.0},
+						{"random_freq_offset_stdev", 2.0},
+						{"phase_offset", 0.5},
+						{"random_phase_offset_stdev", 0.1},
+						{"noise_entries", json::array({{{"alpha", 1.0}, {"weight", 0.5}}})}};
 		serial::update_timing_from_json(j, w, 30);
 
 		auto* updated_timing = w.findTiming(30);
@@ -1135,7 +1135,7 @@ TEST_CASE("JSON: Granular updates of Radar Components and Timing", "[serial][jso
 
 TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -1177,8 +1177,9 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	w.add(std::move(rx));
 	w.add(std::move(p));
 
-	json j = {{"name", "mono_updated"},	   {"tx_id", 101},		  {"rx_id", 102},	  {"waveform", 10}, {"antenna", 20},
-			  {"cw_mode", json::object()}, {"noise_temp", 300.0}, {"nodirect", true}, {"timing", 30}};
+	json const j = {{"name", "mono_updated"}, {"tx_id", 101},	  {"rx_id", 102},
+					{"waveform", 10},		  {"antenna", 20},	  {"cw_mode", json::object()},
+					{"noise_temp", 300.0},	  {"nodirect", true}, {"timing", 30}};
 
 	serial::update_monostatic_from_json(j, tx_ptr, rx_ptr, w, seeder);
 
@@ -1193,18 +1194,18 @@ TEST_CASE("JSON: Granular updates of Monostatic Radar", "[serial][json]")
 	REQUIRE(rx_ptr->getTiming()->getSeed() == 12345);
 	REQUIRE(tx_ptr->getTiming().get() == rx_ptr->getTiming().get());
 
-	json fmcw_update = {{"name", "mono_fmcw"},
-						{"tx_id", 101},
-						{"rx_id", 102},
-						{"waveform", 11},
-						{"antenna", 20},
-						{"fmcw_mode",
-						 {{"dechirp_mode", "physical"},
-						  {"dechirp_reference", {{"source", "attached"}}},
-						  {"if_sample_rate", 100.0},
-						  {"if_filter_bandwidth", 40.0},
-						  {"if_filter_transition_width", 10.0}}},
-						{"timing", 30}};
+	json const fmcw_update = {{"name", "mono_fmcw"},
+							  {"tx_id", 101},
+							  {"rx_id", 102},
+							  {"waveform", 11},
+							  {"antenna", 20},
+							  {"fmcw_mode",
+							   {{"dechirp_mode", "physical"},
+								{"dechirp_reference", {{"source", "attached"}}},
+								{"if_sample_rate", 100.0},
+								{"if_filter_bandwidth", 40.0},
+								{"if_filter_transition_width", 10.0}}},
+							  {"timing", 30}};
 
 	REQUIRE_NOTHROW(serial::update_monostatic_from_json(fmcw_update, tx_ptr, rx_ptr, w, seeder));
 	REQUIRE(tx_ptr->getMode() == radar::OperationMode::FMCW_MODE);

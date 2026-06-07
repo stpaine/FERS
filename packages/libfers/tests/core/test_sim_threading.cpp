@@ -429,7 +429,7 @@ TEST_CASE("ProgressReporter safely wraps and calls callback", "[core][threading]
 
 TEST_CASE("makeActiveSource caches streaming scalars and clips FMCW chirp count", "[core][threading][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 
 	radar::Platform platform("TxPlatform");
 	antenna::Isotropic antenna("Iso");
@@ -463,7 +463,7 @@ TEST_CASE("makeActiveSource caches streaming scalars and clips FMCW chirp count"
 
 TEST_CASE("makeActiveSource caches signed FMCW down-chirp coefficient", "[core][threading][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 
 	radar::Platform platform("TxPlatform");
 	antenna::Isotropic antenna("Iso");
@@ -487,7 +487,7 @@ TEST_CASE("makeActiveSource caches signed FMCW down-chirp coefficient", "[core][
 
 TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 10.0);
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
@@ -527,7 +527,7 @@ TEST_CASE("SimulationEngine handles streaming state events", "[core][threading]"
 
 TEST_CASE("SimulationEngine handles Pulsed Window events", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -592,7 +592,7 @@ TEST_CASE("SimulationEngine handles Pulsed Window events", "[core][threading]")
 
 TEST_CASE("SimulationEngine handles Tx Pulsed Start and routes responses", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -643,12 +643,12 @@ TEST_CASE("SimulationEngine handles Tx Pulsed Start and routes responses", "[cor
 
 TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setC(3e8); // Override c to 3e8 for clean math
 
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
-	core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+	core::SimulationEngine const engine(world.get(), pool, nullptr, ".");
 
 	auto* tx = world->getTransmitters().front().get();
 	auto* rx = world->getReceivers().front().get();
@@ -678,11 +678,11 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 		const RealType expected_refl_amp = 0.3 / (20000.0 * PI * std::sqrt(PI));
 		const RealType expected_phase = -2000.0 * PI / 3.0;
 
-		ComplexType expected_direct = std::polar(expected_direct_amp, expected_phase);
-		ComplexType expected_refl = std::polar(expected_refl_amp, expected_phase);
-		ComplexType expected_total = expected_direct + expected_refl;
+		ComplexType const expected_direct = std::polar(expected_direct_amp, expected_phase);
+		ComplexType const expected_refl = std::polar(expected_refl_amp, expected_phase);
+		ComplexType const expected_total = expected_direct + expected_refl;
 
-		ComplexType actual_total = simulation::calculateDirectPathContribution(tx, rx, 0.0) +
+		ComplexType const actual_total = simulation::calculateDirectPathContribution(tx, rx, 0.0) +
 			simulation::calculateReflectedPathContribution(tx, rx, world->getTargets().front().get(), 0.0);
 
 		REQUIRE_THAT(actual_total.real(), WithinAbs(expected_total.real(), 1e-12));
@@ -692,7 +692,7 @@ TEST_CASE("SimulationEngine calculates mathematically correct CW physics", "[cor
 
 TEST_CASE("SimulationEngine processStreamingPhysics steps through time and emits sink blocks", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -729,7 +729,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics steps through time and emits
 
 TEST_CASE("SimulationEngine live streaming output emits bounded CW blocks", "[core][threading][vita49][bounded]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -758,7 +758,7 @@ TEST_CASE("SimulationEngine live streaming output emits bounded CW blocks", "[co
 
 TEST_CASE("SimulationEngine emits output heartbeats on streaming simulation time", "[core][threading][vita49]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 5.0);
@@ -788,7 +788,7 @@ TEST_CASE("SimulationEngine emits output heartbeats on streaming simulation time
 
 TEST_CASE("SimulationEngine does not burst historical heartbeats after schedule gaps", "[core][threading][vita49]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(0.1);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 4000.0);
@@ -816,7 +816,7 @@ TEST_CASE("SimulationEngine does not burst historical heartbeats after schedule 
 TEST_CASE("SimulationEngine streaming output applies logged pulsed interference through block path",
 		  "[core][threading][interference]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(4.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
@@ -849,7 +849,7 @@ TEST_CASE("SimulationEngine streaming output applies logged pulsed interference 
 
 TEST_CASE("SimulationEngine keeps streaming source through propagation tail after transmit end", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 0.4);
@@ -890,7 +890,7 @@ TEST_CASE("SimulationEngine keeps streaming source through propagation tail afte
 
 TEST_CASE("SimulationEngine cleanup preserves moving direct streaming tails", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
@@ -941,7 +941,7 @@ TEST_CASE("SimulationEngine cleanup preserves moving direct streaming tails", "[
 
 TEST_CASE("SimulationEngine cleanup preserves reflected-only streaming tails", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
@@ -973,7 +973,7 @@ TEST_CASE("SimulationEngine cleanup preserves reflected-only streaming tails", "
 
 TEST_CASE("SimulationEngine cleanup keeps sources through receiver gaps when tails resume", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
@@ -1009,7 +1009,7 @@ TEST_CASE("SimulationEngine cleanup keeps sources through receiver gaps when tai
 
 TEST_CASE("SimulationEngine cleanup removes an old segment before a same-time next segment", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1024.0);
 	params::setOversampleRatio(1);
@@ -1039,7 +1039,7 @@ TEST_CASE("SimulationEngine cleanup removes an old segment before a same-time ne
 
 TEST_CASE("SimulationEngine cleanup skips long future sample-grid scans", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1.0e9);
 	params::setOversampleRatio(1);
@@ -1064,7 +1064,7 @@ TEST_CASE("SimulationEngine cleanup skips long future sample-grid scans", "[core
 TEST_CASE("SimulationEngine processStreamingPhysics handles active streaming receiver without streaming transmitters",
 		  "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -1093,7 +1093,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics handles active streaming rec
 TEST_CASE("SimulationEngine processStreamingPhysics uses buffered shared timing for streaming samples",
 		  "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
@@ -1163,7 +1163,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics uses buffered shared timing 
 
 TEST_CASE("SimulationEngine phase-noise lookup covers pre-start retarded streaming emissions", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(10.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
@@ -1222,7 +1222,7 @@ TEST_CASE("SimulationEngine phase-noise lookup covers pre-start retarded streami
 TEST_CASE("SimulationEngine native FMCW dechirp produces positive stationary-target beat",
 		  "[core][threading][fmcw][dechirp]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1.0e6);
 	params::setOversampleRatio(1);
@@ -1310,7 +1310,7 @@ TEST_CASE("SimulationEngine native FMCW dechirp produces positive stationary-tar
 TEST_CASE("SimulationEngine physical FMCW dechirp keeps timing decorrelation absent from ideal mode",
 		  "[core][threading][fmcw][dechirp]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(2.0e6);
 	params::setOversampleRatio(1);
@@ -1392,7 +1392,7 @@ TEST_CASE("SimulationEngine physical FMCW dechirp keeps timing decorrelation abs
 
 TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 0.005); // Very short simulation
@@ -1422,7 +1422,7 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 
 TEST_CASE("SimulationEngine reports progress while processing long streaming spans", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(100.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
@@ -1460,7 +1460,7 @@ TEST_CASE("SimulationEngine reports progress while processing long streaming spa
 
 TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][threading][fmcw]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 
@@ -1469,8 +1469,8 @@ TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][
 		params::setTime(0.0, 0.26);
 		auto world = createFmcwLoggingWorld(std::nullopt);
 		pool::ThreadPool pool(1);
-		LogLevelGuard log_level(logging::Level::INFO);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::INFO);
+		CerrCapture const capture;
 
 		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 		engine.run();
@@ -1486,8 +1486,8 @@ TEST_CASE("SimulationEngine logs FMCW derived chirp counts at startup", "[core][
 		params::setTime(0.05, 0.45);
 		auto world = createFmcwLoggingWorld(std::size_t{3}, {{-0.05, 0.25}, {0.3, 0.36}});
 		pool::ThreadPool pool(1);
-		LogLevelGuard log_level(logging::Level::INFO);
-		CerrCapture capture;
+		LogLevelGuard const log_level(logging::Level::INFO);
+		CerrCapture const capture;
 
 		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
 		engine.run();
@@ -1507,7 +1507,7 @@ TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle",
 	// This test covers:
 	// 1. initializeFinalizers() -> _finalizer_threads.emplace_back(...)
 	// 6. shutdown() -> else if (PULSED_MODE) { enqueue shutdown_job }
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 0.005);
@@ -1543,7 +1543,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics exits early if t_event <= t_
 {
 	// This test covers:
 	// 2. processStreamingPhysics(t_event) -> if (t_event <= t_current) { return; }
-	ParamGuard guard;
+	ParamGuard const guard;
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
 	RecordingOutputSink sink;
@@ -1567,7 +1567,7 @@ TEST_CASE("SimulationEngine processStreamingPhysics exits early if t_event <= t_
 
 TEST_CASE("SimulationEngine processEvent dispatches all event types correctly", "[core][threading]")
 {
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 10.0);
@@ -1620,7 +1620,7 @@ TEST_CASE("SimulationEngine routeResponse handles null responses safely", "[core
 {
 	// This test covers:
 	// 4. routeResponse(...) -> if (!response) { return; }
-	ParamGuard guard;
+	ParamGuard const guard;
 	auto world = std::make_unique<core::World>();
 
 	// Put Tx and Rx on the EXACT SAME platform to force calculateResponse to return nullptr
@@ -1674,7 +1674,7 @@ TEST_CASE("SimulationEngine updateProgress safely handles null reporter", "[core
 {
 	// This test covers:
 	// 5. updateProgress() -> if (!_reporter) { return; }
-	ParamGuard guard;
+	ParamGuard const guard;
 	params::setTime(0.0, 1.0);
 	auto world = createPhysicsWorld();
 	pool::ThreadPool pool(1);
