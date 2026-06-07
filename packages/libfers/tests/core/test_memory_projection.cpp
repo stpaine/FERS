@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <nlohmann/json.hpp>
@@ -140,7 +141,7 @@ TEST_CASE("Simulation memory projection totals core categories", "[core][memory_
 
 	REQUIRE(projection.phase_noise_lookup.bytes == 21 * sizeof(RealType));
 	REQUIRE(projection.streaming_iq_buffers.bytes == 20 * sizeof(ComplexType));
-	REQUIRE(projection.rendered_hdf5_payload.bytes == 16 * 2 * sizeof(RealType));
+	REQUIRE(projection.rendered_hdf5_payload.bytes == std::uint64_t{16} * 2 * sizeof(RealType));
 
 	const auto json = nlohmann::json::parse(core::memoryProjectionToJsonString(projection));
 	REQUIRE(json["phase_noise_lookups"]["bytes"] == projection.phase_noise_lookup.bytes);
@@ -173,7 +174,7 @@ TEST_CASE("Simulation memory projection counts dechirped streaming output at RF 
 	REQUIRE(projection.streaming_sample_count == 20);
 	REQUIRE(projection.streaming_receiver_count == 2);
 	REQUIRE(projection.rendered_hdf5_sample_count == 36);
-	REQUIRE(projection.rendered_hdf5_payload.bytes == 36 * 2 * sizeof(RealType));
+	REQUIRE(projection.rendered_hdf5_payload.bytes == std::uint64_t{36} * 2 * sizeof(RealType));
 }
 
 TEST_CASE("Simulation memory projection counts IF-rate dechirped output at receiver rate",
@@ -204,7 +205,7 @@ TEST_CASE("Simulation memory projection counts IF-rate dechirped output at recei
 	REQUIRE(projection.streaming_receiver_count == 2);
 	REQUIRE(projection.rendered_hdf5_sample_count == 21);
 	REQUIRE(projection.streaming_iq_buffers.bytes == 25 * sizeof(ComplexType));
-	REQUIRE(projection.rendered_hdf5_payload.bytes == 21 * 2 * sizeof(RealType));
+	REQUIRE(projection.rendered_hdf5_payload.bytes == std::uint64_t{21} * 2 * sizeof(RealType));
 }
 
 TEST_CASE("Simulation memory projection starts phase-noise lookup at earliest streaming receiver",

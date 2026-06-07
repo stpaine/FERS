@@ -188,7 +188,8 @@ namespace
 		stage.group_delay_seconds = static_cast<RealType>(taps - 1) / (2.0 * design_rate_hz);
 		if (kind == fers_signal::FmcwIfResamplerStageKind::HalfBandDecimateBy2)
 		{
-			stage.estimated_macs_per_stage_output = static_cast<RealType>((taps + 3) / 4);
+			const auto half_band_branch_macs = (taps + 3) / 4;
+			stage.estimated_macs_per_stage_output = static_cast<RealType>(half_band_branch_macs);
 		}
 		else
 		{
@@ -542,7 +543,7 @@ namespace fers_signal
 			const RealType limiting_nyquist = 0.5 * std::min(_plan.input_sample_rate_hz, _plan.output_sample_rate_hz);
 			const RealType cutoff_hz = std::min(_plan.cutoff_hz, limiting_nyquist * 0.999);
 			const RealType cutoff = cutoff_hz / _plan.input_sample_rate_hz;
-			const auto half = static_cast<RealType>((taps - 1) / 2);
+			const RealType half = static_cast<RealType>(taps - 1) / 2.0;
 
 			for (std::size_t phase = 0; phase < phase_count; ++phase)
 			{

@@ -1944,7 +1944,7 @@ namespace core
 				auto vita49_metadata = vita49MetadataFromConfig(output_config.vita49);
 				if (stats.epoch_unix_nanoseconds.has_value())
 				{
-					vita49_metadata.epoch_unix_nanoseconds = *stats.epoch_unix_nanoseconds;
+					vita49_metadata.epoch_unix_nanoseconds = stats.epoch_unix_nanoseconds;
 				}
 				for (const auto& stream : stats.streams)
 				{

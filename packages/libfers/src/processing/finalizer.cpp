@@ -361,7 +361,7 @@ namespace processing
 				metadata.fmcw_if_decimation_enabled = if_plan.has_value();
 				if (if_request.sample_rate_hz.has_value())
 				{
-					metadata.fmcw_if_requested_sample_rate = *if_request.sample_rate_hz;
+					metadata.fmcw_if_requested_sample_rate = if_request.sample_rate_hz;
 				}
 				if (if_plan.has_value())
 				{

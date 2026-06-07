@@ -16,6 +16,7 @@
 #include <cmath>
 #include <complex>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -238,9 +239,14 @@ namespace fers_signal
 	{
 		clear();
 		const unsigned ratio = params::oversampleRatio();
-		_data.resize(samples * ratio);
-		_size = samples * ratio;
-		_rate = sampleRate * ratio;
+		const auto oversampled_samples = static_cast<std::size_t>(samples) * static_cast<std::size_t>(ratio);
+		if (oversampled_samples > std::numeric_limits<unsigned>::max())
+		{
+			throw std::overflow_error("Oversampled signal sample count exceeds unsigned range");
+		}
+		_data.resize(oversampled_samples);
+		_size = static_cast<unsigned>(oversampled_samples);
+		_rate = sampleRate * static_cast<RealType>(ratio);
 
 		if (ratio == 1)
 		{
