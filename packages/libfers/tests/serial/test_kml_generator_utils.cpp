@@ -7,6 +7,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 #include "antenna/antenna_factory.h"
@@ -117,7 +118,8 @@ TEST_CASE("KML Geodesic: Coordinate Calculations", "[serial][kml][geodesic]")
 {
 	SECTION("Destination Coordinate")
 	{
-		double dest_lat, dest_lon;
+		double dest_lat = std::numeric_limits<double>::quiet_NaN();
+		double dest_lon = std::numeric_limits<double>::quiet_NaN();
 		// Start at equator/prime meridian, move East (90 deg) by ~1 degree of longitude (111319.49 meters)
 		serial::kml_generator_utils::calculateDestinationCoordinate(0.0, 0.0, 90.0, 111319.49, dest_lat, dest_lon);
 		REQUIRE_THAT(dest_lat, WithinAbs(0.0, 1e-4));

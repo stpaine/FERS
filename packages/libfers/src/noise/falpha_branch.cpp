@@ -29,11 +29,10 @@ namespace noise
 {
 	FAlphaBranch::FAlphaBranch(std::mt19937& rngEngine, RealType ffrac, unsigned fint,
 							   std::unique_ptr<FAlphaBranch> pre, const bool last) :
-		_rng_engine_ref(rngEngine), _normal_dist{0.0, 1.0}, _pre(std::move(pre)), _buffer(10), _ffrac(ffrac),
-		_fint(fint), _last(last)
+		_rng_engine_ref(rngEngine), _normal_dist{0.0, 1.0}, _pre(std::move(pre)),
+		_upsample_scale(std::pow(10, ffrac + fint + 0.5)), _buffer(10), _ffrac(ffrac), _fint(fint), _last(last)
 	{
 		LOG(Level::TRACE, "Creating FAlphaBranch: ffrac={} fint={}", ffrac, fint);
-		_upsample_scale = std::pow(10, ffrac + fint + 0.5);
 		init();
 
 		if (!_last)

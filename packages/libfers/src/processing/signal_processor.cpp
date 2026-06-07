@@ -91,8 +91,8 @@ namespace
 	void processResponse(const serial::Response* resp, std::vector<ComplexType>& localWindow, const RealType rate,
 						 const RealType start, const RealType fracDelay, const std::size_t localWindowSize)
 	{
-		unsigned psize;
-		RealType prate;
+		unsigned psize = 0;
+		RealType prate = std::numeric_limits<RealType>::quiet_NaN();
 		const auto array = resp->renderBinary(prate, psize, fracDelay);
 		int const start_sample = static_cast<int>(std::round(rate * (resp->startTime() - start)));
 		const auto roffset = start_sample < 0 ? static_cast<std::size_t>(-start_sample) : std::size_t{0};

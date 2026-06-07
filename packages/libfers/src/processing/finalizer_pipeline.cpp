@@ -184,8 +184,8 @@ namespace processing::pipeline
 	{
 		for (const auto& response : interference_log)
 		{
-			unsigned psize;
-			RealType prate;
+			unsigned psize = 0;
+			RealType prate = std::numeric_limits<RealType>::quiet_NaN();
 			const auto rendered_pulse = response->renderBinary(prate, psize, 0.0);
 			const RealType rate_tolerance = std::numeric_limits<RealType>::epsilon() *
 				std::max(std::abs(prate), std::abs(output_sample_rate)) * 16.0;

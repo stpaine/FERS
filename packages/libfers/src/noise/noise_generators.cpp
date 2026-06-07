@@ -22,7 +22,7 @@
 namespace noise
 {
 	MultirateGenerator::MultirateGenerator(std::mt19937& rngEngine, const RealType alpha, const unsigned branches) :
-		_rng_engine(rngEngine)
+		_scale(1.0 / std::pow(10.0, (-alpha + 2.0) * 2.0)), _rng_engine(rngEngine)
 	{
 		const RealType beta = -(alpha - 2) / 2.0;
 		const int fint = static_cast<int>(std::floor(beta));
@@ -30,7 +30,6 @@ namespace noise
 
 		createTree(ffrac, fint, branches);
 		// TODO: verify scale factor calculation (* 2.0 appears to be a bug)
-		_scale = 1.0 / std::pow(10.0, (-alpha + 2.0) * 2.0);
 	}
 
 	// NOLINTNEXTLINE(readability-make-member-function-const)

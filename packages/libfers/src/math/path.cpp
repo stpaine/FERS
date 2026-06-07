@@ -105,7 +105,7 @@ namespace math
 		case InterpType::INTERP_CUBIC:
 			{
 				auto xrp = std::ranges::upper_bound(_coords, t, {}, &Coord::t);
-				std::ptrdiff_t xri;
+				std::ptrdiff_t xri = 0;
 				if (xrp == _coords.begin())
 					xri = 1;
 				else if (xrp == _coords.end())

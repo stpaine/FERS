@@ -208,9 +208,8 @@ namespace fers_signal
 		return out;
 	}
 
-	DownsamplingSink::DownsamplingSink()
+	DownsamplingSink::DownsamplingSink() : _ratio(params::oversampleRatio())
 	{
-		_ratio = params::oversampleRatio();
 		validateOversamplingConfig(_ratio);
 		if (_ratio <= 1)
 		{

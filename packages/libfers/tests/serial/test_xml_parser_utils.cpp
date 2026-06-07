@@ -41,7 +41,7 @@ namespace
 	{
 		std::ostringstream buffer;
 		std::streambuf* old{nullptr};
-		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		CerrCapture() : old(std::cerr.rdbuf(buffer.rdbuf())) {}
 		CerrCapture(const CerrCapture&) = delete;
 		CerrCapture& operator=(const CerrCapture&) = delete;
 		CerrCapture(CerrCapture&&) = delete;

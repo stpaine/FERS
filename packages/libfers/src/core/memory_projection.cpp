@@ -454,9 +454,9 @@ namespace core
 		}
 		if (unit_index == 0)
 		{
-			return std::format("{} {}", bytes, units[unit_index]);
+			return std::format("{} {}", bytes, units.at(unit_index));
 		}
-		return std::format("{:.2f} {}", static_cast<double>(value), units[unit_index]);
+		return std::format("{:.2f} {}", static_cast<double>(value), units.at(unit_index));
 	}
 
 	std::string memoryProjectionToJsonString(const SimulationMemoryProjection& projection)

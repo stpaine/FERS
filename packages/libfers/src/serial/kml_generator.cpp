@@ -16,6 +16,7 @@
 #include <GeographicLib/UTMUPS.hpp>
 #include <expected>
 #include <fstream>
+#include <limits>
 #include <memory>
 
 #include "core/logging.h"
@@ -49,7 +50,8 @@ namespace serial
 					const bool northp = ctx.parameters.utm_north_hemisphere;
 					ctx.converter = [zone, northp](const math::Vec3& pos, double& lat, double& lon, double& alt)
 					{
-						double gamma, k;
+						double gamma = std::numeric_limits<double>::quiet_NaN();
+						double k = std::numeric_limits<double>::quiet_NaN();
 						GeographicLib::UTMUPS::Reverse(zone, northp, pos.x, pos.y, lat, lon, gamma, k);
 						alt = pos.z;
 					};

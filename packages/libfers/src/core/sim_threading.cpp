@@ -166,6 +166,32 @@ namespace core
 			}
 		}
 
+		[[nodiscard]] RealType axisValue(const std::array<RealType, 3>& values, const std::size_t axis) noexcept
+		{
+			switch (axis)
+			{
+			case 0:
+				return values[0];
+			case 1:
+				return values[1];
+			default:
+				return values[2];
+			}
+		}
+
+		[[nodiscard]] RealType& axisValue(std::array<RealType, 3>& values, const std::size_t axis) noexcept
+		{
+			switch (axis)
+			{
+			case 0:
+				return values[0];
+			case 1:
+				return values[1];
+			default:
+				return values[2];
+			}
+		}
+
 		[[nodiscard]] RealType axisDistanceBound(const PositionBounds& lhs, const PositionBounds& rhs,
 												 const std::size_t axis) noexcept
 		{
@@ -222,9 +248,12 @@ namespace core
 
 			for (std::size_t axis = 0; axis < 3; ++axis)
 			{
-				const RealType a = 0.5 * h2 * (dd_right[axis] - dd_left[axis]);
-				const RealType b = h2 * dd_left[axis];
-				const RealType c = (right[axis] - left[axis]) + (h2 / 6.0) * (-2.0 * dd_left[axis] - dd_right[axis]);
+				const RealType dd_right_axis = axisValue(dd_right, axis);
+				const RealType dd_left_axis = axisValue(dd_left, axis);
+				const RealType a = 0.5 * h2 * (dd_right_axis - dd_left_axis);
+				const RealType b = h2 * dd_left_axis;
+				const RealType c = (axisValue(right, axis) - axisValue(left, axis)) +
+					(h2 / 6.0) * (-2.0 * dd_left_axis - dd_right_axis);
 
 				if (std::abs(a) <= EPSILON)
 				{
@@ -333,11 +362,12 @@ namespace core
 			const RealType velocity = (a * root_u * root_u + b * root_u + c) / segment_length;
 			if (std::isfinite(velocity))
 			{
-				max_abs_velocity[axis] = std::max(max_abs_velocity[axis], std::abs(velocity));
+				RealType& axis_max_velocity = axisValue(max_abs_velocity, axis);
+				axis_max_velocity = std::max(axis_max_velocity, std::abs(velocity));
 			}
 			else
 			{
-				max_abs_velocity[axis] = std::numeric_limits<RealType>::infinity();
+				axisValue(max_abs_velocity, axis) = std::numeric_limits<RealType>::infinity();
 			}
 		}
 
@@ -359,9 +389,12 @@ namespace core
 
 			for (std::size_t axis = 0; axis < 3; ++axis)
 			{
-				const RealType a = 0.5 * h2 * (dd_right[axis] - dd_left[axis]);
-				const RealType b = h2 * dd_left[axis];
-				const RealType c = (right[axis] - left[axis]) + (h2 / 6.0) * (-2.0 * dd_left[axis] - dd_right[axis]);
+				const RealType dd_right_axis = axisValue(dd_right, axis);
+				const RealType dd_left_axis = axisValue(dd_left, axis);
+				const RealType a = 0.5 * h2 * (dd_right_axis - dd_left_axis);
+				const RealType b = h2 * dd_left_axis;
+				const RealType c = (axisValue(right, axis) - axisValue(left, axis)) +
+					(h2 / 6.0) * (-2.0 * dd_left_axis - dd_right_axis);
 				includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, lower_u, lower_u,
 												 upper_u);
 				includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, upper_u, lower_u,
@@ -587,7 +620,8 @@ namespace core
 		_world(world), _pool(pool), _reporter(std::move(reporter)), _metadata_collector(std::move(metadata_collector)),
 		_output_sink(output_sink), _cancel_callback(std::move(cancel_callback)),
 		_eager_context_stream_open(eager_context_stream_open), _last_report_time(std::chrono::steady_clock::now()),
-		_next_context_heartbeat_time(params::startTime() + 1.0), _output_dir(std::move(output_dir))
+		_next_context_heartbeat_time(params::startTime() + 1.0), _output_dir(std::move(output_dir)),
+		_internal_stop_time(params::endTime())
 	{
 		_streaming_tracker_caches.resize(_world->getReceivers().size());
 		_if_pulse_tracker_caches.resize(_world->getReceivers().size());
@@ -612,7 +646,6 @@ namespace core
 		{
 			block.reserve(streaming_output_block_size);
 		}
-		_internal_stop_time = params::endTime();
 	}
 
 	void SimulationEngine::run()
