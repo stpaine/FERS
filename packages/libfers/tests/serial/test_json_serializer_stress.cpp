@@ -103,12 +103,15 @@ namespace
 			}
 			for (auto& [key, val] : a.items())
 			{
-				if (!compareJson(val, b[key], path + "/" + key))
+				std::string child_path = path;
+				child_path += '/';
+				child_path += key;
+				if (!compareJson(val, b[key], child_path))
 					return false;
 			}
 			return true;
 		}
-		else if (a.is_array())
+		if (a.is_array())
 		{
 			if (a.size() != b.size())
 			{
@@ -122,7 +125,7 @@ namespace
 			}
 			return true;
 		}
-		else if (a.is_number_float())
+		if (a.is_number_float())
 		{
 			double va = a.get<double>();
 			double vb = b.get<double>();
@@ -134,15 +137,13 @@ namespace
 			}
 			return true;
 		}
-		else
+
+		if (a != b)
 		{
-			if (a != b)
-			{
-				UNSCOPED_INFO("Value mismatch at " << path << ": " << a << " vs " << b);
-				return false;
-			}
-			return true;
+			UNSCOPED_INFO("Value mismatch at " << path << ": " << a << " vs " << b);
+			return false;
 		}
+		return true;
 	}
 
 	// Generates a massive, highly complex world to stress the serializer

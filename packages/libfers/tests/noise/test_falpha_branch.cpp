@@ -94,9 +94,9 @@ TEST_CASE("FAlphaBranch non-last branch matches upsampled pre-offset buffer", "[
 		}
 	}
 
-	for (size_t i = 0; i < expected.size(); ++i)
+	for (const RealType expected_sample : expected)
 	{
-		REQUIRE_THAT(branch.getSample(), WithinAbs(expected[i], 1e-12));
+		REQUIRE_THAT(branch.getSample(), WithinAbs(expected_sample, 1e-12));
 	}
 }
 

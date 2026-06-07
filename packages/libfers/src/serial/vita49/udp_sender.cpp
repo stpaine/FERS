@@ -98,8 +98,12 @@ namespace serial::vita49
 
 		for (auto* candidate = result; candidate != nullptr; candidate = candidate->ai_next)
 		{
+#ifdef _WIN32
 			const int fd =
 				static_cast<int>(::socket(candidate->ai_family, candidate->ai_socktype, candidate->ai_protocol));
+#else
+			const int fd = ::socket(candidate->ai_family, candidate->ai_socktype, candidate->ai_protocol);
+#endif
 			if (fd < 0)
 			{
 				continue;

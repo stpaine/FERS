@@ -41,8 +41,7 @@ int main(int argc, char* argv[])
 		testLogLevel = levelFromString(env_level);
 		if (testLogLevel != logging::Level::OFF)
 		{
-			std::cout << "[Test Runner] Overriding log level to: " << logging::getLevelString(testLogLevel)
-					  << std::endl;
+			std::cout << "[Test Runner] Overriding log level to: " << logging::getLevelString(testLogLevel) << '\n';
 		}
 	}
 

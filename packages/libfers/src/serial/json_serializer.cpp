@@ -173,8 +173,13 @@ namespace
 			}
 			if (!allowed)
 			{
-				throw std::runtime_error(owner + " " + std::string(object_name) + " contains unsupported key '" + key +
-										 "'.");
+				std::string message = owner;
+				message += ' ';
+				message += object_name;
+				message += " contains unsupported key '";
+				message += key;
+				message += "'.";
+				throw std::runtime_error(message);
 			}
 		}
 	}
