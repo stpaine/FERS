@@ -14,8 +14,9 @@
 namespace radar
 {
 
-	std::vector<SchedulePeriod> processRawSchedule(std::vector<SchedulePeriod> periods, const std::string& ownerName,
-												   const bool isPulsed, const RealType pri)
+	std::vector<SchedulePeriod> processRawSchedule(const std::vector<SchedulePeriod>& periods,
+												   const std::string& ownerName, const bool isPulsed,
+												   const RealType pri)
 	{
 		if (periods.empty())
 		{

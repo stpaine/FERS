@@ -30,7 +30,7 @@ TEST_CASE("SchedulePeriod filters invalid and out-of-bounds periods", "[radar][s
 	std::vector<radar::SchedulePeriod> raw = {{-1.0, -0.5}, {12.0, 15.0}, {5.0, 5.0},
 											  {7.0, 3.0},	{1.0, 2.0},	  {2.0, 3.0}};
 
-	const auto processed = radar::processRawSchedule(std::move(raw), "TestRadar", false, 1.0);
+	const auto processed = radar::processRawSchedule(raw, "TestRadar", false, 1.0);
 
 	REQUIRE(processed.size() == 1);
 	REQUIRE_THAT(processed.front().start, WithinAbs(1.0, 1e-12));
@@ -45,7 +45,7 @@ TEST_CASE("SchedulePeriod sorts and merges overlaps and adjacency", "[radar][sch
 	std::vector<radar::SchedulePeriod> raw = {{5.0, 6.0},	{1.0, 4.0},	  {4.0, 5.0},
 											  {10.0, 12.0}, {11.0, 20.0}, {30.0, 31.0}};
 
-	const auto processed = radar::processRawSchedule(std::move(raw), "MergeRadar", false, 1.0);
+	const auto processed = radar::processRawSchedule(raw, "MergeRadar", false, 1.0);
 
 	REQUIRE(processed.size() == 3);
 	REQUIRE_THAT(processed[0].start, WithinAbs(1.0, 1e-12));
@@ -63,7 +63,7 @@ TEST_CASE("SchedulePeriod keeps periods that intersect simulation bounds", "[rad
 
 	std::vector<radar::SchedulePeriod> raw = {{0.0, 6.0}, {5.0, 6.0}, {14.0, 16.0}, {20.0, 25.0}};
 
-	const auto processed = radar::processRawSchedule(std::move(raw), "BoundsRadar", false, 1.0);
+	const auto processed = radar::processRawSchedule(raw, "BoundsRadar", false, 1.0);
 
 	REQUIRE(processed.size() == 2);
 	REQUIRE_THAT(processed[0].start, WithinAbs(0.0, 1e-12));
@@ -104,6 +104,6 @@ TEST_CASE("SchedulePeriod returns empty after filtering all invalid periods", "[
 
 	std::vector<radar::SchedulePeriod> raw = {{5.0, 5.0}, {7.0, 3.0}, {-5.0, -1.0}, {12.0, 20.0}};
 
-	const auto processed = radar::processRawSchedule(std::move(raw), "FilteredRadar", false, 1.0);
+	const auto processed = radar::processRawSchedule(raw, "FilteredRadar", false, 1.0);
 	REQUIRE(processed.empty());
 }

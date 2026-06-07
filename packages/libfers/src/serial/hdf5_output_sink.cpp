@@ -76,7 +76,7 @@ namespace serial
 		{
 		}
 
-		void initializeRun(const core::OutputConfig& config, std::string /*simulation_name*/)
+		void initializeRun(const core::OutputConfig& config, const std::string& /*simulation_name*/)
 		{
 			if (config.mode != core::OutputMode::Hdf5)
 			{
@@ -265,9 +265,9 @@ namespace serial
 			{
 				state.streaming_buffer.resize(sample_end);
 			}
-			std::copy(block.samples.begin(), block.samples.end(),
-					  std::next(state.streaming_buffer.begin(),
-								static_cast<std::vector<ComplexType>::difference_type>(sample_start)));
+			std::ranges::copy(block.samples,
+							  std::next(state.streaming_buffer.begin(),
+										static_cast<std::vector<ComplexType>::difference_type>(sample_start)));
 		}
 
 		void closePulsedStream(StreamState& state)
@@ -348,7 +348,7 @@ namespace serial
 
 	void Hdf5OutputSink::initializeRun(const core::OutputConfig& config, std::string simulation_name)
 	{
-		_impl->initializeRun(config, std::move(simulation_name));
+		_impl->initializeRun(config, simulation_name);
 	}
 
 	std::uint32_t Hdf5OutputSink::registerStream(const core::ReceiverStreamDescriptor& stream)

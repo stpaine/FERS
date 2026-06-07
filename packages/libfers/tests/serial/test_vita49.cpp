@@ -132,7 +132,7 @@ namespace
 		void releaseFirstSend()
 		{
 			{
-				std::lock_guard const lock(mutex);
+				std::scoped_lock const lock(mutex);
 				release_first_send = true;
 			}
 			cv.notify_all();

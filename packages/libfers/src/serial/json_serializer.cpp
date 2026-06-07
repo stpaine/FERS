@@ -1313,8 +1313,8 @@ namespace
 			{
 				pri = 1.0 / trans->getPrf();
 			}
-			auto schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
-													  mode == radar::OperationMode::PULSED_MODE, pri);
+			auto schedule =
+				radar::processRawSchedule(raw, trans->getName(), mode == radar::OperationMode::PULSED_MODE, pri);
 			if (waveform->isFmcwFamily())
 			{
 				validate_fmcw_schedule(schedule, *waveform, "Transmitter component '" + trans->getName() + "'");
@@ -1391,8 +1391,8 @@ namespace
 			{
 				pri = 1.0 / recv->getWindowPrf();
 			}
-			recv->setSchedule(radar::processRawSchedule(std::move(raw), recv->getName(),
-														mode == radar::OperationMode::PULSED_MODE, pri));
+			recv->setSchedule(
+				radar::processRawSchedule(raw, recv->getName(), mode == radar::OperationMode::PULSED_MODE, pri));
 		}
 
 		parse_receiver_dechirp_config(comp_json, *recv,
@@ -1547,8 +1547,8 @@ namespace
 			}
 
 			// Process once, apply to both
-			auto processed_schedule = radar::processRawSchedule(std::move(raw), trans->getName(),
-																mode == radar::OperationMode::PULSED_MODE, pri);
+			auto processed_schedule =
+				radar::processRawSchedule(raw, trans->getName(), mode == radar::OperationMode::PULSED_MODE, pri);
 			if (waveform->isFmcwFamily())
 			{
 				validate_fmcw_schedule(processed_schedule, *waveform,
@@ -1879,8 +1879,8 @@ namespace serial
 			RealType pri = 0.0;
 			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
 				pri = 1.0 / tx->getPrf();
-			auto schedule = radar::processRawSchedule(std::move(raw), tx->getName(),
-													  tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
+			auto schedule =
+				radar::processRawSchedule(raw, tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
 			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
 			{
 				validate_fmcw_schedule(schedule, *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
@@ -1969,8 +1969,8 @@ namespace serial
 			RealType pri = 0.0;
 			if (rx->getMode() == radar::OperationMode::PULSED_MODE)
 				pri = 1.0 / rx->getWindowPrf();
-			rx->setSchedule(radar::processRawSchedule(std::move(raw), rx->getName(),
-													  rx->getMode() == radar::OperationMode::PULSED_MODE, pri));
+			rx->setSchedule(
+				radar::processRawSchedule(raw, rx->getName(), rx->getMode() == radar::OperationMode::PULSED_MODE, pri));
 		}
 		if (j.contains("fmcw_mode"))
 		{

@@ -53,7 +53,7 @@ namespace serial::vita49
 
 	void PacedSender::start(const RealType simulation_epoch_time)
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		if (_started)
 		{
 			return;
@@ -103,7 +103,7 @@ namespace serial::vita49
 	void PacedSender::stop()
 	{
 		{
-			std::lock_guard const lock(_mutex);
+			std::scoped_lock const lock(_mutex);
 			if (!_started && !_thread.joinable())
 			{
 				_sender->close();
@@ -119,7 +119,7 @@ namespace serial::vita49
 		}
 
 		{
-			std::lock_guard const lock(_mutex);
+			std::scoped_lock const lock(_mutex);
 			_started = false;
 			_stopping = false;
 			_send_in_progress = false;
@@ -130,49 +130,49 @@ namespace serial::vita49
 
 	std::uint64_t PacedSender::latePacketCount(const std::uint32_t stream_id) const
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto found = _late_packets.find(stream_id);
 		return found == _late_packets.end() ? 0 : found->second;
 	}
 
 	std::uint64_t PacedSender::sentPacketCount(const std::uint32_t stream_id) const
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto found = _sent_packets.find(stream_id);
 		return found == _sent_packets.end() ? 0 : found->second;
 	}
 
 	std::uint64_t PacedSender::sendFailureCount(const std::uint32_t stream_id) const
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto found = _send_failures.find(stream_id);
 		return found == _send_failures.end() ? 0 : found->second;
 	}
 
 	std::uint64_t PacedSender::droppedDataPacketCount(const std::uint32_t stream_id) const
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto found = _dropped_data_packets.find(stream_id);
 		return found == _dropped_data_packets.end() ? 0 : found->second;
 	}
 
 	std::uint64_t PacedSender::droppedContextPacketCount(const std::uint32_t stream_id) const
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto found = _dropped_context_packets.find(stream_id);
 		return found == _dropped_context_packets.end() ? 0 : found->second;
 	}
 
 	std::uint64_t PacedSender::droppedSampleCount(const std::uint32_t stream_id) const
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		const auto found = _dropped_samples.find(stream_id);
 		return found == _dropped_samples.end() ? 0 : found->second;
 	}
 
 	std::vector<DroppedDatagram> PacedSender::consumeDroppedDatagrams()
 	{
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		auto result = std::move(_pending_dropped_datagrams);
 		_pending_dropped_datagrams.clear();
 		return result;
@@ -247,13 +247,13 @@ namespace serial::vita49
 		}
 		catch (...)
 		{
-			std::lock_guard const lock(_mutex);
+			std::scoped_lock const lock(_mutex);
 			++_send_failures[packet.stream_id];
 			recordDroppedUnlocked(packet);
 			_pending_dropped_datagrams.push_back(makeDroppedDatagram(packet));
 			return;
 		}
-		std::lock_guard const lock(_mutex);
+		std::scoped_lock const lock(_mutex);
 		++_sent_packets[packet.stream_id];
 		if (now > due + std::chrono::milliseconds(1))
 		{

@@ -576,9 +576,8 @@ namespace core
 			{
 				throw std::runtime_error(owner + " dechirp reference has no active LO segments in the simulation.");
 			}
-			std::sort(sources.begin(), sources.end(),
-					  [](const ActiveStreamingSource& lhs, const ActiveStreamingSource& rhs)
-					  { return lhs.segment_start < rhs.segment_start; });
+			std::ranges::sort(sources, [](const ActiveStreamingSource& lhs, const ActiveStreamingSource& rhs)
+							  { return lhs.segment_start < rhs.segment_start; });
 			rx.setDechirpReference(std::move(reference));
 			rx.setResolvedDechirpSources(std::move(sources));
 		}

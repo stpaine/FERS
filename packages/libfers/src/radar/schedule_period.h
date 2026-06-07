@@ -39,6 +39,6 @@ namespace radar
 	 * @param pri The Pulse Repetition Interval (only used if isPulsed is true).
 	 * @return A sorted, merged, and validated vector of periods.
 	 */
-	std::vector<SchedulePeriod> processRawSchedule(std::vector<SchedulePeriod> periods, const std::string& ownerName,
-												   bool isPulsed, RealType pri);
+	std::vector<SchedulePeriod> processRawSchedule(const std::vector<SchedulePeriod>& periods,
+												   const std::string& ownerName, bool isPulsed, RealType pri);
 }

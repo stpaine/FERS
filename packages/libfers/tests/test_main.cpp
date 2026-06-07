@@ -36,6 +36,7 @@ int main(int argc, char* argv[])
 
 	// Allow overriding the log level with an environment variable for debugging.
 	// Example: FERS_TEST_LOG_LEVEL=DEBUG ctest -R my_failing_test
+	// NOLINTNEXTLINE(concurrency-mt-unsafe): Test runner reads environment before tests start worker threads.
 	if (const char* env_level = std::getenv("FERS_TEST_LOG_LEVEL"))
 	{
 		testLogLevel = levelFromString(env_level);

@@ -132,6 +132,7 @@ TEST_CASE("XmlDocument throws when setting root on moved-from doc", "[serial][xm
 	XmlDocument const moved_doc(std::move(doc));
 	const XmlElement root = XmlElement::create("root");
 	moved_doc.setRootElement(root);
+	// NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move): Verifies moved-from document guard.
 	REQUIRE_THROWS_AS(doc.setRootElement(root), std::runtime_error);
 }
 
@@ -141,6 +142,7 @@ TEST_CASE("XmlDocument throws when getting root on moved-from doc", "[serial][xm
 	XmlDocument const moved_doc(std::move(doc));
 	const XmlElement root = XmlElement::create("root");
 	moved_doc.setRootElement(root);
+	// NOLINTNEXTLINE(bugprone-use-after-move,clang-analyzer-cplusplus.Move): Verifies moved-from document guard.
 	REQUIRE_THROWS_AS(doc.getRootElement(), std::runtime_error);
 }
 

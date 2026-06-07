@@ -1079,6 +1079,7 @@ char* fers_get_last_error_message()
 	// `strdup` allocates with `malloc`, which is part of the C standard ABI,
 	// making it safe to transfer ownership across the FFI boundary. The caller
 	// must then free this memory using `fers_free_string`.
+	// NOLINTNEXTLINE(cppcoreguidelines-no-malloc): C ABI string ownership is freed by `fers_free_string`.
 	return strdup(last_error_message.c_str());
 }
 

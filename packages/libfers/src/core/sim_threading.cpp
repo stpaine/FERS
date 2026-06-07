@@ -1392,8 +1392,7 @@ namespace core
 		if (!tracker_cache.last_dechirp_time.has_value() || t_step < *tracker_cache.last_dechirp_time)
 		{
 			tracker_cache.active_dechirp_source_index = 0;
-			std::fill(tracker_cache.dechirp_reference.begin(), tracker_cache.dechirp_reference.end(),
-					  FmcwChirpBoundaryTracker{});
+			std::ranges::fill(tracker_cache.dechirp_reference, FmcwChirpBoundaryTracker{});
 		}
 		tracker_cache.last_dechirp_time = t_step;
 

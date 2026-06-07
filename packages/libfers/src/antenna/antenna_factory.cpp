@@ -72,8 +72,8 @@ namespace
 	/// Returns a lowercase copy of a string.
 	std::string toLowerCopy(std::string value)
 	{
-		std::transform(value.begin(), value.end(), value.begin(),
-					   [](const unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+		std::ranges::transform(value, value.begin(),
+							   [](const unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
 		return value;
 	}
 

@@ -55,6 +55,7 @@ namespace
 		{
 			if (!j.empty() && j[0].is_object() && j[0].contains("id"))
 			{
+				// NOLINTNEXTLINE(modernize-use-ranges): nlohmann::json iterators fail ranges::sort concepts here.
 				std::sort(j.begin(), j.end(),
 						  [](const json& a, const json& b)
 						  {

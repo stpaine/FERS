@@ -373,7 +373,7 @@ namespace serial::xml_parser_utils
 				}
 			}
 		}
-		return radar::processRawSchedule(std::move(raw_periods), parentName, isPulsed, pri);
+		return radar::processRawSchedule(raw_periods, parentName, isPulsed, pri);
 	}
 
 	void parseParameters(const XmlElement& parameters, params::Parameters& params_out)
