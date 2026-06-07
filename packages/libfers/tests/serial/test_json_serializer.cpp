@@ -8,6 +8,7 @@
 #include <nlohmann/json.hpp>
 #include <random>
 #include <sstream>
+#include <string>
 #include <string_view>
 
 #include "antenna/antenna_factory.h"
@@ -111,7 +112,8 @@ namespace
 		fers_signal::to_json(serialized, *wf);
 		REQUIRE(serialized.contains("fmcw_linear_chirp"));
 		REQUIRE_FALSE(serialized.contains("fmcw_up_chirp"));
-		REQUIRE(serialized.at("fmcw_linear_chirp").at("direction") == direction);
+		const auto serialized_direction = serialized.at("fmcw_linear_chirp").at("direction").get<std::string>();
+		REQUIRE(serialized_direction == std::string(direction));
 
 		auto reparsed = serial::parse_waveform_from_json(serialized);
 		REQUIRE(reparsed != nullptr);
