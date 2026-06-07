@@ -38,7 +38,7 @@ namespace core
 		struct PlatformState
 		{
 			SimId platform_id = 0;
-			std::string platform_name;
+			std::string platform_name = {};
 			RealType position_x = 0.0;
 			RealType position_y = 0.0;
 			RealType position_z = 0.0;
@@ -52,13 +52,13 @@ namespace core
 		struct FmcwContext
 		{
 			bool present = false;
-			std::string waveform_shape;
+			std::string waveform_shape = {};
 			RealType chirp_bandwidth = 0.0;
 			RealType chirp_duration = 0.0;
 			RealType chirp_period = 0.0;
 			RealType chirp_rate = 0.0;
 			RealType chirp_rate_signed = 0.0;
-			std::string sweep_direction;
+			std::string sweep_direction = {};
 			RealType start_frequency_offset = 0.0;
 			std::optional<RealType> triangle_period = std::nullopt;
 			std::optional<std::uint64_t> chirp_count = std::nullopt;
@@ -66,9 +66,9 @@ namespace core
 			std::string dechirp_mode = "none";
 			std::string dechirp_reference_source = "none";
 			SimId dechirp_reference_transmitter_id = 0;
-			std::string dechirp_reference_transmitter_name;
+			std::string dechirp_reference_transmitter_name = {};
 			SimId dechirp_reference_waveform_id = 0;
-			std::string dechirp_reference_waveform_name;
+			std::string dechirp_reference_waveform_name = {};
 		};
 
 		struct PulsedContext
@@ -79,7 +79,7 @@ namespace core
 			RealType window_skip = 0.0;
 			std::uint64_t window_count = 0;
 			SimId waveform_id = 0;
-			std::string waveform_name;
+			std::string waveform_name = {};
 			RealType carrier_frequency = 0.0;
 			RealType power = 0.0;
 			RealType pulse_width = 0.0;
@@ -91,14 +91,14 @@ namespace core
 		{
 			bool present = false;
 			SimId waveform_id = 0;
-			std::string waveform_name;
+			std::string waveform_name = {};
 			RealType carrier_frequency = 0.0;
 			RealType power = 0.0;
 		};
 
 		SimId receiver_id = 0;
-		std::string receiver_name;
-		std::string mode;
+		std::string receiver_name = {};
+		std::string mode = {};
 		RealType sample_rate = 0.0;
 		RealType reference_frequency = 0.0;
 		RealType if_offset = 0.0;
@@ -106,11 +106,11 @@ namespace core
 		bool dechirped = false;
 		bool if_resampled = false;
 		unsigned adc_bits = 0;
-		CoordinateContext coordinate;
-		PlatformState initial_platform_state;
-		PulsedContext pulsed;
-		CwContext cw;
-		FmcwContext fmcw;
+		CoordinateContext coordinate = {};
+		PlatformState initial_platform_state = {};
+		PulsedContext pulsed = {};
+		CwContext cw = {};
+		FmcwContext fmcw = {};
 	};
 
 	struct ReceiverSampleBlock
