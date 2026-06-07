@@ -28,6 +28,10 @@ namespace serial::vita49
 		explicit Vita49OutputSink(std::unique_ptr<DatagramSender> sender = nullptr,
 								  core::ReceiverOutputTelemetryCallback telemetry_callback = nullptr);
 		~Vita49OutputSink() override;
+		Vita49OutputSink(const Vita49OutputSink&) = delete;
+		Vita49OutputSink& operator=(const Vita49OutputSink&) = delete;
+		Vita49OutputSink(Vita49OutputSink&&) = delete;
+		Vita49OutputSink& operator=(Vita49OutputSink&&) = delete;
 
 		void initializeRun(const core::OutputConfig& config, std::string simulation_name) override;
 		std::uint32_t registerStream(const core::ReceiverStreamDescriptor& stream) override;

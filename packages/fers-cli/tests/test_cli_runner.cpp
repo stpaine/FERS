@@ -26,6 +26,10 @@ namespace
 		std::filesystem::path path;
 
 		explicit ScopedPath(std::filesystem::path value) : path(std::move(value)) {}
+		ScopedPath(const ScopedPath&) = delete;
+		ScopedPath& operator=(const ScopedPath&) = delete;
+		ScopedPath(ScopedPath&&) = delete;
+		ScopedPath& operator=(ScopedPath&&) = delete;
 
 		~ScopedPath()
 		{

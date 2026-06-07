@@ -61,6 +61,7 @@ namespace math
 		SVec3(SVec3&&) noexcept = default;
 		SVec3& operator=(const SVec3&) noexcept = default;
 		SVec3& operator=(SVec3&&) noexcept = default;
+		~SVec3() noexcept = default;
 
 		/**
 		 * @brief Parameterized constructor for SVec3.
@@ -115,6 +116,7 @@ namespace math
 		Vec3(Vec3&&) noexcept = default;
 		Vec3& operator=(const Vec3&) noexcept = default;
 		Vec3& operator=(Vec3&&) noexcept = default;
+		~Vec3() noexcept = default;
 
 		/**
 		 * @brief Parameterized constructor for Vec3.

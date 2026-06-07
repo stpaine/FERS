@@ -21,6 +21,10 @@ namespace
 		RealType previous_rate = params::rate();
 
 		explicit RateGuard(RealType rate) { params::setRate(rate); }
+		RateGuard(const RateGuard&) = delete;
+		RateGuard& operator=(const RateGuard&) = delete;
+		RateGuard(RateGuard&&) = delete;
+		RateGuard& operator=(RateGuard&&) = delete;
 
 		~RateGuard() { params::params.rate = previous_rate; }
 	};

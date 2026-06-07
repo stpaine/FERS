@@ -30,6 +30,10 @@ namespace
 	{
 		params::Parameters saved;
 		ParamGuard() : saved(params::params) {}
+		ParamGuard(const ParamGuard&) = delete;
+		ParamGuard& operator=(const ParamGuard&) = delete;
+		ParamGuard(ParamGuard&&) = delete;
+		ParamGuard& operator=(ParamGuard&&) = delete;
 		~ParamGuard() { params::params = saved; }
 	};
 
@@ -38,6 +42,10 @@ namespace
 		std::ostringstream buffer;
 		std::streambuf* old{nullptr};
 		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		CerrCapture(const CerrCapture&) = delete;
+		CerrCapture& operator=(const CerrCapture&) = delete;
+		CerrCapture(CerrCapture&&) = delete;
+		CerrCapture& operator=(CerrCapture&&) = delete;
 		~CerrCapture() { std::cerr.rdbuf(old); }
 		[[nodiscard]] std::string str() const { return buffer.str(); }
 	};
@@ -45,6 +53,10 @@ namespace
 	struct LogLevelGuard
 	{
 		explicit LogLevelGuard(const logging::Level level) { logging::logger.setLevel(level); }
+		LogLevelGuard(const LogLevelGuard&) = delete;
+		LogLevelGuard& operator=(const LogLevelGuard&) = delete;
+		LogLevelGuard(LogLevelGuard&&) = delete;
+		LogLevelGuard& operator=(LogLevelGuard&&) = delete;
 		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
 

@@ -14,6 +14,10 @@ namespace
 		std::ostringstream buffer;
 		std::streambuf* old{nullptr};
 		CerrCapture() { old = std::cerr.rdbuf(buffer.rdbuf()); }
+		CerrCapture(const CerrCapture&) = delete;
+		CerrCapture& operator=(const CerrCapture&) = delete;
+		CerrCapture(CerrCapture&&) = delete;
+		CerrCapture& operator=(CerrCapture&&) = delete;
 		~CerrCapture() { std::cerr.rdbuf(old); }
 		[[nodiscard]] std::string str() const { return buffer.str(); }
 	};
@@ -21,11 +25,20 @@ namespace
 	struct LogLevelGuard
 	{
 		explicit LogLevelGuard(logging::Level level) { logging::logger.setLevel(level); }
+		LogLevelGuard(const LogLevelGuard&) = delete;
+		LogLevelGuard& operator=(const LogLevelGuard&) = delete;
+		LogLevelGuard(LogLevelGuard&&) = delete;
+		LogLevelGuard& operator=(LogLevelGuard&&) = delete;
 		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
 
 	struct LogCallbackGuard
 	{
+		LogCallbackGuard() = default;
+		LogCallbackGuard(const LogCallbackGuard&) = delete;
+		LogCallbackGuard& operator=(const LogCallbackGuard&) = delete;
+		LogCallbackGuard(LogCallbackGuard&&) = delete;
+		LogCallbackGuard& operator=(LogCallbackGuard&&) = delete;
 		~LogCallbackGuard() { logging::logger.setCallback(nullptr, nullptr); }
 	};
 

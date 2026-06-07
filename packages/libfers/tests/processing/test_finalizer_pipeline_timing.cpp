@@ -20,6 +20,10 @@ namespace
 	{
 		params::Parameters saved;
 		ParamGuard() : saved(params::params) {}
+		ParamGuard(const ParamGuard&) = delete;
+		ParamGuard& operator=(const ParamGuard&) = delete;
+		ParamGuard(ParamGuard&&) = delete;
+		ParamGuard& operator=(ParamGuard&&) = delete;
 		~ParamGuard() { params::params = saved; }
 	};
 
