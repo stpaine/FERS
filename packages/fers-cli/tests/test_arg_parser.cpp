@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "arg_parser.h"
@@ -37,7 +38,7 @@ namespace
 	{
 		std::ostringstream const buffer;
 		auto* const original = std::cout.rdbuf(buffer.rdbuf());
-		fn();
+		std::invoke(std::forward<Fn>(fn));
 		std::cout.rdbuf(original);
 		return buffer.str();
 	}

@@ -11,8 +11,10 @@
 
 #include "libxml_wrapper.h"
 
+#include <array>
 #include <cctype>
 #include <cstdarg>
+#include <cstdio>
 #include <format>
 #include <limits>
 #include <string>
@@ -35,13 +37,16 @@ namespace
 			return;
 		}
 
-		char buf[1024];
+		std::array<char, 1024> buf{};
 		va_list args;
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay): va_list is an array typedef on this ABI.
 		va_start(args, msg);
-		vsnprintf(buf, sizeof(buf), msg, args);
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay): va_list is required by vsnprintf.
+		std::vsnprintf(buf.data(), buf.size(), msg, args);
+		// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay): va_list is an array typedef on this ABI.
 		va_end(args);
 
-		err_str->append(buf);
+		err_str->append(buf.data());
 	}
 
 	[[nodiscard]] int checkedXmlInputSize(const std::size_t size)

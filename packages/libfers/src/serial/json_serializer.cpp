@@ -371,7 +371,7 @@ namespace
 
 namespace math
 {
-	void to_json(nlohmann::json& j, const Vec3& v)
+	void to_json(nlohmann::json& j, const Vec3& v) // NOLINT(*-use-internal-linkage)
 	{
 		j = {{"x", v.x}, {"y", v.y}, {"z", v.z}};
 	} // NOLINT(*-use-internal-linkage)
@@ -805,7 +805,7 @@ namespace antenna
 
 namespace radar
 {
-	void to_json(nlohmann::json& j, const SchedulePeriod& p)
+	void to_json(nlohmann::json& j, const SchedulePeriod& p) // NOLINT(*-use-internal-linkage)
 	{
 		j = {{"start", p.start}, {"end", p.end}};
 	} // NOLINT(*-use-internal-linkage)

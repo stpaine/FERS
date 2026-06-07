@@ -15,11 +15,12 @@
 #include <core/logging.h>
 #include <core/parameters.h>
 #include <core/sim_id.h>
+#include <cstddef>
 #include <cstdint>
-#include <cstring>
 #include <filesystem>
 #include <format>
 #include <functional>
+#include <iterator>
 #include <libfers/api.h>
 #include <limits>
 #include <math/path.h>
@@ -229,6 +230,14 @@ namespace
 			return "VITA49 epoch must fit the VRT 32-bit UTC seconds timestamp field.";
 		}
 		return std::nullopt;
+	}
+
+	void copy_visual_link_label(fers_visual_link_t& destination, const std::string& source) noexcept
+	{
+		const std::size_t count = std::min(source.size(), sizeof(destination.label) - 1);
+		std::copy_n(source.begin(), count, std::begin(destination.label));
+		destination.label[count] = '\0';
+		destination.label[sizeof(destination.label) - 1] = '\0';
 	}
 
 	[[nodiscard]] nlohmann::json stream_stats_to_json(const core::ReceiverStreamStats& stream)
@@ -1591,9 +1600,7 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 
 				dst.quality = (src.quality == simulation::LinkQuality::Strong) ? FERS_LINK_STRONG : FERS_LINK_WEAK;
 
-				// Safe string copy
-				std::strncpy(dst.label, src.label.c_str(), sizeof(dst.label) - 1);
-				dst.label[sizeof(dst.label) - 1] = '\0';
+				copy_visual_link_label(dst, src.label);
 
 				dst.source_id = static_cast<uint64_t>(src.source_id);
 				dst.dest_id = static_cast<uint64_t>(src.dest_id);

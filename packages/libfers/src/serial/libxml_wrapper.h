@@ -159,7 +159,7 @@ public:
 	 *
 	 * @param node The xmlNode pointer representing the XML element.
 	 */
-	explicit XmlElement(const xmlNode* node) : _node(const_cast<xmlNode*>(node)) {}
+	explicit XmlElement(xmlNodePtr node) : _node(node) {}
 
 	XmlElement(const XmlElement&) = default;
 
@@ -431,7 +431,7 @@ public:
 		{
 			throw std::runtime_error("Document not loaded");
 		}
-		const xmlNode* root = xmlDocGetRootElement(_doc.get());
+		xmlNodePtr root = xmlDocGetRootElement(_doc.get());
 		if (root == nullptr)
 		{
 			throw std::runtime_error("Root element not found");

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -27,10 +28,10 @@ namespace
 
 TEST_CASE("IirFilter acts as identity with unity coefficients", "[signal][dsp][iir]")
 {
-	const RealType a[] = {1.0, 0.0};
-	const RealType b[] = {1.0, 0.0};
+	const std::array<RealType, 2> a = {1.0, 0.0};
+	const std::array<RealType, 2> b = {1.0, 0.0};
 
-	fers_signal::IirFilter filter(a, b, 2);
+	fers_signal::IirFilter filter(a.data(), b.data(), static_cast<unsigned>(a.size()));
 	std::vector<RealType> samples = {1.0, -2.5, 3.25, 0.0};
 
 	filter.filter(samples);
@@ -44,10 +45,10 @@ TEST_CASE("IirFilter acts as identity with unity coefficients", "[signal][dsp][i
 
 TEST_CASE("IirFilter feedback produces expected decay", "[signal][dsp][iir]")
 {
-	const RealType a[] = {1.0, -0.5};
-	const RealType b[] = {1.0, 0.0};
+	const std::array<RealType, 2> a = {1.0, -0.5};
+	const std::array<RealType, 2> b = {1.0, 0.0};
 
-	fers_signal::IirFilter filter(a, b, 2);
+	fers_signal::IirFilter filter(a.data(), b.data(), static_cast<unsigned>(a.size()));
 	std::vector<RealType> input = {1.0, 0.0, 0.0, 0.0};
 	std::vector<RealType> expected = {1.0, 0.5, 0.25, 0.125};
 

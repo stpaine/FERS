@@ -341,7 +341,7 @@ namespace serial::xml_serializer_utils
 		serializeSchedule(tx.getSchedule(), tx_elem);
 	}
 
-	void serializeReceiverFmcwMode(const radar::Receiver& rx, const XmlElement& mode_elem)
+	static void serializeReceiverFmcwMode(const radar::Receiver& rx, const XmlElement& mode_elem)
 	{
 		if (!rx.isDechirpEnabled())
 		{

@@ -1,3 +1,4 @@
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -71,11 +72,12 @@ TEST_CASE("API motion path interpolation falls back to repeated positions for no
 		  "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_motion_waypoint_t waypoints[] = {
-		{1.0, 2.0, 3.0, 4.0},
-		{1.0, 2.0, 3.0, 4.0},
+	const std::array<fers_motion_waypoint_t, 2> waypoints = {
+		fers_motion_waypoint_t{1.0, 2.0, 3.0, 4.0},
+		fers_motion_waypoint_t{1.0, 2.0, 3.0, 4.0},
 	};
-	api_test::MotionPath const path(fers_get_interpolated_motion_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
+	api_test::MotionPath const path(
+		fers_get_interpolated_motion_path(waypoints.data(), waypoints.size(), FERS_INTERP_LINEAR, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -95,11 +97,12 @@ TEST_CASE("API motion path interpolation falls back to repeated positions for no
 TEST_CASE("API motion path interpolation returns expected linear positions and velocities", "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_motion_waypoint_t waypoints[] = {
-		{0.0, 0.0, 0.0, 0.0},
-		{10.0, 10.0, 20.0, 30.0},
+	const std::array<fers_motion_waypoint_t, 2> waypoints = {
+		fers_motion_waypoint_t{0.0, 0.0, 0.0, 0.0},
+		fers_motion_waypoint_t{10.0, 10.0, 20.0, 30.0},
 	};
-	api_test::MotionPath const path(fers_get_interpolated_motion_path(waypoints, 2, FERS_INTERP_LINEAR, 3));
+	api_test::MotionPath const path(
+		fers_get_interpolated_motion_path(waypoints.data(), waypoints.size(), FERS_INTERP_LINEAR, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -129,12 +132,13 @@ TEST_CASE("API motion path interpolation returns expected linear positions and v
 TEST_CASE("API motion path interpolation maps cubic enum to cubic behavior", "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_motion_waypoint_t waypoints[] = {
-		{0.0, 0.0, 0.0, 0.0},
-		{1.0, 1.0, 0.0, 0.0},
-		{2.0, 2.0, 0.0, 0.0},
+	const std::array<fers_motion_waypoint_t, 3> waypoints = {
+		fers_motion_waypoint_t{0.0, 0.0, 0.0, 0.0},
+		fers_motion_waypoint_t{1.0, 1.0, 0.0, 0.0},
+		fers_motion_waypoint_t{2.0, 2.0, 0.0, 0.0},
 	};
-	api_test::MotionPath const path(fers_get_interpolated_motion_path(waypoints, 3, FERS_INTERP_CUBIC, 3));
+	api_test::MotionPath const path(
+		fers_get_interpolated_motion_path(waypoints.data(), waypoints.size(), FERS_INTERP_CUBIC, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -204,12 +208,12 @@ TEST_CASE("API rotation path interpolation returns constant compass angles for s
 TEST_CASE("API rotation path interpolation preserves compass-angle semantics", "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_rotation_waypoint_t waypoints[] = {
-		{0.0, 0.0, -10.0},
-		{10.0, 180.0, 20.0},
+	const std::array<fers_rotation_waypoint_t, 2> waypoints = {
+		fers_rotation_waypoint_t{0.0, 0.0, -10.0},
+		fers_rotation_waypoint_t{10.0, 180.0, 20.0},
 	};
-	api_test::RotationPath const path(
-		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
+	api_test::RotationPath const path(fers_get_interpolated_rotation_path(waypoints.data(), waypoints.size(),
+																		  FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -225,13 +229,13 @@ TEST_CASE("API rotation path interpolation preserves compass-angle semantics", "
 TEST_CASE("API rotation path interpolation maps cubic enum to cubic behavior", "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_rotation_waypoint_t waypoints[] = {
-		{0.0, 90.0, 0.0},
-		{1.0, 32.7042204869, 57.2957795131},
-		{2.0, -24.5915590262, 114.5915590262},
+	const std::array<fers_rotation_waypoint_t, 3> waypoints = {
+		fers_rotation_waypoint_t{0.0, 90.0, 0.0},
+		fers_rotation_waypoint_t{1.0, 32.7042204869, 57.2957795131},
+		fers_rotation_waypoint_t{2.0, -24.5915590262, 114.5915590262},
 	};
-	api_test::RotationPath const path(
-		fers_get_interpolated_rotation_path(waypoints, 3, FERS_INTERP_CUBIC, FERS_ANGLE_UNIT_DEG, 3));
+	api_test::RotationPath const path(fers_get_interpolated_rotation_path(waypoints.data(), waypoints.size(),
+																		  FERS_INTERP_CUBIC, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -242,12 +246,12 @@ TEST_CASE("API rotation path interpolation maps cubic enum to cubic behavior", "
 TEST_CASE("API rotation path interpolation preserves unnormalized winding angles", "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_rotation_waypoint_t waypoints[] = {
-		{0.0, -30.0, 0.0},
-		{10.0, 390.0, 0.0},
+	const std::array<fers_rotation_waypoint_t, 2> waypoints = {
+		fers_rotation_waypoint_t{0.0, -30.0, 0.0},
+		fers_rotation_waypoint_t{10.0, 390.0, 0.0},
 	};
-	api_test::RotationPath const path(
-		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
+	api_test::RotationPath const path(fers_get_interpolated_rotation_path(waypoints.data(), waypoints.size(),
+																		  FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_DEG, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);
@@ -260,12 +264,12 @@ TEST_CASE("API rotation path interpolation preserves unnormalized winding angles
 TEST_CASE("API rotation path interpolation supports radians", "[api][paths]")
 {
 	api_test::clearLastError();
-	const fers_rotation_waypoint_t waypoints[] = {
-		{0.0, 0.0, 0.0},
-		{1.0, PI / 2.0, PI / 4.0},
+	const std::array<fers_rotation_waypoint_t, 2> waypoints = {
+		fers_rotation_waypoint_t{0.0, 0.0, 0.0},
+		fers_rotation_waypoint_t{1.0, PI / 2.0, PI / 4.0},
 	};
-	api_test::RotationPath const path(
-		fers_get_interpolated_rotation_path(waypoints, 2, FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_RAD, 3));
+	api_test::RotationPath const path(fers_get_interpolated_rotation_path(waypoints.data(), waypoints.size(),
+																		  FERS_INTERP_LINEAR, FERS_ANGLE_UNIT_RAD, 3));
 
 	REQUIRE(path.get() != nullptr);
 	REQUIRE(path.get()->count == 3u);

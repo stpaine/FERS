@@ -10,7 +10,7 @@
 #include "core/logging.h"
 
 // Helper to parse log level from an environment variable string
-logging::Level levelFromString(std::string_view levelStr)
+static logging::Level levelFromString(std::string_view levelStr)
 {
 	if (levelStr == "TRACE")
 		return logging::Level::TRACE;

@@ -98,7 +98,7 @@ namespace logging
 		 */
 		template <typename... Args>
 		void log(const Level level, const std::source_location& location, const std::string& formatStr,
-				 Args&&... args) noexcept
+				 const Args&... args) noexcept
 		{
 			if (level != Level::OFF && level >= getLevel())
 			{

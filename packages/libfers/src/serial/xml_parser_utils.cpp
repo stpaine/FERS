@@ -970,9 +970,9 @@ namespace serial::xml_parser_utils
 	}
 
 	/// Parses a transmitter after its operation mode has already been determined.
-	radar::Transmitter* parseTransmitterWithMode(const XmlElement& transmitter, radar::Platform* platform,
-												 ParserContext& ctx, const ReferenceLookup& refs,
-												 const radar::OperationMode mode)
+	static radar::Transmitter* parseTransmitterWithMode(const XmlElement& transmitter, radar::Platform* platform,
+														ParserContext& ctx, const ReferenceLookup& refs,
+														const radar::OperationMode mode)
 	{
 		const std::string name = XmlElement::getSafeAttribute(transmitter, "name");
 		const SimId id = assign_id_from_attribute("transmitter '" + name + "'", ObjectType::Transmitter);
@@ -1041,8 +1041,9 @@ namespace serial::xml_parser_utils
 	}
 
 	/// Parses a receiver after its operation mode has already been determined.
-	radar::Receiver* parseReceiverWithMode(const XmlElement& receiver, radar::Platform* platform, ParserContext& ctx,
-										   const ReferenceLookup& refs, const radar::OperationMode mode)
+	static radar::Receiver* parseReceiverWithMode(const XmlElement& receiver, radar::Platform* platform,
+												  ParserContext& ctx, const ReferenceLookup& refs,
+												  const radar::OperationMode mode)
 	{
 		const std::string name = XmlElement::getSafeAttribute(receiver, "name");
 		const SimId id = assign_id_from_attribute("receiver '" + name + "'", ObjectType::Receiver);
