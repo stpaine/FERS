@@ -152,8 +152,9 @@ bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) 
 
 	if (!is_valid)
 	{
-		std::string fancyError = formatError("XML DTD Validation Failed", dtdErrors,
-											 "Check your scenario XML tags and attributes against 'fers-xml.dtd'.");
+		const std::string fancyError =
+			formatError("XML DTD Validation Failed", dtdErrors,
+						"Check your scenario XML tags and attributes against 'fers-xml.dtd'.");
 		LOG(logging::Level::ERROR, "{}", fancyError);
 		throw XmlException("XML failed DTD validation.");
 	}
@@ -180,7 +181,7 @@ bool XmlDocument::validateWithXsd(const std::span<const unsigned char> xsdData) 
 																	  xmlSchemaFree);
 	if (!schema)
 	{
-		std::string fancyError =
+		const std::string fancyError =
 			formatError("XSD Schema Parse Failed", xsdParseErrors, "The internal XSD schema is invalid.");
 		LOG(logging::Level::FATAL, "{}", fancyError);
 		throw XmlException("Failed to parse schema from memory.");
@@ -200,8 +201,9 @@ bool XmlDocument::validateWithXsd(const std::span<const unsigned char> xsdData) 
 
 	if (const bool is_valid = xmlSchemaValidateDoc(schema_valid_ctxt.get(), _doc.get()) == 0; !is_valid)
 	{
-		std::string fancyError = formatError("XML XSD Validation Failed", xsdErrors,
-											 "Check your scenario XML tags and attributes against 'fers-xml.xsd'.");
+		const std::string fancyError =
+			formatError("XML XSD Validation Failed", xsdErrors,
+						"Check your scenario XML tags and attributes against 'fers-xml.xsd'.");
 		LOG(logging::Level::ERROR, "{}", fancyError);
 		throw XmlException("XML failed XSD validation.");
 	}
@@ -249,7 +251,7 @@ bool XmlDocument::loadFile(const std::string_view filename)
 	_doc.reset(xmlReadFile(filename.data(), nullptr, XML_PARSE_NOERROR | XML_PARSE_NOWARNING));
 	if (!_doc)
 	{
-		std::string fancyError =
+		const std::string fancyError =
 			formatError("XML Parsing Failed", getXmlLastErrorFormatted(), "Ensure the XML file is well-formed.");
 		LOG(logging::Level::ERROR, "{}", fancyError);
 		return false;
@@ -264,7 +266,7 @@ bool XmlDocument::loadString(const std::string& content)
 							 XML_PARSE_NOERROR | XML_PARSE_NOWARNING));
 	if (!_doc)
 	{
-		std::string fancyError =
+		const std::string fancyError =
 			formatError("XML Parsing Failed", getXmlLastErrorFormatted(), "Ensure the XML string is well-formed.");
 		LOG(logging::Level::ERROR, "{}", fancyError);
 		return false;

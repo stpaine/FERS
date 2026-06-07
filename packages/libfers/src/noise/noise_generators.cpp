@@ -90,6 +90,7 @@ namespace noise
 	void MultirateGenerator::reset() noexcept
 	{
 		std::vector<FAlphaBranch*> branches;
+		// NOLINTNEXTLINE(misc-const-correctness): Collected branches are flushed through mutable aliases below.
 		FAlphaBranch* branch = _topbranch.get();
 
 		while (branch != nullptr)

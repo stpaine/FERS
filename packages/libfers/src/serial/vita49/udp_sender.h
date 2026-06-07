@@ -6,7 +6,9 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 
@@ -38,7 +40,7 @@ namespace serial::vita49
 
 	private:
 		int _socket = -1;
-		void* _address = nullptr;
+		std::unique_ptr<std::byte[]> _address;
 		std::size_t _address_size = 0;
 	};
 }

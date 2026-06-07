@@ -301,11 +301,11 @@ namespace processing
 					std::max<RealType>(0.0, std::ceil((end_time - params::startTime()) * output_sample_rate))));
 				if (start_sample < end_sample)
 				{
-					core::StreamingSegmentMetadata segment{.start_time = start_time,
-														   .end_time = end_time,
-														   .sample_count = end_sample - start_sample,
-														   .sample_start = start_sample,
-														   .sample_end_exclusive = end_sample};
+					const core::StreamingSegmentMetadata segment{.start_time = start_time,
+																 .end_time = end_time,
+																 .sample_count = end_sample - start_sample,
+																 .sample_start = start_sample,
+																 .sample_end_exclusive = end_sample};
 					metadata.streaming_segments.push_back(segment);
 				}
 			};

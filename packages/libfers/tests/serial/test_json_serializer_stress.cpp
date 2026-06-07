@@ -128,8 +128,8 @@ namespace
 		}
 		if (a.is_number_float())
 		{
-			double va = a.get<double>();
-			double vb = b.get<double>();
+			const double va = a.get<double>();
+			const double vb = b.get<double>();
 			// Allow a small epsilon for float serialization round-tripping
 			if (std::abs(va - vb) > 1e-5 && std::abs(va - vb) / std::max(std::abs(va), std::abs(vb)) > 1e-5)
 			{

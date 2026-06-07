@@ -27,8 +27,6 @@ namespace serial::vita49
 	{
 		constexpr int kRequestedUdpSendBufferBytes = 4 * 1024 * 1024;
 
-		void freeAddress(void* address) noexcept { delete[] static_cast<std::byte*>(address); }
-
 		void tuneSendBuffer(const int socket_fd) noexcept
 		{
 			const int send_buffer_bytes = kRequestedUdpSendBufferBytes;
@@ -44,10 +42,9 @@ namespace serial::vita49
 	UdpSender::~UdpSender() { close(); }
 
 	UdpSender::UdpSender(UdpSender&& other) noexcept :
-		_socket(other._socket), _address(other._address), _address_size(other._address_size)
+		_socket(other._socket), _address(std::move(other._address)), _address_size(other._address_size)
 	{
 		other._socket = -1;
-		other._address = nullptr;
 		other._address_size = 0;
 	}
 
@@ -57,10 +54,9 @@ namespace serial::vita49
 		{
 			close();
 			_socket = other._socket;
-			_address = other._address;
+			_address = std::move(other._address);
 			_address_size = other._address_size;
 			other._socket = -1;
-			other._address = nullptr;
 			other._address_size = 0;
 		}
 		return *this;
@@ -112,9 +108,9 @@ namespace serial::vita49
 			tuneSendBuffer(fd);
 			_socket = fd;
 			_address_size = candidate->ai_addrlen;
-			auto* storage = new std::byte[_address_size];
-			std::memcpy(storage, candidate->ai_addr, _address_size);
-			_address = storage;
+			auto storage = std::make_unique<std::byte[]>(_address_size);
+			std::memcpy(storage.get(), candidate->ai_addr, _address_size);
+			_address = std::move(storage);
 			return;
 		}
 
@@ -135,9 +131,11 @@ namespace serial::vita49
 #ifdef _WIN32
 		const auto* payload = std::bit_cast<const char*>(bytes.data());
 		const auto sent = ::sendto(_socket, payload, static_cast<int>(bytes.size()), 0,
-								   static_cast<const sockaddr*>(_address), static_cast<int>(_address_size));
+								   static_cast<const sockaddr*>(static_cast<const void*>(_address.get())),
+								   static_cast<int>(_address_size));
 #else
-		const auto sent = ::sendto(_socket, bytes.data(), bytes.size(), 0, static_cast<const sockaddr*>(_address),
+		const auto sent = ::sendto(_socket, bytes.data(), bytes.size(), 0,
+								   static_cast<const sockaddr*>(static_cast<const void*>(_address.get())),
 								   static_cast<socklen_t>(_address_size));
 #endif
 		if (sent < 0 || static_cast<std::size_t>(sent) != bytes.size())
@@ -158,11 +156,7 @@ namespace serial::vita49
 #endif
 			_socket = -1;
 		}
-		if (_address != nullptr)
-		{
-			freeAddress(_address);
-			_address = nullptr;
-			_address_size = 0;
-		}
+		_address.reset();
+		_address_size = 0;
 	}
 }

@@ -743,7 +743,7 @@ namespace serial::xml_parser_utils
 
 	void parseAntenna(const XmlElement& antenna, ParserContext& ctx)
 	{
-		std::string name = XmlElement::getSafeAttribute(antenna, "name");
+		const std::string name = XmlElement::getSafeAttribute(antenna, "name");
 		const SimId id = assign_id_from_attribute("antenna '" + name + "'", ObjectType::Antenna);
 		const std::string pattern = XmlElement::getSafeAttribute(antenna, "pattern");
 

@@ -10,8 +10,8 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <format>
+#include <fstream>
 #include <limits>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -244,16 +244,16 @@ namespace core
 				return std::nullopt;
 			}
 
-			FILE* statm = std::fopen("/proc/self/statm", "r");
-			if (statm == nullptr)
+			std::ifstream statm("/proc/self/statm");
+			if (!statm)
 			{
 				return std::nullopt;
 			}
 
+			std::string ignored_total_pages;
 			unsigned long resident_pages = 0;
-			const int scanned = std::fscanf(statm, "%*s %lu", &resident_pages);
-			std::fclose(statm);
-			if (scanned != 1)
+			statm >> ignored_total_pages >> resident_pages;
+			if (!statm)
 			{
 				return std::nullopt;
 			}

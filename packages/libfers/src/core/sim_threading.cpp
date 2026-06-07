@@ -829,7 +829,7 @@ namespace core
 			const auto& request = receiver_ptr->getFmcwIfChainRequest();
 			const RealType output_rate = request.sample_rate_hz.value_or(0.0);
 			const RealType bandwidth = request.filter_bandwidth_hz.value_or(0.40 * output_rate);
-			fers_signal::FmcwIfResamplerRequest resampler_request{
+			const fers_signal::FmcwIfResamplerRequest resampler_request{
 				.input_sample_rate_hz = params::rate() * static_cast<RealType>(params::oversampleRatio()),
 				.output_sample_rate_hz = output_rate,
 				.filter_bandwidth_hz = bandwidth,

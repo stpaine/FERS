@@ -100,6 +100,7 @@ fers_context_t* fers_context_create()
 	discard_warning_capture();
 	try
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API returns an owned handle.
 		return new fers_context_t();
 	}
 	catch (const std::bad_alloc& e)
@@ -120,6 +121,7 @@ void fers_context_destroy(fers_context_t* context)
 	{
 		return;
 	}
+	// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees handles allocated by `fers_context_create`.
 	delete context;
 }
 
@@ -1108,6 +1110,7 @@ void fers_free_string(char* str)
 {
 	if (str != nullptr)
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API frees strings returned by this library.
 		free(str);
 	}
 }
@@ -1310,7 +1313,9 @@ fers_interpolated_path_t* fers_get_interpolated_motion_path(const fers_motion_wa
 
 		path.finalize();
 
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API returns an owned path struct.
 		auto* result_path = new fers_interpolated_path_t();
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API frees this array with the parent path.
 		result_path->points = new fers_interpolated_point_t[num_points];
 		result_path->count = num_points;
 
@@ -1353,7 +1358,10 @@ void fers_free_interpolated_motion_path(fers_interpolated_path_t* path)
 {
 	if (path != nullptr)
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees arrays owned by C API path structs.
 		delete[] path->points;
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees structs allocated by
+		// `fers_get_interpolated_motion_path`.
 		delete path;
 	}
 }
@@ -1401,7 +1409,9 @@ fers_interpolated_rotation_path_t* fers_get_interpolated_rotation_path(const fer
 
 		path.finalize();
 
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API returns an owned path struct.
 		auto* result_path = new fers_interpolated_rotation_path_t();
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API frees this array with the parent path.
 		result_path->points = new fers_interpolated_rotation_point_t[num_points];
 		result_path->count = num_points;
 
@@ -1449,7 +1459,10 @@ void fers_free_interpolated_rotation_path(fers_interpolated_rotation_path_t* pat
 {
 	if (path != nullptr)
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees arrays owned by C API path structs.
 		delete[] path->points;
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees structs allocated by
+		// `fers_get_interpolated_rotation_path`.
 		delete path;
 	}
 }
@@ -1493,10 +1506,12 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 			wavelength = params::c() / frequency_hz;
 		}
 
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API returns owned antenna pattern data.
 		auto* data = new fers_antenna_pattern_data_t();
 		data->az_count = az_samples;
 		data->el_count = el_samples;
 		const size_t total_samples = az_samples * el_samples;
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API frees this array with the parent data.
 		data->gains = new double[total_samples];
 
 		// The reference angle (boresight) is implicitly the local X-axis in the FERS engine.
@@ -1546,7 +1561,9 @@ void fers_free_antenna_pattern_data(fers_antenna_pattern_data_t* data)
 {
 	if (data != nullptr)
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees arrays owned by C API pattern structs.
 		delete[] data->gains;
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees structs allocated by `fers_get_antenna_pattern`.
 		delete data;
 	}
 }
@@ -1570,11 +1587,13 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 		const auto cpp_links = simulation::calculatePreviewLinks(*ctx->getWorld(), time);
 
 		// Convert C++ vector to C-API struct
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API returns owned preview-link lists.
 		auto* result = new fers_visual_link_list_t();
 		result->count = cpp_links.size();
 
 		if (!cpp_links.empty())
 		{
+			// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Public C API frees this array with the parent list.
 			result->links = new fers_visual_link_t[result->count];
 			for (size_t i = 0; i < result->count; ++i)
 			{
@@ -1627,7 +1646,9 @@ void fers_free_preview_links(fers_visual_link_list_t* list)
 {
 	if (list != nullptr)
 	{
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees arrays owned by C API preview-link lists.
 		delete[] list->links;
+		// NOLINTNEXTLINE(cppcoreguidelines-owning-memory): Frees structs allocated by `fers_calculate_preview_links`.
 		delete list;
 	}
 }
