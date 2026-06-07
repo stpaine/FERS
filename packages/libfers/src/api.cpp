@@ -413,7 +413,7 @@ int fers_set_output_directory(fers_context_t* context, const char* out_dir)
 		set_api_error("Invalid arguments: context or out_dir is NULL.");
 		return -1;
 	}
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		ctx->setOutputDir(out_dir);
@@ -435,7 +435,7 @@ int fers_use_hdf5_output(fers_context_t* context)
 		return -1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		core::OutputConfig config = ctx->getOutputConfig();
@@ -474,7 +474,7 @@ int fers_enable_vita49_udp_output(fers_context_t* context, const char* host, con
 		return 1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		core::OutputConfig config = ctx->getOutputConfig();
@@ -505,7 +505,7 @@ int fers_set_vita49_fullscale(fers_context_t* context, const double fullscale)
 		return 1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	core::OutputConfig config = ctx->getOutputConfig();
 	config.vita49.adc_fullscale = static_cast<RealType>(fullscale);
 	ctx->setOutputConfig(std::move(config));
@@ -526,7 +526,7 @@ int fers_set_vita49_epoch_unix_nanoseconds(fers_context_t* context, const std::u
 		return 1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	core::OutputConfig config = ctx->getOutputConfig();
 	config.vita49.epoch_unix_nanoseconds = epoch_unix_nanoseconds;
 	ctx->setOutputConfig(std::move(config));
@@ -547,7 +547,7 @@ int fers_set_vita49_max_udp_payload(fers_context_t* context, const std::uint16_t
 		return 1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	core::OutputConfig config = ctx->getOutputConfig();
 	config.vita49.max_udp_payload = max_udp_payload;
 	ctx->setOutputConfig(std::move(config));
@@ -568,7 +568,7 @@ int fers_set_vita49_queue_depth(fers_context_t* context, const std::uint32_t que
 		return 1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	core::OutputConfig config = ctx->getOutputConfig();
 	config.vita49.queue_depth = queue_depth;
 	ctx->setOutputConfig(std::move(config));
@@ -584,7 +584,7 @@ int fers_set_vita49_packet_trace_enabled(fers_context_t* context, const int enab
 		return -1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	core::OutputConfig config = ctx->getOutputConfig();
 	config.vita49.packet_trace_enabled = enabled != 0;
 	ctx->setOutputConfig(std::move(config));
@@ -603,7 +603,7 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 		return -1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		// Set default output directory to the scenario file's directory
@@ -654,7 +654,7 @@ int fers_load_scenario_from_xml_string(fers_context_t* context, const char* xml_
 		return -1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		serial::parseSimulationFromString(xml_content, ctx->getWorld(), static_cast<bool>(validate),
@@ -697,7 +697,7 @@ char* fers_get_scenario_as_json(fers_context_t* context)
 		return nullptr;
 	}
 
-	const auto* ctx = reinterpret_cast<FersContext*>(context);
+	const auto* ctx = context;
 	try
 	{
 		const nlohmann::json j = serial::world_to_json(*ctx->getWorld());
@@ -724,7 +724,7 @@ char* fers_get_scenario_as_xml(fers_context_t* context)
 		return nullptr;
 	}
 
-	const auto* ctx = reinterpret_cast<FersContext*>(context);
+	const auto* ctx = context;
 	try
 	{
 		const std::string xml_str = serial::world_to_xml_string(*ctx->getWorld());
@@ -754,7 +754,7 @@ char* fers_get_last_output_metadata_json(fers_context_t* context)
 		return nullptr;
 	}
 
-	const auto* ctx = reinterpret_cast<FersContext*>(context);
+	const auto* ctx = context;
 	try
 	{
 		const std::string json_str = ctx->getLastOutputMetadataJson();
@@ -777,7 +777,7 @@ char* fers_get_memory_projection_json(fers_context_t* context)
 		return nullptr;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 
 	try
 	{
@@ -801,7 +801,7 @@ int fers_update_platform_from_json(fers_context_t* context, uint64_t id, const c
 		discard_warning_capture();
 		return -1;
 	}
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto* p = ctx->getWorld()->findPlatform(id);
@@ -837,7 +837,7 @@ int fers_update_parameters_from_json(fers_context_t* context, const char* json)
 		discard_warning_capture();
 		return -1;
 	}
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto j = nlohmann::json::parse(json);
@@ -858,7 +858,7 @@ int fers_update_antenna_from_json(fers_context_t* context, const char* json)
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto j = nlohmann::json::parse(json);
@@ -884,7 +884,7 @@ int fers_update_waveform_from_json(fers_context_t* context, const char* json)
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto j = nlohmann::json::parse(json);
@@ -907,7 +907,7 @@ int fers_update_transmitter_from_json(fers_context_t* context, uint64_t id, cons
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto* tx = ctx->getWorld()->findTransmitter(id);
@@ -932,7 +932,7 @@ int fers_update_receiver_from_json(fers_context_t* context, uint64_t id, const c
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto* rx = ctx->getWorld()->findReceiver(id);
@@ -957,7 +957,7 @@ int fers_update_target_from_json(fers_context_t* context, uint64_t id, const cha
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto* tgt = ctx->getWorld()->findTarget(id);
@@ -982,7 +982,7 @@ int fers_update_monostatic_from_json(fers_context_t* context, const char* json)
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		auto j = nlohmann::json::parse(json);
@@ -1012,7 +1012,7 @@ int fers_update_timing_from_json(fers_context_t* context, uint64_t id, const cha
 	last_error_message.clear();
 	if ((context == nullptr) || (json == nullptr))
 		return -1;
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		if (ctx->getWorld()->findTiming(id) == nullptr)
@@ -1043,7 +1043,7 @@ int fers_update_scenario_from_json(fers_context_t* context, const char* scenario
 		return -1;
 	}
 
-	auto* ctx = reinterpret_cast<FersContext*>(context);
+	auto* ctx = context;
 	try
 	{
 		const nlohmann::json j = nlohmann::json::parse(scenario_json);
@@ -1118,7 +1118,7 @@ namespace
 			return -1;
 		}
 
-		auto* ctx = reinterpret_cast<FersContext*>(context);
+		auto* ctx = context;
 
 		std::function<void(const std::string&, int, int)> progress_fn;
 		if (progress_callback != nullptr)
@@ -1213,7 +1213,7 @@ int fers_generate_kml(const fers_context_t* context, const char* output_kml_file
 		return -1;
 	}
 
-	const auto* ctx = reinterpret_cast<const FersContext*>(context);
+	const auto* ctx = context;
 
 	try
 	{
@@ -1460,7 +1460,7 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 
 	try
 	{
-		const auto* ctx = reinterpret_cast<const FersContext*>(context);
+		const auto* ctx = context;
 		antenna::Antenna const* ant = ctx->getWorld()->findAntenna(static_cast<SimId>(antenna_id));
 
 		if (ant == nullptr)
@@ -1555,7 +1555,7 @@ fers_visual_link_list_t* fers_calculate_preview_links(const fers_context_t* cont
 
 	try
 	{
-		const auto* ctx = reinterpret_cast<const FersContext*>(context);
+		const auto* ctx = context;
 		// Call the core physics logic in channel_model.cpp
 		const auto cpp_links = simulation::calculatePreviewLinks(*ctx->getWorld(), time);
 

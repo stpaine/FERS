@@ -26,8 +26,7 @@ namespace serial
 	std::string world_to_xml_string(const core::World& world)
 	{
 		XmlDocument const doc;
-		xmlNodePtr sim_node = xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("simulation"));
-		XmlElement const root(sim_node);
+		XmlElement const root = XmlElement::create("simulation");
 		doc.setRootElement(root);
 
 		const auto& p = params::params;

@@ -17,12 +17,14 @@
 
 #include <iostream>
 #include <libxml/parser.h>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "core/logging.h"
 #include "libxml/globals.h"
@@ -42,6 +44,102 @@ public:
 	 */
 	explicit XmlException(const std::string_view message) : std::runtime_error(std::string(message)) {}
 };
+
+namespace xml_detail
+{
+	class XmlCharBuffer
+	{
+		std::vector<xmlChar> _value;
+
+	public:
+		explicit XmlCharBuffer(const std::string_view value)
+		{
+			_value.reserve(value.size() + 1);
+			for (const char character : value)
+			{
+				_value.push_back(static_cast<xmlChar>(static_cast<unsigned char>(character)));
+			}
+			_value.push_back(0);
+		}
+
+		[[nodiscard]] const xmlChar* c_str() const noexcept { return _value.data(); }
+
+		[[nodiscard]] int contentLength() const
+		{
+			const auto length = _value.empty() ? static_cast<std::size_t>(0) : _value.size() - 1;
+			if (length > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+			{
+				throw XmlException("XML string exceeds libxml2 length limit.");
+			}
+			return static_cast<int>(length);
+		}
+	};
+
+	[[nodiscard]] inline std::string toString(const xmlChar* value)
+	{
+		if (value == nullptr)
+		{
+			return "";
+		}
+
+		std::string result;
+		for (const xmlChar* cursor = value; *cursor != 0; ++cursor)
+		{
+			result.push_back(static_cast<char>(*cursor));
+		}
+		return result;
+	}
+
+	[[nodiscard]] inline std::string toString(const xmlChar* value, const int length)
+	{
+		if (value == nullptr || length <= 0)
+		{
+			return "";
+		}
+
+		std::string result;
+		result.reserve(static_cast<std::size_t>(length));
+		for (int index = 0; index < length; ++index)
+		{
+			result.push_back(static_cast<char>(value[index]));
+		}
+		return result;
+	}
+
+	[[nodiscard]] inline bool equals(const xmlChar* xml_value, const std::string_view value)
+	{
+		if (xml_value == nullptr)
+		{
+			return false;
+		}
+
+		for (std::size_t index = 0; index < value.size(); ++index)
+		{
+			if (xml_value[index] == 0 || static_cast<char>(xml_value[index]) != value[index])
+			{
+				return false;
+			}
+		}
+		return xml_value[value.size()] == 0;
+	}
+
+	[[nodiscard]] inline xmlNodePtr createNode(const std::string_view name)
+	{
+		const XmlCharBuffer xml_name(name);
+		xmlNodePtr node = xmlNewNode(nullptr, xml_name.c_str());
+		if (node == nullptr)
+		{
+			throw XmlException("Failed to create XML node: " + std::string(name));
+		}
+		return node;
+	}
+
+	[[nodiscard]] inline xmlDocPtr createDocument()
+	{
+		const XmlCharBuffer version("1.0");
+		return xmlNewDoc(version.c_str());
+	}
+}
 
 /**
  * @class XmlElement
@@ -78,7 +176,18 @@ public:
 	 *
 	 * @return The name of the XML element.
 	 */
-	[[nodiscard]] std::string_view name() const noexcept { return reinterpret_cast<const char*>(_node->name); }
+	[[nodiscard]] std::string name() const { return _node == nullptr ? "" : xml_detail::toString(_node->name); }
+
+	/**
+	 * @brief Create a new XML element by name.
+	 *
+	 * @param name The name of the XML element.
+	 * @return The newly created XML element.
+	 */
+	[[nodiscard]] static XmlElement create(const std::string_view name)
+	{
+		return XmlElement(xml_detail::createNode(name));
+	}
 
 	/**
 	 * @brief Get the text content of the XML element.
@@ -92,7 +201,7 @@ public:
 			return "";
 		}
 		xmlChar* text = xmlNodeGetContent(_node);
-		std::string result = reinterpret_cast<const char*>(text);
+		std::string result = xml_detail::toString(text);
 		xmlFree(text);
 		return result;
 	}
@@ -104,7 +213,8 @@ public:
 	 */
 	void setText(const std::string_view text) const
 	{
-		xmlNodeSetContent(_node, reinterpret_cast<const xmlChar*>(text.data()));
+		const xml_detail::XmlCharBuffer xml_text(text);
+		xmlNodeSetContentLen(_node, xml_text.c_str(), xml_text.contentLength());
 	}
 
 	/**
@@ -118,9 +228,10 @@ public:
 	static std::string getSafeAttribute(const XmlElement& element, const std::string_view name)
 	{
 		std::string value;
-		if (xmlChar* attr = xmlGetProp(element.getNode(), reinterpret_cast<const xmlChar*>(name.data())))
+		const xml_detail::XmlCharBuffer xml_name(name);
+		if (xmlChar* attr = xmlGetProp(element.getNode(), xml_name.c_str()))
 		{
-			value = reinterpret_cast<const char*>(attr);
+			value = xml_detail::toString(attr);
 			xmlFree(attr);
 		}
 		else
@@ -143,9 +254,10 @@ public:
 		{
 			return std::nullopt;
 		}
-		if (xmlChar* attr = xmlGetProp(element.getNode(), reinterpret_cast<const xmlChar*>(name.data())))
+		const xml_detail::XmlCharBuffer xml_name(name);
+		if (xmlChar* attr = xmlGetProp(element.getNode(), xml_name.c_str()))
 		{
-			std::string value = reinterpret_cast<const char*>(attr);
+			std::string value = xml_detail::toString(attr);
 			xmlFree(attr);
 			return value;
 		}
@@ -160,8 +272,9 @@ public:
 	 */
 	void setAttribute(const std::string_view name, const std::string_view value) const
 	{
-		xmlSetProp(_node, reinterpret_cast<const xmlChar*>(name.data()),
-				   reinterpret_cast<const xmlChar*>(value.data()));
+		const xml_detail::XmlCharBuffer xml_name(name);
+		const xml_detail::XmlCharBuffer xml_value(value);
+		xmlSetProp(_node, xml_name.c_str(), xml_value.c_str());
 	}
 
 	/**
@@ -170,10 +283,10 @@ public:
 	 * @param name The name of the new child element.
 	 * @return The newly created XmlElement.
 	 */
-	[[nodiscard]] XmlElement addChild(const std::string_view name) const noexcept
+	[[nodiscard]] XmlElement addChild(const std::string_view name) const
 	{
-		const xmlNode* child = xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>(name.data()));
-		xmlAddChild(_node, const_cast<xmlNode*>(child));
+		xmlNodePtr child = xml_detail::createNode(name);
+		xmlAddChild(_node, child);
 		return XmlElement(child);
 	}
 
@@ -193,7 +306,7 @@ public:
 		unsigned count = 0;
 		for (auto* child = _node->children; child != nullptr; child = child->next)
 		{
-			if (child->type == XML_ELEMENT_NODE && (name.empty() || name == reinterpret_cast<const char*>(child->name)))
+			if (child->type == XML_ELEMENT_NODE && (name.empty() || xml_detail::equals(child->name, name)))
 			{
 				if (count == index)
 				{
@@ -234,7 +347,7 @@ public:
 	 *
 	 * @throws std::runtime_error if the document creation fails.
 	 */
-	XmlDocument() : _doc(xmlNewDoc(reinterpret_cast<const xmlChar*>("1.0")), &xmlFreeDoc)
+	XmlDocument() : _doc(xml_detail::createDocument(), &xmlFreeDoc)
 	{
 		if (!_doc)
 		{

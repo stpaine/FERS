@@ -14,6 +14,7 @@
 #include <cctype>
 #include <cstdarg>
 #include <format>
+#include <limits>
 #include <string>
 
 #include "libxml/encoding.h"
@@ -41,6 +42,26 @@ namespace
 		va_end(args);
 
 		err_str->append(buf);
+	}
+
+	[[nodiscard]] int checkedXmlInputSize(const std::size_t size)
+	{
+		if (size > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+		{
+			throw XmlException("XML input exceeds libxml2 length limit.");
+		}
+		return static_cast<int>(size);
+	}
+
+	[[nodiscard]] std::string bytesToString(const std::span<const unsigned char> bytes)
+	{
+		std::string result;
+		result.reserve(bytes.size());
+		for (const unsigned char byte : bytes)
+		{
+			result.push_back(static_cast<char>(byte));
+		}
+		return result;
 	}
 
 	/// Formats a raw XML error message with a title and remediation hint.
@@ -96,10 +117,11 @@ namespace
 
 bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) const
 {
+	const std::string dtd_string = bytesToString(dtdData);
 	xmlDtdPtr dtd =
 		xmlIOParseDTD(nullptr,
-					  xmlParserInputBufferCreateMem(reinterpret_cast<const char*>(dtdData.data()),
-													static_cast<int>(dtdData.size()), XML_CHAR_ENCODING_UTF8),
+					  xmlParserInputBufferCreateMem(dtd_string.data(), checkedXmlInputSize(dtd_string.size()),
+													XML_CHAR_ENCODING_UTF8),
 					  XML_CHAR_ENCODING_UTF8);
 	if (dtd == nullptr)
 	{
@@ -136,9 +158,9 @@ bool XmlDocument::validateWithDtd(const std::span<const unsigned char> dtdData) 
 
 bool XmlDocument::validateWithXsd(const std::span<const unsigned char> xsdData) const
 {
+	const std::string xsd_string = bytesToString(xsdData);
 	const std::unique_ptr<xmlSchemaParserCtxt, decltype(&xmlSchemaFreeParserCtxt)> schema_parser_ctxt(
-		xmlSchemaNewMemParserCtxt(reinterpret_cast<const char*>(xsdData.data()), static_cast<int>(xsdData.size())),
-		xmlSchemaFreeParserCtxt);
+		xmlSchemaNewMemParserCtxt(xsd_string.data(), checkedXmlInputSize(xsd_string.size())), xmlSchemaFreeParserCtxt);
 	if (!schema_parser_ctxt)
 	{
 		throw XmlException("Failed to create schema parser context.");
@@ -260,7 +282,7 @@ std::string XmlDocument::dumpToString() const
 		LOG(logging::Level::ERROR, "Failed to dump XML document to memory buffer.");
 		return "";
 	}
-	const std::string result(reinterpret_cast<const char*>(buffer), static_cast<size_t>(size));
+	const std::string result = xml_detail::toString(buffer, size);
 	xmlFree(buffer);
 	return result;
 }

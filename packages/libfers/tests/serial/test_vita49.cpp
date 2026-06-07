@@ -70,6 +70,13 @@ namespace
 		return std::bit_cast<double>(readU64(bytes, offset));
 	}
 
+#ifndef _WIN32
+	[[nodiscard]] sockaddr* asSockaddr(sockaddr_in& address) noexcept
+	{
+		return static_cast<sockaddr*>(static_cast<void*>(&address));
+	}
+#endif
+
 	[[nodiscard]] std::string readAsciiMetadata(const std::vector<std::uint8_t>& bytes, std::size_t offset)
 	{
 		std::string value;
@@ -1180,14 +1187,14 @@ TEST_CASE("VITA UDP sender loopback carries stream ID and packet count", "[seria
 	bind_addr.sin_family = AF_INET;
 	bind_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	bind_addr.sin_port = 0;
-	if (::bind(receiver, reinterpret_cast<sockaddr*>(&bind_addr), sizeof(bind_addr)) != 0)
+	if (::bind(receiver, asSockaddr(bind_addr), sizeof(bind_addr)) != 0)
 	{
 		::close(receiver);
 		SKIP("loopback bind unavailable");
 	}
 
 	socklen_t addr_len = sizeof(bind_addr);
-	REQUIRE(::getsockname(receiver, reinterpret_cast<sockaddr*>(&bind_addr), &addr_len) == 0);
+	REQUIRE(::getsockname(receiver, asSockaddr(bind_addr), &addr_len) == 0);
 
 	timeval timeout{};
 	timeout.tv_sec = 1;

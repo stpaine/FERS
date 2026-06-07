@@ -35,7 +35,7 @@ TEST_CASE("XmlElement handles invalid nodes", "[serial][xml]")
 TEST_CASE("XmlElement reads and writes text", "[serial][xml]")
 {
 	XmlDocument const doc;
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	doc.setRootElement(root);
 	root.setText("alpha");
 	root.setText("beta");
@@ -50,7 +50,7 @@ TEST_CASE("XmlElement reads and writes text", "[serial][xml]")
 TEST_CASE("XmlElement manages attributes", "[serial][xml]")
 {
 	XmlDocument const doc;
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	doc.setRootElement(root);
 	root.setAttribute("mode", "cw");
 
@@ -61,7 +61,7 @@ TEST_CASE("XmlElement manages attributes", "[serial][xml]")
 TEST_CASE("XmlElement handles child indexing and filtering", "[serial][xml]")
 {
 	XmlDocument const doc;
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	doc.setRootElement(root);
 
 	const XmlElement alpha0 = root.addChild("alpha");
@@ -115,7 +115,7 @@ TEST_CASE("XmlDocument loads files and persists output", "[serial][xml]")
 TEST_CASE("XmlDocument requires root element", "[serial][xml]")
 {
 	XmlDocument const doc;
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	doc.setRootElement(root);
 	REQUIRE(doc.getRootElement().name() == "root");
 }
@@ -130,7 +130,7 @@ TEST_CASE("XmlDocument throws when setting root on moved-from doc", "[serial][xm
 {
 	XmlDocument doc;
 	XmlDocument const moved_doc(std::move(doc));
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	moved_doc.setRootElement(root);
 	REQUIRE_THROWS_AS(doc.setRootElement(root), std::runtime_error);
 }
@@ -139,7 +139,7 @@ TEST_CASE("XmlDocument throws when getting root on moved-from doc", "[serial][xm
 {
 	XmlDocument doc;
 	XmlDocument const moved_doc(std::move(doc));
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	moved_doc.setRootElement(root);
 	REQUIRE_THROWS_AS(doc.getRootElement(), std::runtime_error);
 }
@@ -248,11 +248,11 @@ TEST_CASE("mergeXmlDocuments merges element children", "[serial][xml]")
 	XmlDocument const main_doc;
 	XmlDocument const included_doc;
 
-	const XmlElement main_root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement main_root = XmlElement::create("root");
 	main_root.addChild("main").setText("1");
 	main_doc.setRootElement(main_root);
 
-	const XmlElement included_root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement included_root = XmlElement::create("root");
 	included_root.addChild("a").setText("2");
 	included_root.addChild("b").setText("3");
 	included_doc.setRootElement(included_root);
@@ -268,7 +268,7 @@ TEST_CASE("mergeXmlDocuments merges element children", "[serial][xml]")
 TEST_CASE("removeIncludeElements removes all include nodes", "[serial][xml]")
 {
 	XmlDocument const doc;
-	const XmlElement root(xmlNewNode(nullptr, reinterpret_cast<const xmlChar*>("root")));
+	const XmlElement root = XmlElement::create("root");
 	root.addChild("include").setText("first");
 	root.addChild("keep").setText("value");
 	root.addChild("include").setText("second");

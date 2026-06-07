@@ -6,6 +6,7 @@
 
 #include "serial/vita49/udp_sender.h"
 
+#include <bit>
 #include <cstring>
 #include <memory>
 #include <stdexcept>
@@ -31,8 +32,12 @@ namespace serial::vita49
 		void tuneSendBuffer(const int socket_fd) noexcept
 		{
 			const int send_buffer_bytes = kRequestedUdpSendBufferBytes;
-			(void)::setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, reinterpret_cast<const char*>(&send_buffer_bytes),
-							   sizeof(send_buffer_bytes));
+#ifdef _WIN32
+			const auto* option_value = std::bit_cast<const char*>(&send_buffer_bytes);
+#else
+			const void* option_value = &send_buffer_bytes;
+#endif
+			(void)::setsockopt(socket_fd, SOL_SOCKET, SO_SNDBUF, option_value, sizeof(send_buffer_bytes));
 		}
 	}
 
@@ -123,8 +128,14 @@ namespace serial::vita49
 			return;
 		}
 
-		const auto sent = ::sendto(_socket, reinterpret_cast<const char*>(bytes.data()), bytes.size(), 0,
-								   static_cast<const sockaddr*>(_address), static_cast<socklen_t>(_address_size));
+#ifdef _WIN32
+		const auto* payload = std::bit_cast<const char*>(bytes.data());
+		const auto sent = ::sendto(_socket, payload, static_cast<int>(bytes.size()), 0,
+								   static_cast<const sockaddr*>(_address), static_cast<int>(_address_size));
+#else
+		const auto sent = ::sendto(_socket, bytes.data(), bytes.size(), 0, static_cast<const sockaddr*>(_address),
+								   static_cast<socklen_t>(_address_size));
+#endif
 		if (sent < 0 || static_cast<std::size_t>(sent) != bytes.size())
 		{
 			throw std::runtime_error("VITA UDP send failed");
