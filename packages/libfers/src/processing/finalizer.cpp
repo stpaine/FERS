@@ -274,6 +274,143 @@ namespace processing
 			return spans;
 		}
 
+		void appendStreamingSegment(core::OutputFileMetadata& metadata, const std::size_t total_samples,
+									const RealType output_sample_rate, const RealType start_time,
+									const RealType end_time)
+		{
+			const auto start_sample = static_cast<std::uint64_t>(std::min<RealType>(
+				static_cast<RealType>(total_samples),
+				std::max<RealType>(0.0, std::ceil((start_time - params::startTime()) * output_sample_rate))));
+			const auto end_sample = static_cast<std::uint64_t>(std::min<RealType>(
+				static_cast<RealType>(total_samples),
+				std::max<RealType>(0.0, std::ceil((end_time - params::startTime()) * output_sample_rate))));
+			if (start_sample < end_sample)
+			{
+				const core::StreamingSegmentMetadata segment{.start_time = start_time,
+															 .end_time = end_time,
+															 .sample_count = end_sample - start_sample,
+															 .sample_start = start_sample,
+															 .sample_end_exclusive = end_sample};
+				metadata.streaming_segments.push_back(segment);
+			}
+		}
+
+		void appendScheduledStreamingSegments(core::OutputFileMetadata& metadata, const radar::Receiver* receiver,
+											  const std::size_t total_samples, const RealType output_sample_rate)
+		{
+			const auto& schedule = receiver->getSchedule();
+			if (schedule.empty())
+			{
+				appendStreamingSegment(metadata, total_samples, output_sample_rate, params::startTime(),
+									   params::endTime());
+				return;
+			}
+
+			for (const auto& period : schedule)
+			{
+				const RealType start = std::max(params::startTime(), period.start);
+				const RealType end = std::min(params::endTime(), period.end);
+				if (start < end)
+				{
+					appendStreamingSegment(metadata, total_samples, output_sample_rate, start, end);
+				}
+			}
+		}
+
+		void appendStreamingSegments(core::OutputFileMetadata& metadata, const radar::Receiver* receiver,
+									 const std::size_t total_samples, const RealType output_sample_rate,
+									 const std::vector<TimeSpan>& dechirp_time_spans)
+		{
+			if (!receiver->isDechirpEnabled())
+			{
+				appendScheduledStreamingSegments(metadata, receiver, total_samples, output_sample_rate);
+				return;
+			}
+
+			for (const auto& span : dechirp_time_spans)
+			{
+				appendStreamingSegment(metadata, total_samples, output_sample_rate, span.first, span.second);
+			}
+		}
+
+		void annotateSingleFmcwSource(core::OutputFileMetadata& metadata,
+									  const std::vector<core::ActiveStreamingSource>& streaming_sources)
+		{
+			metadata.fmcw_sources = buildFmcwSources(streaming_sources);
+			if (metadata.fmcw_sources.size() != 1)
+			{
+				return;
+			}
+
+			metadata.fmcw = metadata.fmcw_sources.front().waveform;
+			for (const auto& streaming_source : streaming_sources)
+			{
+				if (streaming_source.is_fmcw && streaming_source.transmitter != nullptr &&
+					streaming_source.transmitter->getId() == metadata.fmcw_sources.front().transmitter_id)
+				{
+					annotateStreamingSegmentsForSingleFmcwSource(metadata, streaming_source);
+				}
+			}
+		}
+
+		void populateFmcwIfMetadata(core::OutputFileMetadata& metadata, const radar::Receiver* receiver)
+		{
+			const auto& if_request = receiver->getFmcwIfChainRequest();
+			const auto& if_plan = receiver->getFmcwIfResamplerPlan();
+			metadata.fmcw_if_legacy_full_rate = !if_request.sample_rate_hz.has_value();
+			metadata.fmcw_if_decimation_enabled = if_plan.has_value();
+			if (if_request.sample_rate_hz.has_value())
+			{
+				metadata.fmcw_if_requested_sample_rate = if_request.sample_rate_hz;
+			}
+			if (!if_plan.has_value())
+			{
+				return;
+			}
+
+			metadata.fmcw_if_sample_rate = if_plan->actual_output_sample_rate_hz;
+			metadata.fmcw_if_input_sample_rate = if_plan->input_sample_rate_hz;
+			metadata.fmcw_if_resample_numerator = static_cast<unsigned>(if_plan->overall_ratio.numerator);
+			metadata.fmcw_if_resample_denominator = static_cast<unsigned>(if_plan->overall_ratio.denominator);
+			metadata.fmcw_if_decimation_factor = if_plan->actual_output_sample_rate_hz > 0.0
+				? if_plan->input_sample_rate_hz / if_plan->actual_output_sample_rate_hz
+				: 0.0;
+			metadata.fmcw_if_filter_bandwidth = if_plan->filter_bandwidth_hz;
+			metadata.fmcw_if_filter_transition_width = if_plan->filter_transition_width_hz;
+			metadata.fmcw_if_filter_stopband = if_plan->stopband_attenuation_db;
+			metadata.fmcw_if_filter_group_delay_seconds = if_plan->group_delay_seconds;
+			metadata.fmcw_if_compensated_integer_delay_samples = if_plan->warmup_discard_samples;
+			metadata.fmcw_if_compensated_fractional_delay_samples = if_plan->fractional_output_delay_samples;
+			metadata.fmcw_if_warmup_discard_samples = if_plan->warmup_discard_samples;
+			metadata.fmcw_if_phase_refinement = static_cast<unsigned>(if_plan->phase_refinement);
+			metadata.fmcw_if_timing_error_seconds = if_plan->estimated_timing_error_seconds;
+			metadata.fmcw_if_phase_error_radians = if_plan->estimated_phase_error_radians;
+			metadata.fmcw_if_noise_variance =
+				params::boltzmannK() * receiver->getNoiseTemperature() * if_plan->actual_output_sample_rate_hz;
+			metadata.fmcw_if_group_delay_compensated = if_plan->group_delay_compensated;
+		}
+
+		void populateDechirpReferenceMetadata(core::OutputFileMetadata& metadata, const radar::Receiver* receiver)
+		{
+			const auto& reference = receiver->getDechirpReference();
+			metadata.fmcw_dechirp_reference_source = std::string(radar::dechirpReferenceSourceToken(reference.source));
+			if (reference.source == radar::Receiver::DechirpReferenceSource::Attached ||
+				reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
+			{
+				metadata.fmcw_dechirp_reference_transmitter_id = reference.transmitter_id;
+				metadata.fmcw_dechirp_reference_transmitter_name = reference.transmitter_name;
+			}
+			else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
+			{
+				metadata.fmcw_dechirp_reference_waveform_id = reference.waveform_id;
+				metadata.fmcw_dechirp_reference_waveform_name = reference.waveform_name;
+				if (!receiver->getDechirpSources().empty())
+				{
+					metadata.fmcw_dechirp_reference_waveform = buildFmcwMetadata(receiver->getDechirpSources().front());
+				}
+			}
+		}
+
 		/// Builds output metadata for a streaming receiver result file.
 		core::OutputFileMetadata
 		buildStreamingMetadata(const radar::Receiver* receiver, const std::string& hdf5_filename,
@@ -291,121 +428,14 @@ namespace processing
 											  .sample_start = 0,
 											  .sample_end_exclusive = static_cast<std::uint64_t>(total_samples)};
 
-			const auto append_segment = [&](const RealType start_time, const RealType end_time)
-			{
-				const auto start_sample = static_cast<std::uint64_t>(std::min<RealType>(
-					static_cast<RealType>(total_samples),
-					std::max<RealType>(0.0, std::ceil((start_time - params::startTime()) * output_sample_rate))));
-				const auto end_sample = static_cast<std::uint64_t>(std::min<RealType>(
-					static_cast<RealType>(total_samples),
-					std::max<RealType>(0.0, std::ceil((end_time - params::startTime()) * output_sample_rate))));
-				if (start_sample < end_sample)
-				{
-					const core::StreamingSegmentMetadata segment{.start_time = start_time,
-																 .end_time = end_time,
-																 .sample_count = end_sample - start_sample,
-																 .sample_start = start_sample,
-																 .sample_end_exclusive = end_sample};
-					metadata.streaming_segments.push_back(segment);
-				}
-			};
-
-			if (receiver->isDechirpEnabled())
-			{
-				for (const auto& span : dechirp_time_spans)
-				{
-					append_segment(span.first, span.second);
-				}
-			}
-			else
-			{
-				const auto& schedule = receiver->getSchedule();
-				if (schedule.empty())
-				{
-					append_segment(params::startTime(), params::endTime());
-				}
-				else
-				{
-					for (const auto& period : schedule)
-					{
-						const RealType start = std::max(params::startTime(), period.start);
-						const RealType end = std::min(params::endTime(), period.end);
-						if (start < end)
-						{
-							append_segment(start, end);
-						}
-					}
-				}
-			}
-
-			metadata.fmcw_sources = buildFmcwSources(streaming_sources);
-			if (metadata.fmcw_sources.size() == 1)
-			{
-				metadata.fmcw = metadata.fmcw_sources.front().waveform;
-				for (const auto& streaming_source : streaming_sources)
-				{
-					if (streaming_source.is_fmcw && streaming_source.transmitter != nullptr &&
-						streaming_source.transmitter->getId() == metadata.fmcw_sources.front().transmitter_id)
-					{
-						annotateStreamingSegmentsForSingleFmcwSource(metadata, streaming_source);
-					}
-				}
-			}
+			appendStreamingSegments(metadata, receiver, total_samples, output_sample_rate, dechirp_time_spans);
+			annotateSingleFmcwSource(metadata, streaming_sources);
 
 			metadata.fmcw_dechirp_mode = std::string(radar::dechirpModeToken(receiver->getDechirpMode()));
 			if (receiver->isDechirpEnabled())
 			{
-				const auto& if_request = receiver->getFmcwIfChainRequest();
-				const auto& if_plan = receiver->getFmcwIfResamplerPlan();
-				metadata.fmcw_if_legacy_full_rate = !if_request.sample_rate_hz.has_value();
-				metadata.fmcw_if_decimation_enabled = if_plan.has_value();
-				if (if_request.sample_rate_hz.has_value())
-				{
-					metadata.fmcw_if_requested_sample_rate = if_request.sample_rate_hz;
-				}
-				if (if_plan.has_value())
-				{
-					metadata.fmcw_if_sample_rate = if_plan->actual_output_sample_rate_hz;
-					metadata.fmcw_if_input_sample_rate = if_plan->input_sample_rate_hz;
-					metadata.fmcw_if_resample_numerator = static_cast<unsigned>(if_plan->overall_ratio.numerator);
-					metadata.fmcw_if_resample_denominator = static_cast<unsigned>(if_plan->overall_ratio.denominator);
-					metadata.fmcw_if_decimation_factor = if_plan->actual_output_sample_rate_hz > 0.0
-						? if_plan->input_sample_rate_hz / if_plan->actual_output_sample_rate_hz
-						: 0.0;
-					metadata.fmcw_if_filter_bandwidth = if_plan->filter_bandwidth_hz;
-					metadata.fmcw_if_filter_transition_width = if_plan->filter_transition_width_hz;
-					metadata.fmcw_if_filter_stopband = if_plan->stopband_attenuation_db;
-					metadata.fmcw_if_filter_group_delay_seconds = if_plan->group_delay_seconds;
-					metadata.fmcw_if_compensated_integer_delay_samples = if_plan->warmup_discard_samples;
-					metadata.fmcw_if_compensated_fractional_delay_samples = if_plan->fractional_output_delay_samples;
-					metadata.fmcw_if_warmup_discard_samples = if_plan->warmup_discard_samples;
-					metadata.fmcw_if_phase_refinement = static_cast<unsigned>(if_plan->phase_refinement);
-					metadata.fmcw_if_timing_error_seconds = if_plan->estimated_timing_error_seconds;
-					metadata.fmcw_if_phase_error_radians = if_plan->estimated_phase_error_radians;
-					metadata.fmcw_if_noise_variance =
-						params::boltzmannK() * receiver->getNoiseTemperature() * if_plan->actual_output_sample_rate_hz;
-					metadata.fmcw_if_group_delay_compensated = if_plan->group_delay_compensated;
-				}
-
-				const auto& reference = receiver->getDechirpReference();
-				metadata.fmcw_dechirp_reference_source =
-					std::string(radar::dechirpReferenceSourceToken(reference.source));
-				if (reference.source == radar::Receiver::DechirpReferenceSource::Attached ||
-					reference.source == radar::Receiver::DechirpReferenceSource::Transmitter)
-				{
-					metadata.fmcw_dechirp_reference_transmitter_id = reference.transmitter_id;
-					metadata.fmcw_dechirp_reference_transmitter_name = reference.transmitter_name;
-				}
-				else if (reference.source == radar::Receiver::DechirpReferenceSource::Custom)
-				{
-					metadata.fmcw_dechirp_reference_waveform_id = reference.waveform_id;
-					metadata.fmcw_dechirp_reference_waveform_name = reference.waveform_name;
-					if (!receiver->getDechirpSources().empty())
-					{
-						metadata.fmcw_dechirp_reference_waveform =
-							buildFmcwMetadata(receiver->getDechirpSources().front());
-					}
-				}
+				populateFmcwIfMetadata(metadata, receiver);
+				populateDechirpReferenceMetadata(metadata, receiver);
 			}
 
 			return metadata;

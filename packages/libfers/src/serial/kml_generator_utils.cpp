@@ -378,6 +378,72 @@ namespace serial::kml_generator_utils
 		out << indent << "</Placemark>\n";
 	}
 
+	std::optional<double> antennaCarrierWavelength(const radar::Radar* radar, const KmlContext& ctx)
+	{
+		if (const auto* tx = dynamic_cast<const radar::Transmitter*>(radar))
+		{
+			if (tx->getSignal() != nullptr)
+			{
+				return ctx.parameters.c / tx->getSignal()->getCarrier();
+			}
+			return std::nullopt;
+		}
+		if (const auto* rx = dynamic_cast<const radar::Receiver*>(radar))
+		{
+			if (const auto* attached_tx = dynamic_cast<const radar::Transmitter*>(rx->getAttached()))
+			{
+				if (attached_tx->getSignal() != nullptr)
+				{
+					return ctx.parameters.c / attached_tx->getSignal()->getCarrier();
+				}
+			}
+		}
+		return std::nullopt;
+	}
+
+	std::optional<double> antenna3DbDropAngle(const antenna::Antenna* ant, const std::optional<double> wavelength)
+	{
+		if (const auto* sinc_ant = dynamic_cast<const antenna::Sinc*>(ant))
+		{
+			return find3DbDropAngle(sinc_ant->getAlpha(), sinc_ant->getBeta(), sinc_ant->getGamma());
+		}
+		if (const auto* gaussian_ant = dynamic_cast<const antenna::Gaussian*>(ant))
+		{
+			return findGaussian3DbDropAngle(gaussian_ant);
+		}
+		if (const auto* parabolic_ant = dynamic_cast<const antenna::Parabolic*>(ant))
+		{
+			if (wavelength)
+			{
+				return findParabolic3DbDropAngle(parabolic_ant, *wavelength);
+			}
+			return std::nullopt;
+		}
+		if (const auto* squarehorn_ant = dynamic_cast<const antenna::SquareHorn*>(ant))
+		{
+			if (wavelength)
+			{
+				return findSquareHorn3DbDropAngle(squarehorn_ant, *wavelength);
+			}
+			return std::nullopt;
+		}
+		return std::nullopt;
+	}
+
+	void logSymbolicAntennaKml(const antenna::Antenna* ant)
+	{
+		if ((dynamic_cast<const antenna::XmlAntenna*>(ant) == nullptr) &&
+			(dynamic_cast<const antenna::H5Antenna*>(ant) == nullptr))
+		{
+			return;
+		}
+		LOG(logging::Level::INFO,
+			"KML visualization for antenna '{}' ('{}') is symbolic. "
+			"Only the boresight direction is shown, as a 3dB beamwidth is not calculated from file-based "
+			"patterns.",
+			ant->getName(), dynamic_cast<const antenna::XmlAntenna*>(ant) ? "xml" : "file");
+	}
+
 	void generateAntennaKml(std::ostream& out, const radar::Platform* platform, const radar::Radar* radar,
 							const KmlContext& ctx, const std::string& indent)
 	{
@@ -394,59 +460,9 @@ namespace serial::kml_generator_utils
 		}
 		else
 		{
-			std::optional<double> angle_3db_drop_deg;
-
-			std::optional<double> wavelength;
-			if (const auto* tx = dynamic_cast<const radar::Transmitter*>(radar))
-			{
-				if (tx->getSignal() != nullptr)
-				{
-					wavelength = ctx.parameters.c / tx->getSignal()->getCarrier();
-				}
-			}
-			else if (const auto* rx = dynamic_cast<const radar::Receiver*>(radar))
-			{
-				if (const auto* attached_tx = dynamic_cast<const radar::Transmitter*>(rx->getAttached()))
-				{
-					if (attached_tx->getSignal() != nullptr)
-					{
-						wavelength = ctx.parameters.c / attached_tx->getSignal()->getCarrier();
-					}
-				}
-			}
-
-			if (const auto* sinc_ant = dynamic_cast<const antenna::Sinc*>(ant))
-			{
-				angle_3db_drop_deg = find3DbDropAngle(sinc_ant->getAlpha(), sinc_ant->getBeta(), sinc_ant->getGamma());
-			}
-			else if (const auto* gaussian_ant = dynamic_cast<const antenna::Gaussian*>(ant))
-			{
-				angle_3db_drop_deg = findGaussian3DbDropAngle(gaussian_ant);
-			}
-			else if (const auto* parabolic_ant = dynamic_cast<const antenna::Parabolic*>(ant))
-			{
-				if (wavelength)
-				{
-					angle_3db_drop_deg = findParabolic3DbDropAngle(parabolic_ant, *wavelength);
-				}
-			}
-			else if (const auto* squarehorn_ant = dynamic_cast<const antenna::SquareHorn*>(ant))
-			{
-				if (wavelength)
-				{
-					angle_3db_drop_deg = findSquareHorn3DbDropAngle(squarehorn_ant, *wavelength);
-				}
-			}
-			else if ((dynamic_cast<const antenna::XmlAntenna*>(ant) != nullptr) ||
-					 (dynamic_cast<const antenna::H5Antenna*>(ant) != nullptr))
-			{
-				LOG(logging::Level::INFO,
-					"KML visualization for antenna '{}' ('{}') is symbolic. "
-					"Only the boresight direction is shown, as a 3dB beamwidth is not calculated from file-based "
-					"patterns.",
-					ant->getName(), dynamic_cast<const antenna::XmlAntenna*>(ant) ? "xml" : "file");
-			}
-
+			const auto wavelength = antennaCarrierWavelength(radar, ctx);
+			const auto angle_3db_drop_deg = antenna3DbDropAngle(ant, wavelength);
+			logSymbolicAntennaKml(ant);
 			generateDirectionalAntennaKml(out, platform, ctx, angle_3db_drop_deg, indent);
 		}
 	}

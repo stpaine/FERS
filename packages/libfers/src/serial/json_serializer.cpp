@@ -208,6 +208,112 @@ namespace
 		return value;
 	}
 
+	bool has_if_chain_fields(const radar::Receiver::FmcwIfChainRequest& if_chain) noexcept
+	{
+		return if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
+			if_chain.filter_transition_width_hz.has_value();
+	}
+
+	void reject_disabled_json_dechirp_fields(const nlohmann::json& mode_json,
+											 const radar::Receiver::FmcwIfChainRequest& if_chain,
+											 const std::string& owner)
+	{
+		if (mode_json.contains("dechirp_reference"))
+		{
+			throw std::runtime_error(owner + " declares dechirp_reference while dechirp_mode is 'none'.");
+		}
+		if (has_if_chain_fields(if_chain))
+		{
+			throw std::runtime_error(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
+		}
+	}
+
+	void validate_json_if_chain_request(const radar::Receiver::FmcwIfChainRequest& if_chain, const std::string& owner)
+	{
+		if ((if_chain.filter_bandwidth_hz.has_value() || if_chain.filter_transition_width_hz.has_value()) &&
+			!if_chain.sample_rate_hz.has_value())
+		{
+			throw std::runtime_error(owner + " IF filter fields require if_sample_rate.");
+		}
+		if (if_chain.sample_rate_hz.has_value())
+		{
+			const RealType sim_rate = params::rate() * params::oversampleRatio();
+			if (*if_chain.sample_rate_hz > sim_rate)
+			{
+				throw std::runtime_error(owner + " if_sample_rate must not exceed the simulation sample rate.");
+			}
+		}
+		if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value() &&
+			*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
+		{
+			throw std::runtime_error(owner + " if_filter_bandwidth must be less than half if_sample_rate.");
+		}
+	}
+
+	std::string required_non_empty_json_string(const nlohmann::json& object, const std::string_view key,
+											   const std::string& owner, const std::string_view context)
+	{
+		const std::string key_string(key);
+		auto value = object.at(key_string).get<std::string>();
+		if (value.empty())
+		{
+			throw std::runtime_error(owner + " " + std::string(context) + " has an empty " + key_string + ".");
+		}
+		return value;
+	}
+
+	radar::Receiver::DechirpReference parse_json_dechirp_reference(const nlohmann::json& mode_json,
+																   const std::string& owner)
+	{
+		if (!mode_json.contains("dechirp_reference") || !mode_json.at("dechirp_reference").is_object())
+		{
+			throw std::runtime_error(owner + " enables dechirping but does not declare dechirp_reference.");
+		}
+
+		const auto& ref_json = mode_json.at("dechirp_reference");
+		reject_unknown_keys(ref_json, owner, "dechirp_reference", {"source", "transmitter_name", "waveform_name"});
+		if (!ref_json.contains("source"))
+		{
+			throw std::runtime_error(owner + " dechirp_reference requires source.");
+		}
+
+		radar::Receiver::DechirpReference reference;
+		reference.source = radar::parseDechirpReferenceSourceToken(ref_json.at("source").get<std::string>());
+		const bool has_transmitter_name = ref_json.contains("transmitter_name");
+		const bool has_waveform_name = ref_json.contains("waveform_name");
+
+		switch (reference.source)
+		{
+		case radar::Receiver::DechirpReferenceSource::Attached:
+			if (has_transmitter_name || has_waveform_name)
+			{
+				throw std::runtime_error(owner +
+										 " attached dechirp_reference must not set transmitter_name or waveform_name.");
+			}
+			break;
+		case radar::Receiver::DechirpReferenceSource::Transmitter:
+			if (!has_transmitter_name || has_waveform_name)
+			{
+				throw std::runtime_error(owner + " transmitter dechirp_reference requires transmitter_name only.");
+			}
+			reference.name =
+				required_non_empty_json_string(ref_json, "transmitter_name", owner, "transmitter dechirp_reference");
+			break;
+		case radar::Receiver::DechirpReferenceSource::Custom:
+			if (!has_waveform_name || has_transmitter_name)
+			{
+				throw std::runtime_error(owner + " custom dechirp_reference requires waveform_name only.");
+			}
+			reference.name =
+				required_non_empty_json_string(ref_json, "waveform_name", owner, "custom dechirp_reference");
+			break;
+		case radar::Receiver::DechirpReferenceSource::None:
+			throw std::runtime_error(owner + " dechirp_reference source must be attached, transmitter, or custom.");
+		}
+
+		return reference;
+	}
+
 	/// Parses receiver-side dechirp settings from a JSON component.
 	void parse_receiver_dechirp_config(const nlohmann::json& comp_json, radar::Receiver& receiver,
 									   const std::string& owner)
@@ -240,90 +346,13 @@ namespace
 
 		if (mode == radar::Receiver::DechirpMode::None)
 		{
-			if (mode_json.contains("dechirp_reference"))
-			{
-				throw std::runtime_error(owner + " declares dechirp_reference while dechirp_mode is 'none'.");
-			}
-			if (if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
-				if_chain.filter_transition_width_hz.has_value())
-			{
-				throw std::runtime_error(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
-			}
+			reject_disabled_json_dechirp_fields(mode_json, if_chain, owner);
 			receiver.setDechirpMode(mode);
 			return;
 		}
 
-		if ((if_chain.filter_bandwidth_hz.has_value() || if_chain.filter_transition_width_hz.has_value()) &&
-			!if_chain.sample_rate_hz.has_value())
-		{
-			throw std::runtime_error(owner + " IF filter fields require if_sample_rate.");
-		}
-		if (if_chain.sample_rate_hz.has_value())
-		{
-			const RealType sim_rate = params::rate() * params::oversampleRatio();
-			if (*if_chain.sample_rate_hz > sim_rate)
-			{
-				throw std::runtime_error(owner + " if_sample_rate must not exceed the simulation sample rate.");
-			}
-		}
-		if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value())
-		{
-			if (*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
-			{
-				throw std::runtime_error(owner + " if_filter_bandwidth must be less than half if_sample_rate.");
-			}
-		}
-
-		if (!mode_json.contains("dechirp_reference") || !mode_json.at("dechirp_reference").is_object())
-		{
-			throw std::runtime_error(owner + " enables dechirping but does not declare dechirp_reference.");
-		}
-
-		const auto& ref_json = mode_json.at("dechirp_reference");
-		reject_unknown_keys(ref_json, owner, "dechirp_reference", {"source", "transmitter_name", "waveform_name"});
-		if (!ref_json.contains("source"))
-		{
-			throw std::runtime_error(owner + " dechirp_reference requires source.");
-		}
-		radar::Receiver::DechirpReference reference;
-		reference.source = radar::parseDechirpReferenceSourceToken(ref_json.at("source").get<std::string>());
-
-		const bool has_transmitter_name = ref_json.contains("transmitter_name");
-		const bool has_waveform_name = ref_json.contains("waveform_name");
-		switch (reference.source)
-		{
-		case radar::Receiver::DechirpReferenceSource::Attached:
-			if (has_transmitter_name || has_waveform_name)
-			{
-				throw std::runtime_error(owner +
-										 " attached dechirp_reference must not set transmitter_name or waveform_name.");
-			}
-			break;
-		case radar::Receiver::DechirpReferenceSource::Transmitter:
-			if (!has_transmitter_name || has_waveform_name)
-			{
-				throw std::runtime_error(owner + " transmitter dechirp_reference requires transmitter_name only.");
-			}
-			reference.name = ref_json.at("transmitter_name").get<std::string>();
-			if (reference.name.empty())
-			{
-				throw std::runtime_error(owner + " transmitter dechirp_reference has an empty transmitter_name.");
-			}
-			break;
-		case radar::Receiver::DechirpReferenceSource::Custom:
-			if (!has_waveform_name || has_transmitter_name)
-			{
-				throw std::runtime_error(owner + " custom dechirp_reference requires waveform_name only.");
-			}
-			reference.name = ref_json.at("waveform_name").get<std::string>();
-			if (reference.name.empty())
-			{
-				throw std::runtime_error(owner + " custom dechirp_reference has an empty waveform_name.");
-			}
-			break;
-		case radar::Receiver::DechirpReferenceSource::None:
-			throw std::runtime_error(owner + " dechirp_reference source must be attached, transmitter, or custom.");
-		}
+		validate_json_if_chain_request(if_chain, owner);
+		auto reference = parse_json_dechirp_reference(mode_json, owner);
 
 		receiver.setDechirpMode(mode);
 		receiver.setDechirpReference(std::move(reference));
@@ -1156,74 +1185,80 @@ namespace
 		}
 	}
 
+	using JsonNameRegistry = std::unordered_map<std::string, std::string>;
+
+	void register_json_name(JsonNameRegistry& name_registry, const nlohmann::json& element, const std::string_view kind)
+	{
+		if (!element.is_object() || !element.contains("name"))
+		{
+			return;
+		}
+
+		const auto name = element.at("name").get<std::string>();
+		const auto [iter, inserted] = name_registry.emplace(name, std::string(kind));
+		if (!inserted)
+		{
+			throw std::runtime_error("Duplicate name '" + name + "' found for " + std::string(kind) +
+									 "; previously used by " + iter->second + ".");
+		}
+	}
+
+	void register_json_name_array(JsonNameRegistry& name_registry, const nlohmann::json& sim,
+								  const std::string_view key, const std::string_view kind)
+	{
+		const std::string key_string(key);
+		if (!sim.contains(key_string))
+		{
+			return;
+		}
+		for (const auto& element : sim.at(key_string))
+		{
+			register_json_name(name_registry, element, kind);
+		}
+	}
+
+	void register_platform_component_names(JsonNameRegistry& name_registry, const nlohmann::json& platform)
+	{
+		if (!platform.contains("components") || !platform.at("components").is_array())
+		{
+			return;
+		}
+
+		for (const auto& component_wrapper : platform.at("components"))
+		{
+			if (!component_wrapper.is_object())
+			{
+				continue;
+			}
+			for (const auto& [kind, component] : component_wrapper.items())
+			{
+				register_json_name(name_registry, component, kind);
+			}
+		}
+	}
+
+	void register_platform_names(JsonNameRegistry& name_registry, const nlohmann::json& sim)
+	{
+		if (!sim.contains("platforms"))
+		{
+			return;
+		}
+
+		for (const auto& platform : sim.at("platforms"))
+		{
+			register_json_name(name_registry, platform, "platform");
+			register_platform_component_names(name_registry, platform);
+		}
+	}
+
 	void validate_unique_names(const nlohmann::json& sim)
 	{
-		std::unordered_map<std::string, std::string> name_registry;
+		JsonNameRegistry name_registry;
 		name_registry.reserve(64);
-
-		const auto register_name = [&name_registry](const nlohmann::json& element, const std::string_view kind)
-		{
-			if (!element.is_object() || !element.contains("name"))
-			{
-				return;
-			}
-
-			const auto name = element.at("name").get<std::string>();
-			const auto [iter, inserted] = name_registry.emplace(name, std::string(kind));
-			if (!inserted)
-			{
-				throw std::runtime_error("Duplicate name '" + name + "' found for " + std::string(kind) +
-										 "; previously used by " + iter->second + ".");
-			}
-		};
-
-		if (sim.contains("waveforms"))
-		{
-			for (const auto& waveform : sim.at("waveforms"))
-			{
-				register_name(waveform, "waveform");
-			}
-		}
-
-		if (sim.contains("timings"))
-		{
-			for (const auto& timing : sim.at("timings"))
-			{
-				register_name(timing, "timing");
-			}
-		}
-
-		if (sim.contains("antennas"))
-		{
-			for (const auto& antenna : sim.at("antennas"))
-			{
-				register_name(antenna, "antenna");
-			}
-		}
-
-		if (sim.contains("platforms"))
-		{
-			for (const auto& platform : sim.at("platforms"))
-			{
-				register_name(platform, "platform");
-				if (!platform.contains("components") || !platform.at("components").is_array())
-				{
-					continue;
-				}
-
-				for (const auto& component_wrapper : platform.at("components"))
-				{
-					if (!component_wrapper.is_object())
-					{
-						continue;
-					}
-					for (const auto& [kind, component] : component_wrapper.items())
-					{
-						register_name(component, kind);
-					}
-				}
-			}
-		}
+		register_json_name_array(name_registry, sim, "waveforms", "waveform");
+		register_json_name_array(name_registry, sim, "timings", "timing");
+		register_json_name_array(name_registry, sim, "antennas", "antenna");
+		register_platform_names(name_registry, sim);
 	}
 
 	/// Counts operation mode blocks on a component.
@@ -1681,48 +1716,54 @@ namespace serial
 		parse_parameters(sim, masterSeeder);
 	}
 
-	void update_antenna_from_json(const nlohmann::json& j, antenna::Antenna* ant, core::World& world)
+	std::unique_ptr<antenna::Antenna> parse_required_update_antenna(const nlohmann::json& j)
 	{
-		auto new_pattern = j.value("pattern", "isotropic");
-		bool type_changed = false;
-
-		const auto parse_required_antenna = [&j]()
+		auto parsed = parse_antenna_from_json(j);
+		if (parsed == nullptr)
 		{
-			auto parsed = parse_antenna_from_json(j);
-			if (parsed == nullptr)
-			{
-				const auto name = j.value("name", std::string{});
-				const auto pattern = j.value("pattern", "isotropic");
-				throw std::runtime_error("Cannot update antenna '" + name + "' to pattern '" + pattern +
-										 "' without a filename.");
-			}
-			return parsed;
-		};
-
-		if (new_pattern == "isotropic" && (dynamic_cast<antenna::Isotropic*>(ant) == nullptr))
-			type_changed = true;
-		else if (new_pattern == "sinc" && (dynamic_cast<antenna::Sinc*>(ant) == nullptr))
-			type_changed = true;
-		else if (new_pattern == "gaussian" && (dynamic_cast<antenna::Gaussian*>(ant) == nullptr))
-			type_changed = true;
-		else if (new_pattern == "squarehorn" && (dynamic_cast<antenna::SquareHorn*>(ant) == nullptr))
-			type_changed = true;
-		else if (new_pattern == "parabolic" && (dynamic_cast<antenna::Parabolic*>(ant) == nullptr))
-			type_changed = true;
-		else if (new_pattern == "xml" && (dynamic_cast<antenna::XmlAntenna*>(ant) == nullptr))
-			type_changed = true;
-		else if (new_pattern == "file" && (dynamic_cast<antenna::H5Antenna*>(ant) == nullptr))
-			type_changed = true;
-
-		if (type_changed)
-		{
-			world.replace(parse_required_antenna());
-			return;
+			const auto name = j.value("name", std::string{});
+			const auto pattern = j.value("pattern", "isotropic");
+			throw std::runtime_error("Cannot update antenna '" + name + "' to pattern '" + pattern +
+									 "' without a filename.");
 		}
+		return parsed;
+	}
 
-		ant->setName(j.at("name").get<std::string>());
-		ant->setEfficiencyFactor(j.value("efficiency", 1.0));
+	bool antenna_pattern_requires_replacement(const std::string_view pattern, const antenna::Antenna* ant) noexcept
+	{
+		if (pattern == "isotropic")
+		{
+			return dynamic_cast<const antenna::Isotropic*>(ant) == nullptr;
+		}
+		if (pattern == "sinc")
+		{
+			return dynamic_cast<const antenna::Sinc*>(ant) == nullptr;
+		}
+		if (pattern == "gaussian")
+		{
+			return dynamic_cast<const antenna::Gaussian*>(ant) == nullptr;
+		}
+		if (pattern == "squarehorn")
+		{
+			return dynamic_cast<const antenna::SquareHorn*>(ant) == nullptr;
+		}
+		if (pattern == "parabolic")
+		{
+			return dynamic_cast<const antenna::Parabolic*>(ant) == nullptr;
+		}
+		if (pattern == "xml")
+		{
+			return dynamic_cast<const antenna::XmlAntenna*>(ant) == nullptr;
+		}
+		if (pattern == "file")
+		{
+			return dynamic_cast<const antenna::H5Antenna*>(ant) == nullptr;
+		}
+		return false;
+	}
 
+	void update_existing_antenna_pattern_fields(const nlohmann::json& j, antenna::Antenna* ant, core::World& world)
+	{
 		if (auto* sinc = dynamic_cast<antenna::Sinc*>(ant))
 		{
 			sinc->setAlpha(j.value("alpha", 1.0));
@@ -1746,16 +1787,30 @@ namespace serial
 		{
 			if (xml->getFilename() != j.value("filename", ""))
 			{
-				world.replace(parse_required_antenna());
+				world.replace(parse_required_update_antenna(j));
 			}
 		}
 		else if (auto* h5 = dynamic_cast<antenna::H5Antenna*>(ant))
 		{
 			if (h5->getFilename() != j.value("filename", ""))
 			{
-				world.replace(parse_required_antenna());
+				world.replace(parse_required_update_antenna(j));
 			}
 		}
+	}
+
+	void update_antenna_from_json(const nlohmann::json& j, antenna::Antenna* ant, core::World& world)
+	{
+		const auto new_pattern = j.value("pattern", "isotropic");
+		if (antenna_pattern_requires_replacement(new_pattern, ant))
+		{
+			world.replace(parse_required_update_antenna(j));
+			return;
+		}
+
+		ant->setName(j.at("name").get<std::string>());
+		ant->setEfficiencyFactor(j.value("efficiency", 1.0));
+		update_existing_antenna_pattern_fields(j, ant, world);
 	}
 
 	void update_platform_paths_from_json(const nlohmann::json& j, radar::Platform* plat)
@@ -1827,90 +1882,210 @@ namespace serial
 		}
 	}
 
+	void update_transmitter_mode_from_json(const nlohmann::json& j, radar::Transmitter& tx)
+	{
+		reject_conflicting_mode_blocks(j, "Transmitter '" + tx.getName() + "'");
+		if (j.contains("pulsed_mode"))
+		{
+			tx.setMode(radar::OperationMode::PULSED_MODE);
+			tx.setPrf(j.at("pulsed_mode").value("prf", 0.0));
+		}
+		else if (j.contains("fmcw_mode"))
+		{
+			if (has_dechirp_fields(j.at("fmcw_mode")))
+			{
+				throw std::runtime_error("Transmitter '" + tx.getName() +
+										 "' fmcw_mode must not contain dechirp configuration.");
+			}
+			tx.setMode(radar::OperationMode::FMCW_MODE);
+		}
+		else if (j.contains("cw_mode"))
+		{
+			tx.setMode(radar::OperationMode::CW_MODE);
+		}
+	}
+
+	void update_transmitter_waveform_from_json(const nlohmann::json& j, radar::Transmitter& tx, core::World& world)
+	{
+		if (!j.contains("waveform"))
+		{
+			return;
+		}
+		auto id = parse_json_id(j, "waveform", "Transmitter");
+		auto* wf = world.findWaveform(id);
+		if (wf == nullptr)
+		{
+			throw std::runtime_error("Waveform ID " + std::to_string(id) + " not found.");
+		}
+		validate_fmcw_waveform(*wf, "Waveform '" + wf->getName() + "'");
+		validate_waveform_mode_match(*wf, tx.getMode(), "Transmitter '" + tx.getName() + "'");
+		tx.setWave(wf);
+	}
+
+	void update_transmitter_antenna_from_json(const nlohmann::json& j, radar::Transmitter& tx, core::World& world)
+	{
+		if (!j.contains("antenna"))
+		{
+			return;
+		}
+		auto id = parse_json_id(j, "antenna", "Transmitter");
+		auto* ant = world.findAntenna(id);
+		if (ant == nullptr)
+		{
+			throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
+		}
+		tx.setAntenna(ant);
+	}
+
+	void update_transmitter_timing_from_json(const nlohmann::json& j, radar::Transmitter& tx, core::World& world)
+	{
+		if (!j.contains("timing"))
+		{
+			return;
+		}
+		auto timing_id = parse_json_id(j, "timing", "Transmitter");
+		auto* const timing_proto = world.findTiming(timing_id);
+		if (timing_proto == nullptr)
+		{
+			throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
+		}
+		unsigned const seed = tx.getTiming() ? tx.getTiming()->getSeed() : 0;
+		auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
+		timing->initializeModel(timing_proto);
+		tx.setTiming(timing);
+	}
+
+	void validate_transmitter_signal_state(const radar::Transmitter& tx, const std::string& owner)
+	{
+		if (tx.getSignal() == nullptr)
+		{
+			return;
+		}
+		validate_fmcw_waveform(*tx.getSignal(), "Waveform '" + tx.getSignal()->getName() + "'");
+		validate_waveform_mode_match(*tx.getSignal(), tx.getMode(), owner);
+		if (tx.getSignal()->isFmcwFamily())
+		{
+			validate_fmcw_schedule(tx.getSchedule(), *tx.getSignal(), owner);
+		}
+	}
+
+	void update_transmitter_schedule_from_json(const nlohmann::json& j, radar::Transmitter& tx,
+											   const std::string& owner)
+	{
+		if (!j.contains("schedule"))
+		{
+			return;
+		}
+		auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
+		const bool pulsed = tx.getMode() == radar::OperationMode::PULSED_MODE;
+		const RealType pri = pulsed ? 1.0 / tx.getPrf() : 0.0;
+		auto schedule = radar::processRawSchedule(raw, tx.getName(), pulsed, pri);
+		if (tx.getSignal() != nullptr && tx.getSignal()->isFmcwFamily())
+		{
+			validate_fmcw_schedule(schedule, *tx.getSignal(), owner);
+		}
+		tx.setSchedule(std::move(schedule));
+	}
+
 	void update_transmitter_from_json(const nlohmann::json& j, radar::Transmitter* tx, core::World& world,
 									  std::mt19937& /*masterSeeder*/)
 	{
 		if (j.contains("name"))
 			tx->setName(j.at("name").get<std::string>());
 
-		reject_conflicting_mode_blocks(j, "Transmitter '" + tx->getName() + "'");
+		const std::string owner = "Transmitter '" + tx->getName() + "'";
+		update_transmitter_mode_from_json(j, *tx);
+		update_transmitter_waveform_from_json(j, *tx, world);
+		update_transmitter_antenna_from_json(j, *tx, world);
+		update_transmitter_timing_from_json(j, *tx, world);
+		update_transmitter_schedule_from_json(j, *tx, owner);
+		validate_transmitter_signal_state(*tx, owner);
+	}
+
+	void update_receiver_mode_from_json(const nlohmann::json& j, radar::Receiver& rx)
+	{
+		reject_conflicting_mode_blocks(j, "Receiver '" + rx.getName() + "'");
 		if (j.contains("pulsed_mode"))
 		{
-			tx->setMode(radar::OperationMode::PULSED_MODE);
-			tx->setPrf(j.at("pulsed_mode").value("prf", 0.0));
+			rx.setMode(radar::OperationMode::PULSED_MODE);
+			const auto& mode_json = j.at("pulsed_mode");
+			rx.setWindowProperties(mode_json.value("window_length", 0.0), mode_json.value("prf", 0.0),
+								   mode_json.value("window_skip", 0.0));
 		}
 		else if (j.contains("fmcw_mode"))
 		{
-			if (has_dechirp_fields(j.at("fmcw_mode")))
-			{
-				throw std::runtime_error("Transmitter '" + tx->getName() +
-										 "' fmcw_mode must not contain dechirp configuration.");
-			}
-			tx->setMode(radar::OperationMode::FMCW_MODE);
+			rx.setMode(radar::OperationMode::FMCW_MODE);
 		}
 		else if (j.contains("cw_mode"))
 		{
-			tx->setMode(radar::OperationMode::CW_MODE);
+			rx.setMode(radar::OperationMode::CW_MODE);
 		}
+	}
 
-		if (j.contains("waveform"))
-		{
-			auto id = parse_json_id(j, "waveform", "Transmitter");
-			auto* wf = world.findWaveform(id);
-			if (wf == nullptr)
-				throw std::runtime_error("Waveform ID " + std::to_string(id) + " not found.");
-			validate_fmcw_waveform(*wf, "Waveform '" + wf->getName() + "'");
-			validate_waveform_mode_match(*wf, tx->getMode(), "Transmitter '" + tx->getName() + "'");
-			tx->setWave(wf);
-		}
+	void update_receiver_noise_and_flags_from_json(const nlohmann::json& j, radar::Receiver& rx)
+	{
+		if (j.contains("noise_temp"))
+			rx.setNoiseTemperature(j.value("noise_temp", 0.0));
 
-		if (j.contains("antenna"))
+		if (j.contains("nodirect"))
 		{
-			auto id = parse_json_id(j, "antenna", "Transmitter");
-			auto* ant = world.findAntenna(id);
-			if (ant == nullptr)
-				throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
-			tx->setAntenna(ant);
-		}
-
-		if (j.contains("timing"))
-		{
-			auto timing_id = parse_json_id(j, "timing", "Transmitter");
-			if (auto* const timing_proto = world.findTiming(timing_id))
-			{
-				unsigned const seed = tx->getTiming() ? tx->getTiming()->getSeed() : 0;
-				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
-				timing->initializeModel(timing_proto);
-				tx->setTiming(timing);
-			}
+			if (j.value("nodirect", false))
+				rx.setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
 			else
-			{
-				throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
-			}
+				rx.clearFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
 		}
-		if (j.contains("schedule"))
+		if (j.contains("nopropagationloss"))
 		{
-			auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
-			RealType pri = 0.0;
-			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
-				pri = 1.0 / tx->getPrf();
-			auto schedule =
-				radar::processRawSchedule(raw, tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
-			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
-			{
-				validate_fmcw_schedule(schedule, *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
-			}
-			tx->setSchedule(std::move(schedule));
+			if (j.value("nopropagationloss", false))
+				rx.setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+			else
+				rx.clearFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
 		}
-		if (tx->getSignal() != nullptr)
+	}
+
+	void update_receiver_antenna_from_json(const nlohmann::json& j, radar::Receiver& rx, core::World& world)
+	{
+		if (!j.contains("antenna"))
 		{
-			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
-			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Transmitter '" + tx->getName() + "'");
-			if (tx->getSignal()->isFmcwFamily())
-			{
-				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Transmitter '" + tx->getName() + "'");
-			}
+			return;
 		}
+		auto id = parse_json_id(j, "antenna", "Receiver");
+		auto* ant = world.findAntenna(id);
+		if (ant == nullptr)
+		{
+			throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
+		}
+		rx.setAntenna(ant);
+	}
+
+	void update_receiver_timing_from_json(const nlohmann::json& j, radar::Receiver& rx, core::World& world)
+	{
+		if (!j.contains("timing"))
+		{
+			return;
+		}
+		auto timing_id = parse_json_id(j, "timing", "Receiver");
+		auto* const timing_proto = world.findTiming(timing_id);
+		if (timing_proto == nullptr)
+		{
+			throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
+		}
+		unsigned const seed = rx.getTiming() ? rx.getTiming()->getSeed() : 0;
+		auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
+		timing->initializeModel(timing_proto);
+		rx.setTiming(timing);
+	}
+
+	void update_receiver_schedule_from_json(const nlohmann::json& j, radar::Receiver& rx)
+	{
+		if (!j.contains("schedule"))
+		{
+			return;
+		}
+		auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
+		const bool pulsed = rx.getMode() == radar::OperationMode::PULSED_MODE;
+		const RealType pri = pulsed ? 1.0 / rx.getWindowPrf() : 0.0;
+		rx.setSchedule(radar::processRawSchedule(raw, rx.getName(), pulsed, pri));
 	}
 
 	void update_receiver_from_json(const nlohmann::json& j, radar::Receiver* rx, core::World& world,
@@ -1919,74 +2094,11 @@ namespace serial
 		if (j.contains("name"))
 			rx->setName(j.at("name").get<std::string>());
 
-		reject_conflicting_mode_blocks(j, "Receiver '" + rx->getName() + "'");
-		if (j.contains("pulsed_mode"))
-		{
-			rx->setMode(radar::OperationMode::PULSED_MODE);
-			const auto& mode_json = j.at("pulsed_mode");
-			rx->setWindowProperties(mode_json.value("window_length", 0.0), mode_json.value("prf", 0.0),
-									mode_json.value("window_skip", 0.0));
-		}
-		else if (j.contains("fmcw_mode"))
-		{
-			rx->setMode(radar::OperationMode::FMCW_MODE);
-		}
-		else if (j.contains("cw_mode"))
-		{
-			rx->setMode(radar::OperationMode::CW_MODE);
-		}
-
-		if (j.contains("noise_temp"))
-			rx->setNoiseTemperature(j.value("noise_temp", 0.0));
-
-		if (j.contains("nodirect"))
-		{
-			if (j.value("nodirect", false))
-				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-			else
-				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-		}
-		if (j.contains("nopropagationloss"))
-		{
-			if (j.value("nopropagationloss", false))
-				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-			else
-				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-		}
-
-		if (j.contains("antenna"))
-		{
-			auto id = parse_json_id(j, "antenna", "Receiver");
-			auto* ant = world.findAntenna(id);
-			if (ant == nullptr)
-				throw std::runtime_error("Antenna ID " + std::to_string(id) + " not found.");
-			rx->setAntenna(ant);
-		}
-
-		if (j.contains("timing"))
-		{
-			auto timing_id = parse_json_id(j, "timing", "Receiver");
-			if (auto* const timing_proto = world.findTiming(timing_id))
-			{
-				unsigned const seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
-				auto timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
-				timing->initializeModel(timing_proto);
-				rx->setTiming(timing);
-			}
-			else
-			{
-				throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
-			}
-		}
-		if (j.contains("schedule"))
-		{
-			auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
-			RealType pri = 0.0;
-			if (rx->getMode() == radar::OperationMode::PULSED_MODE)
-				pri = 1.0 / rx->getWindowPrf();
-			rx->setSchedule(
-				radar::processRawSchedule(raw, rx->getName(), rx->getMode() == radar::OperationMode::PULSED_MODE, pri));
-		}
+		update_receiver_mode_from_json(j, *rx);
+		update_receiver_noise_and_flags_from_json(j, *rx);
+		update_receiver_antenna_from_json(j, *rx, world);
+		update_receiver_timing_from_json(j, *rx, world);
+		update_receiver_schedule_from_json(j, *rx);
 		if (j.contains("fmcw_mode"))
 		{
 			parse_receiver_dechirp_config(j, *rx, "Receiver '" + rx->getName() + "'");
@@ -1994,8 +2106,7 @@ namespace serial
 		world.resolveReceiverDechirpReferences();
 	}
 
-	void update_monostatic_from_json(const nlohmann::json& j, radar::Transmitter* tx, radar::Receiver* rx,
-									 core::World& world, std::mt19937& masterSeeder)
+	nlohmann::json monostatic_transmitter_json(const nlohmann::json& j)
 	{
 		auto transmitter_json = j;
 		if (transmitter_json.contains("fmcw_mode") && transmitter_json.at("fmcw_mode").is_object())
@@ -2006,76 +2117,76 @@ namespace serial
 			transmitter_json["fmcw_mode"].erase("if_filter_bandwidth");
 			transmitter_json["fmcw_mode"].erase("if_filter_transition_width");
 		}
-		update_transmitter_from_json(transmitter_json, tx, world, masterSeeder);
+		return transmitter_json;
+	}
 
+	void update_monostatic_receiver_basics(const nlohmann::json& j, const radar::Transmitter& tx, radar::Receiver& rx,
+										   core::World& world)
+	{
 		if (j.contains("name"))
-			rx->setName(j.at("name").get<std::string>());
-		rx->setMode(tx->getMode());
-		if (rx->getMode() == radar::OperationMode::PULSED_MODE && j.contains("pulsed_mode"))
+			rx.setName(j.at("name").get<std::string>());
+		rx.setMode(tx.getMode());
+		if (rx.getMode() == radar::OperationMode::PULSED_MODE && j.contains("pulsed_mode"))
 		{
 			const auto& mode_json = j.at("pulsed_mode");
-			rx->setWindowProperties(mode_json.value("window_length", 0.0), tx->getPrf(),
-									mode_json.value("window_skip", 0.0));
+			rx.setWindowProperties(mode_json.value("window_length", 0.0), tx.getPrf(),
+								   mode_json.value("window_skip", 0.0));
 		}
-		if (j.contains("noise_temp"))
-			rx->setNoiseTemperature(j.value("noise_temp", 0.0));
-		if (j.contains("nodirect"))
-		{
-			if (j.value("nodirect", false))
-				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-			else
-				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-		}
-		if (j.contains("nopropagationloss"))
-		{
-			if (j.value("nopropagationloss", false))
-				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-			else
-				rx->clearFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-		}
+		update_receiver_noise_and_flags_from_json(j, rx);
 		if (j.contains("antenna"))
-			rx->setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Monostatic")));
-		if (j.contains("timing"))
 		{
-			auto timing_id = parse_json_id(j, "timing", "Monostatic");
-			if (auto* const timing_proto = world.findTiming(timing_id))
-			{
-				unsigned const seed = rx->getTiming() ? rx->getTiming()->getSeed() : 0;
-				auto shared_timing =
-					std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
-				shared_timing->initializeModel(timing_proto);
-				tx->setTiming(shared_timing);
-				rx->setTiming(shared_timing);
-			}
-			else
-			{
-				throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
-			}
+			rx.setAntenna(world.findAntenna(parse_json_id(j, "antenna", "Monostatic")));
 		}
-		if (j.contains("schedule"))
+	}
+
+	void update_monostatic_timing_from_json(const nlohmann::json& j, radar::Transmitter& tx, radar::Receiver& rx,
+											core::World& world)
+	{
+		if (!j.contains("timing"))
 		{
-			auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
-			RealType pri = 0.0;
-			if (tx->getMode() == radar::OperationMode::PULSED_MODE)
-				pri = 1.0 / tx->getPrf();
-			auto processed_schedule = radar::processRawSchedule(
-				std::move(raw), tx->getName(), tx->getMode() == radar::OperationMode::PULSED_MODE, pri);
-			if (tx->getSignal() != nullptr && tx->getSignal()->isFmcwFamily())
-			{
-				validate_fmcw_schedule(processed_schedule, *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
-			}
-			tx->setSchedule(processed_schedule);
-			rx->setSchedule(processed_schedule);
+			return;
 		}
-		if (tx->getSignal() != nullptr)
+		auto timing_id = parse_json_id(j, "timing", "Monostatic");
+		auto* const timing_proto = world.findTiming(timing_id);
+		if (timing_proto == nullptr)
 		{
-			validate_fmcw_waveform(*tx->getSignal(), "Waveform '" + tx->getSignal()->getName() + "'");
-			validate_waveform_mode_match(*tx->getSignal(), tx->getMode(), "Monostatic '" + tx->getName() + "'");
-			if (tx->getSignal()->isFmcwFamily())
-			{
-				validate_fmcw_schedule(tx->getSchedule(), *tx->getSignal(), "Monostatic '" + tx->getName() + "'");
-			}
+			throw std::runtime_error("Timing ID " + std::to_string(timing_id) + " not found.");
 		}
+		unsigned const seed = rx.getTiming() ? rx.getTiming()->getSeed() : 0;
+		auto shared_timing = std::make_shared<timing::Timing>(timing_proto->getName(), seed, timing_proto->getId());
+		shared_timing->initializeModel(timing_proto);
+		tx.setTiming(shared_timing);
+		rx.setTiming(shared_timing);
+	}
+
+	void update_monostatic_schedule_from_json(const nlohmann::json& j, radar::Transmitter& tx, radar::Receiver& rx)
+	{
+		if (!j.contains("schedule"))
+		{
+			return;
+		}
+		auto raw = j.at("schedule").get<std::vector<radar::SchedulePeriod>>();
+		const bool pulsed = tx.getMode() == radar::OperationMode::PULSED_MODE;
+		const RealType pri = pulsed ? 1.0 / tx.getPrf() : 0.0;
+		auto processed_schedule = radar::processRawSchedule(raw, tx.getName(), pulsed, pri);
+		if (tx.getSignal() != nullptr && tx.getSignal()->isFmcwFamily())
+		{
+			validate_fmcw_schedule(processed_schedule, *tx.getSignal(), "Monostatic '" + tx.getName() + "'");
+		}
+		tx.setSchedule(processed_schedule);
+		rx.setSchedule(processed_schedule);
+	}
+
+	void update_monostatic_from_json(const nlohmann::json& j, radar::Transmitter* tx, radar::Receiver* rx,
+									 core::World& world, std::mt19937& masterSeeder)
+	{
+		auto transmitter_json = monostatic_transmitter_json(j);
+		update_transmitter_from_json(transmitter_json, tx, world, masterSeeder);
+
+		update_monostatic_receiver_basics(j, *tx, *rx, world);
+		update_monostatic_timing_from_json(j, *tx, *rx, world);
+		update_monostatic_schedule_from_json(j, *tx, *rx);
+		validate_transmitter_signal_state(*tx, "Monostatic '" + tx->getName() + "'");
 		if (j.contains("fmcw_mode"))
 		{
 			parse_receiver_dechirp_config(j, *rx, "Monostatic '" + tx->getName() + "'");

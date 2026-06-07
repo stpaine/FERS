@@ -276,17 +276,11 @@ SystemHeaders: false
 
 CheckOptions:
     # ── readability-function-cognitive-complexity ──────────────────────────────
-    # Default is 25 — every radar/DSP function trips it. 50 is the right ceiling
-    # for a simulation codebase. Functions that exceed it are candidates for
-    # decomposition, not blanket suppression.
-    readability-function-cognitive-complexity.Threshold: 50
+    readability-function-cognitive-complexity.Threshold: 25
     readability-function-cognitive-complexity.DescribeBasicIncrements: true
     readability-function-cognitive-complexity.IgnoreMacros: false
 
     # ── readability-function-size ─────────────────────────────────────────────
-    # 150 lines is firm. Signal-processing kernels approach this naturally; the
-    # limit prevents gradual bloat. NestingThreshold: 6 catches deeply nested
-    # state machines that are better modelled as tables or sub-functions.
     readability-function-size.LineThreshold: 150
     readability-function-size.StatementThreshold: 150
     readability-function-size.BranchThreshold: 20

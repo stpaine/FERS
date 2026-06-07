@@ -77,66 +77,95 @@ namespace
 
 	// Smart recursive JSON comparator that handles floating point drift
 	// and prints the exact path of the failure.
-	bool compareJson(const json& a, const json& b, const std::string& path = "")
+	bool compareJson(const json& a, const json& b, const std::string& path = "");
+
+	void reportMissingObjectKeys(const json& a, const json& b, const std::string& path)
+	{
+		for (const auto& [k, v] : a.items())
+		{
+			if (!b.contains(k))
+			{
+				UNSCOPED_INFO("Key missing in B: " << path << "/" << k);
+			}
+		}
+		for (const auto& [k, v] : b.items())
+		{
+			if (!a.contains(k))
+			{
+				UNSCOPED_INFO("Key missing in A: " << path << "/" << k);
+			}
+		}
+	}
+
+	bool compareJsonObject(const json& a, const json& b, const std::string& path)
+	{
+		if (a.size() != b.size())
+		{
+			UNSCOPED_INFO("Object size mismatch at " << path << ": " << a.size() << " vs " << b.size());
+			reportMissingObjectKeys(a, b, path);
+			return false;
+		}
+		for (const auto& [key, val] : a.items())
+		{
+			std::string child_path = path;
+			child_path += '/';
+			child_path += key;
+			if (!compareJson(val, b[key], child_path))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool compareJsonArray(const json& a, const json& b, const std::string& path)
+	{
+		if (a.size() != b.size())
+		{
+			UNSCOPED_INFO("Array size mismatch at " << path << ": " << a.size() << " vs " << b.size());
+			return false;
+		}
+		for (size_t i = 0; i < a.size(); ++i)
+		{
+			if (!compareJson(a[i], b[i], path + "[" + std::to_string(i) + "]"))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool compareJsonFloat(const json& a, const json& b, const std::string& path)
+	{
+		const double va = a.get<double>();
+		const double vb = b.get<double>();
+		// Allow a small epsilon for float serialization round-tripping
+		if (std::abs(va - vb) > 1e-5 && std::abs(va - vb) / std::max(std::abs(va), std::abs(vb)) > 1e-5)
+		{
+			UNSCOPED_INFO("Float mismatch at " << path << ": " << va << " vs " << vb);
+			return false;
+		}
+		return true;
+	}
+
+	bool compareJson(const json& a, const json& b, const std::string& path)
 	{
 		if (a.type() != b.type())
 		{
 			UNSCOPED_INFO("Type mismatch at " << path << ": " << a.type_name() << " vs " << b.type_name());
 			return false;
 		}
-
 		if (a.is_object())
 		{
-			if (a.size() != b.size())
-			{
-				UNSCOPED_INFO("Object size mismatch at " << path << ": " << a.size() << " vs " << b.size());
-				for (const auto& [k, v] : a.items())
-				{
-					if (!b.contains(k))
-						UNSCOPED_INFO("Key missing in B: " << path << "/" << k);
-				}
-				for (const auto& [k, v] : b.items())
-				{
-					if (!a.contains(k))
-						UNSCOPED_INFO("Key missing in A: " << path << "/" << k);
-				}
-				return false;
-			}
-			for (const auto& [key, val] : a.items())
-			{
-				std::string child_path = path;
-				child_path += '/';
-				child_path += key;
-				if (!compareJson(val, b[key], child_path))
-					return false;
-			}
-			return true;
+			return compareJsonObject(a, b, path);
 		}
 		if (a.is_array())
 		{
-			if (a.size() != b.size())
-			{
-				UNSCOPED_INFO("Array size mismatch at " << path << ": " << a.size() << " vs " << b.size());
-				return false;
-			}
-			for (size_t i = 0; i < a.size(); ++i)
-			{
-				if (!compareJson(a[i], b[i], path + "[" + std::to_string(i) + "]"))
-					return false;
-			}
-			return true;
+			return compareJsonArray(a, b, path);
 		}
 		if (a.is_number_float())
 		{
-			const double va = a.get<double>();
-			const double vb = b.get<double>();
-			// Allow a small epsilon for float serialization round-tripping
-			if (std::abs(va - vb) > 1e-5 && std::abs(va - vb) / std::max(std::abs(va), std::abs(vb)) > 1e-5)
-			{
-				UNSCOPED_INFO("Float mismatch at " << path << ": " << va << " vs " << vb);
-				return false;
-			}
-			return true;
+			return compareJsonFloat(a, b, path);
 		}
 
 		if (a != b)

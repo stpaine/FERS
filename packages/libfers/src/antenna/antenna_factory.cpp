@@ -69,6 +69,14 @@ namespace
 		std::size_t sample_count{}; ///< Number of parsed samples.
 	};
 
+	struct AxisSampleStats
+	{
+		RealType min_angle{std::numeric_limits<RealType>::max()};
+		RealType max_angle{std::numeric_limits<RealType>::lowest()};
+		RealType max_gain{};
+		std::size_t sample_count{};
+	};
+
 	/// Returns a lowercase copy of a string.
 	std::string toLowerCopy(std::string value)
 	{
@@ -212,6 +220,78 @@ namespace
 	 */
 	RealType j1C(const RealType x) noexcept { return x == 0 ? 1.0 : core::besselJ1(x) / x; }
 
+	void loadAntennaGainSample(const interp::InterpSet* set, const AxisMetadata& metadata, const std::string& axis_name,
+							   const XmlElement& sample, AxisSampleStats& stats)
+	{
+		XmlElement const angle_element = sample.childElement("angle", 0);
+		XmlElement const gain_element = sample.childElement("gain", 0);
+		if (!angle_element.isValid() || !gain_element.isValid())
+		{
+			if (sample.name() == "gainsample")
+			{
+				throw std::runtime_error("Each <gainsample> in <" + axis_name + "> must contain <angle> and <gain>.");
+			}
+			return;
+		}
+
+		const RealType raw_angle = parseRealValue(angle_element.getText(), "<" + axis_name + "> sample angle");
+		const RealType raw_gain = parseRealValue(gain_element.getText(), "<" + axis_name + "> sample gain");
+		const RealType angle = metadata.unit == AxisUnit::Degrees ? raw_angle * (PI / 180.0) : raw_angle;
+		const RealType gain = metadata.format == AxisGainFormat::DBi ? std::pow(10.0, raw_gain / 10.0) : raw_gain;
+
+		if (!std::isfinite(angle))
+		{
+			throw std::runtime_error("Converted <" + axis_name + "> sample angle is non-finite.");
+		}
+		if (!std::isfinite(gain))
+		{
+			throw std::runtime_error("Converted <" + axis_name + "> sample gain is non-finite.");
+		}
+		if (gain < 0.0)
+		{
+			throw std::runtime_error("Converted <" + axis_name + "> sample gain must be non-negative.");
+		}
+
+		set->insertSample(angle, gain);
+		stats.min_angle = std::min(stats.min_angle, angle);
+		stats.max_angle = std::max(stats.max_angle, angle);
+		stats.max_gain = std::max(stats.max_gain, gain);
+		++stats.sample_count;
+	}
+
+	void validateAxisSymmetry(const AxisMetadata& metadata, AxisLoadResult& result, const std::string& axis_name,
+							  const RealType min_angle, const RealType max_angle)
+	{
+		const bool spans_zero = min_angle < 0.0 && max_angle > 0.0;
+
+		if (metadata.symmetry_explicit)
+		{
+			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Mirrored && min_angle < 0.0)
+			{
+				throw std::runtime_error("XML antenna <" + axis_name +
+										 "> axis uses symmetry='mirrored' but defines negative sample angles.");
+			}
+			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::None && !spans_zero)
+			{
+				throw std::runtime_error(
+					"XML antenna <" + axis_name +
+					"> axis uses symmetry='none' but does not span both negative and positive angles.");
+			}
+			return;
+		}
+
+		if (min_angle < 0.0)
+		{
+			if (!spans_zero)
+			{
+				throw std::runtime_error("XML antenna <" + axis_name +
+										 "> axis contains negative sample angles but does not span both sides of zero "
+										 "for direct signed-angle lookup.");
+			}
+			result.symmetry = antenna::XmlAntenna::AxisSymmetry::None;
+		}
+	}
+
 	/**
 	 * @brief Load antenna gain axis data from an XML element.
 	 *
@@ -233,81 +313,19 @@ namespace
 			throw std::runtime_error("XML antenna <" + axis_name + "> axis must contain at least one <gainsample>.");
 		}
 
-		RealType min_angle = std::numeric_limits<RealType>::max();
-		RealType max_angle = std::numeric_limits<RealType>::lowest();
-		RealType max_gain = 0.0;
-		std::size_t sample_count = 0;
+		AxisSampleStats stats;
 
 		while (sample.isValid())
 		{
-			XmlElement const angle_element = sample.childElement("angle", 0);
-
-			if (XmlElement const gain_element = sample.childElement("gain", 0);
-				angle_element.isValid() && gain_element.isValid())
-			{
-				const RealType raw_angle = parseRealValue(angle_element.getText(), "<" + axis_name + "> sample angle");
-				const RealType raw_gain = parseRealValue(gain_element.getText(), "<" + axis_name + "> sample gain");
-				const RealType angle = metadata.unit == AxisUnit::Degrees ? raw_angle * (PI / 180.0) : raw_angle;
-				const RealType gain =
-					metadata.format == AxisGainFormat::DBi ? std::pow(10.0, raw_gain / 10.0) : raw_gain;
-
-				if (!std::isfinite(angle))
-				{
-					throw std::runtime_error("Converted <" + axis_name + "> sample angle is non-finite.");
-				}
-				if (!std::isfinite(gain))
-				{
-					throw std::runtime_error("Converted <" + axis_name + "> sample gain is non-finite.");
-				}
-				if (gain < 0.0)
-				{
-					throw std::runtime_error("Converted <" + axis_name + "> sample gain must be non-negative.");
-				}
-
-				set->insertSample(angle, gain);
-				min_angle = std::min(min_angle, angle);
-				max_angle = std::max(max_angle, angle);
-				max_gain = std::max(max_gain, gain);
-				++sample_count;
-			}
-			else if (sample.name() == "gainsample")
-			{
-				throw std::runtime_error("Each <gainsample> in <" + axis_name + "> must contain <angle> and <gain>.");
-			}
-
+			loadAntennaGainSample(set, metadata, axis_name, sample, stats);
 			sample = XmlElement(sample.getNode()->next);
 		}
 
 		AxisLoadResult result;
-		result.max_gain = max_gain;
+		result.max_gain = stats.max_gain;
 		result.symmetry = metadata.symmetry;
-		result.sample_count = sample_count;
-		const bool spans_zero = min_angle < 0.0 && max_angle > 0.0;
-
-		if (metadata.symmetry_explicit)
-		{
-			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::Mirrored && min_angle < 0.0)
-			{
-				throw std::runtime_error("XML antenna <" + axis_name +
-										 "> axis uses symmetry='mirrored' but defines negative sample angles.");
-			}
-			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::None && !spans_zero)
-			{
-				throw std::runtime_error(
-					"XML antenna <" + axis_name +
-					"> axis uses symmetry='none' but does not span both negative and positive angles.");
-			}
-		}
-		else if (min_angle < 0.0)
-		{
-			if (!spans_zero)
-			{
-				throw std::runtime_error("XML antenna <" + axis_name +
-										 "> axis contains negative sample angles but does not span both sides of zero "
-										 "for direct signed-angle lookup.");
-			}
-			result.symmetry = antenna::XmlAntenna::AxisSymmetry::None;
-		}
+		result.sample_count = stats.sample_count;
+		validateAxisSymmetry(metadata, result, axis_name, stats.min_angle, stats.max_angle);
 
 		const char* unit_source = metadata.unit_explicit ? "explicit" : "legacy default";
 		const char* format_source = metadata.format_explicit ? "explicit" : "legacy default";

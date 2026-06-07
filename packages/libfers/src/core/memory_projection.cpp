@@ -337,6 +337,50 @@ namespace core
 		return timings;
 	}
 
+	void addStreamingReceiverProjection(SimulationMemoryProjection& projection, const radar::Receiver& receiver,
+										const bool sample_count_overflowed)
+	{
+		++projection.streaming_receiver_count;
+		bool if_count_overflowed = false;
+		const auto if_sample_rate = receiver.getIfSampleRate();
+		const bool if_rate_dechirped = receiver.isDechirpEnabled() && if_sample_rate.has_value();
+		const auto if_sample_count = if_rate_dechirped
+			? countSamplesForDuration(projection.duration_seconds, if_sample_rate.value_or(0.0), if_count_overflowed)
+			: std::uint64_t{0};
+		const auto rendered_samples = if_rate_dechirped
+			? if_sample_count
+			: (receiver.isDechirpEnabled() ? projection.streaming_sample_count
+										   : downsampledSampleCount(projection.streaming_sample_count));
+		projection.rendered_hdf5_sample_count =
+			addBytes({.bytes = projection.rendered_hdf5_sample_count},
+					 {.bytes = rendered_samples, .overflowed = sample_count_overflowed || if_count_overflowed})
+				.bytes;
+		const auto resident_samples = if_rate_dechirped ? if_sample_count : projection.streaming_sample_count;
+		projection.streaming_iq_buffers =
+			addBytes(projection.streaming_iq_buffers,
+					 multiplyBytes(resident_samples, static_cast<std::uint64_t>(sizeof(ComplexType)),
+								   sample_count_overflowed || if_count_overflowed));
+	}
+
+	void addPulsedReceiverProjection(SimulationMemoryProjection& projection, const radar::Receiver& receiver)
+	{
+		++projection.pulsed_receiver_count;
+		bool window_count_overflowed = false;
+		const auto windows = countPulsedWindows(receiver, window_count_overflowed);
+		projection.pulsed_window_count = addBytes({.bytes = projection.pulsed_window_count},
+												  {.bytes = windows, .overflowed = window_count_overflowed})
+											 .bytes;
+
+		bool pulsed_sample_count_overflowed = false;
+		const auto raw_window_samples = countSamplesForDuration(
+			receiver.getWindowLength(), projection.simulation_sample_rate_hz, pulsed_sample_count_overflowed);
+		const auto rendered_window_samples = downsampledSampleCount(raw_window_samples);
+		const auto rendered_samples =
+			multiplyBytes(windows, rendered_window_samples, window_count_overflowed || pulsed_sample_count_overflowed);
+		projection.rendered_hdf5_sample_count =
+			addBytes({.bytes = projection.rendered_hdf5_sample_count}, rendered_samples).bytes;
+	}
+
 	SimulationMemoryProjection projectSimulationMemory(const World& world)
 	{
 		SimulationMemoryProjection projection{};
@@ -382,47 +426,13 @@ namespace core
 			const auto& receiver = *receiver_ptr;
 			if (isStreamingReceiver(receiver))
 			{
-				++projection.streaming_receiver_count;
-				bool if_count_overflowed = false;
-				const auto if_sample_rate = receiver.getIfSampleRate();
-				const bool if_rate_dechirped = receiver.isDechirpEnabled() && if_sample_rate.has_value();
-				const auto if_sample_count = if_rate_dechirped
-					? countSamplesForDuration(projection.duration_seconds, if_sample_rate.value_or(0.0),
-											  if_count_overflowed)
-					: std::uint64_t{0};
-				const auto rendered_samples = if_rate_dechirped
-					? if_sample_count
-					: (receiver.isDechirpEnabled() ? projection.streaming_sample_count
-												   : downsampledSampleCount(projection.streaming_sample_count));
-				projection.rendered_hdf5_sample_count =
-					addBytes({.bytes = projection.rendered_hdf5_sample_count},
-							 {.bytes = rendered_samples, .overflowed = sample_count_overflowed || if_count_overflowed})
-						.bytes;
-				const auto resident_samples = if_rate_dechirped ? if_sample_count : projection.streaming_sample_count;
-				projection.streaming_iq_buffers =
-					addBytes(projection.streaming_iq_buffers,
-							 multiplyBytes(resident_samples, static_cast<std::uint64_t>(sizeof(ComplexType)),
-										   sample_count_overflowed || if_count_overflowed));
+				addStreamingReceiverProjection(projection, receiver, sample_count_overflowed);
 				continue;
 			}
 
 			if (receiver.getMode() == OperationMode::PULSED_MODE)
 			{
-				++projection.pulsed_receiver_count;
-				bool window_count_overflowed = false;
-				const auto windows = countPulsedWindows(receiver, window_count_overflowed);
-				projection.pulsed_window_count = addBytes({.bytes = projection.pulsed_window_count},
-														  {.bytes = windows, .overflowed = window_count_overflowed})
-													 .bytes;
-
-				bool pulsed_sample_count_overflowed = false;
-				const auto raw_window_samples = countSamplesForDuration(
-					receiver.getWindowLength(), projection.simulation_sample_rate_hz, pulsed_sample_count_overflowed);
-				const auto rendered_window_samples = downsampledSampleCount(raw_window_samples);
-				const auto rendered_samples = multiplyBytes(windows, rendered_window_samples,
-															window_count_overflowed || pulsed_sample_count_overflowed);
-				projection.rendered_hdf5_sample_count =
-					addBytes({.bytes = projection.rendered_hdf5_sample_count}, rendered_samples).bytes;
+				addPulsedReceiverProjection(projection, receiver);
 			}
 		}
 

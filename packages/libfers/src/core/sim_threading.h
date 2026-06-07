@@ -223,6 +223,12 @@ namespace core
 		/// Builds and attaches IF resampling sinks for configured FMCW receivers.
 		void initializeFmcwIfResamplers();
 
+		/// Builds and attaches one receiver IF resampler when configured.
+		void initializeFmcwIfResampler(std::size_t receiver_index);
+
+		/// Extends resolved dechirp source spans to cover IF resampler over-render.
+		void extendDechirpSourcesForIfOverrender();
+
 		/// Flushes all pending high-rate samples buffered for IF resamplers.
 		void flushFmcwIfBlocks();
 
@@ -283,6 +289,12 @@ namespace core
 		/// Adds pulsed interference into a live streaming block before final noise/scaling.
 		void applyPulsedInterferenceToStreamingBlock(std::size_t receiver_index, std::span<ComplexType> block,
 													 RealType block_start_time, RealType sample_rate, bool dechirp_mix);
+
+		/// Adds one rendered pulsed-interference slice into a streaming block.
+		void addPulsedInterferenceSamples(std::span<ComplexType> block, std::span<const ComplexType> rendered_pulse,
+										  long long dest_begin, long long dest_end, std::size_t crop_offset,
+										  RealType block_start_time, RealType sample_rate, bool dechirp_mix,
+										  radar::Receiver* receiver, ReceiverTrackerCache& tracker_cache) const;
 
 		/// Emits summary logs for streaming receiver configuration.
 		void logStreamingSummaries() const;

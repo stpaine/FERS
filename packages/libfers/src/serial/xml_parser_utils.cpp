@@ -111,57 +111,28 @@ namespace serial::xml_parser_utils
 			return value;
 		}
 
-		/// Parses receiver-side dechirp settings from an FMCW mode block.
-		void parse_receiver_dechirp_config(const XmlElement& parent, radar::Receiver& receiver,
-										   const std::string& owner)
+		bool has_if_chain_fields(const radar::Receiver::FmcwIfChainRequest& if_chain) noexcept
 		{
-			if (receiver.getMode() != radar::OperationMode::FMCW_MODE)
-			{
-				receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
-				return;
-			}
+			return if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
+				if_chain.filter_transition_width_hz.has_value();
+		}
 
-			const XmlElement fmcw_mode = parent.childElement("fmcw_mode", 0);
-			if (!fmcw_mode.isValid())
+		void reject_disabled_dechirp_fields(const XmlElement& ref_element,
+											const radar::Receiver::FmcwIfChainRequest& if_chain,
+											const std::string& owner)
+		{
+			if (ref_element.isValid())
 			{
-				receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
-				return;
+				throw XmlException(owner + " declares <dechirp_reference> while dechirp_mode is 'none'.");
 			}
-
-			radar::Receiver::DechirpMode mode = radar::Receiver::DechirpMode::None;
-			if (const auto mode_attr = XmlElement::getOptionalAttribute(fmcw_mode, "dechirp_mode"))
+			if (has_if_chain_fields(if_chain))
 			{
-				try
-				{
-					mode = radar::parseDechirpModeToken(*mode_attr);
-				}
-				catch (const std::exception& e)
-				{
-					throw XmlException(owner + " has invalid dechirp_mode. " + e.what());
-				}
+				throw XmlException(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
 			}
+		}
 
-			const XmlElement ref_element = fmcw_mode.childElement("dechirp_reference", 0);
-			radar::Receiver::FmcwIfChainRequest if_chain{
-				.sample_rate_hz = parse_optional_fmcw_if_child(fmcw_mode, "if_sample_rate", owner),
-				.filter_bandwidth_hz = parse_optional_fmcw_if_child(fmcw_mode, "if_filter_bandwidth", owner),
-				.filter_transition_width_hz =
-					parse_optional_fmcw_if_child(fmcw_mode, "if_filter_transition_width", owner)};
-			if (mode == radar::Receiver::DechirpMode::None)
-			{
-				if (ref_element.isValid())
-				{
-					throw XmlException(owner + " declares <dechirp_reference> while dechirp_mode is 'none'.");
-				}
-				if (if_chain.sample_rate_hz.has_value() || if_chain.filter_bandwidth_hz.has_value() ||
-					if_chain.filter_transition_width_hz.has_value())
-				{
-					throw XmlException(owner + " declares IF-chain fields while dechirp_mode is 'none'.");
-				}
-				receiver.setDechirpMode(mode);
-				return;
-			}
-
+		void validate_if_chain_request(const radar::Receiver::FmcwIfChainRequest& if_chain, const std::string& owner)
+		{
 			if ((if_chain.filter_bandwidth_hz.has_value() || if_chain.filter_transition_width_hz.has_value()) &&
 				!if_chain.sample_rate_hz.has_value())
 			{
@@ -175,14 +146,16 @@ namespace serial::xml_parser_utils
 					throw XmlException(owner + " <if_sample_rate> must not exceed the simulation sample rate.");
 				}
 			}
-			if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value())
+			if (if_chain.sample_rate_hz.has_value() && if_chain.filter_bandwidth_hz.has_value() &&
+				*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
 			{
-				if (*if_chain.filter_bandwidth_hz >= *if_chain.sample_rate_hz / 2.0)
-				{
-					throw XmlException(owner + " <if_filter_bandwidth> must be less than half <if_sample_rate>.");
-				}
+				throw XmlException(owner + " <if_filter_bandwidth> must be less than half <if_sample_rate>.");
 			}
+		}
 
+		radar::Receiver::DechirpReference
+		parse_dechirp_reference(const XmlElement& fmcw_mode, const XmlElement& ref_element, const std::string& owner)
+		{
 			if (!ref_element.isValid())
 			{
 				throw XmlException(owner + " enables dechirping but does not declare <dechirp_reference>.");
@@ -232,6 +205,55 @@ namespace serial::xml_parser_utils
 			case radar::Receiver::DechirpReferenceSource::None:
 				throw XmlException(owner + " dechirp_reference source must be attached, transmitter, or custom.");
 			}
+
+			return reference;
+		}
+
+		/// Parses receiver-side dechirp settings from an FMCW mode block.
+		void parse_receiver_dechirp_config(const XmlElement& parent, radar::Receiver& receiver,
+										   const std::string& owner)
+		{
+			if (receiver.getMode() != radar::OperationMode::FMCW_MODE)
+			{
+				receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
+				return;
+			}
+
+			const XmlElement fmcw_mode = parent.childElement("fmcw_mode", 0);
+			if (!fmcw_mode.isValid())
+			{
+				receiver.setDechirpMode(radar::Receiver::DechirpMode::None);
+				return;
+			}
+
+			radar::Receiver::DechirpMode mode = radar::Receiver::DechirpMode::None;
+			if (const auto mode_attr = XmlElement::getOptionalAttribute(fmcw_mode, "dechirp_mode"))
+			{
+				try
+				{
+					mode = radar::parseDechirpModeToken(*mode_attr);
+				}
+				catch (const std::exception& e)
+				{
+					throw XmlException(owner + " has invalid dechirp_mode. " + e.what());
+				}
+			}
+
+			const XmlElement ref_element = fmcw_mode.childElement("dechirp_reference", 0);
+			radar::Receiver::FmcwIfChainRequest if_chain{
+				.sample_rate_hz = parse_optional_fmcw_if_child(fmcw_mode, "if_sample_rate", owner),
+				.filter_bandwidth_hz = parse_optional_fmcw_if_child(fmcw_mode, "if_filter_bandwidth", owner),
+				.filter_transition_width_hz =
+					parse_optional_fmcw_if_child(fmcw_mode, "if_filter_transition_width", owner)};
+			if (mode == radar::Receiver::DechirpMode::None)
+			{
+				reject_disabled_dechirp_fields(ref_element, if_chain, owner);
+				receiver.setDechirpMode(mode);
+				return;
+			}
+
+			validate_if_chain_request(if_chain, owner);
+			auto reference = parse_dechirp_reference(fmcw_mode, ref_element, owner);
 
 			receiver.setDechirpMode(mode);
 			receiver.setDechirpReference(std::move(reference));

@@ -122,6 +122,123 @@ namespace serial::rotation_warning_utils
 			return best;
 		}
 
+		void score_magnitude(InferenceResult& result, const RealType abs_value) noexcept
+		{
+			const RealType pi = std::numbers::pi_v<RealType>;
+			const RealType two_pi = 2.0 * pi;
+			if (abs_value > 360.0)
+			{
+				result.degree_score += 8;
+			}
+			else if (abs_value > 180.0)
+			{
+				result.degree_score += 7;
+			}
+			else if (abs_value > two_pi)
+			{
+				result.degree_score += abs_value < 10.0 ? 3 : 6;
+			}
+			else if (abs_value > pi)
+			{
+				result.degree_score += 2;
+			}
+		}
+
+		void score_common_angle_matches(InferenceResult& result, const RealType abs_value) noexcept
+		{
+			const bool degree_famous = matches_common_angle(abs_value, common_degree_angles);
+			const bool radian_famous = matches_common_angle(abs_value, common_radian_angles);
+			if (degree_famous && !radian_famous)
+			{
+				result.degree_score += 3;
+			}
+			else if (radian_famous && !degree_famous)
+			{
+				result.radian_score += 3;
+			}
+		}
+
+		void score_integer_roundness(InferenceResult& result, const RealType abs_value) noexcept
+		{
+			const RealType two_pi = 2.0 * std::numbers::pi_v<RealType>;
+			if (is_near_integer(abs_value))
+			{
+				const RealType rounded = std::round(abs_value);
+				if ((std::fmod(rounded, 45.0) == 0.0) || (std::fmod(rounded, 30.0) == 0.0) ||
+					(std::fmod(rounded, 15.0) == 0.0) || (std::fmod(rounded, 10.0) == 0.0) ||
+					(std::fmod(rounded, 5.0) == 0.0))
+				{
+					result.degree_score += 2;
+				}
+				else
+				{
+					result.degree_score += 1;
+				}
+			}
+			else if ((abs_value <= two_pi + 1.0) && !is_near_tenth(abs_value))
+			{
+				result.radian_score += 1;
+			}
+		}
+
+		void score_pi_ratio(InferenceResult& result, const RealType abs_value) noexcept
+		{
+			if (matches_simple_pi_ratio(abs_value))
+			{
+				result.radian_score += 3;
+			}
+		}
+
+		void score_trig_cleanliness(InferenceResult& result, const RealType value, const RealType abs_value,
+									const ValueKind kind) noexcept
+		{
+			const RealType pi = std::numbers::pi_v<RealType>;
+			const RealType two_pi = 2.0 * pi;
+			if ((kind != ValueKind::Angle) || (abs_value > two_pi + 0.5) ||
+				(std::abs(result.degree_score - result.radian_score) > 1))
+			{
+				return;
+			}
+
+			const RealType degree_distance = best_clean_trig_distance(value * pi / 180.0);
+			const RealType radian_distance = best_clean_trig_distance(value);
+			if (degree_distance + 1e-4 < radian_distance)
+			{
+				++result.degree_score;
+			}
+			else if (radian_distance + 1e-4 < degree_distance)
+			{
+				++result.radian_score;
+			}
+		}
+
+		void assign_inference_confidence(InferenceResult& result) noexcept
+		{
+			if (result.degree_score == result.radian_score)
+			{
+				result.confidence = Confidence::None;
+				return;
+			}
+
+			result.inferred_unit = result.degree_score > result.radian_score ? params::RotationAngleUnit::Degrees
+																			 : params::RotationAngleUnit::Radians;
+			const int lead = std::abs(result.degree_score - result.radian_score);
+			const int max_score = std::max(result.degree_score, result.radian_score);
+
+			if ((lead >= 5) || ((max_score >= 7) && (lead >= 3)))
+			{
+				result.confidence = Confidence::High;
+			}
+			else if ((lead >= 3) || ((max_score >= 5) && (lead >= 2)))
+			{
+				result.confidence = Confidence::Medium;
+			}
+			else if ((lead >= 2) || (max_score >= 4))
+			{
+				result.confidence = Confidence::Low;
+			}
+		}
+
 		/// Returns the external token for a rotation angle unit.
 		[[nodiscard]] std::string unit_token(const params::RotationAngleUnit unit)
 		{
@@ -149,8 +266,6 @@ namespace serial::rotation_warning_utils
 	InferenceResult infer_unit_from_value(const RealType value, const ValueKind kind) noexcept
 	{
 		const RealType abs_value = std::abs(value);
-		const RealType pi = std::numbers::pi_v<RealType>;
-		const RealType two_pi = 2.0 * pi;
 
 		InferenceResult result;
 		if (abs_value <= kEpsilon)
@@ -158,96 +273,12 @@ namespace serial::rotation_warning_utils
 			return result;
 		}
 
-		if (abs_value > 360.0)
-		{
-			result.degree_score += 8;
-		}
-		else if (abs_value > 180.0)
-		{
-			result.degree_score += 7;
-		}
-		else if (abs_value > two_pi)
-		{
-			result.degree_score += abs_value < 10.0 ? 3 : 6;
-		}
-		else if (abs_value > pi)
-		{
-			result.degree_score += 2;
-		}
-
-		const bool degree_famous = matches_common_angle(abs_value, common_degree_angles);
-		const bool radian_famous = matches_common_angle(abs_value, common_radian_angles);
-		if (degree_famous && !radian_famous)
-		{
-			result.degree_score += 3;
-		}
-		else if (radian_famous && !degree_famous)
-		{
-			result.radian_score += 3;
-		}
-
-		if (is_near_integer(abs_value))
-		{
-			const RealType rounded = std::round(abs_value);
-			if ((std::fmod(rounded, 45.0) == 0.0) || (std::fmod(rounded, 30.0) == 0.0) ||
-				(std::fmod(rounded, 15.0) == 0.0) || (std::fmod(rounded, 10.0) == 0.0) ||
-				(std::fmod(rounded, 5.0) == 0.0))
-			{
-				result.degree_score += 2;
-			}
-			else
-			{
-				result.degree_score += 1;
-			}
-		}
-		else if ((abs_value <= two_pi + 1.0) && !is_near_tenth(abs_value))
-		{
-			result.radian_score += 1;
-		}
-
-		if (matches_simple_pi_ratio(abs_value))
-		{
-			result.radian_score += 3;
-		}
-
-		if ((kind == ValueKind::Angle) && (abs_value <= two_pi + 0.5) &&
-			(std::abs(result.degree_score - result.radian_score) <= 1))
-		{
-			const RealType degree_distance = best_clean_trig_distance(value * pi / 180.0);
-			const RealType radian_distance = best_clean_trig_distance(value);
-			if (degree_distance + 1e-4 < radian_distance)
-			{
-				++result.degree_score;
-			}
-			else if (radian_distance + 1e-4 < degree_distance)
-			{
-				++result.radian_score;
-			}
-		}
-
-		if (result.degree_score == result.radian_score)
-		{
-			result.confidence = Confidence::None;
-			return result;
-		}
-
-		result.inferred_unit = result.degree_score > result.radian_score ? params::RotationAngleUnit::Degrees
-																		 : params::RotationAngleUnit::Radians;
-		const int lead = std::abs(result.degree_score - result.radian_score);
-		const int max_score = std::max(result.degree_score, result.radian_score);
-
-		if ((lead >= 5) || ((max_score >= 7) && (lead >= 3)))
-		{
-			result.confidence = Confidence::High;
-		}
-		else if ((lead >= 3) || ((max_score >= 5) && (lead >= 2)))
-		{
-			result.confidence = Confidence::Medium;
-		}
-		else if ((lead >= 2) || (max_score >= 4))
-		{
-			result.confidence = Confidence::Low;
-		}
+		score_magnitude(result, abs_value);
+		score_common_angle_matches(result, abs_value);
+		score_integer_roundness(result, abs_value);
+		score_pi_ratio(result, abs_value);
+		score_trig_cleanliness(result, value, abs_value, kind);
+		assign_inference_confidence(result);
 
 		return result;
 	}

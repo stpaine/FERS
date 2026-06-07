@@ -40,6 +40,73 @@ using timing::PrototypeTiming;
 
 namespace core
 {
+	namespace
+	{
+		std::vector<ActiveStreamingSource> transmitterDechirpSources(const Transmitter* const tx)
+		{
+			std::vector<ActiveStreamingSource> sources;
+			if (tx->getSchedule().empty())
+			{
+				auto source = makeActiveSource(tx, params::startTime(), params::endTime());
+				if (source.segment_start < source.segment_end)
+				{
+					sources.push_back(source);
+				}
+				return sources;
+			}
+
+			for (const auto& period : tx->getSchedule())
+			{
+				auto source = makeActiveSource(tx, period.start, std::min(params::endTime(), period.end));
+				if (source.segment_start < source.segment_end && source.segment_end > params::startTime())
+				{
+					sources.push_back(source);
+				}
+			}
+			return sources;
+		}
+
+		std::vector<ActiveStreamingSource> waveformDechirpSources(const RadarSignal* const waveform,
+																  const Receiver* const rx)
+		{
+			std::vector<ActiveStreamingSource> sources;
+			if (rx->getSchedule().empty())
+			{
+				auto source = makeActiveSourceFromWaveform(waveform, params::startTime(), params::endTime());
+				if (source.segment_start < source.segment_end)
+				{
+					sources.push_back(source);
+				}
+				return sources;
+			}
+
+			for (const auto& period : rx->getSchedule())
+			{
+				auto source =
+					makeActiveSourceFromWaveform(waveform, period.start, std::min(params::endTime(), period.end));
+				if (source.segment_start < source.segment_end && source.segment_end > params::startTime())
+				{
+					sources.push_back(source);
+				}
+			}
+			return sources;
+		}
+
+		void validateDechirpTransmitter(const Transmitter* const tx, const std::string& owner)
+		{
+			if (tx == nullptr)
+			{
+				throw std::runtime_error(owner + " references a missing dechirp transmitter.");
+			}
+			if (tx->getMode() != radar::OperationMode::FMCW_MODE || tx->getSignal() == nullptr ||
+				!tx->getSignal()->isFmcwFamily())
+			{
+				throw std::runtime_error(owner + " dechirp reference transmitter '" + tx->getName() +
+										 "' must be an FMCW transmitter with an FMCW waveform.");
+			}
+		}
+	}
+
 	void World::add(std::unique_ptr<Platform> plat) noexcept { _platforms.push_back(std::move(plat)); }
 
 	void World::add(std::unique_ptr<Transmitter> trans) noexcept
@@ -484,69 +551,6 @@ namespace core
 
 	void World::resolveReceiverDechirpReferences()
 	{
-		const auto append_transmitter_sources = [](const Transmitter* const tx)
-		{
-			std::vector<ActiveStreamingSource> sources;
-			if (tx->getSchedule().empty())
-			{
-				auto source = makeActiveSource(tx, params::startTime(), params::endTime());
-				if (source.segment_start < source.segment_end)
-				{
-					sources.push_back(source);
-				}
-				return sources;
-			}
-
-			for (const auto& period : tx->getSchedule())
-			{
-				auto source = makeActiveSource(tx, period.start, std::min(params::endTime(), period.end));
-				if (source.segment_start < source.segment_end && source.segment_end > params::startTime())
-				{
-					sources.push_back(source);
-				}
-			}
-			return sources;
-		};
-
-		const auto append_waveform_sources = [](const RadarSignal* const waveform, const Receiver* const rx)
-		{
-			std::vector<ActiveStreamingSource> sources;
-			if (rx->getSchedule().empty())
-			{
-				auto source = makeActiveSourceFromWaveform(waveform, params::startTime(), params::endTime());
-				if (source.segment_start < source.segment_end)
-				{
-					sources.push_back(source);
-				}
-				return sources;
-			}
-
-			for (const auto& period : rx->getSchedule())
-			{
-				auto source =
-					makeActiveSourceFromWaveform(waveform, period.start, std::min(params::endTime(), period.end));
-				if (source.segment_start < source.segment_end && source.segment_end > params::startTime())
-				{
-					sources.push_back(source);
-				}
-			}
-			return sources;
-		};
-
-		const auto validate_transmitter = [](const Transmitter* const tx, const std::string& owner)
-		{
-			if (tx == nullptr)
-			{
-				throw std::runtime_error(owner + " references a missing dechirp transmitter.");
-			}
-			if (tx->getMode() != radar::OperationMode::FMCW_MODE || tx->getSignal() == nullptr ||
-				!tx->getSignal()->isFmcwFamily())
-			{
-				throw std::runtime_error(owner + " dechirp reference transmitter '" + tx->getName() +
-										 "' must be an FMCW transmitter with an FMCW waveform.");
-			}
-		};
-
 		for (const auto& rx_ptr : _receivers)
 		{
 			auto& rx = *rx_ptr;
@@ -568,19 +572,19 @@ namespace core
 			case Receiver::DechirpReferenceSource::Attached:
 				{
 					const auto* const tx = dynamic_cast<const Transmitter*>(rx.getAttached());
-					validate_transmitter(tx, owner);
+					validateDechirpTransmitter(tx, owner);
 					reference.transmitter_id = tx->getId();
 					reference.transmitter_name = tx->getName();
-					sources = append_transmitter_sources(tx);
+					sources = transmitterDechirpSources(tx);
 					break;
 				}
 			case Receiver::DechirpReferenceSource::Transmitter:
 				{
 					auto* const tx = findTransmitterByName(reference.name);
-					validate_transmitter(tx, owner);
+					validateDechirpTransmitter(tx, owner);
 					reference.transmitter_id = tx->getId();
 					reference.transmitter_name = tx->getName();
-					sources = append_transmitter_sources(tx);
+					sources = transmitterDechirpSources(tx);
 					break;
 				}
 			case Receiver::DechirpReferenceSource::Custom:
@@ -593,7 +597,7 @@ namespace core
 					}
 					reference.waveform_id = waveform->getId();
 					reference.waveform_name = waveform->getName();
-					sources = append_waveform_sources(waveform, &rx);
+					sources = waveformDechirpSources(waveform, &rx);
 					break;
 				}
 			case Receiver::DechirpReferenceSource::None:
