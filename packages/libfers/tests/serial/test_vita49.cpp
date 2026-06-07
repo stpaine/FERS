@@ -92,6 +92,249 @@ namespace
 		return value;
 	}
 
+	[[nodiscard]] core::ReceiverStreamDescriptor fmcwContextStreamDescriptor()
+	{
+		return core::ReceiverStreamDescriptor{.receiver_id = 0x1122334455667788ull,
+											  .receiver_name = "rx1",
+											  .mode = "fmcw",
+											  .sample_rate = 2.5e6,
+											  .reference_frequency = 9.6e9,
+											  .if_offset = -1.25e6,
+											  .bandwidth = 5.0e6,
+											  .dechirped = true,
+											  .if_resampled = false,
+											  .adc_bits = 14,
+											  .coordinate = {.frame = "UTM",
+															 .origin_latitude = -33.9,
+															 .origin_longitude = 18.4,
+															 .origin_altitude = 111.0,
+															 .utm_zone = 34,
+															 .utm_north_hemisphere = false},
+											  .initial_platform_state = {.platform_id = 0x99,
+																		 .platform_name = "rx-platform",
+																		 .position_x = 1.0,
+																		 .position_y = 2.0,
+																		 .position_z = 3.0,
+																		 .velocity_x = 4.0,
+																		 .velocity_y = 5.0,
+																		 .velocity_z = 6.0,
+																		 .azimuth = 0.25,
+																		 .elevation = -0.5},
+											  .fmcw = {.present = true,
+													   .waveform_shape = "linear",
+													   .chirp_bandwidth = 20.0e6,
+													   .chirp_duration = 1.0e-3,
+													   .chirp_period = 2.0e-3,
+													   .chirp_rate = 20.0e9,
+													   .chirp_rate_signed = -20.0e9,
+													   .sweep_direction = "down",
+													   .start_frequency_offset = 1.5e6,
+													   .chirp_count = 64,
+													   .dechirp_mode = "physical",
+													   .dechirp_reference_source = "transmitter",
+													   .dechirp_reference_transmitter_id = 0x1234,
+													   .dechirp_reference_transmitter_name = "tx-lo",
+													   .dechirp_reference_waveform_id = 0,
+													   .dechirp_reference_waveform_name = ""}};
+	}
+
+	[[nodiscard]] std::vector<std::uint8_t> serializedFmcwContextPacket()
+	{
+		using namespace serial::vita49;
+		const auto context = Vita49ContextBuilder::build(ContextBuildRequest{.stream = fmcwContextStreamDescriptor(),
+																			 .stream_id = 0x55667788u,
+																			 .simulation_name = "sim",
+																			 .adc_fullscale = 2.0,
+																			 .timestamp = Timestamp{100u, 250u},
+																			 .packet_count = 3,
+																			 .sample_loss = true,
+																			 .stream_open = true});
+		return Vita49Serializer::serializeContext(context);
+	}
+
+	void requireContextPacketHeader(const std::vector<std::uint8_t>& bytes)
+	{
+		using namespace serial::vita49;
+		REQUIRE(bytes.size() % 4u == 0u);
+		REQUIRE((readU32(bytes, 0) & 0xFFFF0000u) == 0x4A630000u);
+		REQUIRE((readU32(bytes, 0) & 0x0000FFFFu) == bytes.size() / 4u);
+		REQUIRE(readU32(bytes, 4) == 0x55667788u);
+		REQUIRE(readU64(bytes, 8) == kFersVrtIqClassId);
+		REQUIRE(readU32(bytes, 16) == 100u);
+		REQUIRE(readU64(bytes, 20) == 250u);
+		REQUIRE(readU32(bytes, 28) == kFersContextCif0);
+	}
+
+	void requireContextPacketFields(const std::vector<std::uint8_t>& bytes)
+	{
+		using namespace serial::vita49;
+		REQUIRE((readU32(bytes, 32) & TrailerSampleLoss) == TrailerSampleLoss);
+		REQUIRE(readU64(bytes, 36) == makeComplexInt16PayloadFormat());
+		REQUIRE(readF64(bytes, 44) == 2.5e6);
+		REQUIRE(readF64(bytes, 52) == 9.6e9);
+		REQUIRE(readF64(bytes, 60) == -1.25e6);
+		REQUIRE(readF64(bytes, 68) == 5.0e6);
+		REQUIRE(readF64(bytes, 76) == 2.0);
+		REQUIRE(readU64(bytes, 84) == 0x1122334455667788ull);
+	}
+
+	void requireAsciiMetadataPadding(const std::vector<std::uint8_t>& bytes, const std::size_t ascii_offset)
+	{
+		const auto null_pos = std::find(bytes.begin() + static_cast<std::ptrdiff_t>(ascii_offset), bytes.end(), 0);
+		REQUIRE(null_pos != bytes.end());
+		for (auto it = bytes.begin() + static_cast<std::ptrdiff_t>(ascii_offset); it != null_pos; ++it)
+		{
+			REQUIRE(*it <= 0x7Fu);
+		}
+		for (auto it = std::next(null_pos); it != bytes.end(); ++it)
+		{
+			REQUIRE(*it == 0u);
+		}
+	}
+
+	void requireContextReceiverMetadata(const nlohmann::json& metadata)
+	{
+		using namespace serial::vita49;
+		REQUIRE(metadata.at("schema") == "fers-vita49-context-v1");
+		REQUIRE(metadata.at("simulation_name") == "sim");
+		REQUIRE(metadata.at("receiver").at("id").get<std::uint64_t>() == 0x1122334455667788ull);
+		REQUIRE(metadata.at("receiver").at("name") == "rx1");
+		REQUIRE(metadata.at("receiver").at("mode") == "fmcw");
+		REQUIRE(metadata.at("receiver").at("adc_bits") == 14u);
+		const auto context_flags = metadata.at("receiver").at("context_flags").get<std::uint32_t>();
+		REQUIRE(
+			(context_flags &
+			 (ContextFlagDechirped | ContextFlagSampleLoss | ContextFlagStreamOpen | ContextFlagFmcwMetadataPresent)) ==
+			(ContextFlagDechirped | ContextFlagSampleLoss | ContextFlagStreamOpen | ContextFlagFmcwMetadataPresent));
+	}
+
+	void requireContextCoordinateMetadata(const nlohmann::json& metadata)
+	{
+		REQUIRE(metadata.at("coordinate_frame").at("frame") == "UTM");
+		REQUIRE(metadata.at("coordinate_frame").at("origin").at("latitude") == -33.9);
+		REQUIRE(metadata.at("coordinate_frame").at("origin").at("longitude") == 18.4);
+		REQUIRE(metadata.at("coordinate_frame").at("origin").at("altitude") == 111.0);
+		REQUIRE(metadata.at("coordinate_frame").at("utm_zone") == 34);
+		REQUIRE_FALSE(metadata.at("coordinate_frame").at("utm_north_hemisphere").get<bool>());
+	}
+
+	void requireContextPlatformMetadata(const nlohmann::json& metadata)
+	{
+		REQUIRE(metadata.at("initial_platform_state").at("platform_id") == 0x99u);
+		REQUIRE(metadata.at("initial_platform_state").at("platform_name") == "rx-platform");
+		REQUIRE(metadata.at("initial_platform_state").at("position_m").at("x") == 1.0);
+		REQUIRE(metadata.at("initial_platform_state").at("position_m").at("y") == 2.0);
+		REQUIRE(metadata.at("initial_platform_state").at("position_m").at("z") == 3.0);
+		REQUIRE(metadata.at("initial_platform_state").at("velocity_mps").at("x") == 4.0);
+		REQUIRE(metadata.at("initial_platform_state").at("velocity_mps").at("y") == 5.0);
+		REQUIRE(metadata.at("initial_platform_state").at("velocity_mps").at("z") == 6.0);
+		REQUIRE(metadata.at("initial_platform_state").at("rotation_rad").at("azimuth") == 0.25);
+		REQUIRE(metadata.at("initial_platform_state").at("rotation_rad").at("elevation") == -0.5);
+	}
+
+	void requireContextFmcwMetadata(const nlohmann::json& metadata)
+	{
+		REQUIRE(metadata.at("fmcw").at("present").get<bool>());
+		REQUIRE(metadata.at("fmcw").at("waveform_shape") == "linear");
+		REQUIRE(metadata.at("fmcw").at("sweep_direction") == "down");
+		REQUIRE(metadata.at("fmcw").at("chirp_bandwidth_hz") == 20.0e6);
+		REQUIRE(metadata.at("fmcw").at("chirp_duration_s") == 1.0e-3);
+		REQUIRE(metadata.at("fmcw").at("chirp_period_s") == 2.0e-3);
+		REQUIRE(metadata.at("fmcw").at("chirp_rate_hz_per_s") == 20.0e9);
+		REQUIRE(metadata.at("fmcw").at("chirp_rate_signed_hz_per_s") == -20.0e9);
+		REQUIRE(metadata.at("fmcw").at("start_frequency_offset_hz") == 1.5e6);
+		REQUIRE(metadata.at("fmcw").at("chirp_count") == 64u);
+		REQUIRE(metadata.at("fmcw").at("dechirp_mode") == "physical");
+		REQUIRE(metadata.at("fmcw").at("dechirp_reference_source") == "transmitter");
+		REQUIRE(metadata.at("fmcw").at("dechirp_reference_transmitter_id") == 0x1234u);
+		REQUIRE(metadata.at("fmcw").at("dechirp_reference_transmitter_name") == "tx-lo");
+		REQUIRE(metadata.at("waveform").at("kind") == "fmcw");
+		REQUIRE(metadata.at("waveform").at("metadata_ref") == "fmcw");
+	}
+
+	[[nodiscard]] core::ReceiverStreamDescriptor basicCwStreamDescriptor()
+	{
+		return core::ReceiverStreamDescriptor{.receiver_id = 77,
+											  .receiver_name = "rx",
+											  .mode = "cw",
+											  .sample_rate = 1.0,
+											  .reference_frequency = 1.0e9,
+											  .coordinate = {},
+											  .initial_platform_state = {},
+											  .fmcw = {}};
+	}
+
+	void requirePacketsFitPayload(const std::vector<serial::vita49::SerializedPacket>& packets,
+								  const std::size_t max_bytes)
+	{
+		for (const auto& packet : packets)
+		{
+			REQUIRE(packet.bytes.size() <= max_bytes);
+			REQUIRE((readU32(packet.bytes, 0) & 0x0000FFFFu) == packet.bytes.size() / 4u);
+		}
+	}
+
+	[[nodiscard]] serial::vita49::SerializedPacket testSerializedPacket(const std::uint8_t payload_byte,
+																		const std::uint64_t sample_count)
+	{
+		return serial::vita49::SerializedPacket{.bytes = {0, 0, 0, payload_byte},
+												.stream_id = 9,
+												.sample_count = sample_count,
+												.first_sample_time = 0.0,
+												.data_packet = true,
+												.timestamp = serial::vita49::Timestamp{}};
+	}
+
+	[[nodiscard]] std::future<serial::vita49::EnqueueResult>
+	enqueueAsync(serial::vita49::PacedSender& sender, const serial::vita49::SerializedPacket& packet,
+				 std::atomic_bool& enqueue_finished)
+	{
+		return std::async(std::launch::async,
+						  [&sender, packet, &enqueue_finished]
+						  {
+							  auto result = sender.enqueue(packet);
+							  enqueue_finished.store(true);
+							  return result;
+						  });
+	}
+
+	void requireLiveTelemetryStats(const core::OutputStats& final_stats,
+								   const std::vector<core::OutputStats>& stats_snapshots)
+	{
+		REQUIRE_FALSE(stats_snapshots.empty());
+		REQUIRE(final_stats.streams.size() == 1u);
+		const auto& stream_stats = final_stats.streams.front();
+		REQUIRE(stream_stats.first_sample_time.has_value());
+		REQUIRE(stream_stats.end_sample_time.has_value());
+		REQUIRE(stream_stats.first_timestamp.has_value());
+		REQUIRE(stream_stats.end_timestamp.has_value());
+
+		const auto first_timestamp = stream_stats.first_timestamp.value_or(core::Vita49Timestamp{});
+		const auto end_timestamp = stream_stats.end_timestamp.value_or(core::Vita49Timestamp{});
+		CHECK(stream_stats.first_sample_time.value_or(0.0) == 0.0);
+		CHECK(stream_stats.end_sample_time.value_or(0.0) == 0.5);
+		CHECK(first_timestamp.integer_seconds == 1700000000u);
+		CHECK(first_timestamp.fractional_picoseconds == 0u);
+		CHECK(end_timestamp.integer_seconds == 1700000000u);
+		CHECK(end_timestamp.fractional_picoseconds == 500000000000u);
+		CHECK(stats_snapshots.back().streams.size() == 1u);
+		CHECK(stats_snapshots.back().streams.front().receiver_id == 7u);
+	}
+
+	void requireLivePacketTraces(const std::vector<core::ReceiverOutputPacketTrace>& packet_traces)
+	{
+		CHECK(std::ranges::any_of(packet_traces, [](const auto& trace) { return trace.event == "context"; }));
+		CHECK(std::ranges::any_of(packet_traces, [](const auto& trace) { return trace.event == "data"; }));
+		CHECK(std::ranges::all_of(packet_traces, [](const auto& trace) { return trace.sequence > 0u; }));
+		const auto data_trace =
+			std::ranges::find_if(packet_traces, [](const auto& trace) { return trace.event == "data"; });
+		REQUIRE(data_trace != packet_traces.end());
+		REQUIRE(data_trace->timestamp.has_value());
+		const auto data_timestamp = data_trace->timestamp.value_or(core::Vita49Timestamp{});
+		CHECK(data_timestamp.integer_seconds == 1700000000u);
+		CHECK(data_timestamp.fractional_picoseconds == 0u);
+	}
+
 	class RecordingSender final : public serial::vita49::DatagramSender
 	{
 	public:
@@ -230,130 +473,18 @@ TEST_CASE("VITA context packet serializes CIF and fields in profile order", "[se
 {
 	using namespace serial::vita49;
 
-	const core::ReceiverStreamDescriptor stream{.receiver_id = 0x1122334455667788ull,
-												.receiver_name = "rx1",
-												.mode = "fmcw",
-												.sample_rate = 2.5e6,
-												.reference_frequency = 9.6e9,
-												.if_offset = -1.25e6,
-												.bandwidth = 5.0e6,
-												.dechirped = true,
-												.if_resampled = false,
-												.adc_bits = 14,
-												.coordinate = {.frame = "UTM",
-															   .origin_latitude = -33.9,
-															   .origin_longitude = 18.4,
-															   .origin_altitude = 111.0,
-															   .utm_zone = 34,
-															   .utm_north_hemisphere = false},
-												.initial_platform_state = {.platform_id = 0x99,
-																		   .platform_name = "rx-platform",
-																		   .position_x = 1.0,
-																		   .position_y = 2.0,
-																		   .position_z = 3.0,
-																		   .velocity_x = 4.0,
-																		   .velocity_y = 5.0,
-																		   .velocity_z = 6.0,
-																		   .azimuth = 0.25,
-																		   .elevation = -0.5},
-												.fmcw = {.present = true,
-														 .waveform_shape = "linear",
-														 .chirp_bandwidth = 20.0e6,
-														 .chirp_duration = 1.0e-3,
-														 .chirp_period = 2.0e-3,
-														 .chirp_rate = 20.0e9,
-														 .chirp_rate_signed = -20.0e9,
-														 .sweep_direction = "down",
-														 .start_frequency_offset = 1.5e6,
-														 .chirp_count = 64,
-														 .dechirp_mode = "physical",
-														 .dechirp_reference_source = "transmitter",
-														 .dechirp_reference_transmitter_id = 0x1234,
-														 .dechirp_reference_transmitter_name = "tx-lo",
-														 .dechirp_reference_waveform_id = 0,
-														 .dechirp_reference_waveform_name = ""}};
-	const auto context = Vita49ContextBuilder::build(ContextBuildRequest{.stream = stream,
-																		 .stream_id = 0x55667788u,
-																		 .simulation_name = "sim",
-																		 .adc_fullscale = 2.0,
-																		 .timestamp = Timestamp{100u, 250u},
-																		 .packet_count = 3,
-																		 .sample_loss = true,
-																		 .stream_open = true});
+	const auto bytes = serializedFmcwContextPacket();
 
-	const auto bytes = Vita49Serializer::serializeContext(context);
-
-	REQUIRE(bytes.size() % 4u == 0u);
-	REQUIRE((readU32(bytes, 0) & 0xFFFF0000u) == 0x4A630000u);
-	REQUIRE((readU32(bytes, 0) & 0x0000FFFFu) == bytes.size() / 4u);
-	REQUIRE(readU32(bytes, 4) == 0x55667788u);
-	REQUIRE(readU64(bytes, 8) == kFersVrtIqClassId);
-	REQUIRE(readU32(bytes, 16) == 100u);
-	REQUIRE(readU64(bytes, 20) == 250u);
-	REQUIRE(readU32(bytes, 28) == kFersContextCif0);
-	REQUIRE((readU32(bytes, 32) & TrailerSampleLoss) == TrailerSampleLoss);
-	REQUIRE(readU64(bytes, 36) == makeComplexInt16PayloadFormat());
-	REQUIRE(readF64(bytes, 44) == 2.5e6);
-	REQUIRE(readF64(bytes, 52) == 9.6e9);
-	REQUIRE(readF64(bytes, 60) == -1.25e6);
-	REQUIRE(readF64(bytes, 68) == 5.0e6);
-	REQUIRE(readF64(bytes, 76) == 2.0);
-	REQUIRE(readU64(bytes, 84) == 0x1122334455667788ull);
+	requireContextPacketHeader(bytes);
+	requireContextPacketFields(bytes);
 	constexpr std::size_t ascii_offset = 92u;
-	const auto null_pos = std::find(bytes.begin() + static_cast<std::ptrdiff_t>(ascii_offset), bytes.end(), 0);
-	REQUIRE(null_pos != bytes.end());
-	for (auto it = bytes.begin() + static_cast<std::ptrdiff_t>(ascii_offset); it != null_pos; ++it)
-	{
-		REQUIRE(*it <= 0x7Fu);
-	}
-	for (auto it = std::next(null_pos); it != bytes.end(); ++it)
-	{
-		REQUIRE(*it == 0u);
-	}
+	requireAsciiMetadataPadding(bytes, ascii_offset);
 
 	const auto metadata = nlohmann::json::parse(readAsciiMetadata(bytes, ascii_offset));
-	REQUIRE(metadata.at("schema") == "fers-vita49-context-v1");
-	REQUIRE(metadata.at("simulation_name") == "sim");
-	REQUIRE(metadata.at("receiver").at("id").get<std::uint64_t>() == 0x1122334455667788ull);
-	REQUIRE(metadata.at("receiver").at("name") == "rx1");
-	REQUIRE(metadata.at("receiver").at("mode") == "fmcw");
-	REQUIRE(metadata.at("receiver").at("adc_bits") == 14u);
-	const auto context_flags = metadata.at("receiver").at("context_flags").get<std::uint32_t>();
-	REQUIRE((context_flags &
-			 (ContextFlagDechirped | ContextFlagSampleLoss | ContextFlagStreamOpen | ContextFlagFmcwMetadataPresent)) ==
-			(ContextFlagDechirped | ContextFlagSampleLoss | ContextFlagStreamOpen | ContextFlagFmcwMetadataPresent));
-	REQUIRE(metadata.at("coordinate_frame").at("frame") == "UTM");
-	REQUIRE(metadata.at("coordinate_frame").at("origin").at("latitude") == -33.9);
-	REQUIRE(metadata.at("coordinate_frame").at("origin").at("longitude") == 18.4);
-	REQUIRE(metadata.at("coordinate_frame").at("origin").at("altitude") == 111.0);
-	REQUIRE(metadata.at("coordinate_frame").at("utm_zone") == 34);
-	REQUIRE_FALSE(metadata.at("coordinate_frame").at("utm_north_hemisphere").get<bool>());
-	REQUIRE(metadata.at("initial_platform_state").at("platform_id") == 0x99u);
-	REQUIRE(metadata.at("initial_platform_state").at("platform_name") == "rx-platform");
-	REQUIRE(metadata.at("initial_platform_state").at("position_m").at("x") == 1.0);
-	REQUIRE(metadata.at("initial_platform_state").at("position_m").at("y") == 2.0);
-	REQUIRE(metadata.at("initial_platform_state").at("position_m").at("z") == 3.0);
-	REQUIRE(metadata.at("initial_platform_state").at("velocity_mps").at("x") == 4.0);
-	REQUIRE(metadata.at("initial_platform_state").at("velocity_mps").at("y") == 5.0);
-	REQUIRE(metadata.at("initial_platform_state").at("velocity_mps").at("z") == 6.0);
-	REQUIRE(metadata.at("initial_platform_state").at("rotation_rad").at("azimuth") == 0.25);
-	REQUIRE(metadata.at("initial_platform_state").at("rotation_rad").at("elevation") == -0.5);
-	REQUIRE(metadata.at("fmcw").at("present").get<bool>());
-	REQUIRE(metadata.at("fmcw").at("waveform_shape") == "linear");
-	REQUIRE(metadata.at("fmcw").at("sweep_direction") == "down");
-	REQUIRE(metadata.at("fmcw").at("chirp_bandwidth_hz") == 20.0e6);
-	REQUIRE(metadata.at("fmcw").at("chirp_duration_s") == 1.0e-3);
-	REQUIRE(metadata.at("fmcw").at("chirp_period_s") == 2.0e-3);
-	REQUIRE(metadata.at("fmcw").at("chirp_rate_hz_per_s") == 20.0e9);
-	REQUIRE(metadata.at("fmcw").at("chirp_rate_signed_hz_per_s") == -20.0e9);
-	REQUIRE(metadata.at("fmcw").at("start_frequency_offset_hz") == 1.5e6);
-	REQUIRE(metadata.at("fmcw").at("chirp_count") == 64u);
-	REQUIRE(metadata.at("fmcw").at("dechirp_mode") == "physical");
-	REQUIRE(metadata.at("fmcw").at("dechirp_reference_source") == "transmitter");
-	REQUIRE(metadata.at("fmcw").at("dechirp_reference_transmitter_id") == 0x1234u);
-	REQUIRE(metadata.at("fmcw").at("dechirp_reference_transmitter_name") == "tx-lo");
-	REQUIRE(metadata.at("waveform").at("kind") == "fmcw");
-	REQUIRE(metadata.at("waveform").at("metadata_ref") == "fmcw");
+	requireContextReceiverMetadata(metadata);
+	requireContextCoordinateMetadata(metadata);
+	requireContextPlatformMetadata(metadata);
+	requireContextFmcwMetadata(metadata);
 }
 
 TEST_CASE("VITA context metadata follows receiver mode when stale mode blocks are present", "[serial][vita49]")
@@ -486,26 +617,17 @@ TEST_CASE("VITA packetizer uses first sample timestamp, packet cap, and big-endi
 	REQUIRE(packetizer.maxComplexSamplesPerPacket() == 342u);
 
 	std::vector<ComplexType> samples(1000, ComplexType(0.5, -0.5));
-	const core::ReceiverStreamDescriptor stream{.receiver_id = 77,
-												.receiver_name = "rx",
-												.mode = "cw",
-												.sample_rate = 1.0,
-												.reference_frequency = 1.0e9,
-												.coordinate = {},
-												.initial_platform_state = {},
-												.fmcw = {}};
-	const core::ReceiverSampleBlock block{
-		.stream = stream, .first_sample_time = 1.25, .sample_rate = 1.0, .samples = samples, .sample_start = 0};
+	const core::ReceiverSampleBlock block{.stream = basicCwStreamDescriptor(),
+										  .first_sample_time = 1.25,
+										  .sample_rate = 1.0,
+										  .samples = samples,
+										  .sample_start = 0};
 	PacketCountSequencer counts;
 	const auto result = packetizer.packetize(block, 0xABCDEF01u, counts, false);
 
 	REQUIRE(result.packets.size() == 3u);
 	REQUIRE(result.samples_emitted == 1000u);
-	for (const auto& packet : result.packets)
-	{
-		REQUIRE(packet.bytes.size() <= 1400u);
-		REQUIRE((readU32(packet.bytes, 0) & 0x0000FFFFu) == packet.bytes.size() / 4u);
-	}
+	requirePacketsFitPayload(result.packets, 1400u);
 	REQUIRE(readU32(result.packets.front().bytes, 16) == 1'700'000'001u);
 	REQUIRE(readU64(result.packets.front().bytes, 20) == 373'456'789'000ull);
 	REQUIRE(readU16(result.packets.front().bytes, 28) == 0x4000u);
@@ -567,31 +689,15 @@ TEST_CASE("VITA paced sender blocks at queue depth instead of dropping", "[seria
 	sender.open("127.0.0.1", 1);
 	sender.start(0.0);
 
-	const SerializedPacket first{.bytes = {0, 0, 0, 1},
-								 .stream_id = 9,
-								 .sample_count = 10,
-								 .first_sample_time = 0.0,
-								 .data_packet = true,
-								 .timestamp = Timestamp{}};
-	const SerializedPacket second{.bytes = {0, 0, 0, 2},
-								  .stream_id = 9,
-								  .sample_count = 12,
-								  .first_sample_time = 0.0,
-								  .data_packet = true,
-								  .timestamp = Timestamp{}};
+	const auto first = testSerializedPacket(1, 10);
+	const auto second = testSerializedPacket(2, 12);
 
 	const auto first_result = sender.enqueue(first);
 	REQUIRE(first_result.enqueued);
 	REQUIRE_FALSE(first_result.dropped);
 	REQUIRE(recording_raw->waitUntilFirstSendEntered());
 	std::atomic_bool second_enqueue_finished = false;
-	auto second_result_future = std::async(std::launch::async,
-										   [&]
-										   {
-											   auto result = sender.enqueue(second);
-											   second_enqueue_finished.store(true);
-											   return result;
-										   });
+	auto second_result_future = enqueueAsync(sender, second, second_enqueue_finished);
 	std::this_thread::sleep_for(20ms);
 	const auto second_finished_before_release = second_enqueue_finished.load();
 	recording_raw->releaseFirstSend();
@@ -964,33 +1070,8 @@ TEST_CASE("VITA output sink emits live telemetry snapshots and packet traces", "
 	sink.submitBlock(block);
 	const auto final_stats = sink.finalize();
 
-	REQUIRE_FALSE(stats_snapshots.empty());
-	REQUIRE(final_stats.streams.size() == 1u);
-	const auto& stream_stats = final_stats.streams.front();
-	REQUIRE(stream_stats.first_sample_time.has_value());
-	REQUIRE(stream_stats.end_sample_time.has_value());
-	REQUIRE(stream_stats.first_timestamp.has_value());
-	REQUIRE(stream_stats.end_timestamp.has_value());
-	const auto first_timestamp = stream_stats.first_timestamp.value_or(core::Vita49Timestamp{});
-	const auto end_timestamp = stream_stats.end_timestamp.value_or(core::Vita49Timestamp{});
-	CHECK(stream_stats.first_sample_time.value_or(0.0) == 0.0);
-	CHECK(stream_stats.end_sample_time.value_or(0.0) == 0.5);
-	CHECK(first_timestamp.integer_seconds == 1700000000u);
-	CHECK(first_timestamp.fractional_picoseconds == 0u);
-	CHECK(end_timestamp.integer_seconds == 1700000000u);
-	CHECK(end_timestamp.fractional_picoseconds == 500000000000u);
-	CHECK(stats_snapshots.back().streams.size() == 1u);
-	CHECK(stats_snapshots.back().streams.front().receiver_id == 7u);
-	CHECK(std::ranges::any_of(packet_traces, [](const auto& trace) { return trace.event == "context"; }));
-	CHECK(std::ranges::any_of(packet_traces, [](const auto& trace) { return trace.event == "data"; }));
-	CHECK(std::ranges::all_of(packet_traces, [](const auto& trace) { return trace.sequence > 0u; }));
-	const auto data_trace =
-		std::ranges::find_if(packet_traces, [](const auto& trace) { return trace.event == "data"; });
-	REQUIRE(data_trace != packet_traces.end());
-	REQUIRE(data_trace->timestamp.has_value());
-	const auto data_timestamp = data_trace->timestamp.value_or(core::Vita49Timestamp{});
-	CHECK(data_timestamp.integer_seconds == 1700000000u);
-	CHECK(data_timestamp.fractional_picoseconds == 0u);
+	requireLiveTelemetryStats(final_stats, stats_snapshots);
+	requireLivePacketTraces(packet_traces);
 }
 
 TEST_CASE("VITA output sink batches packet trace telemetry", "[serial][vita49][telemetry]")

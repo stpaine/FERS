@@ -79,6 +79,233 @@ namespace
 		LogLevelGuard& operator=(LogLevelGuard&&) = delete;
 		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
+
+	void configureFmcwRoundTripParams()
+	{
+		params::setRate(2.0e6);
+		params::setOversampleRatio(1);
+		params::setTime(0.0, 1.0);
+	}
+
+	[[nodiscard]] json linearChirpJson(const std::string_view direction)
+	{
+		return {{"id", 457},
+				{"name", std::string("Fmcw") + std::string(direction)},
+				{"power", 500.0},
+				{"carrier_frequency", 2.4e9},
+				{"fmcw_linear_chirp",
+				 {{"direction", direction},
+				  {"chirp_bandwidth", 1.0e6},
+				  {"chirp_duration", 1.0e-3},
+				  {"chirp_period", 1.0e-3}}}};
+	}
+
+	void requireLinearChirpDirectionRoundTrip(const std::string_view direction)
+	{
+		auto wf = serial::parse_waveform_from_json(linearChirpJson(direction));
+		REQUIRE(wf != nullptr);
+		REQUIRE(wf->getFmcwChirpSignal() != nullptr);
+		REQUIRE(wf->getFmcwChirpSignal()->isDownChirp() == (direction == "down"));
+
+		json serialized;
+		fers_signal::to_json(serialized, *wf);
+		REQUIRE(serialized.contains("fmcw_linear_chirp"));
+		REQUIRE_FALSE(serialized.contains("fmcw_up_chirp"));
+		REQUIRE(serialized.at("fmcw_linear_chirp").at("direction") == direction);
+
+		auto reparsed = serial::parse_waveform_from_json(serialized);
+		REQUIRE(reparsed != nullptr);
+		REQUIRE(reparsed->getFmcwChirpSignal() != nullptr);
+		REQUIRE(reparsed->getFmcwChirpSignal()->isDownChirp() == (direction == "down"));
+	}
+
+	void configureSerializableWorldParams()
+	{
+		params::setRate(1000.0);
+		params::setOversampleRatio(1);
+		params::setTime(0.0, 10.0);
+	}
+
+	void populateSerializableAssetsWorld(core::World& world)
+	{
+		auto cw = std::make_unique<fers_signal::CwSignal>();
+		world.add(std::make_unique<fers_signal::RadarSignal>("CwWave", 10.0, 1e9, 1.0, std::move(cw), 10));
+		world.add(std::make_unique<antenna::Gaussian>("gauss", 1.5, 2.5, 20));
+
+		auto proto_tim = std::make_unique<timing::PrototypeTiming>("dummy_proto", 104);
+		proto_tim->setFrequency(10e6);
+		auto tim = std::make_shared<timing::Timing>("dummy_time", 42, 103);
+		tim->initializeModel(proto_tim.get());
+		world.add(std::move(proto_tim));
+
+		auto platform = std::make_unique<radar::Platform>("p1", 100);
+		auto transmitter =
+			std::make_unique<radar::Transmitter>(platform.get(), "tx", radar::OperationMode::PULSED_MODE, 101);
+		transmitter->setTiming(tim);
+		transmitter->setPrf(1000.0);
+		transmitter->setSchedule({{0.1, 0.5}});
+
+		auto target = radar::createIsoTarget(platform.get(), "tgt", 10.0, 42, 102);
+		target->setFluctuationModel(std::make_unique<radar::RcsChiSquare>(target->getRngEngine(), 2.5));
+
+		auto receiver =
+			std::make_unique<radar::Receiver>(platform.get(), "rx", 88, radar::OperationMode::PULSED_MODE, 105);
+		receiver->setTiming(tim);
+		receiver->setWindowProperties(1e-4, 1000.0, 1e-5);
+		receiver->setNoiseTemperature(300.0);
+		receiver->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		receiver->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+
+		world.add(std::move(transmitter));
+		world.add(std::move(target));
+		world.add(std::move(receiver));
+		world.add(std::move(platform));
+	}
+
+	void requireSerializedAssets(const json& simulation_json)
+	{
+		REQUIRE(simulation_json["waveforms"][0]["name"] == "CwWave");
+		REQUIRE_THAT(simulation_json["waveforms"][0]["power"].get<double>(), WithinAbs(10.0, 1e-9));
+		REQUIRE(simulation_json["waveforms"][0].contains("cw"));
+
+		REQUIRE(simulation_json["antennas"][0]["pattern"] == "gaussian");
+		REQUIRE_THAT(simulation_json["antennas"][0]["azscale"].get<double>(), WithinAbs(1.5, 1e-9));
+	}
+
+	[[nodiscard]] const json* findComponent(const json& components, const std::string_view key)
+	{
+		const std::string key_string(key);
+		for (const auto& component : components)
+		{
+			if (component.contains(key_string))
+			{
+				return &component.at(key_string);
+			}
+		}
+		return nullptr;
+	}
+
+	[[nodiscard]] const json& requireComponent(const json& components, const std::string_view key)
+	{
+		const auto* component = findComponent(components, key);
+		REQUIRE(component != nullptr);
+		return *component;
+	}
+
+	void requireSerializedTransmitter(const json& transmitter_json)
+	{
+		REQUIRE_THAT(transmitter_json["pulsed_mode"]["prf"].get<double>(), WithinAbs(1000.0, 1e-9));
+		REQUIRE_THAT(transmitter_json["schedule"][0]["start"].get<double>(), WithinAbs(0.1, 1e-9));
+	}
+
+	void requireSerializedTarget(const json& target_json)
+	{
+		REQUIRE(target_json["rcs"]["type"] == "isotropic");
+		REQUIRE_THAT(target_json["rcs"]["value"].get<double>(), WithinAbs(10.0, 1e-9));
+		REQUIRE(target_json["model"]["type"] == "chisquare");
+		REQUIRE_THAT(target_json["model"]["k"].get<double>(), WithinAbs(2.5, 1e-9));
+	}
+
+	void requireSerializedReceiver(const json& receiver_json)
+	{
+		REQUIRE_THAT(receiver_json["noise_temp"].get<double>(), WithinAbs(300.0, 1e-9));
+		REQUIRE(receiver_json["nodirect"] == true);
+		REQUIRE(receiver_json["nopropagationloss"] == true);
+		REQUIRE_THAT(receiver_json["pulsed_mode"]["window_length"].get<double>(), WithinAbs(1e-4, 1e-9));
+	}
+
+	void requireSerializedRadarComponents(const json& components)
+	{
+		REQUIRE(components.size() == 3);
+		requireSerializedTransmitter(requireComponent(components, "transmitter"));
+		requireSerializedTarget(requireComponent(components, "target"));
+		requireSerializedReceiver(requireComponent(components, "receiver"));
+	}
+
+	[[nodiscard]] json badComponentScenario(const json& test_components)
+	{
+		return {
+			{"simulation",
+			 {{"parameters",
+			   {{"starttime", 0.0},
+				{"endtime", 1.0},
+				{"rate", 1000.0},
+				{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+				{"coordinatesystem", {{"frame", "ENU"}}}}},
+			  {"waveforms",
+			   json::array(
+				   {{{"id", 10}, {"name", "w1"}, {"power", 1.0}, {"carrier_frequency", 1.0}, {"cw", json::object()}}})},
+			  {"antennas", json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}})},
+			  {"timings", json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1e6}}})},
+			  {"platforms", json::array({{{"id", 100}, {"name", "p1"}, {"components", test_components}}})}}}};
+	}
+
+	[[nodiscard]] json fmcwDechirpScenario(json fmcw_mode)
+	{
+		json scenario;
+		scenario["simulation"]["parameters"] = {{"starttime", 0.0},
+												{"endtime", 1.0e-3},
+												{"rate", 4.0e6},
+												{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
+												{"coordinatesystem", {{"frame", "ENU"}}}};
+		scenario["simulation"]["waveforms"] = json::array({{{"id", 10},
+															{"name", "fmcw_wave"},
+															{"power", 1.0},
+															{"carrier_frequency", 1.0e9},
+															{"fmcw_linear_chirp",
+															 {{"direction", "up"},
+															  {"chirp_bandwidth", 1.0e6},
+															  {"chirp_duration", 1.0e-4},
+															  {"chirp_period", 1.0e-4}}}}});
+		scenario["simulation"]["antennas"] = json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}});
+		scenario["simulation"]["timings"] = json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1.0e6}}});
+		scenario["simulation"]["platforms"] = json::array({{{"id", 100},
+															{"name", "p1"},
+															{"components",
+															 json::array({{{"monostatic",
+																			{{"name", "mono1"},
+																			 {"tx_id", 101},
+																			 {"rx_id", 102},
+																			 {"waveform", 10},
+																			 {"antenna", 20},
+																			 {"timing", 30},
+																			 {"fmcw_mode", fmcw_mode}}}}})}}});
+		return scenario;
+	}
+
+	void requireAttachedDechirpRoundTrip(core::World& world)
+	{
+		REQUIRE(world.getReceivers().size() == 1);
+		const auto* rx = world.getReceivers().front().get();
+		REQUIRE(rx->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
+		REQUIRE(rx->getDechirpReference().source == radar::Receiver::DechirpReferenceSource::Attached);
+		REQUIRE_FALSE(rx->getDechirpSources().empty());
+
+		const json serialized = serial::world_to_json(world);
+		const auto& mode_json =
+			serialized.at("simulation").at("platforms").at(0).at("components").at(0).at("monostatic").at("fmcw_mode");
+		REQUIRE(mode_json.at("dechirp_mode") == "physical");
+		REQUIRE(mode_json.at("dechirp_reference").at("source") == "attached");
+	}
+
+	void requireIfChainRoundTrip(core::World& world)
+	{
+		const auto* rx = world.getReceivers().front().get();
+		const auto& if_chain = rx->getFmcwIfChainRequest();
+		REQUIRE(if_chain.sample_rate_hz.has_value());
+		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
+		REQUIRE(if_chain.filter_transition_width_hz.has_value());
+		REQUIRE_THAT(if_chain.sample_rate_hz.value_or(0.0), WithinAbs(1.0e6, 1.0e-9));
+		REQUIRE_THAT(if_chain.filter_bandwidth_hz.value_or(0.0), WithinAbs(4.0e5, 1.0e-9));
+		REQUIRE_THAT(if_chain.filter_transition_width_hz.value_or(0.0), WithinAbs(1.0e5, 1.0e-9));
+
+		const json serialized = serial::world_to_json(world);
+		const auto& mode_json =
+			serialized.at("simulation").at("platforms").at(0).at("components").at(0).at("monostatic").at("fmcw_mode");
+		REQUIRE(mode_json.at("if_sample_rate") == 1.0e6);
+		REQUIRE(mode_json.at("if_filter_bandwidth") == 4.0e5);
+		REQUIRE(mode_json.at("if_filter_transition_width") == 1.0e5);
+	}
 }
 
 TEST_CASE("JSON: Granular parsing of Antenna and Waveform", "[serial][json]")
@@ -139,37 +366,11 @@ TEST_CASE("JSON: FMCW waveform emits large-buffer warning", "[serial][json]")
 TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]")
 {
 	ParamGuard const guard;
-	params::setRate(2.0e6);
-	params::setOversampleRatio(1);
-	params::setTime(0.0, 1.0);
+	configureFmcwRoundTripParams();
 
 	for (const auto* const direction : {"up", "down"})
 	{
-		json const wf_json = {{"id", 457},
-							  {"name", std::string("Fmcw") + direction},
-							  {"power", 500.0},
-							  {"carrier_frequency", 2.4e9},
-							  {"fmcw_linear_chirp",
-							   {{"direction", direction},
-								{"chirp_bandwidth", 1.0e6},
-								{"chirp_duration", 1.0e-3},
-								{"chirp_period", 1.0e-3}}}};
-
-		auto wf = serial::parse_waveform_from_json(wf_json);
-		REQUIRE(wf != nullptr);
-		REQUIRE(wf->getFmcwChirpSignal() != nullptr);
-		REQUIRE(wf->getFmcwChirpSignal()->isDownChirp() == (std::string_view(direction) == "down"));
-
-		json serialized;
-		fers_signal::to_json(serialized, *wf);
-		REQUIRE(serialized.contains("fmcw_linear_chirp"));
-		REQUIRE_FALSE(serialized.contains("fmcw_up_chirp"));
-		REQUIRE(serialized.at("fmcw_linear_chirp").at("direction") == direction);
-
-		auto reparsed = serial::parse_waveform_from_json(serialized);
-		REQUIRE(reparsed != nullptr);
-		REQUIRE(reparsed->getFmcwChirpSignal() != nullptr);
-		REQUIRE(reparsed->getFmcwChirpSignal()->isDownChirp() == (std::string_view(direction) == "down"));
+		requireLinearChirpDirectionRoundTrip(direction);
 	}
 }
 
@@ -296,98 +497,18 @@ TEST_CASE("JSON: Serialization of Math and Timing Structures", "[serial][json]")
 TEST_CASE("JSON: Serialization of Assets and Radar Components", "[serial][json]")
 {
 	ParamGuard const guard;
-
-	// MUST initialize global simulation parameters to avoid division-by-zero
-	// Without this, params::rate() is 0.0, causing the PRF math to evaluate to NaN.
-	params::setRate(1000.0);
-	params::setOversampleRatio(1);
-	params::setTime(0.0, 10.0);
+	configureSerializableWorldParams();
 
 	core::World w;
-
-	// Assets
-	auto cw = std::make_unique<fers_signal::CwSignal>();
-	w.add(std::make_unique<fers_signal::RadarSignal>("CwWave", 10.0, 1e9, 1.0, std::move(cw), 10));
-	w.add(std::make_unique<antenna::Gaussian>("gauss", 1.5, 2.5, 20));
-
-	// PrototypeTiming AND Timing must both be properly initialized
-	auto proto_tim = std::make_unique<timing::PrototypeTiming>("dummy_proto", 104);
-	proto_tim->setFrequency(10e6);
-	auto tim = std::make_shared<timing::Timing>("dummy_time", 42, 103);
-	tim->initializeModel(proto_tim.get());
-	w.add(std::move(proto_tim));
-
-	// Platform & Components
-	auto p = std::make_unique<radar::Platform>("p1", 100);
-	auto tx = std::make_unique<radar::Transmitter>(p.get(), "tx", radar::OperationMode::PULSED_MODE, 101);
-
-	// Set timing FIRST, then PRF, then Schedule, to guarantee internal math has all variables
-	tx->setTiming(tim);
-	tx->setPrf(1000.0);
-	tx->setSchedule({{0.1, 0.5}});
-
-	auto tgt = radar::createIsoTarget(p.get(), "tgt", 10.0, 42, 102);
-	tgt->setFluctuationModel(std::make_unique<radar::RcsChiSquare>(tgt->getRngEngine(), 2.5));
-
-	auto rx = std::make_unique<radar::Receiver>(p.get(), "rx", 88, radar::OperationMode::PULSED_MODE, 105);
-	rx->setTiming(tim);
-	rx->setWindowProperties(1e-4, 1000.0, 1e-5);
-	rx->setNoiseTemperature(300.0);
-	rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-	rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-
-	w.add(std::move(tx));
-	w.add(std::move(tgt));
-	w.add(std::move(rx));
-	w.add(std::move(p));
+	populateSerializableAssetsWorld(w);
 
 	json j = serial::world_to_json(w);
 
-	SECTION("Assets Serialize Correctly")
-	{
-		REQUIRE(j["simulation"]["waveforms"][0]["name"] == "CwWave");
-		REQUIRE_THAT(j["simulation"]["waveforms"][0]["power"].get<double>(), WithinAbs(10.0, 1e-9));
-		REQUIRE(j["simulation"]["waveforms"][0].contains("cw"));
-
-		REQUIRE(j["simulation"]["antennas"][0]["pattern"] == "gaussian");
-		REQUIRE_THAT(j["simulation"]["antennas"][0]["azscale"].get<double>(), WithinAbs(1.5, 1e-9));
-	}
+	SECTION("Assets Serialize Correctly") { requireSerializedAssets(j["simulation"]); }
 
 	SECTION("Radar Components Serialize Correctly")
 	{
-		auto& comps = j["simulation"]["platforms"][0]["components"];
-		REQUIRE(comps.size() == 3);
-
-		bool found_tx = false, found_tgt = false, found_rx = false;
-		for (const auto& c : comps)
-		{
-			if (c.contains("transmitter"))
-			{
-				found_tx = true;
-				REQUIRE_THAT(c["transmitter"]["pulsed_mode"]["prf"].get<double>(), WithinAbs(1000.0, 1e-9));
-				REQUIRE_THAT(c["transmitter"]["schedule"][0]["start"].get<double>(), WithinAbs(0.1, 1e-9));
-			}
-			if (c.contains("target"))
-			{
-				found_tgt = true;
-				REQUIRE(c["target"]["rcs"]["type"] == "isotropic");
-				REQUIRE_THAT(c["target"]["rcs"]["value"].get<double>(), WithinAbs(10.0, 1e-9));
-				REQUIRE(c["target"]["model"]["type"] == "chisquare");
-				REQUIRE_THAT(c["target"]["model"]["k"].get<double>(), WithinAbs(2.5, 1e-9));
-			}
-			if (c.contains("receiver"))
-			{
-				found_rx = true;
-				const auto& rx_json = c["receiver"];
-				REQUIRE_THAT(rx_json["noise_temp"].get<double>(), WithinAbs(300.0, 1e-9));
-				REQUIRE(rx_json["nodirect"] == true);
-				REQUIRE(rx_json["nopropagationloss"] == true);
-				REQUIRE_THAT(rx_json["pulsed_mode"]["window_length"].get<double>(), WithinAbs(1e-4, 1e-9));
-			}
-		}
-		REQUIRE(found_tx);
-		REQUIRE(found_tgt);
-		REQUIRE(found_rx);
+		requireSerializedRadarComponents(j["simulation"]["platforms"][0]["components"]);
 	}
 }
 
@@ -579,63 +700,55 @@ TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit"
 	REQUIRE_THAT(capture.str(), ContainsSubstring("declared"));
 }
 
-TEST_CASE("JSON: Deserialization Error Paths", "[serial][json]")
+TEST_CASE("JSON: Deserialization Error Paths rejects missing transmitter mode", "[serial][json]")
 {
 	ParamGuard const guard;
 	core::World world;
 	std::mt19937 seeder(42);
+	json const test_comps = json::array(
+		{{{"transmitter", {{"id", 1}, {"name", "tx1"}, {"waveform", 10}, {"antenna", 20}, {"timing", 30}}}}});
 
-	auto run_bad_scenario = [&](const json& test_comps)
-	{
-		json const scenario = {
-			{"simulation",
-			 {{"parameters",
-			   {{"starttime", 0.0},
-				{"endtime", 1.0},
-				{"rate", 1000.0},
-				{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
-				{"coordinatesystem", {{"frame", "ENU"}}}}},
-			  {"waveforms",
-			   json::array(
-				   {{{"id", 10}, {"name", "w1"}, {"power", 1.0}, {"carrier_frequency", 1.0}, {"cw", json::object()}}})},
-			  {"antennas", json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}})},
-			  {"timings", json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1e6}}})},
-			  {"platforms", json::array({{{"id", 100}, {"name", "p1"}, {"components", test_comps}}})}}}};
-		serial::json_to_world(scenario, world, seeder);
-	};
+	REQUIRE_THROWS_WITH(serial::json_to_world(badComponentScenario(test_comps), world, seeder),
+						ContainsSubstring("must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block"));
+}
 
-	SECTION("Missing mode throws")
-	{
-		json const test_comps = json::array(
-			{{{"transmitter", {{"id", 1}, {"name", "tx1"}, {"waveform", 10}, {"antenna", 20}, {"timing", 30}}}}});
-		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps),
-							ContainsSubstring("must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block"));
-	}
+TEST_CASE("JSON: Deserialization Error Paths rejects unsupported RCS type", "[serial][json]")
+{
+	ParamGuard const guard;
+	core::World world;
+	std::mt19937 seeder(42);
+	json const test_comps =
+		json::array({{{"target", {{"id", 1}, {"name", "bad-target"}, {"rcs", {{"type", "magic"}}}}}}});
 
-	SECTION("Unsupported RCS type throws")
-	{
-		json const test_comps =
-			json::array({{{"target", {{"id", 1}, {"name", "bad-target"}, {"rcs", {{"type", "magic"}}}}}}});
-		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps), ContainsSubstring("Unsupported target RCS type: magic"));
-	}
+	REQUIRE_THROWS_WITH(serial::json_to_world(badComponentScenario(test_comps), world, seeder),
+						ContainsSubstring("Unsupported target RCS type: magic"));
+}
 
-	SECTION("Unsupported Fluctuation model type throws")
-	{
-		json const test_comps = json::array({{{"target",
-											   {{"id", 1},
-												{"name", "bad-target"},
-												{"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
-												{"model", {{"type", "magic"}}}}}}});
-		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps),
-							ContainsSubstring("Unsupported fluctuation model type: magic"));
-	}
+TEST_CASE("JSON: Deserialization Error Paths rejects unsupported fluctuation model type", "[serial][json]")
+{
+	ParamGuard const guard;
+	core::World world;
+	std::mt19937 seeder(42);
+	json const test_comps = json::array({{{"target",
+										   {{"id", 1},
+											{"name", "bad-target"},
+											{"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
+											{"model", {{"type", "magic"}}}}}}});
 
-	SECTION("Negative ID throws")
-	{
-		json const test_comps = json::array(
-			{{{"target", {{"id", -5}, {"name", "bad-target"}, {"rcs", {{"type", "isotropic"}, {"value", 1.0}}}}}}});
-		REQUIRE_THROWS_WITH(run_bad_scenario(test_comps), ContainsSubstring("negative id"));
-	}
+	REQUIRE_THROWS_WITH(serial::json_to_world(badComponentScenario(test_comps), world, seeder),
+						ContainsSubstring("Unsupported fluctuation model type: magic"));
+}
+
+TEST_CASE("JSON: Deserialization Error Paths rejects negative IDs", "[serial][json]")
+{
+	ParamGuard const guard;
+	core::World world;
+	std::mt19937 seeder(42);
+	json const test_comps = json::array(
+		{{{"target", {{"id", -5}, {"name", "bad-target"}, {"rcs", {{"type", "isotropic"}, {"value", 1.0}}}}}}});
+
+	REQUIRE_THROWS_WITH(serial::json_to_world(badComponentScenario(test_comps), world, seeder),
+						ContainsSubstring("negative id"));
 }
 
 TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json][fmcw]")
@@ -696,141 +809,100 @@ TEST_CASE("JSON: FMCW schedule validation matches chirp timing", "[serial][json]
 	}
 }
 
-TEST_CASE("JSON: FMCW dechirp configuration validates and round-trips", "[serial][json][fmcw][dechirp]")
+TEST_CASE("JSON: FMCW dechirp attached reference round-trips", "[serial][json][fmcw][dechirp]")
 {
 	ParamGuard const guard;
 	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario =
+		fmcwDechirpScenario({{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}});
 
-	const auto make_scenario = [](json fmcw_mode)
-	{
-		json scenario;
-		scenario["simulation"]["parameters"] = {{"starttime", 0.0},
-												{"endtime", 1.0e-3},
-												{"rate", 4.0e6},
-												{"origin", {{"latitude", 0.0}, {"longitude", 0.0}, {"altitude", 0.0}}},
-												{"coordinatesystem", {{"frame", "ENU"}}}};
-		scenario["simulation"]["waveforms"] = json::array({{{"id", 10},
-															{"name", "fmcw_wave"},
-															{"power", 1.0},
-															{"carrier_frequency", 1.0e9},
-															{"fmcw_linear_chirp",
-															 {{"direction", "up"},
-															  {"chirp_bandwidth", 1.0e6},
-															  {"chirp_duration", 1.0e-4},
-															  {"chirp_period", 1.0e-4}}}}});
-		scenario["simulation"]["antennas"] = json::array({{{"id", 20}, {"name", "a1"}, {"pattern", "isotropic"}}});
-		scenario["simulation"]["timings"] = json::array({{{"id", 30}, {"name", "t1"}, {"frequency", 1.0e6}}});
-		scenario["simulation"]["platforms"] = json::array({{{"id", 100},
-															{"name", "p1"},
-															{"components",
-															 json::array({{{"monostatic",
-																			{{"name", "mono1"},
-																			 {"tx_id", 101},
-																			 {"rx_id", 102},
-																			 {"waveform", 10},
-																			 {"antenna", 20},
-																			 {"timing", 30},
-																			 {"fmcw_mode", fmcw_mode}}}}})}}});
-		return scenario;
-	};
+	REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+	requireAttachedDechirpRoundTrip(world);
+}
 
-	SECTION("attached reference is resolved and serialized")
-	{
-		core::World world;
-		const auto scenario =
-			make_scenario({{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}});
+TEST_CASE("JSON: FMCW dechirp IF-chain fields round-trip", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario = fmcwDechirpScenario({{"dechirp_mode", "physical"},
+											   {"dechirp_reference", {{"source", "attached"}}},
+											   {"if_sample_rate", 1.0e6},
+											   {"if_filter_bandwidth", 4.0e5},
+											   {"if_filter_transition_width", 1.0e5}});
 
-		REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
-		REQUIRE(world.getReceivers().size() == 1);
-		const auto* rx = world.getReceivers().front().get();
-		REQUIRE(rx->getDechirpMode() == radar::Receiver::DechirpMode::Physical);
-		REQUIRE(rx->getDechirpReference().source == radar::Receiver::DechirpReferenceSource::Attached);
-		REQUIRE_FALSE(rx->getDechirpSources().empty());
+	REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+	requireIfChainRoundTrip(world);
+}
 
-		const json serialized = serial::world_to_json(world);
-		const auto& mode_json =
-			serialized.at("simulation").at("platforms").at(0).at("components").at(0).at("monostatic").at("fmcw_mode");
-		REQUIRE(mode_json.at("dechirp_mode") == "physical");
-		REQUIRE(mode_json.at("dechirp_reference").at("source") == "attached");
-	}
+TEST_CASE("JSON: FMCW dechirp rejects orphan dechirp_reference", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario = fmcwDechirpScenario({{"dechirp_reference", {{"source", "attached"}}}});
 
-	SECTION("IF-chain fields are parsed and serialized")
-	{
-		core::World world;
-		const auto scenario = make_scenario({{"dechirp_mode", "physical"},
-											 {"dechirp_reference", {{"source", "attached"}}},
-											 {"if_sample_rate", 1.0e6},
-											 {"if_filter_bandwidth", 4.0e5},
-											 {"if_filter_transition_width", 1.0e5}});
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("dechirp_reference"));
+}
 
-		REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
-		const auto* rx = world.getReceivers().front().get();
-		const auto& if_chain = rx->getFmcwIfChainRequest();
-		REQUIRE(if_chain.sample_rate_hz.has_value());
-		REQUIRE(if_chain.filter_bandwidth_hz.has_value());
-		REQUIRE(if_chain.filter_transition_width_hz.has_value());
-		REQUIRE_THAT(if_chain.sample_rate_hz.value_or(0.0), WithinAbs(1.0e6, 1.0e-9));
-		REQUIRE_THAT(if_chain.filter_bandwidth_hz.value_or(0.0), WithinAbs(4.0e5, 1.0e-9));
-		REQUIRE_THAT(if_chain.filter_transition_width_hz.value_or(0.0), WithinAbs(1.0e5, 1.0e-9));
+TEST_CASE("JSON: FMCW dechirp requires dechirp for IF sample rate", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario = fmcwDechirpScenario({{"if_sample_rate", 1.0e6}});
 
-		const json serialized = serial::world_to_json(world);
-		const auto& mode_json =
-			serialized.at("simulation").at("platforms").at(0).at("components").at(0).at("monostatic").at("fmcw_mode");
-		REQUIRE(mode_json.at("if_sample_rate") == 1.0e6);
-		REQUIRE(mode_json.at("if_filter_bandwidth") == 4.0e5);
-		REQUIRE(mode_json.at("if_filter_transition_width") == 1.0e5);
-	}
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("IF-chain fields"));
+}
 
-	SECTION("orphan dechirp_reference is rejected")
-	{
-		core::World world;
-		const auto scenario = make_scenario({{"dechirp_reference", {{"source", "attached"}}}});
-		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("dechirp_reference"));
-	}
+TEST_CASE("JSON: FMCW dechirp rejects non-positive IF-chain values", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario = fmcwDechirpScenario(
+		{{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}, {"if_sample_rate", -1.0}});
 
-	SECTION("IF sample rate requires dechirp")
-	{
-		core::World world;
-		const auto scenario = make_scenario({{"if_sample_rate", 1.0e6}});
-		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("IF-chain fields"));
-	}
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("finite positive"));
+}
 
-	SECTION("IF-chain values must be positive")
-	{
-		core::World world;
-		const auto scenario = make_scenario(
-			{{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}, {"if_sample_rate", -1.0}});
-		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("finite positive"));
-	}
+TEST_CASE("JSON: FMCW dechirp rejects IF filter bandwidth at Nyquist", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario = fmcwDechirpScenario({{"dechirp_mode", "physical"},
+											   {"dechirp_reference", {{"source", "attached"}}},
+											   {"if_sample_rate", 1.0e6},
+											   {"if_filter_bandwidth", 5.0e5}});
 
-	SECTION("IF filter bandwidth must be below IF Nyquist")
-	{
-		core::World world;
-		const auto scenario = make_scenario({{"dechirp_mode", "physical"},
-											 {"dechirp_reference", {{"source", "attached"}}},
-											 {"if_sample_rate", 1.0e6},
-											 {"if_filter_bandwidth", 5.0e5}});
-		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder),
-							ContainsSubstring("less than half if_sample_rate"));
-	}
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder),
+						ContainsSubstring("less than half if_sample_rate"));
+}
 
-	SECTION("conflicting mode blocks cannot hide dechirp configuration")
-	{
-		core::World world;
-		auto scenario = make_scenario({{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}});
-		auto& monostatic = scenario["simulation"]["platforms"][0]["components"][0]["monostatic"];
-		monostatic["cw_mode"] = json::object();
+TEST_CASE("JSON: FMCW dechirp rejects conflicting mode blocks", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	auto scenario =
+		fmcwDechirpScenario({{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}}}});
+	auto& monostatic = scenario["simulation"]["platforms"][0]["components"][0]["monostatic"];
+	monostatic["cw_mode"] = json::object();
 
-		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("at most one"));
-	}
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("at most one"));
+}
 
-	SECTION("unknown dechirp reference keys are rejected")
-	{
-		core::World world;
-		const auto scenario = make_scenario(
-			{{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}, {"bogus", true}}}});
-		REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("unsupported key"));
-	}
+TEST_CASE("JSON: FMCW dechirp rejects unknown reference keys", "[serial][json][fmcw][dechirp]")
+{
+	ParamGuard const guard;
+	std::mt19937 seeder(42);
+	core::World world;
+	const auto scenario = fmcwDechirpScenario(
+		{{"dechirp_mode", "physical"}, {"dechirp_reference", {{"source", "attached"}, {"bogus", true}}}});
+
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder), ContainsSubstring("unsupported key"));
 }
 
 TEST_CASE("JSON: Vec3 Serialization and Deserialization", "[serial][json]")

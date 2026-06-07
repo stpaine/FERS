@@ -85,6 +85,21 @@ namespace
 		{ return radar::createIsoTarget(platform, name, 1.0, seed, id); };
 		return loaders;
 	}
+
+	[[nodiscard]] params::Parameters parseParametersXml(const std::string& xml)
+	{
+		auto doc = loadXml(xml);
+		params::Parameters parameters;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), parameters);
+		return parameters;
+	}
+
+	void parseInvalidParametersXml(const std::string& xml)
+	{
+		auto doc = loadXml(xml);
+		params::Parameters parameters;
+		serial::xml_parser_utils::parseParameters(doc.getRootElement(), parameters);
+	}
 }
 
 TEST_CASE("get_child_real_type extracts floating point values", "[serial][xml_parser_utils]")
@@ -146,180 +161,155 @@ TEST_CASE("parseSchedule handles valid and invalid periods", "[serial][xml_parse
 	REQUIRE_THAT(periods[0].end, WithinAbs(2.0, 1e-5));
 }
 
-TEST_CASE("parseParameters extracts simulation parameters", "[serial][xml_parser_utils]")
+TEST_CASE("parseParameters extracts full UTM south parameters", "[serial][xml_parser_utils]")
 {
 	ParamGuard const guard;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>1.5</starttime>"
+									  "  <endtime>10.0</endtime>"
+									  "  <rate>2000</rate>"
+									  "  <c>3e8</c>"
+									  "  <adc_bits>12</adc_bits>"
+									  "  <oversample>4</oversample>"
+									  "  <origin latitude=\"-33.0\" longitude=\"18.0\" altitude=\"100.0\"/>"
+									  "  <coordinatesystem frame=\"UTM\" zone=\"34\" hemisphere=\"S\"/>"
+									  "</parameters>");
 
-	SECTION("Full parameters with UTM South")
-	{
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>1.5</starttime>"
-						   "  <endtime>10.0</endtime>"
-						   "  <rate>2000</rate>"
-						   "  <c>3e8</c>"
-						   "  <adc_bits>12</adc_bits>"
-						   "  <oversample>4</oversample>"
-						   "  <origin latitude=\"-33.0\" longitude=\"18.0\" altitude=\"100.0\"/>"
-						   "  <coordinatesystem frame=\"UTM\" zone=\"34\" hemisphere=\"S\"/>"
-						   "</parameters>");
+	REQUIRE_THAT(p.start, WithinAbs(1.5, 1e-5));
+	REQUIRE_THAT(p.end, WithinAbs(10.0, 1e-5));
+	REQUIRE_THAT(p.rate, WithinAbs(2000.0, 1e-5));
+	REQUIRE_THAT(p.c, WithinAbs(3e8, 1e-5));
+	REQUIRE(p.adc_bits == 12);
+	REQUIRE(p.oversample_ratio == 4);
+	REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
+	REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
+	REQUIRE_THAT(p.origin_altitude, WithinAbs(100.0, 1e-5));
+	REQUIRE(p.coordinate_frame == params::CoordinateFrame::UTM);
+	REQUIRE(p.utm_zone == 34);
+	REQUIRE(p.utm_north_hemisphere == false);
+}
 
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+TEST_CASE("parseParameters extracts optional ECEF parameters", "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+									  "  <simSamplingRate>500.0</simSamplingRate>"
+									  "  <randomseed>42</randomseed>"
+									  "  <rotationangleunit>rad</rotationangleunit>"
+									  "  <coordinatesystem frame=\"ECEF\"/>"
+									  "</parameters>");
 
-		REQUIRE_THAT(p.start, WithinAbs(1.5, 1e-5));
-		REQUIRE_THAT(p.end, WithinAbs(10.0, 1e-5));
-		REQUIRE_THAT(p.rate, WithinAbs(2000.0, 1e-5));
-		REQUIRE_THAT(p.c, WithinAbs(3e8, 1e-5));
-		REQUIRE(p.adc_bits == 12);
-		REQUIRE(p.oversample_ratio == 4);
-		REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
-		REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
-		REQUIRE_THAT(p.origin_altitude, WithinAbs(100.0, 1e-5));
-		REQUIRE(p.coordinate_frame == params::CoordinateFrame::UTM);
-		REQUIRE(p.utm_zone == 34);
-		REQUIRE(p.utm_north_hemisphere == false);
-	}
+	REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(500.0, 1e-5));
+	REQUIRE(p.random_seed.has_value());
+	REQUIRE(p.random_seed.value_or(0) == 42);
+	REQUIRE(p.rotation_angle_unit == params::RotationAngleUnit::Radians);
+	REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
+}
 
-	SECTION("Optional parameters (simSamplingRate, randomseed) and ECEF")
-	{
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-						   "  <simSamplingRate>500.0</simSamplingRate>"
-						   "  <randomseed>42</randomseed>"
-						   "  <rotationangleunit>rad</rotationangleunit>"
-						   "  <coordinatesystem frame=\"ECEF\"/>"
-						   "</parameters>");
+TEST_CASE("parseParameters floors positive fractional unsigned optional values", "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+									  "  <randomseed>42.9</randomseed>"
+									  "  <adc_bits>12.8</adc_bits>"
+									  "  <oversample>4.2</oversample>"
+									  "</parameters>");
 
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+	REQUIRE(p.random_seed.has_value());
+	REQUIRE(p.random_seed.value_or(0) == 42);
+	REQUIRE(p.adc_bits == 12);
+	REQUIRE(p.oversample_ratio == 4);
+}
 
-		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(500.0, 1e-5));
-		REQUIRE(p.random_seed.has_value());
-		REQUIRE(p.random_seed.value_or(0) == 42);
-		REQUIRE(p.rotation_angle_unit == params::RotationAngleUnit::Radians);
-		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ECEF);
-	}
+TEST_CASE("parseParameters uses defaults without warnings for omitted optional parameters",
+		  "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+									  "</parameters>");
 
-	SECTION("Unsigned optional parameters floor positive fractional values")
-	{
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-						   "  <randomseed>42.9</randomseed>"
-						   "  <adc_bits>12.8</adc_bits>"
-						   "  <oversample>4.2</oversample>"
-						   "</parameters>");
+	REQUIRE_THAT(p.c, WithinAbs(params::Parameters::DEFAULT_C, 1e-5));
+	REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(1000.0, 1e-5));
+	REQUIRE(p.adc_bits == 0);
+	REQUIRE(p.oversample_ratio == 1);
+	REQUIRE(capture.str().empty());
+}
 
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+TEST_CASE("parseParameters defaults omitted origin altitude to zero", "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	LogLevelGuard const log_level(logging::Level::WARNING);
+	CerrCapture const capture;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+									  "  <origin latitude=\"-33.0\" longitude=\"18.0\"/>"
+									  "  <coordinatesystem frame=\"ENU\"/>"
+									  "</parameters>");
 
-		REQUIRE(p.random_seed.has_value());
-		REQUIRE(p.random_seed.value_or(0) == 42);
-		REQUIRE(p.adc_bits == 12);
-		REQUIRE(p.oversample_ratio == 4);
-	}
+	REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
+	REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
+	REQUIRE_THAT(p.origin_altitude, WithinAbs(0.0, 1e-5));
+	REQUIRE(capture.str().empty());
+}
 
-	SECTION("Missing optional parameters use defaults without warnings")
-	{
-		LogLevelGuard const log_level(logging::Level::WARNING);
-		CerrCapture const capture;
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-						   "</parameters>");
+TEST_CASE("parseParameters rejects invalid unsigned optional values", "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	const auto too_large_unsigned =
+		std::to_string(static_cast<unsigned long long>(std::numeric_limits<unsigned>::max()) + 1ULL);
 
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+	REQUIRE_THROWS_AS(parseInvalidParametersXml("<parameters>"
+												"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+												"  <randomseed>-1</randomseed>"
+												"</parameters>"),
+					  XmlException);
+	REQUIRE_THROWS_AS(parseInvalidParametersXml("<parameters>"
+												"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+												"  <adc_bits>nan</adc_bits>"
+												"</parameters>"),
+					  XmlException);
+	REQUIRE_THROWS_AS(parseInvalidParametersXml("<parameters>"
+												"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+												"  <oversample>0</oversample>"
+												"</parameters>"),
+					  std::runtime_error);
+	REQUIRE_THROWS_WITH(parseInvalidParametersXml("<parameters>"
+												  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+												  "  <oversample>9</oversample>"
+												  "</parameters>"),
+						ContainsSubstring("Oversampling ratios > 8 are not supported"));
+	REQUIRE_THROWS_AS(parseInvalidParametersXml(std::string("<parameters>") +
+												"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>" +
+												"  <adc_bits>" + too_large_unsigned + "</adc_bits>" + "</parameters>"),
+					  XmlException);
+}
 
-		REQUIRE_THAT(p.c, WithinAbs(params::Parameters::DEFAULT_C, 1e-5));
-		REQUIRE_THAT(p.sim_sampling_rate, WithinAbs(1000.0, 1e-5));
-		REQUIRE(p.adc_bits == 0);
-		REQUIRE(p.oversample_ratio == 1);
-		REQUIRE(capture.str().empty());
-	}
+TEST_CASE("parseParameters handles UTM north hemisphere", "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+									  "  <coordinatesystem frame=\"UTM\" zone=\"34\" hemisphere=\"N\"/>"
+									  "</parameters>");
 
-	SECTION("Origin altitude defaults to zero when omitted")
-	{
-		LogLevelGuard const log_level(logging::Level::WARNING);
-		CerrCapture const capture;
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-						   "  <origin latitude=\"-33.0\" longitude=\"18.0\"/>"
-						   "  <coordinatesystem frame=\"ENU\"/>"
-						   "</parameters>");
+	REQUIRE(p.coordinate_frame == params::CoordinateFrame::UTM);
+	REQUIRE(p.utm_north_hemisphere == true);
+}
 
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
+TEST_CASE("parseParameters accepts ENU without origin", "[serial][xml_parser_utils]")
+{
+	ParamGuard const guard;
+	const auto p = parseParametersXml("<parameters>"
+									  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
+									  "  <coordinatesystem frame=\"ENU\"/>"
+									  "</parameters>");
 
-		REQUIRE_THAT(p.origin_latitude, WithinAbs(-33.0, 1e-5));
-		REQUIRE_THAT(p.origin_longitude, WithinAbs(18.0, 1e-5));
-		REQUIRE_THAT(p.origin_altitude, WithinAbs(0.0, 1e-5));
-		REQUIRE(capture.str().empty());
-	}
-
-	SECTION("Unsigned optional parameters reject invalid values")
-	{
-		const auto parse_invalid = [](const std::string& xml)
-		{
-			params::Parameters p;
-			auto doc = loadXml(xml);
-			serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
-		};
-		const auto too_large_unsigned =
-			std::to_string(static_cast<unsigned long long>(std::numeric_limits<unsigned>::max()) + 1ULL);
-
-		REQUIRE_THROWS_AS(parse_invalid("<parameters>"
-										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-										"  <randomseed>-1</randomseed>"
-										"</parameters>"),
-						  XmlException);
-
-		REQUIRE_THROWS_AS(parse_invalid("<parameters>"
-										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-										"  <adc_bits>nan</adc_bits>"
-										"</parameters>"),
-						  XmlException);
-
-		REQUIRE_THROWS_AS(parse_invalid("<parameters>"
-										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-										"  <oversample>0</oversample>"
-										"</parameters>"),
-						  std::runtime_error);
-
-		REQUIRE_THROWS_WITH(parse_invalid("<parameters>"
-										  "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-										  "  <oversample>9</oversample>"
-										  "</parameters>"),
-							ContainsSubstring("Oversampling ratios > 8 are not supported"));
-
-		REQUIRE_THROWS_AS(parse_invalid(std::string("<parameters>") +
-										"  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>" +
-										"  <adc_bits>" + too_large_unsigned + "</adc_bits>" + "</parameters>"),
-						  XmlException);
-	}
-
-	SECTION("UTM North Hemisphere")
-	{
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-						   "  <coordinatesystem frame=\"UTM\" zone=\"34\" hemisphere=\"N\"/>"
-						   "</parameters>");
-
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
-		REQUIRE(p.coordinate_frame == params::CoordinateFrame::UTM);
-		REQUIRE(p.utm_north_hemisphere == true);
-	}
-
-	SECTION("ENU without origin logs warning but succeeds")
-	{
-		auto doc = loadXml("<parameters>"
-						   "  <starttime>0</starttime><endtime>1</endtime><rate>1000</rate>"
-						   "  <coordinatesystem frame=\"ENU\"/>"
-						   "</parameters>");
-
-		params::Parameters p;
-		serial::xml_parser_utils::parseParameters(doc.getRootElement(), p);
-		REQUIRE(p.coordinate_frame == params::CoordinateFrame::ENU);
-	}
+	REQUIRE(p.coordinate_frame == params::CoordinateFrame::ENU);
 }
 
 TEST_CASE("parseParameters throws on invalid UTM zones", "[serial][xml_parser_utils]")
@@ -1219,7 +1209,7 @@ TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 	REQUIRE_THAT(model->getK(), WithinAbs(2.0, 1e-5));
 }
 
-TEST_CASE("parsePlatform prefers rotationpath over fixedrotation and supports fixed-only", "[serial][xml_parser_utils]")
+TEST_CASE("parsePlatform prefers rotationpath over fixedrotation", "[serial][xml_parser_utils]")
 {
 	core::World world;
 	serial::xml_parser_utils::ParserContext ctx;
@@ -1229,50 +1219,52 @@ TEST_CASE("parsePlatform prefers rotationpath over fixedrotation and supports fi
 	std::unordered_map<std::string, SimId> const a_refs;
 	std::unordered_map<std::string, SimId> const t_refs;
 	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
-
 	auto register_name = [](const XmlElement&, std::string_view) {};
+	auto doc =
+		loadXml("<platform name=\"plat_both\">"
+				"  <rotationpath interpolation=\"linear\">"
+				"    <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
+				"    <rotationwaypoint><azimuth>90</azimuth><elevation>0</elevation><time>1</time></rotationwaypoint>"
+				"  </rotationpath>"
+				"  <fixedrotation>"
+				"    <startazimuth>90</startazimuth><startelevation>0</startelevation>"
+				"    <azimuthrate>10</azimuthrate><elevationrate>0</elevationrate>"
+				"  </fixedrotation>"
+				"</platform>");
 
-	SECTION("Both rotationpath and fixedrotation: rotationpath is used")
-	{
-		auto doc = loadXml(
-			"<platform name=\"plat_both\">"
-			"  <rotationpath interpolation=\"linear\">"
-			"    <rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint>"
-			"    <rotationwaypoint><azimuth>90</azimuth><elevation>0</elevation><time>1</time></rotationwaypoint>"
-			"  </rotationpath>"
-			"  <fixedrotation>"
-			"    <startazimuth>90</startazimuth><startelevation>0</startelevation>"
-			"    <azimuthrate>10</azimuthrate><elevationrate>0</elevationrate>"
-			"  </fixedrotation>"
-			"</platform>");
+	serial::xml_parser_utils::parsePlatform(doc.getRootElement(), ctx, register_name, refs);
 
-		serial::xml_parser_utils::parsePlatform(doc.getRootElement(), ctx, register_name, refs);
+	REQUIRE(world.getPlatforms().size() == 1);
+	auto* plat = world.getPlatforms().front().get();
+	REQUIRE(plat->getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_LINEAR);
+	REQUIRE_THAT(plat->getRotation(1.0).azimuth, WithinAbs(0.0, 1e-5));
+}
 
-		REQUIRE(world.getPlatforms().size() == 1);
-		auto* plat = world.getPlatforms().front().get();
-		REQUIRE(plat->getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_LINEAR);
-		REQUIRE_THAT(plat->getRotation(1.0).azimuth, WithinAbs(0.0, 1e-5));
-	}
+TEST_CASE("parsePlatform supports fixedrotation without rotationpath", "[serial][xml_parser_utils]")
+{
+	core::World world;
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
 
-	SECTION("Only fixedrotation: constant-rate rotation is used")
-	{
-		world.clear();
+	std::unordered_map<std::string, SimId> const w_refs;
+	std::unordered_map<std::string, SimId> const a_refs;
+	std::unordered_map<std::string, SimId> const t_refs;
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
+	auto register_name = [](const XmlElement&, std::string_view) {};
+	auto doc = loadXml("<platform name=\"plat_fixed\">"
+					   "  <fixedrotation>"
+					   "    <startazimuth>90</startazimuth><startelevation>0</startelevation>"
+					   "    <azimuthrate>10</azimuthrate><elevationrate>5</elevationrate>"
+					   "  </fixedrotation>"
+					   "</platform>");
 
-		auto doc = loadXml("<platform name=\"plat_fixed\">"
-						   "  <fixedrotation>"
-						   "    <startazimuth>90</startazimuth><startelevation>0</startelevation>"
-						   "    <azimuthrate>10</azimuthrate><elevationrate>5</elevationrate>"
-						   "  </fixedrotation>"
-						   "</platform>");
+	serial::xml_parser_utils::parsePlatform(doc.getRootElement(), ctx, register_name, refs);
 
-		serial::xml_parser_utils::parsePlatform(doc.getRootElement(), ctx, register_name, refs);
-
-		REQUIRE(world.getPlatforms().size() == 1);
-		auto* plat = world.getPlatforms().front().get();
-		REQUIRE(plat->getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CONSTANT);
-		REQUIRE_THAT(plat->getRotation(1.0).azimuth, WithinAbs(-10.0 * PI / 180.0, 1e-5));
-		REQUIRE_THAT(plat->getRotation(1.0).elevation, WithinAbs(5.0 * PI / 180.0, 1e-5));
-	}
+	REQUIRE(world.getPlatforms().size() == 1);
+	auto* plat = world.getPlatforms().front().get();
+	REQUIRE(plat->getRotationPath()->getType() == math::RotationPath::InterpType::INTERP_CONSTANT);
+	REQUIRE_THAT(plat->getRotation(1.0).azimuth, WithinAbs(-10.0 * PI / 180.0, 1e-5));
+	REQUIRE_THAT(plat->getRotation(1.0).elevation, WithinAbs(5.0 * PI / 180.0, 1e-5));
 }
 
 TEST_CASE("collectIncludeElements skips empty and unreadable includes", "[serial][xml_parser_utils]")

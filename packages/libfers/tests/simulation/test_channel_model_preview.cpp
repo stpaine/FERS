@@ -68,6 +68,102 @@ namespace
 		REQUIRE(label.find('(') == std::string::npos);
 		REQUIRE(label.find(')') == std::string::npos);
 	}
+
+	struct MonostaticPreviewFixture
+	{
+		antenna::Isotropic antenna{"iso"};
+		std::shared_ptr<timing::Timing> timing = std::make_shared<timing::Timing>("clk", 42);
+		core::World world;
+
+		MonostaticPreviewFixture(const SimId tx_id, const SimId rx_id, const SimId target_id)
+		{
+			auto tx_plat = std::make_unique<radar::Platform>("tx_plat");
+			setupPlatform(*tx_plat, math::Vec3{0.0, 0.0, 0.0});
+			auto* tx_plat_ptr = tx_plat.get();
+
+			auto tgt_plat = std::make_unique<radar::Platform>("tgt_plat");
+			setupPlatform(*tgt_plat, math::Vec3{1000.0, 0.0, 0.0});
+			auto* tgt_plat_ptr = tgt_plat.get();
+
+			auto tx = std::make_unique<radar::Transmitter>(tx_plat_ptr, "tx", radar::OperationMode::PULSED_MODE, tx_id);
+			tx->setAntenna(&antenna);
+			tx->setTiming(timing);
+
+			auto sig = std::make_unique<fers_signal::CwSignal>();
+			auto wave = std::make_unique<fers_signal::RadarSignal>("sig", 1000.0, 1e9, 1e-3, std::move(sig), 300);
+			tx->setSignal(wave.get());
+
+			auto rx =
+				std::make_unique<radar::Receiver>(tx_plat_ptr, "rx", 42, radar::OperationMode::PULSED_MODE, rx_id);
+			rx->setAntenna(&antenna);
+			rx->setTiming(timing);
+			rx->setNoiseTemperature(290.0);
+			tx->setAttached(rx.get());
+
+			auto tgt = radar::createIsoTarget(tgt_plat_ptr, "tgt", 10.0, 42, target_id);
+
+			world.add(std::move(tx_plat));
+			world.add(std::move(tgt_plat));
+			world.add(std::move(tx));
+			world.add(std::move(rx));
+			world.add(std::move(tgt));
+			world.add(std::move(wave));
+		}
+	};
+
+	void requireMonostaticPreviewLinkIds(const std::vector<simulation::PreviewLink>& links, const SimId tx_id,
+										 const SimId target_id)
+	{
+		for (const auto& link : links)
+		{
+			if (link.type == simulation::LinkType::Monostatic || link.type == simulation::LinkType::BistaticTxTgt)
+			{
+				REQUIRE(link.source_id == tx_id);
+				REQUIRE(link.dest_id == target_id);
+				REQUIRE(link.origin_id == tx_id);
+			}
+		}
+	}
+
+	void requireMonostaticPowerLabel(const simulation::PreviewLink& link)
+	{
+		REQUIRE(link.label.find("dBm") != std::string::npos);
+		REQUIRE_THAT(link.rcs, WithinAbs(10.0, 1e-12));
+		REQUIRE(link.actual_power_dbm > -999.0);
+
+		const double label_power_dbm = std::stod(link.label);
+		REQUIRE_THAT(link.display_value, WithinAbs(label_power_dbm, 0.1));
+		REQUIRE_THAT(link.actual_power_dbm, WithinAbs(link.display_value + 10.0 * std::log10(link.rcs), 0.1));
+	}
+
+	void requireBistaticTxTargetPowerLabel(const simulation::PreviewLink& link)
+	{
+		REQUIRE(link.label.find("dBW") != std::string::npos);
+		REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
+	}
+
+	void requireMonostaticLabelSummary(const std::vector<simulation::PreviewLink>& links)
+	{
+		bool saw_monostatic = false;
+		bool saw_tx_tgt = false;
+
+		for (const auto& link : links)
+		{
+			if (link.type == simulation::LinkType::Monostatic)
+			{
+				saw_monostatic = true;
+				requireMonostaticPowerLabel(link);
+			}
+			if (link.type == simulation::LinkType::BistaticTxTgt)
+			{
+				saw_tx_tgt = true;
+				requireBistaticTxTargetPowerLabel(link);
+			}
+		}
+
+		REQUIRE(saw_monostatic);
+		REQUIRE(saw_tx_tgt);
+	}
 }
 
 // =============================================================================
@@ -153,61 +249,10 @@ TEST_CASE("calculatePreviewLinks monostatic link references correct IDs", "[simu
 	const SimId tx_id = 100;
 	const SimId rx_id = 200;
 	const SimId tgt_id = 400;
+	MonostaticPreviewFixture fixture(tx_id, rx_id, tgt_id);
 
-	auto tx_plat = std::make_unique<radar::Platform>("tx_plat");
-	setupPlatform(*tx_plat, math::Vec3{0.0, 0.0, 0.0});
-	auto* tx_plat_ptr = tx_plat.get();
-
-	auto tgt_plat = std::make_unique<radar::Platform>("tgt_plat");
-	setupPlatform(*tgt_plat, math::Vec3{1000.0, 0.0, 0.0});
-	auto* tgt_plat_ptr = tgt_plat.get();
-
-	antenna::Isotropic iso_ant("iso");
-	auto timing = std::make_shared<timing::Timing>("clk", 42);
-
-	auto tx = std::make_unique<radar::Transmitter>(tx_plat_ptr, "tx", radar::OperationMode::PULSED_MODE, tx_id);
-	tx->setAntenna(&iso_ant);
-	tx->setTiming(timing);
-
-	auto sig = std::make_unique<fers_signal::CwSignal>();
-	auto wave = std::make_unique<fers_signal::RadarSignal>("sig", 1000.0, 1e9, 1e-3, std::move(sig), 300);
-	tx->setSignal(wave.get());
-
-	auto rx = std::make_unique<radar::Receiver>(tx_plat_ptr, "rx", 42, radar::OperationMode::PULSED_MODE, rx_id);
-	rx->setAntenna(&iso_ant);
-	rx->setTiming(timing);
-	rx->setNoiseTemperature(290.0);
-
-	tx->setAttached(rx.get());
-
-	auto tgt = radar::createIsoTarget(tgt_plat_ptr, "tgt", 10.0, 42, tgt_id);
-
-	core::World world;
-	world.add(std::move(tx_plat));
-	world.add(std::move(tgt_plat));
-	world.add(std::move(tx));
-	world.add(std::move(rx));
-	world.add(std::move(tgt));
-	world.add(std::move(wave));
-
-	const auto links = simulation::calculatePreviewLinks(world, 0.0);
-
-	// Find the Monostatic link
-	for (const auto& link : links)
-	{
-		if (link.type == simulation::LinkType::Monostatic)
-		{
-			REQUIRE(link.source_id == tx_id);
-			REQUIRE(link.dest_id == tgt_id);
-			REQUIRE(link.origin_id == tx_id);
-		}
-		if (link.type == simulation::LinkType::BistaticTxTgt)
-		{
-			REQUIRE(link.source_id == tx_id);
-			REQUIRE(link.dest_id == tgt_id);
-			REQUIRE(link.origin_id == tx_id);
-		}
-	}
+	const auto links = simulation::calculatePreviewLinks(fixture.world, 0.0);
+	requireMonostaticPreviewLinkIds(links, tx_id, tgt_id);
 }
 
 // =============================================================================
@@ -695,69 +740,10 @@ TEST_CASE("calculatePreviewLinks monostatic label contains dBm", "[simulation][c
 	ParamGuard const guard;
 	params::params.reset();
 	params::setRate(1e6);
+	MonostaticPreviewFixture fixture(100, 200, 400);
 
-	auto tx_plat = std::make_unique<radar::Platform>("tx_plat");
-	setupPlatform(*tx_plat, math::Vec3{0.0, 0.0, 0.0});
-	auto* tx_plat_ptr = tx_plat.get();
-
-	auto tgt_plat = std::make_unique<radar::Platform>("tgt_plat");
-	setupPlatform(*tgt_plat, math::Vec3{1000.0, 0.0, 0.0});
-	auto* tgt_plat_ptr = tgt_plat.get();
-
-	antenna::Isotropic iso_ant("iso");
-	auto timing = std::make_shared<timing::Timing>("clk", 42);
-
-	auto tx = std::make_unique<radar::Transmitter>(tx_plat_ptr, "tx", radar::OperationMode::PULSED_MODE, 100);
-	tx->setAntenna(&iso_ant);
-	tx->setTiming(timing);
-
-	auto sig = std::make_unique<fers_signal::CwSignal>();
-	auto wave = std::make_unique<fers_signal::RadarSignal>("sig", 1000.0, 1e9, 1e-3, std::move(sig), 300);
-	tx->setSignal(wave.get());
-
-	auto rx = std::make_unique<radar::Receiver>(tx_plat_ptr, "rx", 42, radar::OperationMode::PULSED_MODE, 200);
-	rx->setAntenna(&iso_ant);
-	rx->setTiming(timing);
-	rx->setNoiseTemperature(290.0);
-	tx->setAttached(rx.get());
-
-	auto tgt = radar::createIsoTarget(tgt_plat_ptr, "tgt", 10.0, 42, 400);
-
-	core::World world;
-	world.add(std::move(tx_plat));
-	world.add(std::move(tgt_plat));
-	world.add(std::move(tx));
-	world.add(std::move(rx));
-	world.add(std::move(tgt));
-	world.add(std::move(wave));
-
-	const auto links = simulation::calculatePreviewLinks(world, 0.0);
-	bool saw_monostatic = false;
-	bool saw_tx_tgt = false;
-
-	for (const auto& link : links)
-	{
-		if (link.type == simulation::LinkType::Monostatic)
-		{
-			saw_monostatic = true;
-			REQUIRE(link.label.find("dBm") != std::string::npos);
-			REQUIRE_THAT(link.rcs, WithinAbs(10.0, 1e-12));
-			REQUIRE(link.actual_power_dbm > -999.0);
-
-			const double label_power_dbm = std::stod(link.label);
-			REQUIRE_THAT(link.display_value, WithinAbs(label_power_dbm, 0.1));
-			REQUIRE_THAT(link.actual_power_dbm, WithinAbs(link.display_value + 10.0 * std::log10(link.rcs), 0.1));
-		}
-		if (link.type == simulation::LinkType::BistaticTxTgt)
-		{
-			saw_tx_tgt = true;
-			REQUIRE(link.label.find("dBW") != std::string::npos);
-			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(link.label), 0.1));
-		}
-	}
-
-	REQUIRE(saw_monostatic);
-	REQUIRE(saw_tx_tgt);
+	const auto links = simulation::calculatePreviewLinks(fixture.world, 0.0);
+	requireMonostaticLabelSummary(links);
 }
 
 TEST_CASE("calculatePreviewLinks FMCW labels use single-value preview style", "[simulation][channel_model][preview]")

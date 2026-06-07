@@ -376,81 +376,109 @@ namespace core
 
 		for (const auto& transmitter : _transmitters)
 		{
-			if (transmitter->getMode() == radar::OperationMode::PULSED_MODE)
-			{
-				// Find the first valid pulse time starting from the simulation start time.
-				if (auto start_time = transmitter->getNextPulseTime(sim_start); start_time)
-				{
-					if (*start_time <= sim_end)
-					{
-						_event_queue.push({*start_time, EventType::TX_PULSED_START, transmitter.get()});
-					}
-				}
-			}
-			else
-			{
-				const auto& schedule = transmitter->getSchedule();
-				if (schedule.empty())
-				{
-					const RealType end = makeActiveSource(transmitter.get(), sim_start, sim_end).segment_end;
-					if (sim_start < end)
-					{
-						_event_queue.push({sim_start, EventType::TX_STREAMING_START, transmitter.get()});
-						_event_queue.push({end, EventType::TX_STREAMING_END, transmitter.get()});
-					}
-				}
-				else
-				{
-					for (const auto& period : schedule)
-					{
-						const RealType start = std::max(sim_start, period.start);
-						const RealType end =
-							makeActiveSource(transmitter.get(), period.start, std::min(sim_end, period.end))
-								.segment_end;
-
-						if (start < end)
-						{
-							_event_queue.push({start, EventType::TX_STREAMING_START, transmitter.get()});
-							_event_queue.push({end, EventType::TX_STREAMING_END, transmitter.get()});
-						}
-					}
-				}
-			}
+			scheduleInitialTransmitterEvents(transmitter.get(), sim_start, sim_end);
 		}
 
 		for (const auto& receiver : _receivers)
 		{
-			if (receiver->getMode() == radar::OperationMode::PULSED_MODE)
-			{
-				// Schedule the first receive window checking against schedule
-				const RealType nominal_start = receiver->getWindowStart(0);
-				if (auto start = receiver->getNextWindowTime(nominal_start); start && *start < params::endTime())
-				{
-					_event_queue.push({*start, EventType::RX_PULSED_WINDOW_START, receiver.get()});
-				}
-			}
-			else
-			{
-				const auto& schedule = receiver->getSchedule();
-				if (schedule.empty())
-				{
-					_event_queue.push({params::startTime(), EventType::RX_STREAMING_START, receiver.get()});
-					_event_queue.push({params::endTime(), EventType::RX_STREAMING_END, receiver.get()});
-				}
-				else
-				{
-					for (const auto& period : schedule)
-					{
-						const RealType start = std::max(params::startTime(), period.start);
-						const RealType end = std::min(params::endTime(), period.end);
-						if (start < end)
-						{
-							_event_queue.push({start, EventType::RX_STREAMING_START, receiver.get()});
-							_event_queue.push({end, EventType::RX_STREAMING_END, receiver.get()});
-						}
-					}
-				}
-			}
+			scheduleInitialReceiverEvents(receiver.get(), sim_start, sim_end);
+		}
+	}
+
+	void World::scheduleInitialTransmitterEvents(Transmitter* const transmitter, const RealType sim_start,
+												 const RealType sim_end)
+	{
+		if (transmitter->getMode() == radar::OperationMode::PULSED_MODE)
+		{
+			scheduleInitialPulsedTransmitterEvent(transmitter, sim_start, sim_end);
+			return;
+		}
+		scheduleInitialStreamingTransmitterEvents(transmitter, sim_start, sim_end);
+	}
+
+	void World::scheduleInitialPulsedTransmitterEvent(Transmitter* const transmitter, const RealType sim_start,
+													  const RealType sim_end)
+	{
+		// Find the first valid pulse time starting from the simulation start time.
+		if (auto start_time = transmitter->getNextPulseTime(sim_start); start_time && *start_time <= sim_end)
+		{
+			_event_queue.push({*start_time, EventType::TX_PULSED_START, transmitter});
+		}
+	}
+
+	void World::scheduleInitialStreamingTransmitterEvents(Transmitter* const transmitter, const RealType sim_start,
+														  const RealType sim_end)
+	{
+		const auto& schedule = transmitter->getSchedule();
+		if (schedule.empty())
+		{
+			const RealType end = makeActiveSource(transmitter, sim_start, sim_end).segment_end;
+			pushStreamingTransmitterEvents(transmitter, sim_start, end);
+			return;
+		}
+
+		for (const auto& period : schedule)
+		{
+			const RealType start = std::max(sim_start, period.start);
+			const RealType end = makeActiveSource(transmitter, period.start, std::min(sim_end, period.end)).segment_end;
+			pushStreamingTransmitterEvents(transmitter, start, end);
+		}
+	}
+
+	void World::pushStreamingTransmitterEvents(Transmitter* const transmitter, const RealType start, const RealType end)
+	{
+		if (start < end)
+		{
+			_event_queue.push({start, EventType::TX_STREAMING_START, transmitter});
+			_event_queue.push({end, EventType::TX_STREAMING_END, transmitter});
+		}
+	}
+
+	void World::scheduleInitialReceiverEvents(Receiver* const receiver, const RealType sim_start,
+											  const RealType sim_end)
+	{
+		if (receiver->getMode() == radar::OperationMode::PULSED_MODE)
+		{
+			scheduleInitialPulsedReceiverEvent(receiver, sim_end);
+			return;
+		}
+		scheduleInitialStreamingReceiverEvents(receiver, sim_start, sim_end);
+	}
+
+	void World::scheduleInitialPulsedReceiverEvent(Receiver* const receiver, const RealType sim_end)
+	{
+		const RealType nominal_start = receiver->getWindowStart(0);
+		if (auto start = receiver->getNextWindowTime(nominal_start); start && *start < sim_end)
+		{
+			_event_queue.push({*start, EventType::RX_PULSED_WINDOW_START, receiver});
+		}
+	}
+
+	void World::scheduleInitialStreamingReceiverEvents(Receiver* const receiver, const RealType sim_start,
+													   const RealType sim_end)
+	{
+		const auto& schedule = receiver->getSchedule();
+		if (schedule.empty())
+		{
+			_event_queue.push({sim_start, EventType::RX_STREAMING_START, receiver});
+			_event_queue.push({sim_end, EventType::RX_STREAMING_END, receiver});
+			return;
+		}
+
+		for (const auto& period : schedule)
+		{
+			const RealType start = std::max(sim_start, period.start);
+			const RealType end = std::min(sim_end, period.end);
+			pushStreamingReceiverEvents(receiver, start, end);
+		}
+	}
+
+	void World::pushStreamingReceiverEvents(Receiver* const receiver, const RealType start, const RealType end)
+	{
+		if (start < end)
+		{
+			_event_queue.push({start, EventType::RX_STREAMING_START, receiver});
+			_event_queue.push({end, EventType::RX_STREAMING_END, receiver});
 		}
 	}
 

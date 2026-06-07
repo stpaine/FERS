@@ -322,6 +322,18 @@ namespace core
 		[[nodiscard]] SimulationState& getSimulationState() noexcept { return _simulation_state; }
 
 	private:
+		void scheduleInitialTransmitterEvents(radar::Transmitter* transmitter, RealType sim_start, RealType sim_end);
+		void scheduleInitialPulsedTransmitterEvent(radar::Transmitter* transmitter, RealType sim_start,
+												   RealType sim_end);
+		void scheduleInitialStreamingTransmitterEvents(radar::Transmitter* transmitter, RealType sim_start,
+													   RealType sim_end);
+		void pushStreamingTransmitterEvents(radar::Transmitter* transmitter, RealType start, RealType end);
+
+		void scheduleInitialReceiverEvents(radar::Receiver* receiver, RealType sim_start, RealType sim_end);
+		void scheduleInitialPulsedReceiverEvent(radar::Receiver* receiver, RealType sim_end);
+		void scheduleInitialStreamingReceiverEvents(radar::Receiver* receiver, RealType sim_start, RealType sim_end);
+		void pushStreamingReceiverEvents(radar::Receiver* receiver, RealType start, RealType end);
+
 		std::vector<std::unique_ptr<radar::Platform>> _platforms; ///< Owned radar platforms.
 
 		std::vector<std::unique_ptr<radar::Transmitter>> _transmitters; ///< Owned transmitters.

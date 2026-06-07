@@ -9,6 +9,24 @@
 using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
+namespace
+{
+	void requireMotionPosition(const fers_interpolated_point_t& point, const double x, const double y, const double z)
+	{
+		REQUIRE_THAT(point.x, WithinAbs(x, 1e-12));
+		REQUIRE_THAT(point.y, WithinAbs(y, 1e-12));
+		REQUIRE_THAT(point.z, WithinAbs(z, 1e-12));
+	}
+
+	void requireMotionVelocity(const fers_interpolated_point_t& point, const double vx, const double vy,
+							   const double vz)
+	{
+		REQUIRE_THAT(point.vx, WithinAbs(vx, 1e-12));
+		REQUIRE_THAT(point.vy, WithinAbs(vy, 1e-12));
+		REQUIRE_THAT(point.vz, WithinAbs(vz, 1e-12));
+	}
+}
+
 TEST_CASE("API motion path interpolation validates arguments", "[api][paths]")
 {
 	api_test::clearLastError();
@@ -111,21 +129,13 @@ TEST_CASE("API motion path interpolation returns expected linear positions and v
 	const auto& middle = path.get()->points[1];
 	const auto& finish = path.get()->points[2];
 
-	REQUIRE_THAT(start.x, WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(start.y, WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(start.z, WithinAbs(0.0, 1e-12));
-	REQUIRE_THAT(middle.x, WithinAbs(5.0, 1e-12));
-	REQUIRE_THAT(middle.y, WithinAbs(10.0, 1e-12));
-	REQUIRE_THAT(middle.z, WithinAbs(15.0, 1e-12));
-	REQUIRE_THAT(finish.x, WithinAbs(10.0, 1e-12));
-	REQUIRE_THAT(finish.y, WithinAbs(20.0, 1e-12));
-	REQUIRE_THAT(finish.z, WithinAbs(30.0, 1e-12));
+	requireMotionPosition(start, 0.0, 0.0, 0.0);
+	requireMotionPosition(middle, 5.0, 10.0, 15.0);
+	requireMotionPosition(finish, 10.0, 20.0, 30.0);
 
 	for (const auto* point : {&start, &middle, &finish})
 	{
-		REQUIRE_THAT(point->vx, WithinAbs(1.0, 1e-12));
-		REQUIRE_THAT(point->vy, WithinAbs(2.0, 1e-12));
-		REQUIRE_THAT(point->vz, WithinAbs(3.0, 1e-12));
+		requireMotionVelocity(*point, 1.0, 2.0, 3.0);
 	}
 }
 

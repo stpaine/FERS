@@ -958,7 +958,6 @@ namespace core
 	{
 		auto& state = _world->getSimulationState();
 		auto& t_current = state.t_current;
-		auto& active_streaming_transmitters = state.active_streaming_transmitters;
 
 		if (t_event <= t_current)
 		{
@@ -973,35 +972,11 @@ namespace core
 
 		ensureCwPhaseNoiseLookup();
 
-		const auto next_cleanup_deadline = [&](const RealType from_time) -> std::optional<RealType>
-		{
-			std::optional<RealType> next_deadline;
-			for (const auto& source : active_streaming_transmitters)
-			{
-				if (source.segment_end > from_time)
-				{
-					continue;
-				}
-				const auto cleanup_deadline = streamingSourceCleanupDeadline(source, from_time);
-				if (cleanup_deadline.has_value() && *cleanup_deadline > from_time &&
-					(!next_deadline.has_value() || *cleanup_deadline < *next_deadline))
-				{
-					next_deadline = cleanup_deadline;
-				}
-			}
-			return next_deadline;
-		};
-
 		while (t_current < t_event && !isCancellationRequested())
 		{
 			cleanupInactiveStreamingSources(t_current);
 
-			RealType chunk_end = t_event;
-			if (const auto cleanup_deadline = next_cleanup_deadline(t_current);
-				cleanup_deadline.has_value() && *cleanup_deadline < chunk_end)
-			{
-				chunk_end = *cleanup_deadline;
-			}
+			const RealType chunk_end = streamingChunkEnd(t_current, t_event);
 			if (chunk_end <= t_current)
 			{
 				break;
@@ -1011,46 +986,101 @@ namespace core
 			const auto end_index = streamingSampleIndexAtOrAfter(chunk_end, dt_sim);
 			for (size_t sample_index = start_index; sample_index < end_index; ++sample_index)
 			{
-				if (((sample_index - start_index) % 1024) == 0 && isCancellationRequested())
+				if (shouldStopStreamingChunk(sample_index, start_index))
 				{
 					break;
 				}
-				const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
-
-				for (std::size_t receiver_index = 0; receiver_index < _world->getReceivers().size(); ++receiver_index)
-				{
-					const auto& receiver_ptr = _world->getReceivers()[receiver_index];
-					if ((receiver_ptr->getMode() == OperationMode::CW_MODE ||
-						 receiver_ptr->getMode() == OperationMode::FMCW_MODE) &&
-						receiver_ptr->isActive())
-					{
-						ComplexType const sample =
-							calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
-													 _streaming_tracker_caches[receiver_index]);
-						if (receiver_ptr->hasFmcwIfResamplingSink())
-						{
-							appendFmcwIfSample(receiver_index, t_step, sample);
-						}
-						else if (_output_sink != nullptr)
-						{
-							appendStreamingOutputSample(receiver_index, sample_index, t_step, sample);
-						}
-					}
-				}
-				if (_output_sink != nullptr && t_step >= _next_context_heartbeat_time)
-				{
-					emitContextHeartbeatsThrough(t_step);
-				}
-				if (((sample_index - first_index) % progress_report_stride) == 0 || sample_index + 1 == final_index)
-				{
-					reportSimulationProgress(t_step);
-				}
+				processStreamingSample(sample_index, first_index, final_index, progress_report_stride, dt_sim);
 			}
 
 			t_current = chunk_end;
 			emitContextHeartbeatsThrough(t_current);
 		}
 		cleanupInactiveStreamingSources(t_current);
+	}
+
+	std::optional<RealType> SimulationEngine::nextStreamingCleanupDeadline(const RealType from_time)
+	{
+		const auto& active_streaming_transmitters = _world->getSimulationState().active_streaming_transmitters;
+		std::optional<RealType> next_deadline;
+		for (const auto& source : active_streaming_transmitters)
+		{
+			if (source.segment_end > from_time)
+			{
+				continue;
+			}
+			const auto cleanup_deadline = streamingSourceCleanupDeadline(source, from_time);
+			if (cleanup_deadline.has_value() && *cleanup_deadline > from_time &&
+				(!next_deadline.has_value() || *cleanup_deadline < *next_deadline))
+			{
+				next_deadline = cleanup_deadline;
+			}
+		}
+		return next_deadline;
+	}
+
+	RealType SimulationEngine::streamingChunkEnd(const RealType from_time, const RealType event_time)
+	{
+		if (const auto cleanup_deadline = nextStreamingCleanupDeadline(from_time);
+			cleanup_deadline.has_value() && *cleanup_deadline < event_time)
+		{
+			return *cleanup_deadline;
+		}
+		return event_time;
+	}
+
+	bool SimulationEngine::shouldStopStreamingChunk(const std::size_t sample_index, const std::size_t chunk_start_index)
+	{
+		return ((sample_index - chunk_start_index) % 1024) == 0 && isCancellationRequested();
+	}
+
+	void SimulationEngine::processStreamingSample(const std::size_t sample_index, const std::size_t first_index,
+												  const std::size_t final_index,
+												  const std::size_t progress_report_stride, const RealType dt_sim)
+	{
+		const RealType t_step = params::startTime() + static_cast<RealType>(sample_index) * dt_sim;
+		appendActiveReceiverStreamingSamples(sample_index, t_step);
+
+		if (_output_sink != nullptr && t_step >= _next_context_heartbeat_time)
+		{
+			emitContextHeartbeatsThrough(t_step);
+		}
+		if (((sample_index - first_index) % progress_report_stride) == 0 || sample_index + 1 == final_index)
+		{
+			reportSimulationProgress(t_step);
+		}
+	}
+
+	void SimulationEngine::appendActiveReceiverStreamingSamples(const std::size_t sample_index, const RealType t_step)
+	{
+		for (std::size_t receiver_index = 0; receiver_index < _world->getReceivers().size(); ++receiver_index)
+		{
+			appendReceiverStreamingSample(receiver_index, sample_index, t_step);
+		}
+	}
+
+	void SimulationEngine::appendReceiverStreamingSample(const std::size_t receiver_index,
+														 const std::size_t sample_index, const RealType t_step)
+	{
+		const auto& receiver_ptr = _world->getReceivers()[receiver_index];
+		if ((receiver_ptr->getMode() != OperationMode::CW_MODE &&
+			 receiver_ptr->getMode() != OperationMode::FMCW_MODE) ||
+			!receiver_ptr->isActive())
+		{
+			return;
+		}
+
+		const auto& active_streaming_transmitters = _world->getSimulationState().active_streaming_transmitters;
+		ComplexType const sample = calculateStreamingSample(receiver_ptr.get(), t_step, active_streaming_transmitters,
+															_streaming_tracker_caches[receiver_index]);
+		if (receiver_ptr->hasFmcwIfResamplingSink())
+		{
+			appendFmcwIfSample(receiver_index, t_step, sample);
+		}
+		else if (_output_sink != nullptr)
+		{
+			appendStreamingOutputSample(receiver_index, sample_index, t_step, sample);
+		}
 	}
 
 	void SimulationEngine::appendFmcwIfSample(const std::size_t receiver_index, const RealType t_step,

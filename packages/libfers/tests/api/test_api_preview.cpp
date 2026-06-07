@@ -3,8 +3,10 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <libfers/api.h>
+#include <nlohmann/json.hpp>
 #include <string>
 
 #include "api_test_helpers.h"
@@ -14,11 +16,165 @@ using Catch::Matchers::WithinAbs;
 
 namespace
 {
+	struct PreviewIds
+	{
+		std::uint64_t tx = 0;
+		std::uint64_t rx = 0;
+		std::uint64_t target = 0;
+	};
+
 	template <std::size_t N>
 	[[nodiscard]] std::string linkLabelString(const char (&label)[N])
 	{
 		const auto label_end = std::find(std::begin(label), std::end(label), '\0');
 		return std::string(std::begin(label), label_end);
+	}
+
+	void requirePreviewIds(const PreviewIds& ids)
+	{
+		REQUIRE(ids.tx != 0);
+		REQUIRE(ids.rx != 0);
+		REQUIRE(ids.target != 0);
+	}
+
+	[[nodiscard]] PreviewIds previewIdsFromBistaticScenario(const nlohmann::json& scenario)
+	{
+		PreviewIds ids;
+		for (const auto& platform : scenario.at("simulation").at("platforms"))
+		{
+			for (const auto& component : platform.at("components"))
+			{
+				if (component.contains("transmitter"))
+				{
+					ids.tx = api_test::parseId(component.at("transmitter").at("id"));
+				}
+				else if (component.contains("receiver"))
+				{
+					ids.rx = api_test::parseId(component.at("receiver").at("id"));
+				}
+				else if (component.contains("target"))
+				{
+					ids.target = api_test::parseId(component.at("target").at("id"));
+				}
+			}
+		}
+		return ids;
+	}
+
+	[[nodiscard]] PreviewIds previewIdsFromMonostaticScenario(const nlohmann::json& scenario)
+	{
+		PreviewIds ids;
+		for (const auto& platform : scenario.at("simulation").at("platforms"))
+		{
+			for (const auto& component : platform.at("components"))
+			{
+				if (component.contains("monostatic"))
+				{
+					ids.tx = api_test::parseId(component.at("monostatic").at("tx_id"));
+					ids.rx = api_test::parseId(component.at("monostatic").at("rx_id"));
+				}
+				else if (component.contains("target"))
+				{
+					ids.target = api_test::parseId(component.at("target").at("id"));
+				}
+			}
+		}
+		return ids;
+	}
+
+	void requireCommonPreviewLinkFields(const fers_visual_link_t& link)
+	{
+		const std::string label = linkLabelString(link.label);
+		REQUIRE(link.label[sizeof(link.label) - 1] == '\0');
+		REQUIRE_FALSE(label.empty());
+		REQUIRE(std::isfinite(link.display_value));
+	}
+
+	void requireBistaticTxTargetLink(const fers_visual_link_t& link, const PreviewIds& ids)
+	{
+		const std::string label = linkLabelString(link.label);
+		REQUIRE(link.source_id == ids.tx);
+		REQUIRE(link.dest_id == ids.target);
+		REQUIRE(link.origin_id == ids.tx);
+		REQUIRE(link.quality == FERS_LINK_STRONG);
+		REQUIRE_THAT(link.display_value, WithinAbs(std::stod(label), 0.1));
+	}
+
+	void requireDirectTxRxLink(const fers_visual_link_t& link, const PreviewIds& ids)
+	{
+		REQUIRE(link.source_id == ids.tx);
+		REQUIRE(link.dest_id == ids.rx);
+		REQUIRE(link.origin_id == ids.tx);
+		REQUIRE(link.quality == FERS_LINK_STRONG);
+	}
+
+	void requireBistaticTargetRxLink(const fers_visual_link_t& link, const PreviewIds& ids)
+	{
+		const std::string label = linkLabelString(link.label);
+		REQUIRE(link.source_id == ids.target);
+		REQUIRE(link.dest_id == ids.rx);
+		REQUIRE(link.origin_id == ids.tx);
+		REQUIRE(link.quality == FERS_LINK_STRONG);
+		REQUIRE_THAT(link.display_value, WithinAbs(std::stod(label), 0.1));
+	}
+
+	void requireBistaticPreviewLinks(const fers_visual_link_list_t& links, const PreviewIds& ids)
+	{
+		bool saw_tx_tgt = false;
+		bool saw_direct = false;
+		bool saw_tgt_rx = false;
+
+		for (size_t i = 0; i < links.count; ++i)
+		{
+			const auto& link = links.links[i];
+			requireCommonPreviewLinkFields(link);
+
+			switch (link.type)
+			{
+			case FERS_LINK_BISTATIC_TX_TGT:
+				saw_tx_tgt = true;
+				requireBistaticTxTargetLink(link, ids);
+				break;
+			case FERS_LINK_DIRECT_TX_RX:
+				saw_direct = true;
+				requireDirectTxRxLink(link, ids);
+				break;
+			case FERS_LINK_BISTATIC_TGT_RX:
+				saw_tgt_rx = true;
+				requireBistaticTargetRxLink(link, ids);
+				break;
+			default:
+				break;
+			}
+		}
+
+		REQUIRE(saw_tx_tgt);
+		REQUIRE(saw_direct);
+		REQUIRE(saw_tgt_rx);
+	}
+
+	void requireMonostaticLink(const fers_visual_link_t& link, const PreviewIds& ids)
+	{
+		REQUIRE(link.source_id == ids.tx);
+		REQUIRE(link.dest_id == ids.target);
+		REQUIRE(link.origin_id == ids.tx);
+		REQUIRE(link.quality == FERS_LINK_STRONG);
+	}
+
+	void requireMonostaticPreviewLinks(const fers_visual_link_list_t& links, const PreviewIds& ids)
+	{
+		bool saw_monostatic = false;
+		for (size_t i = 0; i < links.count; ++i)
+		{
+			const auto& link = links.links[i];
+			if (link.type == FERS_LINK_MONOSTATIC)
+			{
+				saw_monostatic = true;
+				requireMonostaticLink(link, ids);
+			}
+		}
+
+		REQUIRE(saw_monostatic);
 	}
 }
 
@@ -163,83 +319,13 @@ TEST_CASE("API preview links map link metadata into C structs", "[api][preview]"
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
 	const auto scenario = api_test::parseScenarioJson(context.get());
-	const auto& platforms = scenario.at("simulation").at("platforms");
-
-	std::uint64_t tx_id = 0;
-	std::uint64_t rx_id = 0;
-	std::uint64_t target_id = 0;
-	for (const auto& platform : platforms)
-	{
-		for (const auto& component : platform.at("components"))
-		{
-			if (component.contains("transmitter"))
-			{
-				tx_id = api_test::parseId(component.at("transmitter").at("id"));
-			}
-			else if (component.contains("receiver"))
-			{
-				rx_id = api_test::parseId(component.at("receiver").at("id"));
-			}
-			else if (component.contains("target"))
-			{
-				target_id = api_test::parseId(component.at("target").at("id"));
-			}
-		}
-	}
-
-	REQUIRE(tx_id != 0);
-	REQUIRE(rx_id != 0);
-	REQUIRE(target_id != 0);
+	const PreviewIds ids = previewIdsFromBistaticScenario(scenario);
+	requirePreviewIds(ids);
 
 	api_test::PreviewLinks const links(fers_calculate_preview_links(context.get(), 0.0));
 	REQUIRE(links.get() != nullptr);
 	REQUIRE(links.get()->count > 0u);
-
-	bool saw_tx_tgt = false;
-	bool saw_direct = false;
-	bool saw_tgt_rx = false;
-
-	for (size_t i = 0; i < links.get()->count; ++i)
-	{
-		const auto& link = links.get()->links[i];
-		const std::string label = linkLabelString(link.label);
-		REQUIRE(link.label[sizeof(link.label) - 1] == '\0');
-		REQUIRE_FALSE(label.empty());
-		REQUIRE(std::isfinite(link.display_value));
-
-		switch (link.type)
-		{
-		case FERS_LINK_BISTATIC_TX_TGT:
-			saw_tx_tgt = true;
-			REQUIRE(link.source_id == tx_id);
-			REQUIRE(link.dest_id == target_id);
-			REQUIRE(link.origin_id == tx_id);
-			REQUIRE(link.quality == FERS_LINK_STRONG);
-			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(label), 0.1));
-			break;
-		case FERS_LINK_DIRECT_TX_RX:
-			saw_direct = true;
-			REQUIRE(link.source_id == tx_id);
-			REQUIRE(link.dest_id == rx_id);
-			REQUIRE(link.origin_id == tx_id);
-			REQUIRE(link.quality == FERS_LINK_STRONG);
-			break;
-		case FERS_LINK_BISTATIC_TGT_RX:
-			saw_tgt_rx = true;
-			REQUIRE(link.source_id == target_id);
-			REQUIRE(link.dest_id == rx_id);
-			REQUIRE(link.origin_id == tx_id);
-			REQUIRE(link.quality == FERS_LINK_STRONG);
-			REQUIRE_THAT(link.display_value, WithinAbs(std::stod(label), 0.1));
-			break;
-		default:
-			break;
-		}
-	}
-
-	REQUIRE(saw_tx_tgt);
-	REQUIRE(saw_direct);
-	REQUIRE(saw_tgt_rx);
+	requireBistaticPreviewLinks(*links.get(), ids);
 }
 
 TEST_CASE("API preview links map monostatic link types into C enums", "[api][preview]")
@@ -253,47 +339,10 @@ TEST_CASE("API preview links map monostatic link types into C enums", "[api][pre
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
 	const auto scenario = api_test::parseScenarioJson(context.get());
-	const auto& platforms = scenario.at("simulation").at("platforms");
-
-	std::uint64_t tx_id = 0;
-	std::uint64_t rx_id = 0;
-	std::uint64_t target_id = 0;
-	for (const auto& platform : platforms)
-	{
-		for (const auto& component : platform.at("components"))
-		{
-			if (component.contains("monostatic"))
-			{
-				tx_id = api_test::parseId(component.at("monostatic").at("tx_id"));
-				rx_id = api_test::parseId(component.at("monostatic").at("rx_id"));
-			}
-			else if (component.contains("target"))
-			{
-				target_id = api_test::parseId(component.at("target").at("id"));
-			}
-		}
-	}
-
-	REQUIRE(tx_id != 0);
-	REQUIRE(rx_id != 0);
-	REQUIRE(target_id != 0);
+	const PreviewIds ids = previewIdsFromMonostaticScenario(scenario);
+	requirePreviewIds(ids);
 
 	api_test::PreviewLinks const links(fers_calculate_preview_links(context.get(), 0.0));
 	REQUIRE(links.get() != nullptr);
-
-	bool saw_monostatic = false;
-	for (size_t i = 0; i < links.get()->count; ++i)
-	{
-		const auto& link = links.get()->links[i];
-		if (link.type == FERS_LINK_MONOSTATIC)
-		{
-			saw_monostatic = true;
-			REQUIRE(link.source_id == tx_id);
-			REQUIRE(link.dest_id == target_id);
-			REQUIRE(link.origin_id == tx_id);
-			REQUIRE(link.quality == FERS_LINK_STRONG);
-		}
-	}
-
-	REQUIRE(saw_monostatic);
+	requireMonostaticPreviewLinks(*links.get(), ids);
 }

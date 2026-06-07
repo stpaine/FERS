@@ -42,6 +42,26 @@ namespace
 		std::cout.rdbuf(original);
 		return buffer.str();
 	}
+
+	void requireRecognizedOptions(const core::Config& config, const unsigned requested_threads)
+	{
+		CHECK(config.script_file == "scenario.fersxml");
+		CHECK(config.log_level == FERS_LOG_DEBUG);
+		CHECK(config.log_file == std::optional<std::string>{"runner.log"});
+		CHECK(config.num_threads == requested_threads);
+		CHECK_FALSE(config.validate);
+		CHECK(config.generate_kml);
+		CHECK(config.kml_file == std::optional<std::string>{"preview.kml"});
+		CHECK(config.output_dir == std::optional<std::string>{"results"});
+		CHECK(config.vita49_enabled);
+		CHECK(config.vita49_host == "localhost");
+		CHECK(config.vita49_port == 4991);
+		REQUIRE(config.vita49_fullscale.has_value());
+		CHECK(config.vita49_fullscale.value_or(0.0) == 2.5);
+		CHECK(config.vita49_epoch_unix_nanoseconds == std::optional<std::uint64_t>{1700000000123456789ULL});
+		CHECK(config.vita49_max_udp_payload == std::optional<std::uint16_t>{900});
+		CHECK(config.vita49_queue_depth == std::optional<std::uint32_t>{17});
+	}
 }
 
 TEST_CASE("parseArguments accepts a script file and preserves defaults", "[fers-cli][arg-parser]")
@@ -79,22 +99,7 @@ TEST_CASE("parseArguments applies recognized options", "[fers-cli][arg-parser]")
 		 "1700000000123456789", "--vita49-max-udp-payload", "900", "--vita49-queue-depth", "17"});
 
 	REQUIRE(result);
-	CHECK(result->script_file == "scenario.fersxml");
-	CHECK(result->log_level == FERS_LOG_DEBUG);
-	CHECK(result->log_file == std::optional<std::string>{"runner.log"});
-	CHECK(result->num_threads == requested_threads);
-	CHECK_FALSE(result->validate);
-	CHECK(result->generate_kml);
-	CHECK(result->kml_file == std::optional<std::string>{"preview.kml"});
-	CHECK(result->output_dir == std::optional<std::string>{"results"});
-	CHECK(result->vita49_enabled);
-	CHECK(result->vita49_host == "localhost");
-	CHECK(result->vita49_port == 4991);
-	REQUIRE(result->vita49_fullscale.has_value());
-	CHECK(result->vita49_fullscale.value_or(0.0) == 2.5);
-	CHECK(result->vita49_epoch_unix_nanoseconds == std::optional<std::uint64_t>{1700000000123456789ULL});
-	CHECK(result->vita49_max_udp_payload == std::optional<std::uint16_t>{900});
-	CHECK(result->vita49_queue_depth == std::optional<std::uint32_t>{17});
+	requireRecognizedOptions(*result, requested_threads);
 }
 
 TEST_CASE("parseArguments accepts flags before and after the script", "[fers-cli][arg-parser]")

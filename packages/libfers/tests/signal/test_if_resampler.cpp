@@ -24,6 +24,38 @@ namespace
 		}
 		return data;
 	}
+
+	void requireHalfBandStages(const fers_signal::FmcwIfResamplerPlan& plan)
+	{
+		REQUIRE(plan.stages.size() == 7);
+		for (std::size_t i = 0; i < 6; ++i)
+		{
+			REQUIRE(plan.stages[i].kind == fers_signal::FmcwIfResamplerStageKind::HalfBandDecimateBy2);
+			REQUIRE(plan.stages[i].down_factor == 2);
+		}
+	}
+
+	void requireFinalRationalStage(const fers_signal::FmcwIfResamplerPlan& plan,
+								   const fers_signal::FmcwIfResamplerRequest& request)
+	{
+		const auto& final_stage = plan.stages.back();
+		REQUIRE(final_stage.kind == fers_signal::FmcwIfResamplerStageKind::RationalPolyphase);
+		REQUIRE(final_stage.up_factor == 5);
+		REQUIRE(final_stage.down_factor == 8);
+		REQUIRE(final_stage.phase_refinement == request.limits.max_phase_refinement);
+		REQUIRE(final_stage.phase_count == 5 * request.limits.max_phase_refinement);
+	}
+
+	void requirePlanDelayAndCost(const fers_signal::FmcwIfResamplerPlan& plan,
+								 const fers_signal::FmcwIfResamplerRequest& request)
+	{
+		REQUIRE(plan.group_delay_seconds > 0.0);
+		REQUIRE(plan.group_delay_output_samples > 0.0);
+		REQUIRE(plan.warmup_discard_samples > 0);
+		REQUIRE(plan.fractional_output_delay_samples >= 0.0);
+		REQUIRE(plan.fractional_output_delay_samples < 1.0);
+		REQUIRE(plan.estimated_macs_per_output_sample <= request.limits.max_macs_per_output_sample);
+	}
 }
 
 TEST_CASE("FMCW IF resampler plans rational 5/512 conversion", "[signal][if_resampler][plan]")
@@ -38,24 +70,9 @@ TEST_CASE("FMCW IF resampler plans rational 5/512 conversion", "[signal][if_resa
 	REQUIRE(plan.overall_ratio.numerator == 5);
 	REQUIRE(plan.overall_ratio.denominator == 512);
 	REQUIRE_THAT(plan.actual_output_sample_rate_hz, WithinAbs(10.0e6, 1e-6));
-	REQUIRE(plan.stages.size() == 7);
-	for (std::size_t i = 0; i < 6; ++i)
-	{
-		REQUIRE(plan.stages[i].kind == fers_signal::FmcwIfResamplerStageKind::HalfBandDecimateBy2);
-		REQUIRE(plan.stages[i].down_factor == 2);
-	}
-	const auto& final_stage = plan.stages.back();
-	REQUIRE(final_stage.kind == fers_signal::FmcwIfResamplerStageKind::RationalPolyphase);
-	REQUIRE(final_stage.up_factor == 5);
-	REQUIRE(final_stage.down_factor == 8);
-	REQUIRE(final_stage.phase_refinement == request.limits.max_phase_refinement);
-	REQUIRE(final_stage.phase_count == 5 * request.limits.max_phase_refinement);
-	REQUIRE(plan.group_delay_seconds > 0.0);
-	REQUIRE(plan.group_delay_output_samples > 0.0);
-	REQUIRE(plan.warmup_discard_samples > 0);
-	REQUIRE(plan.fractional_output_delay_samples >= 0.0);
-	REQUIRE(plan.fractional_output_delay_samples < 1.0);
-	REQUIRE(plan.estimated_macs_per_output_sample <= request.limits.max_macs_per_output_sample);
+	requireHalfBandStages(plan);
+	requireFinalRationalStage(plan, request);
+	requirePlanDelayAndCost(plan, request);
 }
 
 TEST_CASE("FMCW IF resampler rejects excessive near-Nyquist filter cost", "[signal][if_resampler][plan]")

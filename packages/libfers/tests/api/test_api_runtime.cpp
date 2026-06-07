@@ -1,10 +1,12 @@
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <chrono>
 #include <filesystem>
 #include <libfers/api.h>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "api_test_helpers.h"
@@ -57,6 +59,46 @@ namespace
 	{
 		auto* cancel = static_cast<std::atomic_bool*>(user_data);
 		return cancel->load() ? 1 : 0;
+	}
+
+	void replaceOnce(std::string& value, const std::string& from, const std::string& to)
+	{
+		const auto pos = value.find(from);
+		REQUIRE(pos != std::string::npos);
+		value.replace(pos, from.size(), to);
+	}
+
+	[[nodiscard]] std::string vita49DrainTimingScenarioXml()
+	{
+		std::string xml = api_test::previewScenarioXml("API VITA Drain Timing");
+		replaceOnce(xml, "<endtime>0.1</endtime>", "<endtime>0.2</endtime>");
+		replaceOnce(xml, "<rate>1000000</rate>", "<rate>100000</rate>");
+		return xml;
+	}
+
+	[[nodiscard]] std::chrono::steady_clock::time_point messageTime(const CallbackState& state,
+																	const std::string_view message)
+	{
+		for (std::size_t i = 0; i < state.messages.size(); ++i)
+		{
+			if (state.messages.at(i) == message)
+			{
+				return state.message_times.at(i);
+			}
+		}
+		return {};
+	}
+
+	void requireVita49DrainCompletionTiming(const CallbackState& state,
+											const std::chrono::steady_clock::time_point start)
+	{
+		const auto drain_time = messageTime(state, "Waiting for VITA output stream drain...");
+		const auto completion_time = messageTime(state, "Simulation complete");
+
+		REQUIRE(drain_time != std::chrono::steady_clock::time_point{});
+		REQUIRE(completion_time != std::chrono::steady_clock::time_point{});
+		CHECK(drain_time <= completion_time);
+		CHECK(completion_time >= start + std::chrono::milliseconds(180));
 	}
 }
 
@@ -488,15 +530,7 @@ TEST_CASE("API VITA49 completion waits for wall-clock stream drain", "[api][runt
 	api_test::Context const context;
 	REQUIRE(context.get() != nullptr);
 
-	std::string xml = api_test::previewScenarioXml("API VITA Drain Timing");
-	auto replace_once = [](std::string& value, const std::string& from, const std::string& to)
-	{
-		const auto pos = value.find(from);
-		REQUIRE(pos != std::string::npos);
-		value.replace(pos, from.size(), to);
-	};
-	replace_once(xml, "<endtime>0.1</endtime>", "<endtime>0.2</endtime>");
-	replace_once(xml, "<rate>1000000</rate>", "<rate>100000</rate>");
+	const std::string xml = vita49DrainTimingScenarioXml();
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 	REQUIRE(fers_enable_vita49_udp_output(context.get(), "127.0.0.1", 4991) == 0);
 	REQUIRE(fers_set_vita49_fullscale(context.get(), 1.0) == 0);
@@ -505,24 +539,7 @@ TEST_CASE("API VITA49 completion waits for wall-clock stream drain", "[api][runt
 	const auto start = std::chrono::steady_clock::now();
 	REQUIRE(fers_run_simulation(context.get(), recordProgress, &state) == 0);
 
-	auto drain_time = std::chrono::steady_clock::time_point{};
-	auto completion_time = std::chrono::steady_clock::time_point{};
-	for (std::size_t i = 0; i < state.messages.size(); ++i)
-	{
-		if (state.messages.at(i) == "Waiting for VITA output stream drain...")
-		{
-			drain_time = state.message_times.at(i);
-		}
-		if (state.messages.at(i) == "Simulation complete")
-		{
-			completion_time = state.message_times.at(i);
-		}
-	}
-
-	REQUIRE(drain_time != std::chrono::steady_clock::time_point{});
-	REQUIRE(completion_time != std::chrono::steady_clock::time_point{});
-	CHECK(drain_time <= completion_time);
-	CHECK(completion_time >= start + std::chrono::milliseconds(180));
+	requireVita49DrainCompletionTiming(state, start);
 }
 
 TEST_CASE("API run simulation invokes progress callbacks with caller user data", "[api][runtime]")

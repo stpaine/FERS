@@ -201,6 +201,25 @@ namespace core
 		/// Removes ended streaming sources once no future receiver sample can observe their in-flight energy.
 		void cleanupInactiveStreamingSources(RealType from_time);
 
+		/// Returns the next time at which ended streaming sources can be cleaned up.
+		[[nodiscard]] std::optional<RealType> nextStreamingCleanupDeadline(RealType from_time);
+
+		/// Returns the next streaming chunk boundary before the target event time.
+		[[nodiscard]] RealType streamingChunkEnd(RealType from_time, RealType event_time);
+
+		/// Returns true when cooperative cancellation should stop the current streaming chunk.
+		[[nodiscard]] bool shouldStopStreamingChunk(std::size_t sample_index, std::size_t chunk_start_index);
+
+		/// Processes one simulation sample for all active streaming receivers.
+		void processStreamingSample(std::size_t sample_index, std::size_t first_index, std::size_t final_index,
+									std::size_t progress_report_stride, RealType dt_sim);
+
+		/// Adds one sample to every active streaming receiver.
+		void appendActiveReceiverStreamingSamples(std::size_t sample_index, RealType t_step);
+
+		/// Adds one sample to a single active streaming receiver.
+		void appendReceiverStreamingSample(std::size_t receiver_index, std::size_t sample_index, RealType t_step);
+
 		/// Builds and attaches IF resampling sinks for configured FMCW receivers.
 		void initializeFmcwIfResamplers();
 

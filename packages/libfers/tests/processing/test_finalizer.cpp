@@ -175,6 +175,55 @@ namespace
 		int total;
 	};
 
+	void requireJitteredPulsedChunks(const std::filesystem::path& output_path)
+	{
+		HighFive::File const file(output_path.string(), HighFive::File::ReadOnly);
+		const auto i_chunk_0 = readDataset(file, "chunk_000000_I");
+		const auto q_chunk_0 = readDataset(file, "chunk_000000_Q");
+		const auto i_chunk_1 = readDataset(file, "chunk_000001_I");
+		const auto q_chunk_1 = readDataset(file, "chunk_000001_Q");
+
+		RealType time_attr_0 = 0.0;
+		RealType time_attr_1 = 0.0;
+		file.getDataSet("chunk_000000_I").getAttribute("time").read(time_attr_0);
+		file.getDataSet("chunk_000001_I").getAttribute("time").read(time_attr_1);
+
+		REQUIRE(i_chunk_0.size() == 4u);
+		REQUIRE(q_chunk_0.size() == 4u);
+		REQUIRE(i_chunk_1.size() == 4u);
+		REQUIRE(q_chunk_1.size() == 4u);
+
+		for (const auto& sample : i_chunk_0)
+		{
+			REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
+		}
+		for (const auto& sample : i_chunk_1)
+		{
+			REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
+		}
+		REQUIRE_THAT(q_chunk_0[0], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_0[1], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_0[2], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_chunk_0[3], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[0], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[1], WithinAbs(1.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[2], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(q_chunk_1[3], WithinAbs(0.0, 1e-12));
+		REQUIRE_THAT(time_attr_0, WithinAbs(0.125, 1e-12));
+		REQUIRE_THAT(time_attr_1, WithinAbs(1.125, 1e-12));
+	}
+
+	[[nodiscard]] bool hasCompletionProgress(const std::vector<ProgressCall>& progress_calls,
+											 const std::string& receiver_name)
+	{
+		return std::ranges::any_of(progress_calls,
+								   [&receiver_name](const ProgressCall& call)
+								   {
+									   return call.message == "Finished Exporting " + receiver_name &&
+										   call.current == 100 && call.total == 100;
+								   });
+	}
+
 	struct CapturedSinkBlock
 	{
 		core::ReceiverStreamDescriptor stream;
@@ -540,46 +589,8 @@ TEST_CASE("runPulsedFinalizer writes jittered chunks and emits completion progre
 	worker.join();
 	hdf5_sink->finalize();
 
-	{
-		HighFive::File const file(output_path.string(), HighFive::File::ReadOnly);
-		const auto i_chunk_0 = readDataset(file, "chunk_000000_I");
-		const auto q_chunk_0 = readDataset(file, "chunk_000000_Q");
-		const auto i_chunk_1 = readDataset(file, "chunk_000001_I");
-		const auto q_chunk_1 = readDataset(file, "chunk_000001_Q");
-
-		RealType time_attr_0 = 0.0;
-		RealType time_attr_1 = 0.0;
-		file.getDataSet("chunk_000000_I").getAttribute("time").read(time_attr_0);
-		file.getDataSet("chunk_000001_I").getAttribute("time").read(time_attr_1);
-
-		REQUIRE(i_chunk_0.size() == 4u);
-		REQUIRE(q_chunk_0.size() == 4u);
-		REQUIRE(i_chunk_1.size() == 4u);
-		REQUIRE(q_chunk_1.size() == 4u);
-
-		for (const auto& sample : i_chunk_0)
-		{
-			REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
-		}
-		for (const auto& sample : i_chunk_1)
-		{
-			REQUIRE_THAT(sample, WithinAbs(0.0, 1e-12));
-		}
-		REQUIRE_THAT(q_chunk_0[0], WithinAbs(1.0, 1e-12));
-		REQUIRE_THAT(q_chunk_0[1], WithinAbs(1.0, 1e-12));
-		REQUIRE_THAT(q_chunk_0[2], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(q_chunk_0[3], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(q_chunk_1[0], WithinAbs(1.0, 1e-12));
-		REQUIRE_THAT(q_chunk_1[1], WithinAbs(1.0, 1e-12));
-		REQUIRE_THAT(q_chunk_1[2], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(q_chunk_1[3], WithinAbs(0.0, 1e-12));
-		REQUIRE_THAT(time_attr_0, WithinAbs(0.125, 1e-12));
-		REQUIRE_THAT(time_attr_1, WithinAbs(1.125, 1e-12));
-	}
-
-	REQUIRE(std::ranges::any_of(
-		progress_calls, [&receiver_name](const ProgressCall& call)
-		{ return call.message == "Finished Exporting " + receiver_name && call.current == 100 && call.total == 100; }));
+	requireJitteredPulsedChunks(output_path);
+	REQUIRE(hasCompletionProgress(progress_calls, receiver_name));
 
 	std::filesystem::remove_all(out_dir);
 }
