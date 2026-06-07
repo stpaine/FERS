@@ -20,7 +20,7 @@
         "coverage:cpp": "bash scripts/run_tests_gen_coverage.sh",
         "coverage:rust": "cargo tarpaulin --package fers-ui --out Html",
         "version:check": "python3 scripts/verify_versions.py",
-        "clangtidy:run": "run-clang-tidy -p build/debug/ -export-fixes fixes.yaml",
+        "clangtidy:run": "run-clang-tidy -p build/coverage/ -export-fixes fixes.yaml",
         "licenses:js": "bunx generate-license-file",
         "licenses:rust": "cargo about generate --manifest-path packages/fers-ui/src-tauri/Cargo.toml about.hbs -o THIRD_PARTY_LICENSES/rust-licenses.html"
     },
