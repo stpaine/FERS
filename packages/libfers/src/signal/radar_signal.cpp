@@ -55,7 +55,7 @@ namespace fers_signal
 									 const RealType chirp_period, const RealType start_frequency_offset,
 									 std::optional<std::size_t> chirp_count, const FmcwChirpDirection direction) :
 		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration), _chirp_period(chirp_period),
-		_start_frequency_offset(start_frequency_offset), _chirp_count(std::move(chirp_count)),
+		_start_frequency_offset(start_frequency_offset), _chirp_count(chirp_count),
 		_chirp_rate(chirp_bandwidth / chirp_duration), _direction(direction)
 	{
 	}
@@ -113,7 +113,7 @@ namespace fers_signal
 										   const RealType start_frequency_offset,
 										   std::optional<std::size_t> triangle_count) :
 		_chirp_bandwidth(chirp_bandwidth), _chirp_duration(chirp_duration),
-		_start_frequency_offset(start_frequency_offset), _triangle_count(std::move(triangle_count)),
+		_start_frequency_offset(start_frequency_offset), _triangle_count(triangle_count),
 		_chirp_rate(chirp_bandwidth / chirp_duration), _triangle_period(2.0 * chirp_duration),
 		_delta_phi_up(2.0 * PI * start_frequency_offset * chirp_duration +
 					  PI * _chirp_rate * chirp_duration * chirp_duration)

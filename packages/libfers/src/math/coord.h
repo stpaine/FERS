@@ -23,7 +23,7 @@ namespace math
 	struct Coord
 	{
 		Vec3 pos; ///< 3D position
-		RealType t; ///< Time
+		RealType t{}; ///< Time
 
 		/**
 		 * @brief Comparison operator based on the time component.

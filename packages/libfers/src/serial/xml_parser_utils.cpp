@@ -235,7 +235,7 @@ namespace serial::xml_parser_utils
 
 			receiver.setDechirpMode(mode);
 			receiver.setDechirpReference(std::move(reference));
-			receiver.setFmcwIfChainRequest(std::move(if_chain));
+			receiver.setFmcwIfChainRequest(if_chain);
 		}
 
 		/// Throws an XML validation exception with the provided message.

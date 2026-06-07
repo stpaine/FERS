@@ -327,7 +327,7 @@ namespace
 
 		receiver.setDechirpMode(mode);
 		receiver.setDechirpReference(std::move(reference));
-		receiver.setFmcwIfChainRequest(std::move(if_chain));
+		receiver.setFmcwIfChainRequest(if_chain);
 	}
 
 	/// Serializes receiver-side FMCW mode settings.

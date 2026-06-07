@@ -306,7 +306,7 @@ namespace processing
 														   .sample_count = end_sample - start_sample,
 														   .sample_start = start_sample,
 														   .sample_end_exclusive = end_sample};
-					metadata.streaming_segments.push_back(std::move(segment));
+					metadata.streaming_segments.push_back(segment);
 				}
 			};
 

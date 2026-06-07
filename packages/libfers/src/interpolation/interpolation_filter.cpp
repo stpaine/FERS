@@ -93,7 +93,7 @@ namespace interp
 		return std::unexpected(kaiser.error());
 	}
 
-	InterpFilter::InterpFilter() : _length(params::renderFilterLength()), _table_filters(1000)
+	InterpFilter::InterpFilter() : _length(params::renderFilterLength())
 	{
 		_filter_table = std::vector<RealType>(_table_filters * _length);
 

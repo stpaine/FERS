@@ -47,8 +47,7 @@ namespace antenna
 		 * @param name The name of the antenna.
 		 */
 		explicit Antenna(std::string name, const SimId id = 0) noexcept :
-			_loss_factor(1), _id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Antenna) : id),
-			_name(std::move(name))
+			_id(id == 0 ? SimIdGenerator::instance().generateId(ObjectType::Antenna) : id), _name(std::move(name))
 		{
 		}
 
@@ -128,7 +127,7 @@ namespace antenna
 		static RealType getAngle(const math::SVec3& angle, const math::SVec3& refangle) noexcept;
 
 	private:
-		RealType _loss_factor; ///< Efficiency factor of the antenna.
+		RealType _loss_factor{1}; ///< Efficiency factor of the antenna.
 		SimId _id; ///< Unique ID for this antenna.
 		std::string _name; ///< Name of the antenna.
 	};

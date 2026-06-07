@@ -28,7 +28,7 @@ namespace core
 	{
 		if (kml_file && !kml_file->empty())
 		{
-			const std::filesystem::path provided_kml_path(*kml_file);
+			std::filesystem::path provided_kml_path(*kml_file);
 			if (provided_kml_path.has_parent_path() || provided_kml_path.is_absolute())
 			{
 				return provided_kml_path;

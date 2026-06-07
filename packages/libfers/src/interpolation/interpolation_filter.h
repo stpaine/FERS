@@ -84,7 +84,7 @@ namespace interp
 		RealType _beta = 5; ///< The beta value for the Kaiser window.
 		RealType _bessel_beta; ///< The Bessel function value for the Kaiser window.
 		std::size_t _length; ///< The length of the filter.
-		std::size_t _table_filters; ///< The number of filters in the table.
+		std::size_t _table_filters{1000}; ///< The number of filters in the table.
 		std::vector<RealType> _filter_table; ///< The table of precomputed filters.
 	};
 }

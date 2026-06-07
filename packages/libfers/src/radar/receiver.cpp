@@ -211,7 +211,7 @@ namespace radar
 
 	void Receiver::setFmcwIfChainRequest(FmcwIfChainRequest request) noexcept
 	{
-		_fmcw_if_chain = std::move(request);
+		_fmcw_if_chain = request;
 		_fmcw_if_plan.reset();
 		_fmcw_if_sink.reset();
 		_fmcw_if_samples_to_discard = 0;
