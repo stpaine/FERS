@@ -40,7 +40,7 @@ namespace
 		auto* state = static_cast<CallbackState*>(user_data);
 		++state->calls;
 		state->seen_user_data = user_data;
-		state->messages.emplace_back(message ? message : "");
+		state->messages.emplace_back((message != nullptr) ? message : "");
 		state->message_times.push_back(std::chrono::steady_clock::now());
 	}
 
@@ -50,7 +50,7 @@ namespace
 		++state->calls;
 		state->seen_user_data = user_data;
 		state->levels.push_back(level);
-		state->lines.emplace_back(line ? line : "");
+		state->lines.emplace_back((line != nullptr) ? line : "");
 	}
 
 	int requestCancel(void* user_data)

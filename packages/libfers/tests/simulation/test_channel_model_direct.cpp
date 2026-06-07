@@ -413,7 +413,7 @@ TEST_CASE("FMCW streaming direct path preserves in-flight segment-end tail",
 	const RealType chirp_duration = 250.0e-6;
 	const RealType chirp_period = chirp_duration;
 	const RealType chirp_rate = chirp_bandwidth / chirp_duration;
-	const std::size_t sample_count = static_cast<std::size_t>(std::ceil(tau / dt));
+	const auto sample_count = static_cast<std::size_t>(std::ceil(tau / dt));
 
 	radar::Platform tx_plat("tx_plat");
 	setupPlatform(tx_plat, math::Vec3{0.0, 0.0, 0.0});

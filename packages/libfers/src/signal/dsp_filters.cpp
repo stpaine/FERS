@@ -150,7 +150,7 @@ namespace fers_signal
 		validateOversamplingConfig(ratio);
 		const unsigned filter_length = params::renderFilterLength();
 		const auto design = blackmanFir(1 / static_cast<RealType>(ratio), ratio, filter_length);
-		const unsigned filt_length = static_cast<unsigned>(design.coeffs.size());
+		const auto filt_length = static_cast<unsigned>(design.coeffs.size());
 
 		std::vector tmp(static_cast<size_t>(size * ratio + filt_length), ComplexType{0.0, 0.0});
 
@@ -189,7 +189,7 @@ namespace fers_signal
 		validateOversamplingConfig(ratio);
 		const unsigned filter_length = params::renderFilterLength();
 		const auto design = blackmanFir(1 / static_cast<RealType>(ratio), ratio, filter_length);
-		const unsigned filt_length = static_cast<unsigned>(design.coeffs.size());
+		const auto filt_length = static_cast<unsigned>(design.coeffs.size());
 
 		std::vector tmp(in.size() + filt_length, ComplexType{0, 0});
 

@@ -1197,7 +1197,7 @@ TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 {
 	core::World world;
 	std::mt19937 seeder(42);
-	const unsigned expected_seed = static_cast<unsigned>(seeder());
+	const auto expected_seed = static_cast<unsigned>(seeder());
 	seeder.seed(42);
 	serial::xml_parser_utils::ParserContext ctx;
 	ctx.world = &world;
@@ -1213,7 +1213,7 @@ TEST_CASE("parseTarget handles chisquare model", "[serial][xml_parser_utils]")
 	REQUIRE(world.getTargets().size() == 1);
 
 	auto* tgt = world.getTargets().front().get();
-	auto* model = dynamic_cast<const radar::RcsChiSquare*>(tgt->getFluctuationModel());
+	const auto* model = dynamic_cast<const radar::RcsChiSquare*>(tgt->getFluctuationModel());
 	REQUIRE(model != nullptr);
 	REQUIRE(tgt->getSeed() == expected_seed);
 	REQUIRE_THAT(model->getK(), WithinAbs(2.0, 1e-5));

@@ -1494,8 +1494,8 @@ fers_antenna_pattern_data_t* fers_get_antenna_pattern(const fers_context_t* cont
 		const math::SVec3 ref_angle(1.0, 0.0, 0.0);
 		double max_gain = 0.0;
 
-		const RealType az_denominator = static_cast<RealType>(az_samples - 1);
-		const RealType el_denominator = static_cast<RealType>(el_samples - 1);
+		const auto az_denominator = static_cast<RealType>(az_samples - 1);
+		const auto el_denominator = static_cast<RealType>(el_samples - 1);
 
 		for (size_t i = 0; i < el_samples; ++i)
 		{

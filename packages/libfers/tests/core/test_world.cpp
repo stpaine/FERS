@@ -49,7 +49,7 @@ namespace
 			EventSnapshot snapshot;
 			snapshot.timestamp = timestamp;
 			snapshot.type = type;
-			snapshot.source_name = source ? source->getName() : std::string{};
+			snapshot.source_name = (source != nullptr) ? source->getName() : std::string{};
 			events.push_back(std::move(snapshot));
 		}
 		return events;

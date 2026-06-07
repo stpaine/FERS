@@ -14,7 +14,7 @@ namespace serial::vita49
 {
 	std::uint8_t PacketCountSequencer::next() noexcept
 	{
-		const std::uint8_t value = static_cast<std::uint8_t>(_next & 0x0Fu);
+		const auto value = static_cast<std::uint8_t>(_next & 0x0Fu);
 		_next = static_cast<std::uint8_t>((_next + 1u) & 0x0Fu);
 		return value;
 	}
@@ -58,7 +58,7 @@ namespace serial::vita49
 		const auto epoch_seconds = static_cast<std::uint64_t>(epoch_unix_nanoseconds / 1'000'000'000ull);
 		const auto epoch_nanoseconds = static_cast<std::uint64_t>(epoch_unix_nanoseconds % 1'000'000'000ull);
 
-		const long double offset_seconds = static_cast<long double>(sample_time_seconds);
+		const auto offset_seconds = static_cast<long double>(sample_time_seconds);
 		const long double offset_floor = std::floor(offset_seconds);
 		const auto whole_offset_seconds = static_cast<std::int64_t>(offset_floor);
 		long double fractional_seconds =
@@ -84,7 +84,7 @@ namespace serial::vita49
 
 		auto fractional_picoseconds =
 			static_cast<std::uint64_t>(std::llround(fractional_seconds * 1'000'000'000'000.0L));
-		std::uint32_t integer_seconds = static_cast<std::uint32_t>(signed_seconds);
+		auto integer_seconds = static_cast<std::uint32_t>(signed_seconds);
 		if (fractional_picoseconds >= 1'000'000'000'000ull)
 		{
 			fractional_picoseconds -= 1'000'000'000'000ull;

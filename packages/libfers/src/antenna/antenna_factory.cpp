@@ -282,6 +282,7 @@ namespace
 		result.max_gain = max_gain;
 		result.symmetry = metadata.symmetry;
 		result.sample_count = sample_count;
+		const bool spans_zero = min_angle < 0.0 && max_angle > 0.0;
 
 		if (metadata.symmetry_explicit)
 		{
@@ -290,7 +291,7 @@ namespace
 				throw std::runtime_error("XML antenna <" + axis_name +
 										 "> axis uses symmetry='mirrored' but defines negative sample angles.");
 			}
-			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::None && !(min_angle < 0.0 && max_angle > 0.0))
+			if (result.symmetry == antenna::XmlAntenna::AxisSymmetry::None && !spans_zero)
 			{
 				throw std::runtime_error(
 					"XML antenna <" + axis_name +
@@ -299,7 +300,7 @@ namespace
 		}
 		else if (min_angle < 0.0)
 		{
-			if (!(min_angle < 0.0 && max_angle > 0.0))
+			if (!spans_zero)
 			{
 				throw std::runtime_error("XML antenna <" + axis_name +
 										 "> axis contains negative sample angles but does not span both sides of zero "

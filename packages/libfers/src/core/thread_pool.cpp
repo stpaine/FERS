@@ -82,7 +82,7 @@ namespace pool
 		{
 			throw std::runtime_error("Thread pool size exceeds unsigned range.");
 		}
-		const unsigned total_threads = static_cast<unsigned>(_workers.size());
+		const auto total_threads = static_cast<unsigned>(_workers.size());
 		return total_threads > active_threads ? total_threads - active_threads : 0;
 	}
 }

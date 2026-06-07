@@ -37,7 +37,7 @@ namespace interp
 		// return static_cast<T>(...)
 		// If the class is conceptually for real-valued interpolation,
 		// std::floating_point<T> would be a better constraint
-		const RealType x_value = static_cast<RealType>(x);
+		const auto x_value = static_cast<RealType>(x);
 		const auto iter = _data.lower_bound(x_value);
 
 		if (iter == _data.begin())

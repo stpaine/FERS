@@ -157,12 +157,8 @@ namespace radar
 		job = std::move(_finalizer_queue.front());
 		_finalizer_queue.pop();
 
-		// Check for shutdown signal (negative duration)
-		if (job.duration < 0.0)
-		{
-			return false; // Shutdown signal
-		}
-		return true;
+		const bool is_shutdown_job = job.duration < 0.0;
+		return !is_shutdown_job;
 	}
 
 	RealType Receiver::getNoiseTemperature(const math::SVec3& angle) const noexcept

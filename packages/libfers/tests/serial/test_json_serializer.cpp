@@ -143,7 +143,7 @@ TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]
 	params::setOversampleRatio(1);
 	params::setTime(0.0, 1.0);
 
-	for (const auto direction : {"up", "down"})
+	for (const auto* const direction : {"up", "down"})
 	{
 		json const wf_json = {{"id", 457},
 							  {"name", std::string("Fmcw") + direction},
@@ -378,7 +378,7 @@ TEST_CASE("JSON: Serialization of Assets and Radar Components", "[serial][json]"
 			if (c.contains("receiver"))
 			{
 				found_rx = true;
-				auto& rx_json = c["receiver"];
+				const auto& rx_json = c["receiver"];
 				REQUIRE_THAT(rx_json["noise_temp"].get<double>(), WithinAbs(300.0, 1e-9));
 				REQUIRE(rx_json["nodirect"] == true);
 				REQUIRE(rx_json["nopropagationloss"] == true);
@@ -444,8 +444,8 @@ TEST_CASE("JSON: Full World Scenario Deserialization", "[serial][json]")
 	REQUIRE(params::params.random_seed == 777);
 	REQUIRE(params::params.rotation_angle_unit == params::RotationAngleUnit::Radians);
 
-	auto tx = world.getTransmitters()[0].get();
-	auto rx = world.getReceivers()[0].get();
+	auto* tx = world.getTransmitters()[0].get();
+	auto* rx = world.getReceivers()[0].get();
 	REQUIRE(tx->getAttached() == rx);
 	REQUIRE(rx->getAttached() == tx);
 	REQUIRE(tx->getTiming().get() == rx->getTiming().get());

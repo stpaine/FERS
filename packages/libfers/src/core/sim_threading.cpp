@@ -1095,7 +1095,7 @@ namespace core
 			return;
 		}
 
-		auto& receiver = _world->getReceivers()[receiver_index];
+		const auto& receiver = _world->getReceivers()[receiver_index];
 		const bool dechirped = receiver->isDechirpEnabled();
 		const RealType input_sample_rate = params::rate() * static_cast<RealType>(params::oversampleRatio());
 		const RealType block_start_time = _streaming_output_block_start_times[receiver_index];
@@ -1191,7 +1191,7 @@ namespace core
 			return;
 		}
 
-		auto& receiver = _world->getReceivers()[receiver_index];
+		const auto& receiver = _world->getReceivers()[receiver_index];
 		auto streaming_sources = collectStreamingSourcesForWindow(params::startTime(), params::endTime());
 		if (_streaming_output_stream_ids[receiver_index] == 0)
 		{
@@ -1221,7 +1221,7 @@ namespace core
 			return;
 		}
 
-		auto& receiver = _world->getReceivers()[receiver_index];
+		const auto& receiver = _world->getReceivers()[receiver_index];
 		auto& processed = _streaming_output_processed_buffers[receiver_index];
 		processed.assign(samples.begin(), samples.end());
 		processing::applyThermalNoiseAtSampleRate(processed, receiver->getNoiseTemperature(), receiver->getRngEngine(),
@@ -1278,7 +1278,7 @@ namespace core
 		{
 			return;
 		}
-		auto& receiver = _world->getReceivers()[receiver_index];
+		const auto& receiver = _world->getReceivers()[receiver_index];
 		if (!receiver->hasFmcwIfResamplingSink())
 		{
 			block.clear();
@@ -1309,7 +1309,7 @@ namespace core
 			return;
 		}
 
-		auto& receiver = _world->getReceivers()[receiver_index];
+		const auto& receiver = _world->getReceivers()[receiver_index];
 		if (!std::isfinite(sample_rate) || sample_rate <= 0.0)
 		{
 			return;

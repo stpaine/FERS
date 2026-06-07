@@ -96,7 +96,7 @@ namespace core
 		if (fers_load_scenario_from_xml_file(context, config.script_file.c_str(), config.validate ? 1 : 0) != 0)
 		{
 			char* err = fers_get_last_error_message();
-			log(FERS_LOG_FATAL, "Failed to load scenario: {}", err ? err : "Unknown error");
+			log(FERS_LOG_FATAL, "Failed to load scenario: {}", (err != nullptr) ? err : "Unknown error");
 			fers_free_string(err);
 			fers_context_destroy(context);
 			return 1;
@@ -113,7 +113,8 @@ namespace core
 			if (fers_enable_vita49_udp_output(context, config.vita49_host.c_str(), config.vita49_port) != 0)
 			{
 				char* err = fers_get_last_error_message();
-				log(FERS_LOG_FATAL, "Failed to configure VITA49 endpoint: {}", err ? err : "Unknown error");
+				log(FERS_LOG_FATAL, "Failed to configure VITA49 endpoint: {}",
+					(err != nullptr) ? err : "Unknown error");
 				fers_free_string(err);
 				fers_context_destroy(context);
 				return 1;
@@ -121,7 +122,8 @@ namespace core
 			if (fers_set_vita49_fullscale(context, config.vita49_fullscale.value_or(0.0)) != 0)
 			{
 				char* err = fers_get_last_error_message();
-				log(FERS_LOG_FATAL, "Failed to configure VITA49 fullscale: {}", err ? err : "Unknown error");
+				log(FERS_LOG_FATAL, "Failed to configure VITA49 fullscale: {}",
+					(err != nullptr) ? err : "Unknown error");
 				fers_free_string(err);
 				fers_context_destroy(context);
 				return 1;
@@ -130,7 +132,7 @@ namespace core
 				fers_set_vita49_epoch_unix_nanoseconds(context, *config.vita49_epoch_unix_nanoseconds) != 0)
 			{
 				char* err = fers_get_last_error_message();
-				log(FERS_LOG_FATAL, "Failed to configure VITA49 epoch: {}", err ? err : "Unknown error");
+				log(FERS_LOG_FATAL, "Failed to configure VITA49 epoch: {}", (err != nullptr) ? err : "Unknown error");
 				fers_free_string(err);
 				fers_context_destroy(context);
 				return 1;
@@ -139,7 +141,8 @@ namespace core
 				fers_set_vita49_max_udp_payload(context, *config.vita49_max_udp_payload) != 0)
 			{
 				char* err = fers_get_last_error_message();
-				log(FERS_LOG_FATAL, "Failed to configure VITA49 max UDP payload: {}", err ? err : "Unknown error");
+				log(FERS_LOG_FATAL, "Failed to configure VITA49 max UDP payload: {}",
+					(err != nullptr) ? err : "Unknown error");
 				fers_free_string(err);
 				fers_context_destroy(context);
 				return 1;
@@ -148,7 +151,8 @@ namespace core
 				fers_set_vita49_queue_depth(context, *config.vita49_queue_depth) != 0)
 			{
 				char* err = fers_get_last_error_message();
-				log(FERS_LOG_FATAL, "Failed to configure VITA49 queue depth: {}", err ? err : "Unknown error");
+				log(FERS_LOG_FATAL, "Failed to configure VITA49 queue depth: {}",
+					(err != nullptr) ? err : "Unknown error");
 				fers_free_string(err);
 				fers_context_destroy(context);
 				return 1;
@@ -158,7 +162,7 @@ namespace core
 		if (fers_set_output_directory(context, final_out_dir.string().c_str()) != 0)
 		{
 			char* err = fers_get_last_error_message();
-			log(FERS_LOG_FATAL, "Failed to set output directory: {}", err ? err : "Unknown error");
+			log(FERS_LOG_FATAL, "Failed to set output directory: {}", (err != nullptr) ? err : "Unknown error");
 			fers_free_string(err);
 			fers_context_destroy(context);
 			return 1;
@@ -179,7 +183,7 @@ namespace core
 			else
 			{
 				char* err = fers_get_last_error_message();
-				log(FERS_LOG_FATAL, "Failed to generate KML file: {}", err ? err : "Unknown error");
+				log(FERS_LOG_FATAL, "Failed to generate KML file: {}", (err != nullptr) ? err : "Unknown error");
 				fers_free_string(err);
 			}
 
@@ -190,7 +194,7 @@ namespace core
 		if (fers_set_thread_count(config.num_threads) != 0)
 		{
 			char* err = fers_get_last_error_message();
-			log(FERS_LOG_ERROR, "Failed to set number of threads: {}", err ? err : "Unknown error");
+			log(FERS_LOG_ERROR, "Failed to set number of threads: {}", (err != nullptr) ? err : "Unknown error");
 			fers_free_string(err);
 		}
 
@@ -198,7 +202,7 @@ namespace core
 		if (fers_run_simulation(context, nullptr, nullptr) != 0)
 		{
 			char* err = fers_get_last_error_message();
-			log(FERS_LOG_FATAL, "Simulation run failed: {}", err ? err : "Unknown error");
+			log(FERS_LOG_FATAL, "Simulation run failed: {}", (err != nullptr) ? err : "Unknown error");
 			fers_free_string(err);
 			fers_context_destroy(context);
 			return 1;

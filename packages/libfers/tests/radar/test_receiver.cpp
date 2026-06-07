@@ -136,7 +136,7 @@ TEST_CASE("Receiver windows quantize to sampling rate", "[radar][receiver]")
 	REQUIRE_THAT(rx.getWindowSkip(), WithinAbs(expected_skip, 1e-12));
 	REQUIRE_THAT(rx.getWindowLength(), WithinAbs(2.0, 1e-12));
 
-	const unsigned expected_count = static_cast<unsigned>(std::ceil((10.0 - 0.0) * expected_prf));
+	const auto expected_count = static_cast<unsigned>(std::ceil((10.0 - 0.0) * expected_prf));
 	REQUIRE(rx.getWindowCount() == expected_count);
 
 	REQUIRE_THROWS_AS(rx.getWindowStart(0), std::logic_error);

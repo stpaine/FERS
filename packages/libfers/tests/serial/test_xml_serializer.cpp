@@ -336,7 +336,7 @@ TEST_CASE("serializeRotation translates internal math to compass correctly", "[s
 	SECTION("Fixed Constant")
 	{
 		// Internal math equivalent to Compass 90 (East), Elevation 0
-		math::RotationCoord const start{(90.0 - 90.0) * PI / 180.0, 0, 0};
+		math::RotationCoord const start{0.0, 0, 0};
 		// Rotate +10 deg/sec in compass, up 5 deg/sec in elevation
 		math::RotationCoord const rate{-10.0 * PI / 180.0, 5.0 * PI / 180.0, 0};
 		rot.setConstantRate(start, rate);

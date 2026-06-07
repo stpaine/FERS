@@ -46,7 +46,7 @@ namespace
 	{
 		if (j.is_object())
 		{
-			for (auto& [key, val] : j.items())
+			for (const auto& [key, val] : j.items())
 			{
 				sortJsonArrays(val);
 			}
@@ -89,19 +89,19 @@ namespace
 			if (a.size() != b.size())
 			{
 				UNSCOPED_INFO("Object size mismatch at " << path << ": " << a.size() << " vs " << b.size());
-				for (auto& [k, v] : a.items())
+				for (const auto& [k, v] : a.items())
 				{
 					if (!b.contains(k))
 						UNSCOPED_INFO("Key missing in B: " << path << "/" << k);
 				}
-				for (auto& [k, v] : b.items())
+				for (const auto& [k, v] : b.items())
 				{
 					if (!a.contains(k))
 						UNSCOPED_INFO("Key missing in A: " << path << "/" << k);
 				}
 				return false;
 			}
-			for (auto& [key, val] : a.items())
+			for (const auto& [key, val] : a.items())
 			{
 				std::string child_path = path;
 				child_path += '/';
@@ -242,7 +242,7 @@ namespace
 			}
 			plat->getRotationPath()->finalize();
 
-			auto proto_tim = world.findTiming(time_ids[i % time_ids.size()]);
+			auto* proto_tim = world.findTiming(time_ids[i % time_ids.size()]);
 
 			// Standalone Transmitter
 			auto tx_mode = radar::OperationMode::CW_MODE;
