@@ -147,16 +147,11 @@ namespace
 		return true;
 	}
 
-	// Generates a massive, highly complex world to stress the serializer
-	void buildStressWorld(core::World& world, size_t num_platforms, std::mt19937& rng)
+	void addStressAssets(core::World& world, std::mt19937& rng, std::vector<SimId>& wave_ids,
+						 std::vector<SimId>& ant_ids, std::vector<SimId>& time_ids)
 	{
 		std::uniform_real_distribution<RealType> dist_real(0.1, 1000.0);
-		std::uniform_int_distribution<int> const dist_mode(0, 1);
-		std::uniform_int_distribution<unsigned> seed_dist;
 
-		std::vector<SimId> wave_ids, ant_ids, time_ids;
-
-		// 1. Generate Assets (Waveforms, Antennas, Timings)
 		for (size_t i = 0; i < 20; ++i)
 		{
 			SimId const w_id = SimIdGenerator::instance().generateId(ObjectType::Waveform);
@@ -200,118 +195,124 @@ namespace
 			tim->setAlpha(1.0, 0.5);
 			tim->setAlpha(2.0, 0.25);
 			if (i % 2 == 0)
+			{
 				tim->setSyncOnPulse();
+			}
 			world.add(std::move(tim));
 			time_ids.push_back(t_id);
 		}
+	}
 
-		// 2. Generate Platforms and Components
-		for (size_t i = 0; i < num_platforms; ++i)
+	void addStressPlatform(core::World& world, const size_t i, std::mt19937& rng,
+						   std::uniform_real_distribution<RealType>& dist_real,
+						   std::uniform_int_distribution<unsigned>& seed_dist, const std::vector<SimId>& wave_ids,
+						   const std::vector<SimId>& ant_ids, const std::vector<SimId>& time_ids)
+	{
+		SimId const p_id = SimIdGenerator::instance().generateId(ObjectType::Platform);
+		auto plat = std::make_unique<radar::Platform>("platform_" + std::to_string(i), p_id);
+
+		plat->getMotionPath()->setInterp(math::Path::InterpType::INTERP_CUBIC);
+		for (size_t wp = 0; wp < 10; ++wp)
 		{
-			SimId const p_id = SimIdGenerator::instance().generateId(ObjectType::Platform);
-			auto plat = std::make_unique<radar::Platform>("platform_" + std::to_string(i), p_id);
+			plat->getMotionPath()->addCoord(
+				{math::Vec3(dist_real(rng), dist_real(rng), dist_real(rng)), static_cast<RealType>(wp) * 0.01});
+		}
+		plat->getMotionPath()->finalize();
 
-			// Motion Path (Cubic)
-			plat->getMotionPath()->setInterp(math::Path::InterpType::INTERP_CUBIC);
+		if (i % 2 == 0)
+		{
+			plat->getRotationPath()->setInterp(math::RotationPath::InterpType::INTERP_LINEAR);
 			for (size_t wp = 0; wp < 10; ++wp)
 			{
-				plat->getMotionPath()->addCoord({
-					math::Vec3(dist_real(rng), dist_real(rng), dist_real(rng)),
-					static_cast<RealType>(wp) * 0.01 // Scaled to fit in 0.1s
-				});
+				plat->getRotationPath()->addCoord(
+					{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), static_cast<RealType>(wp) * 0.01});
 			}
-			plat->getMotionPath()->finalize();
+		}
+		else
+		{
+			plat->getRotationPath()->setInterp(math::RotationPath::InterpType::INTERP_CONSTANT);
+			math::RotationCoord const start{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
+			math::RotationCoord const rate{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
+			plat->getRotationPath()->setConstantRate(start, rate);
+		}
+		plat->getRotationPath()->finalize();
 
-			// Rotation Path (Alternate between Linear Waypoints and Fixed Constant Rotation)
-			if (i % 2 == 0)
-			{
-				plat->getRotationPath()->setInterp(math::RotationPath::InterpType::INTERP_LINEAR);
-				for (size_t wp = 0; wp < 10; ++wp)
-				{
-					plat->getRotationPath()->addCoord({
-						dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0),
-						static_cast<RealType>(wp) * 0.01 // Scaled to fit in 0.1s
-					});
-				}
-			}
-			else
-			{
-				plat->getRotationPath()->setInterp(math::RotationPath::InterpType::INTERP_CONSTANT);
-				math::RotationCoord const start{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
-				math::RotationCoord const rate{dist_real(rng) * (PI / 180.0), dist_real(rng) * (PI / 180.0), 0.0};
-				plat->getRotationPath()->setConstantRate(start, rate);
-			}
-			plat->getRotationPath()->finalize();
+		auto* proto_tim = world.findTiming(time_ids[i % time_ids.size()]);
 
-			auto* proto_tim = world.findTiming(time_ids[i % time_ids.size()]);
+		auto tx =
+			std::make_unique<radar::Transmitter>(plat.get(), "tx_" + std::to_string(i), radar::OperationMode::CW_MODE);
+		tx->setWave(world.findWaveform(wave_ids[i % wave_ids.size()]));
+		tx->setAntenna(world.findAntenna(ant_ids[i % ant_ids.size()]));
+		auto tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
+		tx_tim->initializeModel(proto_tim);
+		tx->setTiming(tx_tim);
+		tx->setSchedule({{0.01, 0.04}, {0.06, 0.09}});
+		world.add(std::move(tx));
 
-			// Standalone Transmitter
-			auto tx_mode = radar::OperationMode::CW_MODE;
-			auto tx = std::make_unique<radar::Transmitter>(plat.get(), "tx_" + std::to_string(i), tx_mode);
-			tx->setWave(world.findWaveform(wave_ids[i % wave_ids.size()]));
-			tx->setAntenna(world.findAntenna(ant_ids[i % ant_ids.size()]));
-			auto tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
-			tx_tim->initializeModel(proto_tim);
-			tx->setTiming(tx_tim);
-			tx->setSchedule({{0.01, 0.04}, {0.06, 0.09}}); // Scaled schedules to fit inside [0.0, 0.1]
-			world.add(std::move(tx));
+		auto rx = std::make_unique<radar::Receiver>(plat.get(), "rx_" + std::to_string(i), seed_dist(rng),
+													radar::OperationMode::CW_MODE);
+		rx->setAntenna(world.findAntenna(ant_ids[(i + 1) % ant_ids.size()]));
+		auto rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
+		rx_tim->initializeModel(proto_tim);
+		rx->setTiming(rx_tim);
+		rx->setNoiseTemperature(290.0);
+		if (i % 2 == 0)
+		{
+			rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		}
+		if (i % 3 == 0)
+		{
+			rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+		}
+		rx->setSchedule({{0.02, 0.08}});
+		world.add(std::move(rx));
 
-			// Standalone Receiver
-			auto rx_mode = radar::OperationMode::CW_MODE;
-			auto rx = std::make_unique<radar::Receiver>(plat.get(), "rx_" + std::to_string(i), seed_dist(rng), rx_mode);
-			rx->setAntenna(world.findAntenna(ant_ids[(i + 1) % ant_ids.size()]));
-			auto rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
-			rx_tim->initializeModel(proto_tim);
-			rx->setTiming(rx_tim);
-			rx->setNoiseTemperature(290.0);
-			if (i % 2 == 0)
-				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-			if (i % 3 == 0)
-				rx->setFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-			rx->setSchedule({{0.02, 0.08}});
-			world.add(std::move(rx));
+		auto mono_tx = std::make_unique<radar::Transmitter>(plat.get(), "mono_tx_" + std::to_string(i),
+															radar::OperationMode::CW_MODE);
+		mono_tx->setWave(world.findWaveform(wave_ids[(i + 2) % wave_ids.size()]));
+		mono_tx->setAntenna(world.findAntenna(ant_ids[(i + 2) % ant_ids.size()]));
+		auto mono_tx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
+		mono_tx_tim->initializeModel(proto_tim);
+		mono_tx->setTiming(mono_tx_tim);
+		mono_tx->setSchedule({{0.01, 0.09}});
 
-			// Monostatic Radar Pair (Linked Tx/Rx)
-			auto mono_mode = radar::OperationMode::CW_MODE;
-			auto mono_tx = std::make_unique<radar::Transmitter>(plat.get(), "mono_tx_" + std::to_string(i), mono_mode);
-			mono_tx->setWave(world.findWaveform(wave_ids[(i + 2) % wave_ids.size()]));
-			mono_tx->setAntenna(world.findAntenna(ant_ids[(i + 2) % ant_ids.size()]));
-			auto mono_tx_tim =
-				std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
-			mono_tx_tim->initializeModel(proto_tim);
-			mono_tx->setTiming(mono_tx_tim);
-			mono_tx->setSchedule({{0.01, 0.09}});
+		auto mono_rx = std::make_unique<radar::Receiver>(plat.get(), "mono_rx_" + std::to_string(i), seed_dist(rng),
+														 radar::OperationMode::CW_MODE);
+		mono_rx->setAntenna(world.findAntenna(ant_ids[(i + 2) % ant_ids.size()]));
+		auto mono_rx_tim = std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
+		mono_rx_tim->initializeModel(proto_tim);
+		mono_rx->setTiming(mono_rx_tim);
+		mono_rx->setNoiseTemperature(300.0);
+		mono_rx->setSchedule({{0.01, 0.09}});
 
-			auto mono_rx = std::make_unique<radar::Receiver>(plat.get(), "mono_rx_" + std::to_string(i), seed_dist(rng),
-															 mono_mode);
-			mono_rx->setAntenna(
-				world.findAntenna(ant_ids[(i + 2) % ant_ids.size()])); // Monostatic usually shares antenna
-			auto mono_rx_tim =
-				std::make_shared<timing::Timing>(proto_tim->getName(), seed_dist(rng), proto_tim->getId());
-			mono_rx_tim->initializeModel(proto_tim);
-			mono_rx->setTiming(mono_rx_tim);
-			mono_rx->setNoiseTemperature(300.0);
-			mono_rx->setSchedule({{0.01, 0.09}});
+		mono_tx->setAttached(mono_rx.get());
+		mono_rx->setAttached(mono_tx.get());
+		world.add(std::move(mono_tx));
+		world.add(std::move(mono_rx));
 
-			// Link them to form a monostatic radar
-			mono_tx->setAttached(mono_rx.get());
-			mono_rx->setAttached(mono_tx.get());
-			world.add(std::move(mono_tx));
-			world.add(std::move(mono_rx));
+		auto tgt = radar::createIsoTarget(plat.get(), "tgt_" + std::to_string(i), dist_real(rng), seed_dist(rng));
+		if (i % 2 == 0)
+		{
+			tgt->setFluctuationModel(std::make_unique<radar::RcsChiSquare>(tgt->getRngEngine(), 2.0));
+		}
+		else
+		{
+			tgt->setFluctuationModel(std::make_unique<radar::RcsConst>());
+		}
+		world.add(std::move(tgt));
+		world.add(std::move(plat));
+	}
 
-			// Target
-			auto tgt = radar::createIsoTarget(plat.get(), "tgt_" + std::to_string(i), dist_real(rng), seed_dist(rng));
-			if (i % 2 == 0)
-			{
-				tgt->setFluctuationModel(std::make_unique<radar::RcsChiSquare>(tgt->getRngEngine(), 2.0));
-			}
-			else
-			{
-				tgt->setFluctuationModel(std::make_unique<radar::RcsConst>());
-			}
-			world.add(std::move(tgt));
+	void buildStressWorld(core::World& world, size_t num_platforms, std::mt19937& rng)
+	{
+		std::uniform_real_distribution<RealType> dist_real(0.1, 1000.0);
+		std::uniform_int_distribution<unsigned> seed_dist;
+		std::vector<SimId> wave_ids, ant_ids, time_ids;
 
-			world.add(std::move(plat));
+		addStressAssets(world, rng, wave_ids, ant_ids, time_ids);
+		for (size_t i = 0; i < num_platforms; ++i)
+		{
+			addStressPlatform(world, i, rng, dist_real, seed_dist, wave_ids, ant_ids, time_ids);
 		}
 	}
 }

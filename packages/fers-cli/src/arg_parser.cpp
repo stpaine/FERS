@@ -198,6 +198,33 @@ namespace
 		return {};
 	}
 
+	using ConfigValueHandler = std::expected<void, std::string> (*)(const std::string&, core::Config&) noexcept;
+
+	std::optional<ConfigValueHandler> valueOptionHandler(const std::string& arg) noexcept
+	{
+		if (arg == "--vita49")
+		{
+			return handleVita49Endpoint;
+		}
+		if (arg == "--vita49-fullscale")
+		{
+			return handleVita49Fullscale;
+		}
+		if (arg == "--vita49-epoch")
+		{
+			return handleVita49Epoch;
+		}
+		if (arg == "--vita49-max-udp-payload")
+		{
+			return handleVita49MaxUdpPayload;
+		}
+		if (arg == "--vita49-queue-depth")
+		{
+			return handleVita49QueueDepth;
+		}
+		return std::nullopt;
+	}
+
 	std::expected<void, std::string> validateVita49Options(const core::Config& config) noexcept
 	{
 		if (!config.vita49_enabled)
@@ -449,66 +476,14 @@ Make sure the script file follows the correct format to avoid errors.
 				return std::string{argv[i]};
 			};
 
-			if (arg == "--vita49")
+			if (const auto handler = valueOptionHandler(arg))
 			{
-				const auto value = require_value("--vita49");
+				const auto value = require_value(arg);
 				if (!value)
 				{
 					return std::unexpected(value.error());
 				}
-				if (const auto result = handleVita49Endpoint(*value, config); !result)
-				{
-					return std::unexpected(result.error());
-				}
-				continue;
-			}
-			if (arg == "--vita49-fullscale")
-			{
-				const auto value = require_value("--vita49-fullscale");
-				if (!value)
-				{
-					return std::unexpected(value.error());
-				}
-				if (const auto result = handleVita49Fullscale(*value, config); !result)
-				{
-					return std::unexpected(result.error());
-				}
-				continue;
-			}
-			if (arg == "--vita49-epoch")
-			{
-				const auto value = require_value("--vita49-epoch");
-				if (!value)
-				{
-					return std::unexpected(value.error());
-				}
-				if (const auto result = handleVita49Epoch(*value, config); !result)
-				{
-					return std::unexpected(result.error());
-				}
-				continue;
-			}
-			if (arg == "--vita49-max-udp-payload")
-			{
-				const auto value = require_value("--vita49-max-udp-payload");
-				if (!value)
-				{
-					return std::unexpected(value.error());
-				}
-				if (const auto result = handleVita49MaxUdpPayload(*value, config); !result)
-				{
-					return std::unexpected(result.error());
-				}
-				continue;
-			}
-			if (arg == "--vita49-queue-depth")
-			{
-				const auto value = require_value("--vita49-queue-depth");
-				if (!value)
-				{
-					return std::unexpected(value.error());
-				}
-				if (const auto result = handleVita49QueueDepth(*value, config); !result)
+				if (const auto result = (*handler)(*value, config); !result)
 				{
 					return std::unexpected(result.error());
 				}

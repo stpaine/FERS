@@ -1117,42 +1117,49 @@ void fers_free_string(char* str)
 
 namespace
 {
-	int run_simulation_common(fers_context_t* context, fers_progress_callback_t progress_callback,
-							  void* progress_user_data, fers_cancel_callback_t cancel_callback, void* cancel_user_data,
-							  fers_vita49_telemetry_callback_t vita49_telemetry_callback,
-							  void* vita49_telemetry_user_data, const char* function_name,
-							  const char* invalid_context_message)
+	struct SimulationRunRequest
+	{
+		fers_context_t* context;
+		fers_progress_callback_t progress_callback;
+		void* progress_user_data;
+		fers_cancel_callback_t cancel_callback;
+		void* cancel_user_data;
+		fers_vita49_telemetry_callback_t vita49_telemetry_callback;
+		void* vita49_telemetry_user_data;
+		const char* function_name;
+		const char* invalid_context_message;
+	};
+
+	int run_simulation_common(const SimulationRunRequest& request)
 	{
 		last_error_message.clear();
-		if (context == nullptr)
+		if (request.context == nullptr)
 		{
-			last_error_message = invalid_context_message;
+			last_error_message = request.invalid_context_message;
 			LOG(logging::Level::ERROR, last_error_message);
 			return -1;
 		}
 
-		auto* ctx = context;
+		auto* ctx = request.context;
 
 		std::function<void(const std::string&, int, int)> progress_fn;
-		if (progress_callback != nullptr)
+		if (request.progress_callback != nullptr)
 		{
-			progress_fn =
-				[progress_callback, progress_user_data](const std::string& msg, const int current, const int total)
-			{ progress_callback(msg.c_str(), current, total, progress_user_data); };
+			progress_fn = [&request](const std::string& msg, const int current, const int total)
+			{ request.progress_callback(msg.c_str(), current, total, request.progress_user_data); };
 		}
 
 		std::function<bool()> cancel_fn;
-		if (cancel_callback != nullptr)
+		if (request.cancel_callback != nullptr)
 		{
-			cancel_fn = [cancel_callback, cancel_user_data] { return cancel_callback(cancel_user_data) != 0; };
+			cancel_fn = [&request] { return request.cancel_callback(request.cancel_user_data) != 0; };
 		}
 
 		core::ReceiverOutputTelemetryCallback telemetry_fn;
-		if (vita49_telemetry_callback != nullptr)
+		if (request.vita49_telemetry_callback != nullptr)
 		{
-			telemetry_fn = [vita49_telemetry_callback,
-							vita49_telemetry_user_data](const std::optional<core::OutputStats>& stats,
-														std::span<const core::ReceiverOutputPacketTrace> packets)
+			telemetry_fn = [&request](const std::optional<core::OutputStats>& stats,
+									  std::span<const core::ReceiverOutputPacketTrace> packets)
 			{
 				std::string stats_json;
 				std::string packet_batch_json;
@@ -1170,7 +1177,7 @@ namespace
 					packet_batch_ptr = packet_batch_json.c_str();
 				}
 
-				vita49_telemetry_callback(stats_ptr, packet_batch_ptr, vita49_telemetry_user_data);
+				request.vita49_telemetry_callback(stats_ptr, packet_batch_ptr, request.vita49_telemetry_user_data);
 			};
 		}
 
@@ -1195,7 +1202,7 @@ namespace
 		}
 		catch (const std::exception& e)
 		{
-			handle_api_exception(e, function_name);
+			handle_api_exception(e, request.function_name);
 			return 1;
 		}
 	}
@@ -1203,17 +1210,32 @@ namespace
 
 int fers_run_simulation(fers_context_t* context, fers_progress_callback_t callback, void* user_data)
 {
-	return run_simulation_common(context, callback, user_data, nullptr, nullptr, nullptr, nullptr,
-								 "fers_run_simulation", "Invalid context provided to fers_run_simulation.");
+	return run_simulation_common(
+		SimulationRunRequest{.context = context,
+							 .progress_callback = callback,
+							 .progress_user_data = user_data,
+							 .cancel_callback = nullptr,
+							 .cancel_user_data = nullptr,
+							 .vita49_telemetry_callback = nullptr,
+							 .vita49_telemetry_user_data = nullptr,
+							 .function_name = "fers_run_simulation",
+							 .invalid_context_message = "Invalid context provided to fers_run_simulation."});
 }
 
 int fers_run_simulation_ex(fers_context_t* context, fers_progress_callback_t progress_callback,
 						   void* progress_user_data, fers_cancel_callback_t cancel_callback, void* cancel_user_data,
 						   fers_vita49_telemetry_callback_t vita49_telemetry_callback, void* vita49_telemetry_user_data)
 {
-	return run_simulation_common(context, progress_callback, progress_user_data, cancel_callback, cancel_user_data,
-								 vita49_telemetry_callback, vita49_telemetry_user_data, "fers_run_simulation_ex",
-								 "Invalid context provided to fers_run_simulation_ex.");
+	return run_simulation_common(
+		SimulationRunRequest{.context = context,
+							 .progress_callback = progress_callback,
+							 .progress_user_data = progress_user_data,
+							 .cancel_callback = cancel_callback,
+							 .cancel_user_data = cancel_user_data,
+							 .vita49_telemetry_callback = vita49_telemetry_callback,
+							 .vita49_telemetry_user_data = vita49_telemetry_user_data,
+							 .function_name = "fers_run_simulation_ex",
+							 .invalid_context_message = "Invalid context provided to fers_run_simulation_ex."});
 }
 
 int fers_generate_kml(const fers_context_t* context, const char* output_kml_filepath)

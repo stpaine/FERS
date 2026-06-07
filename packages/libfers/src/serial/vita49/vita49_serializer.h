@@ -36,15 +36,26 @@ namespace serial::vita49
 		std::vector<std::uint8_t> _bytes;
 	};
 
+	struct FixedFullscaleSignalDataPacket
+	{
+		std::uint32_t stream_id;
+		std::uint64_t class_id;
+		Timestamp timestamp;
+		std::uint8_t packet_count;
+		bool valid_data;
+		bool calibrated_time;
+		bool reference_lock;
+		bool sample_loss;
+		std::span<const ComplexType> samples;
+		RealType fullscale;
+	};
+
 	class Vita49Serializer
 	{
 	public:
 		[[nodiscard]] static std::vector<std::uint8_t> serializeSignalData(const SignalDataPacket& packet);
 		[[nodiscard]] static SignalDataSerializationResult
-		serializeSignalDataFixedFullscale(std::uint32_t stream_id, std::uint64_t class_id, Timestamp timestamp,
-										  std::uint8_t packet_count, bool valid_data, bool calibrated_time,
-										  bool reference_lock, bool sample_loss, std::span<const ComplexType> samples,
-										  RealType fullscale);
+		serializeSignalDataFixedFullscale(const FixedFullscaleSignalDataPacket& packet);
 		[[nodiscard]] static std::vector<std::uint8_t> serializeContext(const ContextPacket& packet);
 	};
 }

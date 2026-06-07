@@ -350,16 +350,28 @@ namespace core
 			return bounds;
 		}
 
-		void includeQuadraticVelocityExtremum(std::array<RealType, 3>& max_abs_velocity, const std::size_t axis,
-											  const RealType a, const RealType b, const RealType c,
-											  const RealType segment_length, const RealType root_u,
-											  const RealType lower_u, const RealType upper_u) noexcept
+		struct QuadraticVelocityExtremum
 		{
-			if (root_u < lower_u || root_u > upper_u || segment_length <= EPSILON)
+			RealType a;
+			RealType b;
+			RealType c;
+			RealType segment_length;
+			RealType root_u;
+			RealType lower_u;
+			RealType upper_u;
+		};
+
+		void includeQuadraticVelocityExtremum(std::array<RealType, 3>& max_abs_velocity, const std::size_t axis,
+											  const QuadraticVelocityExtremum& extremum) noexcept
+		{
+			if (extremum.root_u < extremum.lower_u || extremum.root_u > extremum.upper_u ||
+				extremum.segment_length <= EPSILON)
 			{
 				return;
 			}
-			const RealType velocity = (a * root_u * root_u + b * root_u + c) / segment_length;
+			const RealType velocity =
+				(extremum.a * extremum.root_u * extremum.root_u + extremum.b * extremum.root_u + extremum.c) /
+				extremum.segment_length;
 			if (std::isfinite(velocity))
 			{
 				RealType& axis_max_velocity = axisValue(max_abs_velocity, axis);
@@ -395,15 +407,33 @@ namespace core
 				const RealType b = h2 * dd_left_axis;
 				const RealType c = (axisValue(right, axis) - axisValue(left, axis)) +
 					(h2 / 6.0) * (-2.0 * dd_left_axis - dd_right_axis);
-				includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, lower_u, lower_u,
-												 upper_u);
-				includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, upper_u, lower_u,
-												 upper_u);
+				includeQuadraticVelocityExtremum(max_abs_velocity, axis,
+												 QuadraticVelocityExtremum{.a = a,
+																		   .b = b,
+																		   .c = c,
+																		   .segment_length = segment_length,
+																		   .root_u = lower_u,
+																		   .lower_u = lower_u,
+																		   .upper_u = upper_u});
+				includeQuadraticVelocityExtremum(max_abs_velocity, axis,
+												 QuadraticVelocityExtremum{.a = a,
+																		   .b = b,
+																		   .c = c,
+																		   .segment_length = segment_length,
+																		   .root_u = upper_u,
+																		   .lower_u = lower_u,
+																		   .upper_u = upper_u});
 
 				if (std::abs(a) > EPSILON)
 				{
-					includeQuadraticVelocityExtremum(max_abs_velocity, axis, a, b, c, segment_length, -b / (2.0 * a),
-													 lower_u, upper_u);
+					includeQuadraticVelocityExtremum(max_abs_velocity, axis,
+													 QuadraticVelocityExtremum{.a = a,
+																			   .b = b,
+																			   .c = c,
+																			   .segment_length = segment_length,
+																			   .root_u = -b / (2.0 * a),
+																			   .lower_u = lower_u,
+																			   .upper_u = upper_u});
 				}
 			}
 		}

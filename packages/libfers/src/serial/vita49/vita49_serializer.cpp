@@ -303,40 +303,39 @@ namespace serial::vita49
 		return writer.takeBytes();
 	}
 
-	SignalDataSerializationResult Vita49Serializer::serializeSignalDataFixedFullscale(
-		const std::uint32_t stream_id, const std::uint64_t class_id, const Timestamp timestamp,
-		const std::uint8_t packet_count, const bool valid_data, const bool calibrated_time, const bool reference_lock,
-		const bool sample_loss, const std::span<const ComplexType> samples, const RealType fullscale)
+	SignalDataSerializationResult
+	Vita49Serializer::serializeSignalDataFixedFullscale(const FixedFullscaleSignalDataPacket& packet)
 	{
-		if (!std::isfinite(fullscale) || fullscale <= 0.0)
+		if (!std::isfinite(packet.fullscale) || packet.fullscale <= 0.0)
 		{
 			throw std::invalid_argument("VITA signal full-scale must be positive and finite");
 		}
 
-		const std::size_t byte_count = kSignalDataFixedBytes + samples.size() * sizeof(std::int16_t) * 2u;
+		const std::size_t byte_count = kSignalDataFixedBytes + packet.samples.size() * sizeof(std::int16_t) * 2u;
 		const auto packet_size_words = checkedWordCount(byte_count);
 
 		ByteWriter writer(byte_count);
 		writer.writeU32(makeHeader(PacketType::SignalDataWithStreamId, true, true, IntegerTimestampMode::Utc,
-								   FractionalTimestampMode::RealTimePicoseconds, packet_count, packet_size_words));
-		writer.writeU32(stream_id);
-		writer.writeU64(class_id);
-		writer.writeU32(timestamp.integer_seconds);
-		writer.writeU64(timestamp.fractional_picoseconds);
+								   FractionalTimestampMode::RealTimePicoseconds, packet.packet_count,
+								   packet_size_words));
+		writer.writeU32(packet.stream_id);
+		writer.writeU64(packet.class_id);
+		writer.writeU32(packet.timestamp.integer_seconds);
+		writer.writeU64(packet.timestamp.fractional_picoseconds);
 
 		std::uint64_t clipped_sample_count = 0;
-		for (const auto& sample : samples)
+		for (const auto& sample : packet.samples)
 		{
 			bool clipped = false;
-			writer.writeI16(scaleComponentToInt16(sample.real(), fullscale, clipped));
-			writer.writeI16(scaleComponentToInt16(sample.imag(), fullscale, clipped));
+			writer.writeI16(scaleComponentToInt16(sample.real(), packet.fullscale, clipped));
+			writer.writeI16(scaleComponentToInt16(sample.imag(), packet.fullscale, clipped));
 			if (clipped)
 			{
 				++clipped_sample_count;
 			}
 		}
-		writer.writeU32(
-			makeTrailer(valid_data, calibrated_time, reference_lock, clipped_sample_count > 0, sample_loss));
+		writer.writeU32(makeTrailer(packet.valid_data, packet.calibrated_time, packet.reference_lock,
+									clipped_sample_count > 0, packet.sample_loss));
 
 		if (writer.bytes().size() != byte_count)
 		{

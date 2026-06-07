@@ -320,6 +320,130 @@ namespace
 		return source;
 	}
 
+	bool computeLinearFmcwPhaseWithoutTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+											  const RealType tau, RealType& phase_out)
+	{
+		const RealType time_since_segment_start = t_ret - source.segment_start;
+		const auto chirp_index = static_cast<std::size_t>(std::floor(time_since_segment_start / source.chirp_period));
+		if (source.chirp_count.has_value() && chirp_index >= *source.chirp_count)
+		{
+			return false;
+		}
+		const RealType chirp_time = time_since_segment_start - static_cast<RealType>(chirp_index) * source.chirp_period;
+		if (chirp_time < 0.0 || chirp_time >= source.chirp_duration)
+		{
+			return false;
+		}
+		phase_out = -2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * chirp_time +
+			source.s_pi_alpha * chirp_time * chirp_time;
+		return true;
+	}
+
+	bool computeLinearFmcwPhaseWithTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+										   const RealType tau, core::FmcwChirpBoundaryTracker& chirp_tracker,
+										   RealType& phase_out)
+	{
+		if (!chirp_tracker.initialized)
+		{
+			initializeFmcwTracker(source, t_ret, chirp_tracker);
+		}
+
+		while (t_ret >= chirp_tracker.t_n + source.chirp_period)
+		{
+			chirp_tracker.t_n += source.chirp_period;
+			++chirp_tracker.n_current;
+		}
+
+		if (source.chirp_count.has_value() && chirp_tracker.n_current >= *source.chirp_count)
+		{
+			return false;
+		}
+
+		const RealType u_ret = t_ret - chirp_tracker.t_n;
+		if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+		{
+			return false;
+		}
+
+		phase_out =
+			-2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * u_ret + source.s_pi_alpha * u_ret * u_ret;
+		return true;
+	}
+
+	bool computeTriangleFmcwPhaseWithoutTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+												const RealType tau, RealType& phase_out)
+	{
+		const RealType delta = t_ret - source.segment_start;
+		const auto triangle_index = static_cast<std::size_t>(std::floor(delta / source.triangle_period));
+		if (source.triangle_count.has_value() && triangle_index >= *source.triangle_count)
+		{
+			return false;
+		}
+		const RealType local_triangle_time = delta - static_cast<RealType>(triangle_index) * source.triangle_period;
+		const bool down_leg = local_triangle_time >= source.chirp_duration;
+		const RealType u_ret = down_leg ? local_triangle_time - source.chirp_duration : local_triangle_time;
+		if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+		{
+			return false;
+		}
+		const RealType phi_base = std::fmod(static_cast<RealType>(triangle_index) * source.mod_phi_tri, 2.0 * PI) +
+			(down_leg ? source.mod_phi_up : 0.0);
+		const RealType modular_phi_base = phi_base >= 2.0 * PI ? phi_base - 2.0 * PI : phi_base;
+		const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
+		const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
+		phase_out = -2.0 * PI * source.carrier_freq * tau + modular_phi_base + linear_coeff * u_ret +
+			quad_coeff * u_ret * u_ret;
+		return true;
+	}
+
+	void advanceTriangleTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+								core::FmcwChirpBoundaryTracker& chirp_tracker)
+	{
+		while (t_ret >= chirp_tracker.triangle_t_leg + source.chirp_duration)
+		{
+			chirp_tracker.triangle_t_leg += source.chirp_duration;
+			chirp_tracker.triangle_leg = 1U - chirp_tracker.triangle_leg;
+			if (chirp_tracker.triangle_leg == 0U)
+			{
+				++chirp_tracker.triangle_index;
+			}
+			chirp_tracker.triangle_phi_base += source.mod_phi_up;
+			if (chirp_tracker.triangle_phi_base >= 2.0 * PI)
+			{
+				chirp_tracker.triangle_phi_base -= 2.0 * PI;
+			}
+		}
+	}
+
+	bool computeTriangleFmcwPhaseWithTracker(const core::ActiveStreamingSource& source, const RealType t_ret,
+											 const RealType tau, core::FmcwChirpBoundaryTracker& chirp_tracker,
+											 RealType& phase_out)
+	{
+		if (!chirp_tracker.triangle_initialized)
+		{
+			initializeFmcwTriangleTracker(source, t_ret, chirp_tracker);
+		}
+
+		advanceTriangleTracker(source, t_ret, chirp_tracker);
+		if (source.triangle_count.has_value() && chirp_tracker.triangle_index >= *source.triangle_count)
+		{
+			return false;
+		}
+
+		const RealType u_ret = t_ret - chirp_tracker.triangle_t_leg;
+		if (u_ret < 0.0 || u_ret >= source.chirp_duration)
+		{
+			return false;
+		}
+
+		const bool down_leg = chirp_tracker.triangle_leg == 1U;
+		const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
+		const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
+		phase_out = -2.0 * PI * source.carrier_freq * tau + chirp_tracker.triangle_phi_base + linear_coeff * u_ret +
+			quad_coeff * u_ret * u_ret;
+		return true;
+	}
+
 	/// Computes streaming phase for CW or FMCW sources at a receiver time.
 	bool computeStreamingPhase(const core::ActiveStreamingSource& source, const RealType rx_time, const RealType tau,
 							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
@@ -339,121 +463,18 @@ namespace
 		{
 			if (chirp_tracker == nullptr)
 			{
-				const RealType time_since_segment_start = t_ret - source.segment_start;
-				const auto chirp_index =
-					static_cast<std::size_t>(std::floor(time_since_segment_start / source.chirp_period));
-				if (source.chirp_count.has_value() && chirp_index >= *source.chirp_count)
-				{
-					return false;
-				}
-				const RealType chirp_time =
-					time_since_segment_start - static_cast<RealType>(chirp_index) * source.chirp_period;
-				if (chirp_time < 0.0 || chirp_time >= source.chirp_duration)
-				{
-					return false;
-				}
-				phase_out = -2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * chirp_time +
-					source.s_pi_alpha * chirp_time * chirp_time;
-				return true;
+				return computeLinearFmcwPhaseWithoutTracker(source, t_ret, tau, phase_out);
 			}
-
-			if (!chirp_tracker->initialized)
-			{
-				initializeFmcwTracker(source, t_ret, *chirp_tracker);
-			}
-
-			while (t_ret >= chirp_tracker->t_n + source.chirp_period)
-			{
-				chirp_tracker->t_n += source.chirp_period;
-				++chirp_tracker->n_current;
-			}
-
-			if (source.chirp_count.has_value() && chirp_tracker->n_current >= *source.chirp_count)
-			{
-				return false;
-			}
-
-			const RealType u_ret = t_ret - chirp_tracker->t_n;
-			// This lower-bound guard is required for causality: cold-path initialization pins the
-			// tracker to the segment start when the retarded time precedes the first chirp, and the
-			// advance loop can only move forward. Without the u_ret < 0 check, we'd evaluate the chirp
-			// polynomial at negative local time and extrapolate a non-causal signal before turn-on.
-			if (u_ret < 0.0 || u_ret >= source.chirp_duration)
-			{
-				return false;
-			}
-
-			phase_out =
-				-2.0 * PI * source.carrier_freq * tau + source.two_pi_f0 * u_ret + source.s_pi_alpha * u_ret * u_ret;
-			return true;
+			return computeLinearFmcwPhaseWithTracker(source, t_ret, tau, *chirp_tracker, phase_out);
 		}
 
 		if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
 		{
 			if (chirp_tracker == nullptr)
 			{
-				const RealType delta = t_ret - source.segment_start;
-				const auto triangle_index = static_cast<std::size_t>(std::floor(delta / source.triangle_period));
-				if (source.triangle_count.has_value() && triangle_index >= *source.triangle_count)
-				{
-					return false;
-				}
-				const RealType local_triangle_time =
-					delta - static_cast<RealType>(triangle_index) * source.triangle_period;
-				const bool down_leg = local_triangle_time >= source.chirp_duration;
-				const RealType u_ret = down_leg ? local_triangle_time - source.chirp_duration : local_triangle_time;
-				if (u_ret < 0.0 || u_ret >= source.chirp_duration)
-				{
-					return false;
-				}
-				const RealType phi_base =
-					std::fmod(static_cast<RealType>(triangle_index) * source.mod_phi_tri, 2.0 * PI) +
-					(down_leg ? source.mod_phi_up : 0.0);
-				const RealType modular_phi_base = phi_base >= 2.0 * PI ? phi_base - 2.0 * PI : phi_base;
-				const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
-				const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
-				phase_out = -2.0 * PI * source.carrier_freq * tau + modular_phi_base + linear_coeff * u_ret +
-					quad_coeff * u_ret * u_ret;
-				return true;
+				return computeTriangleFmcwPhaseWithoutTracker(source, t_ret, tau, phase_out);
 			}
-
-			if (!chirp_tracker->triangle_initialized)
-			{
-				initializeFmcwTriangleTracker(source, t_ret, *chirp_tracker);
-			}
-
-			while (t_ret >= chirp_tracker->triangle_t_leg + source.chirp_duration)
-			{
-				chirp_tracker->triangle_t_leg += source.chirp_duration;
-				chirp_tracker->triangle_leg = 1U - chirp_tracker->triangle_leg;
-				if (chirp_tracker->triangle_leg == 0U)
-				{
-					++chirp_tracker->triangle_index;
-				}
-				chirp_tracker->triangle_phi_base += source.mod_phi_up;
-				if (chirp_tracker->triangle_phi_base >= 2.0 * PI)
-				{
-					chirp_tracker->triangle_phi_base -= 2.0 * PI;
-				}
-			}
-
-			if (source.triangle_count.has_value() && chirp_tracker->triangle_index >= *source.triangle_count)
-			{
-				return false;
-			}
-
-			const RealType u_ret = t_ret - chirp_tracker->triangle_t_leg;
-			if (u_ret < 0.0 || u_ret >= source.chirp_duration)
-			{
-				return false;
-			}
-
-			const bool down_leg = chirp_tracker->triangle_leg == 1U;
-			const RealType linear_coeff = down_leg ? source.two_pi_f0_plus_B : source.two_pi_f0;
-			const RealType quad_coeff = down_leg ? source.neg_pi_alpha : source.pi_alpha;
-			phase_out = -2.0 * PI * source.carrier_freq * tau + chirp_tracker->triangle_phi_base +
-				linear_coeff * u_ret + quad_coeff * u_ret * u_ret;
-			return true;
+			return computeTriangleFmcwPhaseWithTracker(source, t_ret, tau, *chirp_tracker, phase_out);
 		}
 
 		phase_out = -2.0 * PI * source.carrier_freq * tau;
@@ -912,205 +933,214 @@ namespace simulation
 		return response;
 	}
 
+	namespace
+	{
+		struct PreviewTransmitterContext
+		{
+			const Transmitter& transmitter;
+			Vec3 position;
+			RealType radiated_power;
+			RealType lambda;
+		};
+
+		struct PreviewReceiverContext
+		{
+			const Receiver& receiver;
+			Vec3 position;
+			bool no_loss;
+		};
+
+		PreviewTransmitterContext makePreviewTransmitterContext(const Transmitter& transmitter, const RealType time)
+		{
+			const auto* waveform = transmitter.getSignal();
+			return PreviewTransmitterContext{.transmitter = transmitter,
+											 .position = transmitter.getPosition(time),
+											 .radiated_power = previewRadiatedPower(waveform),
+											 .lambda =
+												 (waveform != nullptr) ? (params::c() / waveform->getCarrier()) : 0.3};
+		}
+
+		PreviewReceiverContext makePreviewReceiverContext(const Receiver& receiver, const RealType time)
+		{
+			return PreviewReceiverContext{.receiver = receiver,
+										  .position = receiver.getPosition(time),
+										  .no_loss = receiver.checkFlag(Receiver::RecvFlag::FLAG_NOPROPLOSS)};
+		}
+
+		void addIlluminatorLinks(std::vector<PreviewLink>& links, const PreviewTransmitterContext& tx_ctx,
+								 const core::World& world, const RealType time)
+		{
+			for (const auto& target : world.getTargets())
+			{
+				const auto target_position = target->getPosition(time);
+				const Vec3 vec_tx_tgt = target_position - tx_ctx.position;
+				const RealType range = vec_tx_tgt.length();
+				if (range <= EPSILON)
+				{
+					continue;
+				}
+
+				const Vec3 u_tx_tgt = vec_tx_tgt / range;
+				const RealType gain = computeAntennaGain(&tx_ctx.transmitter, u_tx_tgt, time, tx_ctx.lambda);
+				const RealType power_density = (tx_ctx.radiated_power * gain) / (4.0 * PI * range * range);
+				links.push_back({.type = LinkType::BistaticTxTgt,
+								 .quality = LinkQuality::Strong,
+								 .label = formatPreviewDbwPerSquareMeterLabel(power_density),
+								 .display_value = wattsToDb(power_density),
+								 .source_id = tx_ctx.transmitter.getId(),
+								 .dest_id = target->getId(),
+								 .origin_id = tx_ctx.transmitter.getId()});
+			}
+		}
+
+		void addMonostaticLinks(std::vector<PreviewLink>& links, const PreviewTransmitterContext& tx_ctx,
+								const PreviewReceiverContext& rx_ctx, const core::World& world, const RealType time)
+		{
+			for (const auto& target : world.getTargets())
+			{
+				const auto target_position = target->getPosition(time);
+				const Vec3 vec_tx_tgt = target_position - tx_ctx.position;
+				const RealType range = vec_tx_tgt.length();
+				if (range <= EPSILON)
+				{
+					continue;
+				}
+
+				const Vec3 u_tx_tgt = vec_tx_tgt / range;
+				const RealType gt = computeAntennaGain(&tx_ctx.transmitter, u_tx_tgt, time, tx_ctx.lambda);
+				const RealType gr = computeAntennaGain(&rx_ctx.receiver, u_tx_tgt, time, tx_ctx.lambda);
+				SVec3 in_angle(u_tx_tgt);
+				SVec3 out_angle(-u_tx_tgt);
+				const RealType rcs = target->getRcs(in_angle, out_angle, time);
+				const RealType power_ratio =
+					computeReflectedPathPower(gt, gr, rcs, tx_ctx.lambda, range, range, rx_ctx.no_loss);
+				const RealType pr_watts = tx_ctx.radiated_power * power_ratio;
+				const RealType pr_unit_watts = tx_ctx.radiated_power *
+					computeReflectedPathPower(gt, gr, 1.0, tx_ctx.lambda, range, range, rx_ctx.no_loss);
+
+				links.push_back({.type = LinkType::Monostatic,
+								 .quality = isSignalStrong(pr_unit_watts, rx_ctx.receiver.getNoiseTemperature())
+									 ? LinkQuality::Strong
+									 : LinkQuality::Weak,
+								 .label = formatPreviewDbmLabel(pr_unit_watts),
+								 .display_value = wattsToDbm(pr_unit_watts),
+								 .source_id = tx_ctx.transmitter.getId(),
+								 .dest_id = target->getId(),
+								 .origin_id = tx_ctx.transmitter.getId(),
+								 .rcs = rcs,
+								 .actual_power_dbm = wattsToDbm(pr_watts)});
+			}
+		}
+
+		void addDirectLink(std::vector<PreviewLink>& links, const PreviewTransmitterContext& tx_ctx,
+						   const PreviewReceiverContext& rx_ctx, const RealType time)
+		{
+			if (rx_ctx.receiver.checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
+			{
+				return;
+			}
+
+			const Vec3 vec_direct = rx_ctx.position - tx_ctx.position;
+			const RealType range = vec_direct.length();
+			if (range <= EPSILON)
+			{
+				return;
+			}
+
+			const Vec3 u_tx_rx = vec_direct / range;
+			const RealType gt = computeAntennaGain(&tx_ctx.transmitter, u_tx_rx, time, tx_ctx.lambda);
+			const RealType gr = computeAntennaGain(&rx_ctx.receiver, -u_tx_rx, time, tx_ctx.lambda);
+			const RealType power_ratio = computeDirectPathPower(gt, gr, tx_ctx.lambda, range, rx_ctx.no_loss);
+			const RealType pr_watts = tx_ctx.radiated_power * power_ratio;
+
+			links.push_back({.type = LinkType::DirectTxRx,
+							 .quality = LinkQuality::Strong,
+							 .label = formatPreviewDbmLabel(pr_watts, "Direct: "),
+							 .display_value = wattsToDbm(pr_watts),
+							 .source_id = tx_ctx.transmitter.getId(),
+							 .dest_id = rx_ctx.receiver.getId(),
+							 .origin_id = tx_ctx.transmitter.getId()});
+		}
+
+		void addBistaticTargetReceiverLinks(std::vector<PreviewLink>& links, const PreviewTransmitterContext& tx_ctx,
+											const PreviewReceiverContext& rx_ctx, const core::World& world,
+											const RealType time)
+		{
+			for (const auto& target : world.getTargets())
+			{
+				const auto target_position = target->getPosition(time);
+				const Vec3 vec_tx_tgt = target_position - tx_ctx.position;
+				const Vec3 vec_tgt_rx = rx_ctx.position - target_position;
+				const RealType r1 = vec_tx_tgt.length();
+				const RealType r2 = vec_tgt_rx.length();
+				if (r1 <= EPSILON || r2 <= EPSILON)
+				{
+					continue;
+				}
+
+				const Vec3 u_tx_tgt = vec_tx_tgt / r1;
+				const Vec3 u_tgt_rx = vec_tgt_rx / r2;
+				const RealType gt = computeAntennaGain(&tx_ctx.transmitter, u_tx_tgt, time, tx_ctx.lambda);
+				const RealType gr = computeAntennaGain(&rx_ctx.receiver, -u_tgt_rx, time, tx_ctx.lambda);
+				SVec3 in_angle(u_tx_tgt);
+				SVec3 out_angle(-u_tgt_rx);
+				const RealType rcs = target->getRcs(in_angle, out_angle, time);
+				const RealType power_ratio =
+					computeReflectedPathPower(gt, gr, rcs, tx_ctx.lambda, r1, r2, rx_ctx.no_loss);
+				const RealType pr_watts = tx_ctx.radiated_power * power_ratio;
+				const RealType pr_unit_watts = tx_ctx.radiated_power *
+					computeReflectedPathPower(gt, gr, 1.0, tx_ctx.lambda, r1, r2, rx_ctx.no_loss);
+
+				links.push_back({.type = LinkType::BistaticTgtRx,
+								 .quality = isSignalStrong(pr_unit_watts, rx_ctx.receiver.getNoiseTemperature())
+									 ? LinkQuality::Strong
+									 : LinkQuality::Weak,
+								 .label = formatPreviewDbmLabel(pr_unit_watts),
+								 .display_value = wattsToDbm(pr_unit_watts),
+								 .source_id = target->getId(),
+								 .dest_id = rx_ctx.receiver.getId(),
+								 .origin_id = tx_ctx.transmitter.getId(),
+								 .rcs = rcs,
+								 .actual_power_dbm = wattsToDbm(pr_watts)});
+			}
+		}
+
+		void addReceiverLinks(std::vector<PreviewLink>& links, const PreviewTransmitterContext& tx_ctx,
+							  const PreviewReceiverContext& rx_ctx, const core::World& world, const RealType time)
+		{
+			if (tx_ctx.transmitter.getAttached() == &rx_ctx.receiver)
+			{
+				addMonostaticLinks(links, tx_ctx, rx_ctx, world, time);
+				return;
+			}
+
+			addDirectLink(links, tx_ctx, rx_ctx, time);
+			addBistaticTargetReceiverLinks(links, tx_ctx, rx_ctx, world, time);
+		}
+	}
+
 	std::vector<PreviewLink> calculatePreviewLinks(const core::World& world, const RealType time)
 	{
 		std::vector<PreviewLink> links;
 
-		// Default wavelength (1GHz) if no waveform is attached, to allow geometric visualization
-		const RealType lambda_default = 0.3;
-
 		for (const auto& tx : world.getTransmitters())
 		{
-			// 1. Check Transmitter Schedule
 			if (!isComponentActive(tx->getSchedule(), time))
 			{
 				continue;
 			}
 
-			const auto p_tx = tx->getPosition(time);
-			const auto* waveform = tx->getSignal();
-			const RealType pt = previewRadiatedPower(waveform);
-			const RealType lambda = (waveform != nullptr) ? (params::c() / waveform->getCarrier()) : lambda_default;
-
-			// --- PRE-CALCULATE ILLUMINATOR PATHS (Tx -> Tgt) ---
-			// These depend only on the Transmitter and Targets. We calculate them once per Tx
-			// to avoid duplication when multiple receivers are present.
-			// We do NOT filter out Monostatic transmitters here. Even in a monostatic setup,
-			// the "Illuminator" link provides distinct info (Power Density at Target) compared
-			// to the "Monostatic" link (Received Power at Rx). By being outside the Rx loop,
-			// it is guaranteed to be unique per Target.
-			for (const auto& tgt : world.getTargets())
-			{
-				const auto p_tgt = tgt->getPosition(time);
-				const Vec3 vec_tx_tgt = p_tgt - p_tx;
-				const RealType r1 = vec_tx_tgt.length();
-
-				if (r1 <= EPSILON)
-					continue;
-
-				const Vec3 u_tx_tgt = vec_tx_tgt / r1;
-				// Tx Gain: Tx -> Tgt
-				const RealType gt = computeAntennaGain(tx.get(), u_tx_tgt, time, lambda);
-
-				// Power Density at Target: S = (Pt * Gt) / (4 * pi * R1^2)
-				const RealType p_density = (pt * gt) / (4.0 * PI * r1 * r1);
-
-				links.push_back({.type = LinkType::BistaticTxTgt,
-								 .quality = LinkQuality::Strong,
-								 .label = formatPreviewDbwPerSquareMeterLabel(p_density),
-								 .display_value = wattsToDb(p_density),
-								 .source_id = tx->getId(),
-								 .dest_id = tgt->getId(),
-								 .origin_id = tx->getId()});
-			}
+			const auto tx_ctx = makePreviewTransmitterContext(*tx, time);
+			addIlluminatorLinks(links, tx_ctx, world, time);
 
 			for (const auto& rx : world.getReceivers())
 			{
-				// 2. Check Receiver Schedule
 				if (!isComponentActive(rx->getSchedule(), time))
 				{
 					continue;
 				}
-
-				const auto p_rx = rx->getPosition(time);
-				const bool is_monostatic = (tx->getAttached() == rx.get());
-				const bool no_loss = rx->checkFlag(Receiver::RecvFlag::FLAG_NOPROPLOSS);
-
-				if (is_monostatic)
-				{
-					// --- Monostatic Case ---
-					// Calculates the round-trip Received Power (dBm)
-					for (const auto& tgt : world.getTargets())
-					{
-						const auto p_tgt = tgt->getPosition(time);
-
-						// Use computeLink helper logic, but catch exception manually by checking dist
-						// to avoid try/catch overhead in render loop
-						const Vec3 vec_tx_tgt = p_tgt - p_tx;
-						const RealType dist = vec_tx_tgt.length();
-
-						if (dist <= EPSILON)
-							continue;
-
-						const Vec3 u_tx_tgt = vec_tx_tgt / dist; // Unit vec Tx -> Tgt
-
-						// Reusing internal helpers
-						// Tx Gain: Direction Tx -> Tgt
-						const RealType gt = computeAntennaGain(tx.get(), u_tx_tgt, time, lambda);
-						// Rx Gain: Direction Rx -> Tgt (which is -u_tx_tgt because Rx is at Tx)
-						const RealType gr = computeAntennaGain(rx.get(), u_tx_tgt, time, lambda);
-
-						// RCS: In = Tx->Tgt, Out = Tgt->Rx (which is -(Tx->Tgt))
-						SVec3 in_angle(u_tx_tgt);
-						SVec3 out_angle(-u_tx_tgt);
-						const RealType rcs = tgt->getRcs(in_angle, out_angle, time);
-
-						// Reusing Reflected Path Helper
-						// r_tx = dist, r_rx = dist
-						const RealType power_ratio =
-							computeReflectedPathPower(gt, gr, rcs, lambda, dist, dist, no_loss);
-
-						const RealType pr_watts = pt * power_ratio;
-
-						// Label shows power with unit RCS (sigma=1) so it varies only with geometry,
-						// not with the fluctuation model. Actual RCS is carried separately for the tooltip.
-						const RealType pr_unit_watts =
-							pt * computeReflectedPathPower(gt, gr, 1.0, lambda, dist, dist, no_loss);
-
-						links.push_back({.type = LinkType::Monostatic,
-										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
-											 ? LinkQuality::Strong
-											 : LinkQuality::Weak,
-										 .label = formatPreviewDbmLabel(pr_unit_watts),
-										 .display_value = wattsToDbm(pr_unit_watts),
-										 .source_id = tx->getId(),
-										 .dest_id = tgt->getId(),
-										 .origin_id = tx->getId(),
-										 .rcs = rcs,
-										 .actual_power_dbm = wattsToDbm(pr_watts)});
-					}
-				}
-				else
-				{
-					// --- Bistatic Case ---
-
-					// 1. Direct Path (Interference)
-					if (!rx->checkFlag(Receiver::RecvFlag::FLAG_NODIRECT))
-					{
-						const Vec3 vec_direct = p_rx - p_tx;
-						const RealType dist = vec_direct.length();
-
-						if (dist > EPSILON)
-						{
-							const Vec3 u_tx_rx = vec_direct / dist;
-
-							// Tx Gain: Tx -> Rx
-							const RealType gt = computeAntennaGain(tx.get(), u_tx_rx, time, lambda);
-							// Rx Gain: Rx -> Tx (which is -u_tx_rx)
-							const RealType gr = computeAntennaGain(rx.get(), -u_tx_rx, time, lambda);
-
-							const RealType power_ratio = computeDirectPathPower(gt, gr, lambda, dist, no_loss);
-							const RealType pr_watts = pt * power_ratio;
-
-							links.push_back({.type = LinkType::DirectTxRx,
-											 .quality = LinkQuality::Strong,
-											 .label = formatPreviewDbmLabel(pr_watts, "Direct: "),
-											 .display_value = wattsToDbm(pr_watts),
-											 .source_id = tx->getId(),
-											 .dest_id = rx->getId(),
-											 .origin_id = tx->getId()});
-						}
-					}
-
-					// 2. Reflected Path (Scattered Leg: Tgt -> Rx)
-					for (const auto& tgt : world.getTargets())
-					{
-						const auto p_tgt = tgt->getPosition(time);
-						const Vec3 vec_tx_tgt = p_tgt - p_tx;
-						const Vec3 vec_tgt_rx = p_rx - p_tgt; // Vector Tgt -> Rx
-
-						const RealType r1 = vec_tx_tgt.length();
-						const RealType r2 = vec_tgt_rx.length();
-
-						if (r1 <= EPSILON || r2 <= EPSILON)
-							continue;
-
-						const Vec3 u_tx_tgt = vec_tx_tgt / r1;
-						const Vec3 u_tgt_rx = vec_tgt_rx / r2;
-
-						// Tx Gain: Tx -> Tgt
-						const RealType gt = computeAntennaGain(tx.get(), u_tx_tgt, time, lambda);
-						// Rx Gain: Rx -> Tgt (Vector is Tgt->Rx, so look vector is -u_tgt_rx)
-						const RealType gr = computeAntennaGain(rx.get(), -u_tgt_rx, time, lambda);
-
-						// RCS
-						SVec3 in_angle(u_tx_tgt);
-						SVec3 out_angle(-u_tgt_rx); // Out angle is usually defined from Target OUTWARDS
-						const RealType rcs = tgt->getRcs(in_angle, out_angle, time);
-
-						const RealType power_ratio = computeReflectedPathPower(gt, gr, rcs, lambda, r1, r2, no_loss);
-						const RealType pr_watts = pt * power_ratio;
-
-						// Label shows power with unit RCS (sigma=1) so it varies only with geometry.
-						const RealType pr_unit_watts =
-							pt * computeReflectedPathPower(gt, gr, 1.0, lambda, r1, r2, no_loss);
-
-						// Note: Illuminator leg (Tx->Tgt) was handled in the outer loop.
-
-						// Leg 2: Scattered
-						links.push_back({.type = LinkType::BistaticTgtRx,
-										 .quality = isSignalStrong(pr_unit_watts, rx->getNoiseTemperature())
-											 ? LinkQuality::Strong
-											 : LinkQuality::Weak,
-										 .label = formatPreviewDbmLabel(pr_unit_watts),
-										 .display_value = wattsToDbm(pr_unit_watts),
-										 .source_id = tgt->getId(),
-										 .dest_id = rx->getId(),
-										 .origin_id = tx->getId(),
-										 .rcs = rcs,
-										 .actual_power_dbm = wattsToDbm(pr_watts)});
-					}
-				}
+				const auto rx_ctx = makePreviewReceiverContext(*rx, time);
+				addReceiverLinks(links, tx_ctx, rx_ctx, world, time);
 			}
 		}
 		return links;

@@ -65,8 +65,16 @@ namespace serial::vita49
 			const auto timestamp = timestampFromEpoch(_epoch_unix_nanoseconds, packet_first_sample_time);
 
 			auto serialized = Vita49Serializer::serializeSignalDataFixedFullscale(
-				stream_id, kFersVrtIqClassId, timestamp, packet_counts.next(), block.valid_data, block.calibrated_time,
-				block.reference_lock, loss_flag_for_next_packet, block.samples.subspan(offset, count), _adc_fullscale);
+				FixedFullscaleSignalDataPacket{.stream_id = stream_id,
+											   .class_id = kFersVrtIqClassId,
+											   .timestamp = timestamp,
+											   .packet_count = packet_counts.next(),
+											   .valid_data = block.valid_data,
+											   .calibrated_time = block.calibrated_time,
+											   .reference_lock = block.reference_lock,
+											   .sample_loss = loss_flag_for_next_packet,
+											   .samples = block.samples.subspan(offset, count),
+											   .fullscale = _adc_fullscale});
 			const bool packet_over_range = serialized.clipped_sample_count > 0;
 			result.over_range_count += serialized.clipped_sample_count;
 

@@ -128,6 +128,54 @@ namespace core
 			return result;
 		}
 
+		template <typename T>
+		void addOptional(nlohmann::json& result, const char* key, const std::optional<T>& value)
+		{
+			if (value.has_value())
+			{
+				result[key] = *value;
+			}
+		}
+
+		void addDechirpReferenceJson(nlohmann::json& result, const OutputFileMetadata& file)
+		{
+			addOptional(result, "fmcw_dechirp_reference_transmitter_id", file.fmcw_dechirp_reference_transmitter_id);
+			addOptional(result, "fmcw_dechirp_reference_transmitter_name",
+						file.fmcw_dechirp_reference_transmitter_name);
+			addOptional(result, "fmcw_dechirp_reference_waveform_id", file.fmcw_dechirp_reference_waveform_id);
+			addOptional(result, "fmcw_dechirp_reference_waveform_name", file.fmcw_dechirp_reference_waveform_name);
+			if (file.fmcw_dechirp_reference_waveform.has_value())
+			{
+				result["fmcw_dechirp_reference_waveform"] = fmcwToJson(*file.fmcw_dechirp_reference_waveform);
+			}
+		}
+
+		void addFmcwIfJson(nlohmann::json& result, const OutputFileMetadata& file)
+		{
+			result["fmcw_if_decimation_enabled"] = file.fmcw_if_decimation_enabled;
+			result["fmcw_if_legacy_full_rate"] = file.fmcw_if_legacy_full_rate;
+			addOptional(result, "fmcw_if_requested_sample_rate", file.fmcw_if_requested_sample_rate);
+			addOptional(result, "fmcw_if_sample_rate", file.fmcw_if_sample_rate);
+			addOptional(result, "fmcw_if_input_sample_rate", file.fmcw_if_input_sample_rate);
+			addOptional(result, "fmcw_if_resample_numerator", file.fmcw_if_resample_numerator);
+			addOptional(result, "fmcw_if_resample_denominator", file.fmcw_if_resample_denominator);
+			addOptional(result, "fmcw_if_decimation_factor", file.fmcw_if_decimation_factor);
+			addOptional(result, "fmcw_if_filter_bandwidth", file.fmcw_if_filter_bandwidth);
+			addOptional(result, "fmcw_if_filter_transition_width", file.fmcw_if_filter_transition_width);
+			addOptional(result, "fmcw_if_filter_stopband", file.fmcw_if_filter_stopband);
+			addOptional(result, "fmcw_if_filter_group_delay_seconds", file.fmcw_if_filter_group_delay_seconds);
+			addOptional(result, "fmcw_if_compensated_integer_delay_samples",
+						file.fmcw_if_compensated_integer_delay_samples);
+			addOptional(result, "fmcw_if_compensated_fractional_delay_samples",
+						file.fmcw_if_compensated_fractional_delay_samples);
+			addOptional(result, "fmcw_if_warmup_discard_samples", file.fmcw_if_warmup_discard_samples);
+			addOptional(result, "fmcw_if_phase_refinement", file.fmcw_if_phase_refinement);
+			addOptional(result, "fmcw_if_timing_error_seconds", file.fmcw_if_timing_error_seconds);
+			addOptional(result, "fmcw_if_phase_error_radians", file.fmcw_if_phase_error_radians);
+			addOptional(result, "fmcw_if_noise_variance", file.fmcw_if_noise_variance);
+			result["fmcw_if_group_delay_compensated"] = file.fmcw_if_group_delay_compensated;
+		}
+
 		/// Converts one output file metadata entry to JSON.
 		nlohmann::json fileToJson(const OutputFileMetadata& file)
 		{
@@ -170,98 +218,8 @@ namespace core
 			{
 				result["fmcw"] = fmcwToJson(*file.fmcw);
 			}
-			if (file.fmcw_dechirp_reference_transmitter_id.has_value())
-			{
-				result["fmcw_dechirp_reference_transmitter_id"] = *file.fmcw_dechirp_reference_transmitter_id;
-			}
-			if (file.fmcw_dechirp_reference_transmitter_name.has_value())
-			{
-				result["fmcw_dechirp_reference_transmitter_name"] = *file.fmcw_dechirp_reference_transmitter_name;
-			}
-			if (file.fmcw_dechirp_reference_waveform_id.has_value())
-			{
-				result["fmcw_dechirp_reference_waveform_id"] = *file.fmcw_dechirp_reference_waveform_id;
-			}
-			if (file.fmcw_dechirp_reference_waveform_name.has_value())
-			{
-				result["fmcw_dechirp_reference_waveform_name"] = *file.fmcw_dechirp_reference_waveform_name;
-			}
-			if (file.fmcw_dechirp_reference_waveform.has_value())
-			{
-				result["fmcw_dechirp_reference_waveform"] = fmcwToJson(*file.fmcw_dechirp_reference_waveform);
-			}
-			result["fmcw_if_decimation_enabled"] = file.fmcw_if_decimation_enabled;
-			result["fmcw_if_legacy_full_rate"] = file.fmcw_if_legacy_full_rate;
-			if (file.fmcw_if_requested_sample_rate.has_value())
-			{
-				result["fmcw_if_requested_sample_rate"] = *file.fmcw_if_requested_sample_rate;
-			}
-			if (file.fmcw_if_sample_rate.has_value())
-			{
-				result["fmcw_if_sample_rate"] = *file.fmcw_if_sample_rate;
-			}
-			if (file.fmcw_if_input_sample_rate.has_value())
-			{
-				result["fmcw_if_input_sample_rate"] = *file.fmcw_if_input_sample_rate;
-			}
-			if (file.fmcw_if_resample_numerator.has_value())
-			{
-				result["fmcw_if_resample_numerator"] = *file.fmcw_if_resample_numerator;
-			}
-			if (file.fmcw_if_resample_denominator.has_value())
-			{
-				result["fmcw_if_resample_denominator"] = *file.fmcw_if_resample_denominator;
-			}
-			if (file.fmcw_if_decimation_factor.has_value())
-			{
-				result["fmcw_if_decimation_factor"] = *file.fmcw_if_decimation_factor;
-			}
-			if (file.fmcw_if_filter_bandwidth.has_value())
-			{
-				result["fmcw_if_filter_bandwidth"] = *file.fmcw_if_filter_bandwidth;
-			}
-			if (file.fmcw_if_filter_transition_width.has_value())
-			{
-				result["fmcw_if_filter_transition_width"] = *file.fmcw_if_filter_transition_width;
-			}
-			if (file.fmcw_if_filter_stopband.has_value())
-			{
-				result["fmcw_if_filter_stopband"] = *file.fmcw_if_filter_stopband;
-			}
-			if (file.fmcw_if_filter_group_delay_seconds.has_value())
-			{
-				result["fmcw_if_filter_group_delay_seconds"] = *file.fmcw_if_filter_group_delay_seconds;
-			}
-			if (file.fmcw_if_compensated_integer_delay_samples.has_value())
-			{
-				result["fmcw_if_compensated_integer_delay_samples"] = *file.fmcw_if_compensated_integer_delay_samples;
-			}
-			if (file.fmcw_if_compensated_fractional_delay_samples.has_value())
-			{
-				result["fmcw_if_compensated_fractional_delay_samples"] =
-					*file.fmcw_if_compensated_fractional_delay_samples;
-			}
-			if (file.fmcw_if_warmup_discard_samples.has_value())
-			{
-				result["fmcw_if_warmup_discard_samples"] = *file.fmcw_if_warmup_discard_samples;
-			}
-			if (file.fmcw_if_phase_refinement.has_value())
-			{
-				result["fmcw_if_phase_refinement"] = *file.fmcw_if_phase_refinement;
-			}
-			if (file.fmcw_if_timing_error_seconds.has_value())
-			{
-				result["fmcw_if_timing_error_seconds"] = *file.fmcw_if_timing_error_seconds;
-			}
-			if (file.fmcw_if_phase_error_radians.has_value())
-			{
-				result["fmcw_if_phase_error_radians"] = *file.fmcw_if_phase_error_radians;
-			}
-			if (file.fmcw_if_noise_variance.has_value())
-			{
-				result["fmcw_if_noise_variance"] = *file.fmcw_if_noise_variance;
-			}
-			result["fmcw_if_group_delay_compensated"] = file.fmcw_if_group_delay_compensated;
+			addDechirpReferenceJson(result, file);
+			addFmcwIfJson(result, file);
 			return result;
 		}
 

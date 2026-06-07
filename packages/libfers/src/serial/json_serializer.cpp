@@ -987,91 +987,106 @@ namespace params
 
 namespace
 {
+	void addMonostaticReceiverFields(nlohmann::json& monostatic_comp, const radar::Transmitter& transmitter,
+									 const radar::Receiver& receiver)
+	{
+		monostatic_comp["noise_temp"] = receiver.getNoiseTemperature();
+		monostatic_comp["nodirect"] = receiver.checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
+		monostatic_comp["nopropagationloss"] = receiver.checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
+
+		if (!transmitter.getSchedule().empty())
+		{
+			monostatic_comp["schedule"] = transmitter.getSchedule();
+		}
+
+		if (transmitter.getMode() == radar::OperationMode::PULSED_MODE)
+		{
+			monostatic_comp["pulsed_mode"] = {{"prf", transmitter.getPrf()},
+											  {"window_skip", receiver.getWindowSkip()},
+											  {"window_length", receiver.getWindowLength()}};
+		}
+		else if (transmitter.getMode() == radar::OperationMode::FMCW_MODE)
+		{
+			monostatic_comp["fmcw_mode"] = receiver_fmcw_mode_to_json(receiver);
+		}
+		else
+		{
+			monostatic_comp["cw_mode"] = nlohmann::json::object();
+		}
+	}
+
+	nlohmann::json monostaticComponentToJson(const radar::Transmitter& transmitter)
+	{
+		const auto* attached = transmitter.getAttached();
+		nlohmann::json monostatic_comp;
+		monostatic_comp["name"] = transmitter.getName();
+		monostatic_comp["tx_id"] = sim_id_to_json(transmitter.getId());
+		monostatic_comp["rx_id"] = sim_id_to_json(attached->getId());
+		monostatic_comp["waveform"] =
+			sim_id_to_json((transmitter.getSignal() != nullptr) ? transmitter.getSignal()->getId() : 0);
+		monostatic_comp["antenna"] =
+			sim_id_to_json((transmitter.getAntenna() != nullptr) ? transmitter.getAntenna()->getId() : 0);
+		monostatic_comp["timing"] = sim_id_to_json(transmitter.getTiming() ? transmitter.getTiming()->getId() : 0);
+
+		if (const auto* receiver = dynamic_cast<const radar::Receiver*>(attached))
+		{
+			addMonostaticReceiverFields(monostatic_comp, transmitter, *receiver);
+		}
+		return nlohmann::json{{"monostatic", monostatic_comp}};
+	}
+
+	void appendTransmitterComponents(nlohmann::json& components, const radar::Platform* platform,
+									 const core::World& world)
+	{
+		for (const auto& transmitter : world.getTransmitters())
+		{
+			if (transmitter->getPlatform() != platform)
+			{
+				continue;
+			}
+			if (transmitter->getAttached() != nullptr)
+			{
+				components.push_back(monostaticComponentToJson(*transmitter));
+			}
+			else
+			{
+				components.push_back(nlohmann::json{{"transmitter", *transmitter}});
+			}
+		}
+	}
+
+	void appendReceiverComponents(nlohmann::json& components, const radar::Platform* platform, const core::World& world)
+	{
+		for (const auto& receiver : world.getReceivers())
+		{
+			if (receiver->getPlatform() == platform && receiver->getAttached() == nullptr)
+			{
+				components.push_back(nlohmann::json{{"receiver", *receiver}});
+			}
+		}
+	}
+
+	void appendTargetComponents(nlohmann::json& components, const radar::Platform* platform, const core::World& world)
+	{
+		for (const auto& target : world.getTargets())
+		{
+			if (target->getPlatform() == platform)
+			{
+				components.push_back(nlohmann::json{{"target", *target}});
+			}
+		}
+	}
+
 	/// Serializes a platform and its attached components to JSON.
 	nlohmann::json serialize_platform(const radar::Platform* p, const core::World& world)
 	{
 		nlohmann::json plat_json = *p;
-
-		// Initialize components array to ensure it exists even if empty
 		plat_json["components"] = nlohmann::json::array();
+		auto& components = plat_json["components"];
 
-		// Add Transmitters and Monostatic Radars
-		for (const auto& t : world.getTransmitters())
-		{
-			if (t->getPlatform() == p)
-			{
-				if (t->getAttached() != nullptr)
-				{
-					nlohmann::json monostatic_comp;
-					monostatic_comp["name"] = t->getName();
-					monostatic_comp["tx_id"] = sim_id_to_json(t->getId());
-					monostatic_comp["rx_id"] = sim_id_to_json(t->getAttached()->getId());
-					monostatic_comp["waveform"] =
-						sim_id_to_json((t->getSignal() != nullptr) ? t->getSignal()->getId() : 0);
-					monostatic_comp["antenna"] =
-						sim_id_to_json((t->getAntenna() != nullptr) ? t->getAntenna()->getId() : 0);
-					monostatic_comp["timing"] = sim_id_to_json(t->getTiming() ? t->getTiming()->getId() : 0);
-
-					if (const auto* recv = dynamic_cast<const radar::Receiver*>(t->getAttached()))
-					{
-						monostatic_comp["noise_temp"] = recv->getNoiseTemperature();
-						monostatic_comp["nodirect"] = recv->checkFlag(radar::Receiver::RecvFlag::FLAG_NODIRECT);
-						monostatic_comp["nopropagationloss"] =
-							recv->checkFlag(radar::Receiver::RecvFlag::FLAG_NOPROPLOSS);
-
-						if (!t->getSchedule().empty())
-						{
-							monostatic_comp["schedule"] = t->getSchedule();
-						}
-
-						if (t->getMode() == radar::OperationMode::PULSED_MODE)
-						{
-							monostatic_comp["pulsed_mode"] = {{"prf", t->getPrf()},
-															  {"window_skip", recv->getWindowSkip()},
-															  {"window_length", recv->getWindowLength()}};
-						}
-						else
-						{
-							if (t->getMode() == radar::OperationMode::FMCW_MODE)
-							{
-								monostatic_comp["fmcw_mode"] = receiver_fmcw_mode_to_json(*recv);
-							}
-							else
-							{
-								monostatic_comp["cw_mode"] = nlohmann::json::object();
-							}
-						}
-					}
-					plat_json["components"].push_back(nlohmann::json{{"monostatic", monostatic_comp}});
-				}
-				else
-				{
-					plat_json["components"].push_back(nlohmann::json{{"transmitter", *t}});
-				}
-			}
-		}
-
-		// Add Standalone Receivers
-		for (const auto& r : world.getReceivers())
-		{
-			if (r->getPlatform() == p)
-			{
-				// This must be a standalone receiver, as monostatic cases were handled above.
-				if (r->getAttached() == nullptr)
-				{
-					plat_json["components"].push_back(nlohmann::json{{"receiver", *r}});
-				}
-			}
-		}
-
-		// Add Targets
-		for (const auto& target : world.getTargets())
-		{
-			if (target->getPlatform() == p)
-			{
-				plat_json["components"].push_back(nlohmann::json{{"target", *target}});
-			}
-		}
+		appendTransmitterComponents(components, p, world);
+		appendReceiverComponents(components, p, world);
+		appendTargetComponents(components, p, world);
 
 		return plat_json;
 	}
