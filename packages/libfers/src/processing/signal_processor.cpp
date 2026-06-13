@@ -139,27 +139,6 @@ namespace processing
 		}
 	}
 
-	void applyThermalNoise(std::span<ComplexType> window, const RealType noiseTemperature, std::mt19937& rngEngine)
-	{
-		if (noiseTemperature == 0)
-		{
-			return;
-		}
-
-		const RealType b = params::rate() / (2.0 * params::oversampleRatio());
-		const RealType total_power = params::boltzmannK() * noiseTemperature * b;
-
-		// Split total power equally between the I and Q channels
-		const RealType per_channel_power = total_power / 2.0;
-		const RealType stddev = std::sqrt(per_channel_power);
-
-		noise::WgnGenerator generator(rngEngine, stddev);
-		for (auto& sample : window)
-		{
-			sample += ComplexType(generator.getSample(), generator.getSample());
-		}
-	}
-
 	void applyThermalNoiseAtSampleRate(std::span<ComplexType> window, const RealType noiseTemperature,
 									   std::mt19937& rngEngine, const RealType sampleRateHz)
 	{

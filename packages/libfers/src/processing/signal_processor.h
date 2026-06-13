@@ -67,18 +67,6 @@ namespace processing
 	void renderWindow(std::vector<ComplexType>& window, RealType length, RealType start, RealType fracDelay,
 					  std::span<const std::unique_ptr<serial::Response>> responses);
 
-	/**
-	 * @brief Applies thermal (Johnson-Nyquist) noise to a window of I/Q samples.
-	 *
-	 * Simulates the addition of white Gaussian noise based on the receiver's noise
-	 * temperature and the simulation bandwidth.
-	 *
-	 * @param window A span of I/Q data to which noise will be added.
-	 * @param noiseTemperature The effective noise temperature in Kelvin.
-	 * @param rngEngine A random number generator engine to use for noise generation.
-	 */
-	void applyThermalNoise(std::span<ComplexType> window, RealType noiseTemperature, std::mt19937& rngEngine);
-
 	/// Applies circular complex thermal noise using a caller-specified complex-baseband sample rate.
 	void applyThermalNoiseAtSampleRate(std::span<ComplexType> window, RealType noiseTemperature,
 									   std::mt19937& rngEngine, RealType sampleRateHz);

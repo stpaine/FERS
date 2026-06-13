@@ -130,52 +130,6 @@ TEST_CASE("renderWindow accumulates overlapping responses with offsets", "[proce
 	REQUIRE_THAT(window[3].imag(), WithinAbs(0.0, 1e-12));
 }
 
-TEST_CASE("applyThermalNoise respects zero temperature", "[processing][signal]")
-{
-	ParamGuard const guard;
-	params::setRate(1000.0);
-	params::setOversampleRatio(1);
-
-	std::vector<ComplexType> window = {ComplexType{1.0, 2.0}, ComplexType{-3.0, 4.0}};
-	std::mt19937 rng(1234u);
-
-	processing::applyThermalNoise(window, 0.0, rng);
-
-	REQUIRE_THAT(window[0].real(), WithinAbs(1.0, 0.0));
-	REQUIRE_THAT(window[0].imag(), WithinAbs(2.0, 0.0));
-	REQUIRE_THAT(window[1].real(), WithinAbs(-3.0, 0.0));
-	REQUIRE_THAT(window[1].imag(), WithinAbs(4.0, 0.0));
-}
-
-TEST_CASE("applyThermalNoise produces expected power", "[processing][signal]")
-{
-	ParamGuard const guard;
-	params::setRate(2000.0);
-	params::setOversampleRatio(2);
-
-	const RealType temperature = 300.0;
-	const RealType bandwidth = params::rate() / (2.0 * params::oversampleRatio());
-	const RealType total_power = params::boltzmannK() * temperature * bandwidth;
-	const RealType per_channel_power = total_power / 2.0;
-	const RealType stddev = std::sqrt(per_channel_power);
-
-	std::vector<ComplexType> window(50000, ComplexType{0.0, 0.0});
-	std::mt19937 rng(42u);
-
-	processing::applyThermalNoise(window, temperature, rng);
-
-	const RealType mean_real = meanOfChannel(window, true);
-	const RealType mean_imag = meanOfChannel(window, false);
-	const RealType var_real = varianceOfChannel(window, true, mean_real);
-	const RealType var_imag = varianceOfChannel(window, false, mean_imag);
-
-	const RealType mean_tolerance = 5.0 * stddev / std::sqrt(static_cast<RealType>(window.size()));
-	REQUIRE_THAT(mean_real, WithinAbs(0.0, mean_tolerance));
-	REQUIRE_THAT(mean_imag, WithinAbs(0.0, mean_tolerance));
-	REQUIRE_THAT(var_real, WithinRel(per_channel_power, 0.1));
-	REQUIRE_THAT(var_imag, WithinRel(per_channel_power, 0.1));
-}
-
 TEST_CASE("applyThermalNoiseAtSampleRate scales complex variance to IF rate", "[processing][signal][fmcw][if]")
 {
 	ParamGuard const guard;
