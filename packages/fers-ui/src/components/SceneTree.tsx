@@ -1,27 +1,29 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
-import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
-import { useScenarioStore, Platform } from '@/stores/scenarioStore';
-import { Box, Typography, IconButton, Tooltip, Divider } from '@mui/material';
-import { useShallow } from 'zustand/react/shallow';
-
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import PublicIcon from '@mui/icons-material/Public';
-import WavesIcon from '@mui/icons-material/Waves';
-import TimerIcon from '@mui/icons-material/Timer';
-import SettingsInputAntennaIcon from '@mui/icons-material/SettingsInputAntenna';
-import FlightIcon from '@mui/icons-material/Flight';
 import AddIcon from '@mui/icons-material/Add';
-import RemoveIcon from '@mui/icons-material/Remove';
-import SensorsIcon from '@mui/icons-material/Sensors';
-import PodcastsIcon from '@mui/icons-material/Podcasts';
-import RssFeedIcon from '@mui/icons-material/RssFeed';
 import AdjustIcon from '@mui/icons-material/Adjust';
-
-import ScenarioIO from './ScenarioIO';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FlightIcon from '@mui/icons-material/Flight';
+import PodcastsIcon from '@mui/icons-material/Podcasts';
+import PublicIcon from '@mui/icons-material/Public';
+import RemoveIcon from '@mui/icons-material/Remove';
+import RssFeedIcon from '@mui/icons-material/RssFeed';
+import SensorsIcon from '@mui/icons-material/Sensors';
+import SettingsInputAntennaIcon from '@mui/icons-material/SettingsInputAntenna';
+import TimerIcon from '@mui/icons-material/Timer';
+import WavesIcon from '@mui/icons-material/Waves';
+import { Box, Divider, IconButton, Tooltip, Typography } from '@mui/material';
+import { SimpleTreeView, TreeItem } from '@mui/x-tree-view';
 import React from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import {
+    Platform,
+    PlatformComponent,
+    useScenarioStore,
+} from '@/stores/scenarioStore';
+import ScenarioIO from './ScenarioIO';
 
 const SectionHeader = ({
     title,
@@ -83,6 +85,21 @@ const getPlatformIcon = (platform: Platform) => {
     return <FlightIcon sx={{ mr: 1 }} fontSize="small" />;
 };
 
+const getComponentIcon = (component: PlatformComponent) => {
+    switch (component.type) {
+        case 'monostatic':
+            return <SensorsIcon sx={{ mr: 1 }} fontSize="small" />;
+        case 'transmitter':
+            return <PodcastsIcon sx={{ mr: 1 }} fontSize="small" />;
+        case 'receiver':
+            return <RssFeedIcon sx={{ mr: 1 }} fontSize="small" />;
+        case 'target':
+            return <AdjustIcon sx={{ mr: 1 }} fontSize="small" />;
+        default:
+            return <FlightIcon sx={{ mr: 1 }} fontSize="small" />;
+    }
+};
+
 export default function SceneTree() {
     const {
         globalParameters,
@@ -98,6 +115,7 @@ export default function SceneTree() {
         addAntenna,
         addPlatform,
         removeItem,
+        removePlatformComponent,
     } = useScenarioStore(
         useShallow((state) => ({
             globalParameters: state.globalParameters,
@@ -113,6 +131,7 @@ export default function SceneTree() {
             addAntenna: state.addAntenna,
             addPlatform: state.addPlatform,
             removeItem: state.removeItem,
+            removePlatformComponent: state.removePlatformComponent,
         }))
     );
 
@@ -445,7 +464,55 @@ export default function SceneTree() {
                                             </IconButton>
                                         </Box>
                                     }
-                                />
+                                >
+                                    {platform.components.map((component) => (
+                                        <TreeItem
+                                            key={component.id}
+                                            itemId={component.id}
+                                            label={
+                                                <Box
+                                                    sx={{
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        width: '100%',
+                                                    }}
+                                                >
+                                                    {getComponentIcon(
+                                                        component
+                                                    )}
+                                                    <Typography
+                                                        variant="body2"
+                                                        sx={{
+                                                            flexGrow: 1,
+                                                            whiteSpace:
+                                                                'nowrap',
+                                                            overflow: 'hidden',
+                                                            textOverflow:
+                                                                'ellipsis',
+                                                            minWidth: 0,
+                                                            pr: 1,
+                                                        }}
+                                                    >
+                                                        {component.name}
+                                                    </Typography>
+                                                    <IconButton
+                                                        size="small"
+                                                        className="remove-button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            removePlatformComponent(
+                                                                platform.id,
+                                                                component.id
+                                                            );
+                                                        }}
+                                                    >
+                                                        <RemoveIcon fontSize="inherit" />
+                                                    </IconButton>
+                                                </Box>
+                                            }
+                                        />
+                                    ))}
+                                </TreeItem>
                             );
                         })}
                     </TreeItem>

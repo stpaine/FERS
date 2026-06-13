@@ -885,7 +885,12 @@ export function PlatformComponentInspector({
                             label="RCS File"
                             value={component.rcs_filename}
                             onChange={(v) => handleChange('rcs_filename', v)}
-                            filters={[{ name: 'RCS Data', extensions: ['*'] }]}
+                            filters={[
+                                {
+                                    name: 'Target RCS XML',
+                                    extensions: ['xml'],
+                                },
+                            ]}
                         />
                     )}
 
