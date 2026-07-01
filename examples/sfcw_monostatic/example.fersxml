@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE simulation SYSTEM "fers-xml.dtd">
+<simulation name="SfcwMonostaticScenario">
+    <parameters>
+        <starttime>0.0</starttime>
+        <endtime>0.0128</endtime>
+        <rate>100000.0</rate>
+        <simSamplingRate>100000.0</simSamplingRate>
+        <randomseed>20260701</randomseed>
+        <adc_bits>12</adc_bits>
+    </parameters>
+
+    <antenna name="SfcwIsotropicAntenna" pattern="isotropic">
+        <efficiency>1.0</efficiency>
+    </antenna>
+
+    <waveform name="SfcwStepSweep">
+        <power>100.0</power>
+        <carrier_frequency>2.4e9</carrier_frequency>
+        <stepped_frequency>
+            <start_frequency_offset>-7.5e5</start_frequency_offset>
+            <step_size>1.0e5</step_size>
+            <step_count>16</step_count>
+            <dwell_time>1.0e-4</dwell_time>
+            <step_period>2.0e-4</step_period>
+            <sweep_count>4</sweep_count>
+        </stepped_frequency>
+    </waveform>
+
+    <timing name="SfcwClock">
+        <frequency>10.0e6</frequency>
+    </timing>
+
+    <platform name="SfcwRadarPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>0.0</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <monostatic name="SfcwRadar" antenna="SfcwIsotropicAntenna" waveform="SfcwStepSweep"
+                    timing="SfcwClock" nodirect="true">
+            <sfcw_mode/>
+            <noise_temp>0.0</noise_temp>
+        </monostatic>
+    </platform>
+
+    <platform name="SfcwTargetPlatform">
+        <motionpath interpolation="static">
+            <positionwaypoint>
+                <x>100.0</x>
+                <y>0.0</y>
+                <altitude>0.0</altitude>
+                <time>0.0</time>
+            </positionwaypoint>
+        </motionpath>
+        <fixedrotation>
+            <startazimuth>0.0</startazimuth>
+            <startelevation>0.0</startelevation>
+            <azimuthrate>0.0</azimuthrate>
+            <elevationrate>0.0</elevationrate>
+        </fixedrotation>
+        <target name="SfcwPointTarget">
+            <rcs type="isotropic">
+                <value>10.0</value>
+            </rcs>
+        </target>
+    </platform>
+</simulation>

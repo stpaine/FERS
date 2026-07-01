@@ -31,6 +31,8 @@ type FmcwWaveform = Extract<
     { waveformType: 'fmcw_linear_chirp' | 'fmcw_triangle' }
 >;
 
+type SfcwWaveform = Extract<Waveform, { waveformType: 'stepped_frequency' }>;
+
 type FmcwEmitterComponent = Extract<
     PlatformComponent,
     { type: 'transmitter' | 'monostatic' }
@@ -48,6 +50,10 @@ const isFmcwWaveform = (
 ): waveform is FmcwWaveform =>
     waveform?.waveformType === 'fmcw_linear_chirp' ||
     waveform?.waveformType === 'fmcw_triangle';
+
+const isSfcwWaveform = (
+    waveform: Waveform | undefined
+): waveform is SfcwWaveform => waveform?.waveformType === 'stepped_frequency';
 
 const formatNumber = (value: number): string =>
     value.toLocaleString(undefined, { maximumSignificantDigits: 6 });
@@ -104,6 +110,52 @@ export function validateFmcwWaveform(
     waveform: Waveform,
     globalParameters: GlobalParameters
 ): FmcwValidationIssue[] {
+    if (isSfcwWaveform(waveform)) {
+        const issues: FmcwValidationIssue[] = [];
+        const firstFrequency =
+            waveform.carrier_frequency + waveform.start_frequency_offset;
+        const lastFrequency =
+            firstFrequency + (waveform.step_count - 1) * waveform.step_size;
+        const lowerFrequency = Math.min(firstFrequency, lastFrequency);
+        if (waveform.step_size === 0) {
+            pushIssue(issues, {
+                severity: 'error',
+                itemId: waveform.id,
+                waveformId: waveform.id,
+                field: 'step_size',
+                message: 'SFCW step size cannot be zero.',
+            });
+        }
+        if (waveform.step_period < waveform.dwell_time) {
+            pushIssue(issues, {
+                severity: 'error',
+                itemId: waveform.id,
+                waveformId: waveform.id,
+                field: 'step_period',
+                message:
+                    'Step period must be greater than or equal to dwell time.',
+            });
+        }
+        if (globalParameters.rate * waveform.dwell_time < 1) {
+            pushIssue(issues, {
+                severity: 'warning',
+                itemId: waveform.id,
+                waveformId: waveform.id,
+                message: `${waveform.name} has fewer than one output sample per SFCW dwell.`,
+            });
+        }
+        if (lowerFrequency <= 0) {
+            pushIssue(issues, {
+                severity: 'error',
+                itemId: waveform.id,
+                waveformId: waveform.id,
+                message:
+                    'Carrier frequency plus the lowest SFCW step frequency must stay positive.',
+            });
+        }
+        return issues;
+    }
+
     if (!isFmcwWaveform(waveform)) {
         return [];
     }
@@ -242,6 +294,49 @@ function validateFmcwEmitterSchedule(
                 message: `${component.name} schedule leaves ${formatNumber(
                     leftover
                 )} s silent after the last complete FMCW triangle.`,
+            });
+        }
+    }
+
+    return issues;
+}
+
+function validateSfcwEmitterSchedule(
+    component: FmcwEmitterComponent,
+    waveform: SfcwWaveform,
+    globalParameters: GlobalParameters
+): FmcwValidationIssue[] {
+    const issues: FmcwValidationIssue[] = [];
+    const schedule = effectiveSchedule(component.schedule, globalParameters);
+    const sweepPeriod = waveform.step_count * waveform.step_period;
+
+    for (const period of schedule) {
+        const duration = period.end - period.start;
+        if (duration < waveform.dwell_time) {
+            pushIssue(issues, {
+                severity: 'error',
+                itemId: component.id,
+                componentId: component.id,
+                waveformId: waveform.id,
+                field: 'schedule',
+                message: `${component.name} has schedule duration ${formatNumber(
+                    duration
+                )} s shorter than SFCW dwell time ${formatNumber(
+                    waveform.dwell_time
+                )} s.`,
+            });
+        } else if (duration < sweepPeriod) {
+            pushIssue(issues, {
+                severity: 'warning',
+                itemId: component.id,
+                componentId: component.id,
+                waveformId: waveform.id,
+                field: 'schedule',
+                message: `${component.name} has schedule duration ${formatNumber(
+                    duration
+                )} s shorter than SFCW sweep period ${formatNumber(
+                    sweepPeriod
+                )} s.`,
             });
         }
     }
@@ -530,6 +625,29 @@ export function validateFmcwScenario(
             }
 
             if (component.radarType !== 'fmcw' || !component.waveformId) {
+                if (component.radarType !== 'sfcw' || !component.waveformId) {
+                    continue;
+                }
+
+                const waveform = waveformsById.get(component.waveformId);
+                if (!isSfcwWaveform(waveform)) {
+                    pushIssue(issues, {
+                        severity: 'error',
+                        itemId: component.id,
+                        componentId: component.id,
+                        waveformId: component.waveformId,
+                        message: `${component.name} is SFCW but does not reference an SFCW waveform.`,
+                    });
+                    continue;
+                }
+
+                issues.push(
+                    ...validateSfcwEmitterSchedule(
+                        component,
+                        waveform,
+                        scenario.globalParameters
+                    )
+                );
                 continue;
             }
 

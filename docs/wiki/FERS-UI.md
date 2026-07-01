@@ -153,8 +153,11 @@ Waveform editing supports:
 - CW waveforms.
 - FMCW linear chirps.
 - FMCW triangular chirps.
+- SFCW stepped-frequency sweeps.
 
 For FMCW waveforms, the UI warns or blocks when settings violate major FMCW constraints, such as chirp period shorter than chirp duration or a baseband sweep edge too close to the effective sample-rate limit `<rate> * <oversample>`.
+
+For SFCW waveforms, the UI validates step count, step size, dwell time, step period, optional sweep count, and whether the generated RF steps remain positive.
 
 ### Timings
 
@@ -204,7 +207,7 @@ For static motion or rotation, the UI uses the first waypoint. Use linear or cub
 Monostatic radars, transmitters, and receivers share common fields:
 
 - Component name.
-- Radar mode: pulsed, CW, or FMCW.
+- Radar mode: pulsed, CW, FMCW, or SFCW.
 - Compatible waveform selection.
 - Antenna selection.
 - Timing source selection.
@@ -233,6 +236,10 @@ For FMCW receivers and monostatic radars, the UI supports:
 IF settings are valid only when dechirping is enabled. If dechirping is enabled without an IF sample rate, FERS writes legacy full-rate IF output at `<rate> * <oversample>`. If an IF sample rate is provided, it is receiver-local and must be no higher than `<rate> * <oversample>`.
 
 The UI blocks simulations and KML generation when it detects invalid FMCW settings that would fail later.
+
+### SFCW Receiver Settings
+
+SFCW transmitters, receivers, and monostatic radars use `<sfcw_mode/>`. There are no receiver-local LO/dechirp controls in the first native implementation; the step timing and RF values come from the attached or referenced `<stepped_frequency>` waveform.
 
 ### Targets
 
@@ -302,6 +309,7 @@ The output metadata table shows:
 - Pulse count or streaming segment summary.
 - Output file path.
 - FMCW details when available.
+- SFCW details when available, including effective bandwidth, range resolution, unambiguous range, and emitted step counts.
 
 Use `Export JSON` to save the output metadata beside the generated HDF5 files.
 

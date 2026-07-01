@@ -24,6 +24,7 @@ namespace fers_signal
 	class FmcwChirpSignal;
 	class FmcwTriangleSignal;
 	class RadarSignal;
+	class SteppedFrequencySignal;
 }
 
 namespace core
@@ -33,7 +34,8 @@ namespace core
 	{
 		Cw,
 		FmcwLinear,
-		FmcwTriangle
+		FmcwTriangle,
+		Sfcw
 	};
 
 	/// Cached description of an active streaming transmitter segment.
@@ -47,9 +49,12 @@ namespace core
 		RealType amplitude = 0.0; ///< Cached emitted signal amplitude.
 		StreamingWaveformKind kind = StreamingWaveformKind::Cw; ///< Cached streaming waveform shape.
 		bool is_fmcw = false; ///< Compatibility flag for any FMCW source.
+		bool is_sfcw = false; ///< Compatibility flag for any stepped-frequency source.
 
 		const fers_signal::FmcwChirpSignal* fmcw = nullptr; ///< Stable pointer to the linear FMCW waveform, if any.
 		const fers_signal::FmcwTriangleSignal* triangle = nullptr; ///< Stable pointer to the triangle waveform, if any.
+		const fers_signal::SteppedFrequencySignal* sfcw =
+			nullptr; ///< Stable pointer to the stepped-frequency waveform, if any.
 		RealType chirp_duration = 0.0; ///< Cached FMCW chirp duration in seconds.
 		RealType chirp_period = 0.0; ///< Cached FMCW chirp period in seconds.
 		RealType chirp_rate = 0.0; ///< Cached FMCW chirp rate in hertz per second.
@@ -66,6 +71,13 @@ namespace core
 		RealType mod_phi_tri = 0.0; ///< Triangle period phase increment modulo 2*pi.
 		RealType triangle_period = 0.0; ///< Cached full triangle period in seconds.
 		std::optional<std::size_t> triangle_count; ///< Optional finite triangle count for the segment.
+
+		RealType sfcw_step_size = 0.0; ///< Cached SFCW frequency step in hertz.
+		std::size_t sfcw_step_count = 0; ///< Cached SFCW steps per sweep.
+		RealType sfcw_dwell_time = 0.0; ///< Cached SFCW active dwell time in seconds.
+		RealType sfcw_step_period = 0.0; ///< Cached SFCW step period in seconds.
+		RealType sfcw_sweep_period = 0.0; ///< Cached SFCW sweep period in seconds.
+		std::optional<std::size_t> sfcw_sweep_count; ///< Optional finite SFCW sweep count for the segment.
 	};
 
 	/// Builds an active-source cache from a streaming transmitter and segment bounds.
@@ -91,6 +103,14 @@ namespace core
 	/// Counts FMCW triangles that start inside the absolute interval.
 	[[nodiscard]] std::uint64_t countFmcwTriangleStarts(const ActiveStreamingSource& source, RealType active_start,
 														RealType active_end);
+
+	/// Returns the first SFCW step start inside the absolute interval, if one exists.
+	[[nodiscard]] std::optional<RealType> firstSfcwStepStart(const ActiveStreamingSource& source, RealType active_start,
+															 RealType active_end);
+
+	/// Counts SFCW active dwells that start inside the absolute interval.
+	[[nodiscard]] std::uint64_t countSfcwStepStarts(const ActiveStreamingSource& source, RealType active_start,
+													RealType active_end);
 
 	/// Tracks the current FMCW chirp boundary for a streaming path.
 	struct FmcwChirpBoundaryTracker

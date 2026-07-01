@@ -98,6 +98,8 @@ export const serializeComponentInner = (component: PlatformComponent) => {
                     return { fmcw_mode: component.fmcwModeConfig ?? {} };
                 }
                 return { fmcw_mode: {} };
+            case 'sfcw':
+                return { sfcw_mode: {} };
         }
     })();
 
@@ -238,6 +240,19 @@ export const serializeWaveform = (w: Waveform) => {
                             : {}),
                         ...(w.triangle_count !== null
                             ? { triangle_count: w.triangle_count }
+                            : {}),
+                    },
+                };
+            case 'stepped_frequency':
+                return {
+                    stepped_frequency: {
+                        start_frequency_offset: w.start_frequency_offset,
+                        step_size: w.step_size,
+                        step_count: w.step_count,
+                        dwell_time: w.dwell_time,
+                        step_period: w.step_period,
+                        ...(w.sweep_count !== null
+                            ? { sweep_count: w.sweep_count }
                             : {}),
                     },
                 };

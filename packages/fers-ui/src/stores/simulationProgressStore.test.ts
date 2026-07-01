@@ -83,6 +83,7 @@ describe('simulation output metadata', () => {
                             ],
                         },
                     ],
+                    sfcw_sources: [],
                 },
             ],
         };

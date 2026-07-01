@@ -134,6 +134,27 @@ namespace
 		}
 	};
 
+	struct SfcwTxFixture
+	{
+		radar::Platform platform;
+		std::unique_ptr<fers_signal::RadarSignal> wave;
+		radar::Transmitter transmitter;
+
+		SfcwTxFixture(const std::string& name, SimId tx_id, SimId waveform_id, RealType start_frequency_offset,
+					  RealType step_size, std::size_t step_count, RealType dwell_time, RealType step_period,
+					  std::optional<std::size_t> sweep_count) :
+			platform(name + "Platform"),
+			wave(std::make_unique<fers_signal::RadarSignal>(
+				name + "Wave", 1.0, 10.0e9, dwell_time,
+				std::make_unique<fers_signal::SteppedFrequencySignal>(start_frequency_offset, step_size, step_count,
+																	  dwell_time, step_period, sweep_count),
+				waveform_id)),
+			transmitter(&platform, name, radar::OperationMode::SFCW_MODE, tx_id)
+		{
+			transmitter.setSignal(wave.get());
+		}
+	};
+
 	std::unique_ptr<serial::Response>
 	makeFixedResponse(const radar::Transmitter* transmitter,
 					  std::vector<std::unique_ptr<fers_signal::RadarSignal>>& wave_store,
@@ -397,6 +418,44 @@ TEST_CASE("buildReceiverStreamDescriptor keeps CW metadata isolated from active 
 	REQUIRE_THAT(descriptor.cw.carrier_frequency, WithinAbs(5.0e9, 1e-6));
 }
 
+TEST_CASE("buildReceiverStreamDescriptor records SFCW waveform metadata", "[processing][finalizer][sfcw][vita49]")
+{
+	ParamGuard const guard;
+	params::setTime(0.0, 0.01);
+	params::setRate(10'000.0);
+	params::setOversampleRatio(1);
+
+	radar::Platform rx_platform("SfcwRxPlatform");
+	radar::Receiver receiver(&rx_platform, "SfcwRx", 62, radar::OperationMode::SFCW_MODE);
+	auto timing_owner = makeQuietTiming("sfcw_metadata_clk", 28, 9.6e9);
+	receiver.setTiming(timing_owner.timing);
+
+	SfcwTxFixture const source_fixture("DescriptorSfcwTx", 1201, 1202, -1.0e6, 2.0e5, 8, 1.0e-4, 2.0e-4,
+									   std::size_t{2});
+	const std::vector sources = {core::makeActiveSource(&source_fixture.transmitter, 0.0, params::endTime())};
+
+	const auto descriptor = processing::buildReceiverStreamDescriptor(&receiver, params::rate(), sources);
+
+	REQUIRE(descriptor.mode == "sfcw");
+	REQUIRE(descriptor.sfcw.present);
+	REQUIRE_FALSE(descriptor.fmcw.present);
+	REQUIRE_FALSE(descriptor.cw.present);
+	REQUIRE(descriptor.sfcw.waveform_id == 1202);
+	REQUIRE(descriptor.sfcw.step_count == 8u);
+	REQUIRE_THAT(descriptor.sfcw.start_frequency_offset, WithinAbs(-1.0e6, 1e-9));
+	REQUIRE_THAT(descriptor.sfcw.step_size, WithinAbs(2.0e5, 1e-9));
+	REQUIRE_THAT(descriptor.sfcw.dwell_time, WithinAbs(1.0e-4, 1e-12));
+	REQUIRE_THAT(descriptor.sfcw.step_period, WithinAbs(2.0e-4, 1e-12));
+	REQUIRE_THAT(descriptor.sfcw.sweep_period, WithinAbs(1.6e-3, 1e-12));
+	REQUIRE(descriptor.sfcw.sweep_count.has_value());
+	REQUIRE(descriptor.sfcw.sweep_count.value_or(0u) == 2u);
+	REQUIRE_THAT(descriptor.sfcw.first_frequency, WithinAbs(9.999e9, 1e-3));
+	REQUIRE_THAT(descriptor.sfcw.last_frequency, WithinAbs(10.0004e9, 1e-3));
+	REQUIRE_THAT(descriptor.sfcw.effective_bandwidth, WithinAbs(1.6e6, 1e-6));
+	REQUIRE_THAT(descriptor.sfcw.range_resolution, WithinAbs(params::c() / (2.0 * 1.6e6), 1e-9));
+	REQUIRE_THAT(descriptor.sfcw.unambiguous_range, WithinAbs(params::c() / (2.0 * 2.0e5), 1e-9));
+}
+
 TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detached receivers",
 		  "[processing][finalizer][fmcw][metadata]")
 {
@@ -446,6 +505,60 @@ TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detache
 	REQUIRE(streaming_segment.first_chirp_start_time.has_value());
 	REQUIRE_THAT(streaming_segment.first_chirp_start_time.value_or(1.0), WithinAbs(0.0, 1e-12));
 	REQUIRE(streaming_segment.emitted_chirp_count == std::optional<std::uint64_t>{4});
+}
+
+TEST_CASE("buildStreamingOutputMetadata records SFCW source metadata for detached receivers",
+		  "[processing][finalizer][sfcw][metadata]")
+{
+	ParamGuard const guard;
+	params::setTime(0.0, 0.01);
+	params::setRate(10'000.0);
+	params::setOversampleRatio(1);
+	params::setAdcBits(0);
+
+	const std::string receiver_name = uniqueName("sfcw_detached");
+	const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("sfcw_detached_dir");
+	const auto output_path = resultPath(out_dir, receiver_name);
+
+	radar::Platform rx_platform("SfcwRxPlatform");
+	radar::Receiver receiver(&rx_platform, receiver_name, 58, radar::OperationMode::SFCW_MODE);
+	auto timing_owner = makeQuietTiming("sfcw_detached_clk", 24, 77.0);
+	receiver.setTiming(timing_owner.timing);
+	receiver.setNoiseTemperature(0.0);
+
+	SfcwTxFixture const source_fixture("DetachedSfcwTx", 1301, 1302, 0.0, 1.0e5, 4, 1.0e-4, 2.0e-4, std::size_t{2});
+	const auto source = core::makeActiveSource(&source_fixture.transmitter, 0.0, params::endTime());
+
+	const auto metadata =
+		processing::buildStreamingOutputMetadata(&receiver, output_path.string(), 20, {source}, params::rate());
+
+	REQUIRE(metadata.mode == "sfcw");
+	REQUIRE(metadata.sfcw.has_value());
+	REQUIRE(metadata.sfcw_sources.size() == 1u);
+	REQUIRE_FALSE(metadata.fmcw.has_value());
+
+	const auto& source_metadata = metadata.sfcw_sources.front();
+	REQUIRE(source_metadata.transmitter_id == 1301);
+	REQUIRE(source_metadata.transmitter_name == "DetachedSfcwTx");
+	REQUIRE(source_metadata.waveform_id == 1302);
+	REQUIRE(source_metadata.waveform_name == "DetachedSfcwTxWave");
+	REQUIRE_THAT(source_metadata.waveform.step_size, WithinAbs(1.0e5, 1e-9));
+	REQUIRE(source_metadata.waveform.step_count == 4u);
+	REQUIRE_THAT(source_metadata.waveform.dwell_time, WithinAbs(1.0e-4, 1e-12));
+	REQUIRE_THAT(source_metadata.waveform.step_period, WithinAbs(2.0e-4, 1e-12));
+	REQUIRE(source_metadata.waveform.sweep_count == std::optional<std::uint64_t>{2});
+	REQUIRE_THAT(source_metadata.waveform.effective_bandwidth, WithinAbs(4.0e5, 1e-9));
+	REQUIRE_THAT(source_metadata.waveform.range_resolution, WithinAbs(params::c() / (2.0 * 4.0e5), 1e-9));
+	REQUIRE_THAT(source_metadata.waveform.unambiguous_range, WithinAbs(params::c() / (2.0 * 1.0e5), 1e-9));
+	REQUIRE(source_metadata.segments.size() == 1u);
+	REQUIRE(source_metadata.segments.front().first_step_start_time.has_value());
+	REQUIRE_THAT(source_metadata.segments.front().first_step_start_time.value_or(1.0), WithinAbs(0.0, 1e-12));
+	REQUIRE(source_metadata.segments.front().emitted_step_count == std::optional<std::uint64_t>{8});
+
+	const auto& streaming_segment = metadata.streaming_segments.front();
+	REQUIRE(streaming_segment.first_sfcw_step_start_time.has_value());
+	REQUIRE_THAT(streaming_segment.first_sfcw_step_start_time.value_or(1.0), WithinAbs(0.0, 1e-12));
+	REQUIRE(streaming_segment.emitted_sfcw_step_count == std::optional<std::uint64_t>{8});
 }
 
 TEST_CASE("buildStreamingOutputMetadata writes IF-rate FMCW metadata", "[processing][finalizer][fmcw][if]")

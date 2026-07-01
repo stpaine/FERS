@@ -69,6 +69,7 @@ namespace serial
 			file.createAttribute("streaming_segment_count",
 								 static_cast<unsigned long long>(metadata.streaming_segments.size()));
 			file.createAttribute("fmcw_source_count", static_cast<unsigned long long>(metadata.fmcw_sources.size()));
+			file.createAttribute("sfcw_source_count", static_cast<unsigned long long>(metadata.sfcw_sources.size()));
 			file.createAttribute("fmcw_dechirp_mode", metadata.fmcw_dechirp_mode);
 			file.createAttribute("fmcw_dechirp_reference_source", metadata.fmcw_dechirp_reference_source);
 			file.createAttribute("fmcw_if_decimation_enabled", metadata.fmcw_if_decimation_enabled);
@@ -209,6 +210,28 @@ namespace serial
 			writeFmcwWaveformAttributes(file, "fmcw_", *metadata.fmcw, true);
 			writeStreamingSegmentFmcwAttributes(file, metadata);
 		}
+
+		void writeSfcwAttributes(HighFive::File& file, const core::OutputFileMetadata& metadata)
+		{
+			if (!metadata.sfcw.has_value())
+			{
+				return;
+			}
+			const auto& sfcw = *metadata.sfcw;
+			file.createAttribute("sfcw_carrier_frequency", sfcw.carrier_frequency);
+			file.createAttribute("sfcw_start_frequency_offset", sfcw.start_frequency_offset);
+			file.createAttribute("sfcw_step_size", sfcw.step_size);
+			file.createAttribute("sfcw_step_count", static_cast<unsigned long long>(sfcw.step_count));
+			file.createAttribute("sfcw_dwell_time", sfcw.dwell_time);
+			file.createAttribute("sfcw_step_period", sfcw.step_period);
+			createOptionalUnsignedAttribute(file, "sfcw_sweep_count", sfcw.sweep_count);
+			file.createAttribute("sfcw_first_frequency", sfcw.first_frequency);
+			file.createAttribute("sfcw_last_frequency", sfcw.last_frequency);
+			file.createAttribute("sfcw_frequency_span", sfcw.frequency_span);
+			file.createAttribute("sfcw_effective_bandwidth", sfcw.effective_bandwidth);
+			file.createAttribute("sfcw_range_resolution", sfcw.range_resolution);
+			file.createAttribute("sfcw_unambiguous_range", sfcw.unambiguous_range);
+		}
 	}
 
 	void writeOutputFileMetadataAttributes(HighFive::File& file, const core::OutputFileMetadata& metadata)
@@ -217,6 +240,7 @@ namespace serial
 		writeFmcwIfAttributes(file, metadata);
 		writeDechirpReferenceAttributes(file, metadata);
 		writeFmcwAttributes(file, metadata);
+		writeSfcwAttributes(file, metadata);
 	}
 
 	void readPulseData(const std::string& name, std::vector<ComplexType>& data)

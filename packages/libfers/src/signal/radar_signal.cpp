@@ -52,6 +52,98 @@ namespace fers_signal
 		return {};
 	}
 
+	SteppedFrequencySignal::SteppedFrequencySignal(const RealType start_frequency_offset, const RealType step_size,
+												   const std::size_t step_count, const RealType dwell_time,
+												   const RealType step_period, std::optional<std::size_t> sweep_count) :
+		_start_frequency_offset(start_frequency_offset), _step_size(step_size), _step_count(step_count),
+		_dwell_time(dwell_time), _step_period(step_period), _sweep_count(sweep_count)
+	{
+	}
+
+	RealType SteppedFrequencySignal::firstFrequency(const RealType carrier_frequency) const noexcept
+	{
+		return carrier_frequency + _start_frequency_offset;
+	}
+
+	RealType SteppedFrequencySignal::lastFrequency(const RealType carrier_frequency) const noexcept
+	{
+		if (_step_count == 0)
+		{
+			return firstFrequency(carrier_frequency);
+		}
+		return firstFrequency(carrier_frequency) + static_cast<RealType>(_step_count - 1U) * _step_size;
+	}
+
+	RealType SteppedFrequencySignal::frequencySpan() const noexcept
+	{
+		if (_step_count == 0)
+		{
+			return 0.0;
+		}
+		return std::abs(static_cast<RealType>(_step_count - 1U) * _step_size);
+	}
+
+	RealType SteppedFrequencySignal::effectiveBandwidth() const noexcept
+	{
+		return static_cast<RealType>(_step_count) * std::abs(_step_size);
+	}
+
+	std::optional<RealType> SteppedFrequencySignal::totalDuration() const noexcept
+	{
+		if (!_sweep_count.has_value())
+		{
+			return std::nullopt;
+		}
+		return static_cast<RealType>(*_sweep_count) * getSweepPeriod();
+	}
+
+	std::optional<SteppedFrequencySignal::StepState>
+	SteppedFrequencySignal::activeStepAt(const RealType time_since_segment_start,
+										 const RealType carrier_frequency) const noexcept
+	{
+		if (time_since_segment_start < 0.0 || _step_count == 0 || _step_period <= 0.0 || _dwell_time <= 0.0)
+		{
+			return std::nullopt;
+		}
+
+		const RealType sweep_period = getSweepPeriod();
+		const auto sweep_index = static_cast<std::size_t>(std::floor(time_since_segment_start / sweep_period));
+		if (_sweep_count.has_value() && sweep_index >= *_sweep_count)
+		{
+			return std::nullopt;
+		}
+
+		const RealType local_sweep_time = time_since_segment_start - static_cast<RealType>(sweep_index) * sweep_period;
+		const auto step_index = static_cast<std::size_t>(std::floor(local_sweep_time / _step_period));
+		if (step_index >= _step_count)
+		{
+			return std::nullopt;
+		}
+
+		const RealType step_start_time =
+			static_cast<RealType>(sweep_index) * sweep_period + static_cast<RealType>(step_index) * _step_period;
+		const RealType local_step_time = time_since_segment_start - step_start_time;
+		if (local_step_time < 0.0 || local_step_time >= _dwell_time)
+		{
+			return std::nullopt;
+		}
+
+		return StepState{.step_index = step_index,
+						 .sweep_index = sweep_index,
+						 .step_start_time = step_start_time,
+						 .dwell_end_time = step_start_time + _dwell_time,
+						 .step_end_time = step_start_time + _step_period,
+						 .rf_frequency =
+							 firstFrequency(carrier_frequency) + static_cast<RealType>(step_index) * _step_size};
+	}
+
+	std::vector<ComplexType> SteppedFrequencySignal::render(const std::vector<interp::InterpPoint>& /*points*/,
+															unsigned& size, const RealType /*fracWinDelay*/) const
+	{
+		size = 0;
+		return {};
+	}
+
 	FmcwChirpSignal::FmcwChirpSignal(const RealType chirp_bandwidth, const RealType chirp_duration,
 									 const RealType chirp_period, const RealType start_frequency_offset,
 									 std::optional<std::size_t> chirp_count, const FmcwChirpDirection direction) :
@@ -219,6 +311,11 @@ namespace fers_signal
 
 	bool RadarSignal::isFmcwFamily() const noexcept { return _signal->isFmcwFamily(); }
 
+	bool RadarSignal::isSteppedFrequency() const noexcept
+	{
+		return dynamic_cast<const SteppedFrequencySignal*>(_signal.get()) != nullptr;
+	}
+
 	const FmcwChirpSignal* RadarSignal::getFmcwChirpSignal() const noexcept
 	{
 		return dynamic_cast<const FmcwChirpSignal*>(_signal.get());
@@ -227,6 +324,11 @@ namespace fers_signal
 	const FmcwTriangleSignal* RadarSignal::getFmcwTriangleSignal() const noexcept
 	{
 		return dynamic_cast<const FmcwTriangleSignal*>(_signal.get());
+	}
+
+	const SteppedFrequencySignal* RadarSignal::getSteppedFrequencySignal() const noexcept
+	{
+		return dynamic_cast<const SteppedFrequencySignal*>(_signal.get());
 	}
 
 	void Signal::clear() noexcept

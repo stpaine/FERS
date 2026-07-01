@@ -53,6 +53,10 @@ namespace serial::vita49
 		{
 			flags |= ContextFlagPulsedMetadataPresent;
 		}
+		if (request.stream.sfcw.present && modeAllowsMetadata(request.stream.mode, "sfcw"))
+		{
+			flags |= ContextFlagSfcwMetadataPresent;
+		}
 
 		return ContextPacket{
 			.stream_id = request.stream_id,
@@ -80,6 +84,7 @@ namespace serial::vita49
 			.pulsed = request.stream.pulsed,
 			.cw = request.stream.cw,
 			.fmcw = request.stream.fmcw,
+			.sfcw = request.stream.sfcw,
 		};
 	}
 }

@@ -586,6 +586,57 @@ TEST_CASE("VITA context metadata describes pulsed and CW waveform modes", "[seri
 	REQUIRE(cw_metadata.at("cw").at("power_w") == 25.0);
 }
 
+TEST_CASE("VITA context metadata describes SFCW waveform mode", "[serial][vita49][sfcw]")
+{
+	using namespace serial::vita49;
+
+	const core::ReceiverStreamDescriptor stream{.receiver_id = 7,
+												.receiver_name = "sfcw-rx",
+												.mode = "sfcw",
+												.sample_rate = 1.0e6,
+												.reference_frequency = 9.6e9,
+												.adc_bits = 12,
+												.coordinate = {},
+												.initial_platform_state = {},
+												.sfcw = {.present = true,
+														 .waveform_id = 101,
+														 .waveform_name = "sfcw",
+														 .carrier_frequency = 9.6e9,
+														 .power = 50.0,
+														 .start_frequency_offset = -1.0e6,
+														 .step_size = 2.0e5,
+														 .step_count = 8,
+														 .dwell_time = 1.0e-4,
+														 .step_period = 2.0e-4,
+														 .sweep_period = 1.6e-3,
+														 .sweep_count = 3,
+														 .first_frequency = 9.599e9,
+														 .last_frequency = 9.6004e9,
+														 .frequency_span = 1.4e6,
+														 .effective_bandwidth = 1.6e6}};
+	const auto context = Vita49ContextBuilder::build(ContextBuildRequest{.stream = stream,
+																		 .stream_id = 0x33333333u,
+																		 .simulation_name = "mixed",
+																		 .adc_fullscale = 1.0,
+																		 .timestamp = Timestamp{10u, 0u}});
+	const auto bytes = Vita49Serializer::serializeContext(context);
+	const auto metadata = nlohmann::json::parse(readAsciiMetadata(bytes, 92u));
+	const auto context_flags = metadata.at("receiver").at("context_flags").get<std::uint32_t>();
+
+	REQUIRE((context_flags & ContextFlagSfcwMetadataPresent) == ContextFlagSfcwMetadataPresent);
+	REQUIRE(metadata.at("waveform").at("kind") == "sfcw");
+	REQUIRE(metadata.at("waveform").at("metadata_ref") == "sfcw");
+	REQUIRE(metadata.at("sfcw").at("present").get<bool>());
+	REQUIRE(metadata.at("sfcw").at("waveform_id") == 101u);
+	REQUIRE(metadata.at("sfcw").at("step_count") == 8u);
+	REQUIRE(metadata.at("sfcw").at("step_size_hz") == 2.0e5);
+	REQUIRE(metadata.at("sfcw").at("dwell_time_s") == 1.0e-4);
+	REQUIRE(metadata.at("sfcw").at("step_period_s") == 2.0e-4);
+	REQUIRE(metadata.at("sfcw").at("sweep_period_s") == 1.6e-3);
+	REQUIRE(metadata.at("sfcw").at("sweep_count") == 3u);
+	REQUIRE(metadata.at("sfcw").at("effective_bandwidth_hz") == 1.6e6);
+}
+
 TEST_CASE("VITA context serializer rejects unsupported CIF0", "[serial][vita49]")
 {
 	using namespace serial::vita49;

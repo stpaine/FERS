@@ -131,6 +131,19 @@ namespace serial::xml_serializer_utils
 				addChildWithNumber(fmcw_elem, "chirp_count", static_cast<RealType>(*fmcw->getChirpCount()));
 			}
 		}
+		else if (const auto* sfcw = waveform.getSteppedFrequencySignal(); sfcw != nullptr)
+		{
+			const XmlElement sfcw_elem = parent.addChild("stepped_frequency");
+			addChildWithNumber(sfcw_elem, "start_frequency_offset", sfcw->getStartFrequencyOffset());
+			addChildWithNumber(sfcw_elem, "step_size", sfcw->getStepSize());
+			addChildWithNumber(sfcw_elem, "step_count", static_cast<RealType>(sfcw->getStepCount()));
+			addChildWithNumber(sfcw_elem, "dwell_time", sfcw->getDwellTime());
+			addChildWithNumber(sfcw_elem, "step_period", sfcw->getStepPeriod());
+			if (sfcw->getSweepCount().has_value())
+			{
+				addChildWithNumber(sfcw_elem, "sweep_count", static_cast<RealType>(*sfcw->getSweepCount()));
+			}
+		}
 		else if (const auto* triangle = waveform.getFmcwTriangleSignal(); triangle != nullptr)
 		{
 			const XmlElement fmcw_elem = parent.addChild("fmcw_triangle");
@@ -333,6 +346,10 @@ namespace serial::xml_serializer_utils
 		{
 			(void)tx_elem.addChild("fmcw_mode");
 		}
+		else if (tx.getMode() == radar::OperationMode::SFCW_MODE)
+		{
+			(void)tx_elem.addChild("sfcw_mode");
+		}
 		else
 		{
 			(void)tx_elem.addChild("cw_mode");
@@ -397,6 +414,10 @@ namespace serial::xml_serializer_utils
 		{
 			serializeReceiverFmcwMode(rx, rx_elem.addChild("fmcw_mode"));
 		}
+		else if (rx.getMode() == radar::OperationMode::SFCW_MODE)
+		{
+			(void)rx_elem.addChild("sfcw_mode");
+		}
 		else
 		{
 			(void)rx_elem.addChild("cw_mode");
@@ -430,6 +451,10 @@ namespace serial::xml_serializer_utils
 		else if (tx.getMode() == radar::OperationMode::FMCW_MODE)
 		{
 			serializeReceiverFmcwMode(rx, mono_elem.addChild("fmcw_mode"));
+		}
+		else if (tx.getMode() == radar::OperationMode::SFCW_MODE)
+		{
+			(void)mono_elem.addChild("sfcw_mode");
 		}
 		else
 		{

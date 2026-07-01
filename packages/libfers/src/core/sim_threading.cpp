@@ -198,10 +198,71 @@ namespace core
 			logScheduledFmcwTriangleSummary(transmitter, triangle, configured_count, average_power);
 		}
 
+		void logUnscheduledSfcwSummary(const Transmitter& transmitter, const fers_signal::RadarSignal& waveform,
+									   const fers_signal::SteppedFrequencySignal& sfcw,
+									   const std::string& configured_count, const RealType duty_cycle,
+									   const RealType average_power)
+		{
+			const RealType active_start = params::startTime();
+			const auto source = makeActiveSource(&transmitter, active_start, params::endTime());
+			const auto total_step_count = countSfcwStepStarts(source, active_start, source.segment_end);
+			LOG(Level::INFO,
+				"SFCW transmitter '{}' steps={} df={} Hz dwell={} s step_period={} s sweep_period={} s "
+				"f_first={} Hz f_last={} Hz B_eff={} Hz range_resolution={} m unambiguous_range={} m duty_cycle={} "
+				"sweep_count={} total_step_count={} average_power={} W",
+				transmitter.getName(), sfcw.getStepCount(), sfcw.getStepSize(), sfcw.getDwellTime(),
+				sfcw.getStepPeriod(), sfcw.getSweepPeriod(), sfcw.firstFrequency(waveform.getCarrier()),
+				sfcw.lastFrequency(waveform.getCarrier()), sfcw.effectiveBandwidth(),
+				params::c() / (2.0 * sfcw.effectiveBandwidth()), params::c() / (2.0 * std::abs(sfcw.getStepSize())),
+				duty_cycle, configured_count, total_step_count, average_power);
+		}
+
+		void logScheduledSfcwSummary(const Transmitter& transmitter, const fers_signal::RadarSignal& waveform,
+									 const fers_signal::SteppedFrequencySignal& sfcw,
+									 const std::string& configured_count, const RealType duty_cycle,
+									 const RealType average_power)
+		{
+			std::uint64_t total_step_count = 0;
+			for (const auto& period : transmitter.getSchedule())
+			{
+				const RealType active_start = std::max(params::startTime(), period.start);
+				const auto source =
+					makeActiveSource(&transmitter, period.start, std::min(params::endTime(), period.end));
+				const auto segment_step_count = countSfcwStepStarts(source, active_start, source.segment_end);
+				total_step_count += segment_step_count;
+				LOG(Level::INFO,
+					"SFCW transmitter '{}' segment [{}, {}] steps={} df={} Hz dwell={} s step_period={} s "
+					"sweep_period={} s f_first={} Hz f_last={} Hz B_eff={} Hz range_resolution={} m "
+					"unambiguous_range={} m duty_cycle={} sweep_count={} segment_step_count={} total_step_count={} "
+					"average_power={} W",
+					transmitter.getName(), period.start, source.segment_end, sfcw.getStepCount(), sfcw.getStepSize(),
+					sfcw.getDwellTime(), sfcw.getStepPeriod(), sfcw.getSweepPeriod(),
+					sfcw.firstFrequency(waveform.getCarrier()), sfcw.lastFrequency(waveform.getCarrier()),
+					sfcw.effectiveBandwidth(), params::c() / (2.0 * sfcw.effectiveBandwidth()),
+					params::c() / (2.0 * std::abs(sfcw.getStepSize())), duty_cycle, configured_count,
+					segment_step_count, total_step_count, average_power);
+			}
+		}
+
+		void logSfcwSummary(const Transmitter& transmitter, const fers_signal::RadarSignal& waveform,
+							const fers_signal::SteppedFrequencySignal& sfcw)
+		{
+			const RealType duty_cycle = sfcw.getDwellTime() / sfcw.getStepPeriod();
+			const RealType average_power = waveform.getPower() * duty_cycle;
+			const auto configured_count = fmcwCountToken(sfcw.getSweepCount());
+			if (transmitter.getSchedule().empty())
+			{
+				logUnscheduledSfcwSummary(transmitter, waveform, sfcw, configured_count, duty_cycle, average_power);
+				return;
+			}
+			logScheduledSfcwSummary(transmitter, waveform, sfcw, configured_count, duty_cycle, average_power);
+		}
+
 		[[nodiscard]] bool isStreamingReceiver(const Receiver* const receiver) noexcept
 		{
 			return receiver != nullptr &&
-				(receiver->getMode() == OperationMode::CW_MODE || receiver->getMode() == OperationMode::FMCW_MODE);
+				(receiver->getMode() == OperationMode::CW_MODE || receiver->getMode() == OperationMode::FMCW_MODE ||
+				 receiver->getMode() == OperationMode::SFCW_MODE);
 		}
 
 		[[nodiscard]] bool activePastUserEnd(const Receiver* const receiver) noexcept
@@ -848,7 +909,7 @@ namespace core
 		for (const auto& transmitter_ptr : _world->getTransmitters())
 		{
 			const auto* waveform = transmitter_ptr->getSignal();
-			if (waveform == nullptr || !waveform->isFmcwFamily())
+			if (waveform == nullptr)
 			{
 				continue;
 			}
@@ -860,6 +921,10 @@ namespace core
 			else if (const auto* triangle = waveform->getFmcwTriangleSignal(); triangle != nullptr)
 			{
 				logFmcwTriangleSummary(*transmitter_ptr, *waveform, *triangle);
+			}
+			else if (const auto* sfcw = waveform->getSteppedFrequencySignal(); sfcw != nullptr)
+			{
+				logSfcwSummary(*transmitter_ptr, *waveform, *sfcw);
 			}
 		}
 	}
@@ -1104,9 +1169,7 @@ namespace core
 														 const std::size_t sample_index, const RealType t_step)
 	{
 		const auto& receiver_ptr = _world->getReceivers()[receiver_index];
-		if ((receiver_ptr->getMode() != OperationMode::CW_MODE &&
-			 receiver_ptr->getMode() != OperationMode::FMCW_MODE) ||
-			!receiver_ptr->isActive())
+		if (!isStreamingReceiver(receiver_ptr.get()) || !receiver_ptr->isActive())
 		{
 			return;
 		}
@@ -1971,8 +2034,7 @@ namespace core
 		for (std::size_t receiver_index = 0; receiver_index < _world->getReceivers().size(); ++receiver_index)
 		{
 			const auto& receiver_ptr = _world->getReceivers()[receiver_index];
-			if (receiver_ptr->getMode() == OperationMode::CW_MODE ||
-				receiver_ptr->getMode() == OperationMode::FMCW_MODE)
+			if (isStreamingReceiver(receiver_ptr.get()))
 			{
 				if (_output_sink != nullptr)
 				{

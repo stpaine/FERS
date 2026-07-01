@@ -39,7 +39,8 @@ namespace radar
 	{
 		PULSED_MODE, ///< The component operates in a pulsed mode.
 		CW_MODE, ///< The component operates in a continuous-wave mode.
-		FMCW_MODE ///< The component operates in an FMCW streaming mode.
+		FMCW_MODE, ///< The component operates in an FMCW streaming mode.
+		SFCW_MODE ///< The component operates in a stepped-frequency CW streaming mode.
 	};
 
 	/**

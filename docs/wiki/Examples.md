@@ -74,6 +74,39 @@ python3 genpulse.py
 ../../build/release/packages/fers-cli/fers-cli example.fersxml --out-dir=. --vita49 127.0.0.1:4991 --vita49-fullscale 1.0 --log-level=INFO -n=2
 ```
 
+## SFCW Monostatic
+
+Directory:
+
+```text
+examples/sfcw_monostatic
+```
+
+This scenario contains one monostatic stepped-frequency continuous-wave radar, one static point target, and a finite stepped-frequency sweep.
+
+Run it:
+
+```bash
+cd examples/sfcw_monostatic
+../../build/release/packages/fers-cli/fers-cli example.fersxml --out-dir=. --log-level=INFO -n=2
+python3 analysis.py
+```
+
+Expected generated files:
+
+```text
+SfcwRadar_results.h5
+sfcw_range_profile.png
+sfcw_analysis_summary.json
+```
+
+What to look at:
+
+- The waveform uses `<stepped_frequency>`.
+- The monostatic radar uses `<sfcw_mode/>`.
+- The output metadata includes `sfcw` and `sfcw_sources` blocks with first/last RF frequency, effective bandwidth, range resolution, unambiguous range, sweep count, and emitted step counts.
+- `analysis.py` samples each SFCW dwell, forms an IFFT range profile, and checks the peak against the target range.
+
 ## FMCW Monostatic Dechirp
 
 Directory:

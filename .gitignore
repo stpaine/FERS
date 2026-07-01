@@ -12,6 +12,7 @@ build/
 build_cov/
 fixes.yaml
 .codex
+.agents
 .code-review-graph/
 .code-review-graphignore
 .mcp.json

@@ -247,11 +247,17 @@ namespace fers_signal
 		/// Returns true when this signal belongs to the FMCW waveform family.
 		[[nodiscard]] bool isFmcwFamily() const noexcept;
 
+		/// Returns true when this signal is a stepped-frequency CW waveform.
+		[[nodiscard]] bool isSteppedFrequency() const noexcept;
+
 		/// Gets the FMCW chirp implementation, if this signal owns one.
 		[[nodiscard]] const class FmcwChirpSignal* getFmcwChirpSignal() const noexcept;
 
 		/// Gets the FMCW triangle implementation, if this signal owns one.
 		[[nodiscard]] const class FmcwTriangleSignal* getFmcwTriangleSignal() const noexcept;
+
+		/// Gets the stepped-frequency implementation, if this signal owns one.
+		[[nodiscard]] const class SteppedFrequencySignal* getSteppedFrequencySignal() const noexcept;
 
 		/**
 		 * @brief Renders the radar signal.
@@ -301,6 +307,92 @@ namespace fers_signal
 		 */
 		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
 										RealType fracWinDelay) const override;
+	};
+
+	/// Stepped-frequency continuous-wave signal implementation.
+	class SteppedFrequencySignal final : public Signal
+	{
+	public:
+		/// Active SFCW dwell selected for one local waveform time.
+		struct StepState
+		{
+			std::size_t step_index = 0; ///< Zero-based step index inside a sweep.
+			std::size_t sweep_index = 0; ///< Zero-based sweep index.
+			RealType step_start_time = 0.0; ///< Local step period start time in seconds.
+			RealType dwell_end_time = 0.0; ///< Local active dwell end time in seconds.
+			RealType step_end_time = 0.0; ///< Local step period end time in seconds.
+			RealType rf_frequency = 0.0; ///< RF frequency for the active step in hertz.
+		};
+
+		/// Constructs a uniform stepped-frequency CW signal.
+		SteppedFrequencySignal(RealType start_frequency_offset, RealType step_size, std::size_t step_count,
+							   RealType dwell_time, RealType step_period,
+							   std::optional<std::size_t> sweep_count = std::nullopt);
+
+		~SteppedFrequencySignal() override = default;
+
+		SteppedFrequencySignal(const SteppedFrequencySignal&) noexcept = delete;
+
+		SteppedFrequencySignal& operator=(const SteppedFrequencySignal&) noexcept = delete;
+
+		SteppedFrequencySignal(SteppedFrequencySignal&&) noexcept = delete;
+
+		SteppedFrequencySignal& operator=(SteppedFrequencySignal&&) noexcept = delete;
+
+		/// Gets the first-step offset from carrier in hertz.
+		[[nodiscard]] RealType getStartFrequencyOffset() const noexcept { return _start_frequency_offset; }
+
+		/// Gets the uniform frequency step in hertz.
+		[[nodiscard]] RealType getStepSize() const noexcept { return _step_size; }
+
+		/// Gets the number of steps per sweep.
+		[[nodiscard]] std::size_t getStepCount() const noexcept { return _step_count; }
+
+		/// Gets active dwell time per step in seconds.
+		[[nodiscard]] RealType getDwellTime() const noexcept { return _dwell_time; }
+
+		/// Gets step repetition period in seconds.
+		[[nodiscard]] RealType getStepPeriod() const noexcept { return _step_period; }
+
+		/// Gets optional finite sweep count.
+		[[nodiscard]] const std::optional<std::size_t>& getSweepCount() const noexcept { return _sweep_count; }
+
+		/// Gets full sweep period in seconds.
+		[[nodiscard]] RealType getSweepPeriod() const noexcept
+		{
+			return static_cast<RealType>(_step_count) * _step_period;
+		}
+
+		/// Gets first-step RF frequency in hertz.
+		[[nodiscard]] RealType firstFrequency(RealType carrier_frequency) const noexcept;
+
+		/// Gets final-step RF frequency in hertz.
+		[[nodiscard]] RealType lastFrequency(RealType carrier_frequency) const noexcept;
+
+		/// Gets first-to-last absolute span in hertz.
+		[[nodiscard]] RealType frequencySpan() const noexcept;
+
+		/// Gets DFT-convention effective bandwidth in hertz.
+		[[nodiscard]] RealType effectiveBandwidth() const noexcept;
+
+		/// Gets finite waveform duration, if sweep_count is configured.
+		[[nodiscard]] std::optional<RealType> totalDuration() const noexcept;
+
+		/// Returns the active step for a time since the segment start.
+		[[nodiscard]] std::optional<StepState> activeStepAt(RealType time_since_segment_start,
+															RealType carrier_frequency) const noexcept;
+
+		/// Renders the signal data. For SFCW signals, this is a no-op.
+		std::vector<ComplexType> render(const std::vector<interp::InterpPoint>& points, unsigned& size,
+										RealType fracWinDelay) const override;
+
+	private:
+		RealType _start_frequency_offset{}; ///< First-step frequency offset relative to carrier in hertz.
+		RealType _step_size{}; ///< Uniform frequency step in hertz.
+		std::size_t _step_count{}; ///< Steps per sweep.
+		RealType _dwell_time{}; ///< Active dwell time per step in seconds.
+		RealType _step_period{}; ///< Step repetition period in seconds.
+		std::optional<std::size_t> _sweep_count; ///< Optional finite sweep count.
 	};
 
 	/// FMCW linear chirp signal implementation.

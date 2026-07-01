@@ -55,6 +55,9 @@ export function createWaveformForType(
     waveformType: 'fmcw_triangle'
 ): WaveformDefaults<'fmcw_triangle'>;
 export function createWaveformForType(
+    waveformType: 'stepped_frequency'
+): WaveformDefaults<'stepped_frequency'>;
+export function createWaveformForType(
     waveformType: WaveformType
 ): WaveformDefaults {
     const common = {
@@ -94,6 +97,17 @@ export function createWaveformForType(
                 chirp_duration: 1e-3,
                 start_frequency_offset: 0,
                 triangle_count: null,
+            };
+        case 'stepped_frequency':
+            return {
+                ...common,
+                waveformType,
+                start_frequency_offset: 0,
+                step_size: 1e3,
+                step_count: 16,
+                dwell_time: 1e-3,
+                step_period: 1e-3,
+                sweep_count: null,
             };
     }
 }

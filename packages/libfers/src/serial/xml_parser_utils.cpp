@@ -58,8 +58,8 @@ namespace serial::xml_parser_utils
 				if (selected_mode.has_value())
 				{
 					throw XmlException(owner +
-									   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, or "
-									   "<fmcw_mode>).");
+									   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, "
+									   "<fmcw_mode>, or <sfcw_mode>).");
 				}
 				selected_mode = mode;
 			};
@@ -67,12 +67,23 @@ namespace serial::xml_parser_utils
 			select_mode("pulsed_mode", radar::OperationMode::PULSED_MODE);
 			select_mode("cw_mode", radar::OperationMode::CW_MODE);
 			select_mode("fmcw_mode", radar::OperationMode::FMCW_MODE);
+			select_mode("sfcw_mode", radar::OperationMode::SFCW_MODE);
 			if (!selected_mode.has_value())
 			{
 				throw XmlException(owner +
-								   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, or <fmcw_mode>).");
+								   " must specify exactly one radar mode (<pulsed_mode>, <cw_mode>, "
+								   "<fmcw_mode>, or <sfcw_mode>).");
 			}
 			return *selected_mode;
+		}
+
+		void reject_non_empty_sfcw_mode(const XmlElement& parent, const std::string& owner)
+		{
+			const XmlElement sfcw_mode = parent.childElement("sfcw_mode", 0);
+			if (sfcw_mode.isValid() && sfcw_mode.childElement("", 0).isValid())
+			{
+				throw XmlException(owner + " sfcw_mode must be empty.");
+			}
 		}
 
 		/// Returns true when an FMCW mode block carries receiver-side FMCW fields.
@@ -658,6 +669,38 @@ namespace serial::xml_parser_utils
 				name, power, carrier, ctx.parameters.end - ctx.parameters.start, std::move(cw_signal), id);
 			ctx.world->add(std::move(wave));
 		}
+		else if (const XmlElement sfcw_element = waveform.childElement("stepped_frequency", 0); sfcw_element.isValid())
+		{
+			const RealType start_frequency_offset = get_child_real_type(sfcw_element, "start_frequency_offset");
+			const RealType step_size = get_child_real_type(sfcw_element, "step_size");
+			const RealType raw_step_count = get_child_real_type(sfcw_element, "step_count");
+			if (raw_step_count <= 0.0 || std::floor(raw_step_count) != raw_step_count)
+			{
+				throw XmlException("Waveform '" + name + "' has an invalid step_count.");
+			}
+			const RealType dwell_time = get_child_real_type(sfcw_element, "dwell_time");
+			const RealType step_period = get_child_real_type(sfcw_element, "step_period");
+
+			std::optional<std::size_t> sweep_count;
+			if (const auto sweep_count_element = sfcw_element.childElement("sweep_count", 0);
+				sweep_count_element.isValid())
+			{
+				const RealType raw_count = get_child_real_type(sfcw_element, "sweep_count");
+				if (raw_count <= 0.0 || std::floor(raw_count) != raw_count)
+				{
+					throw XmlException("Waveform '" + name + "' has an invalid sweep_count.");
+				}
+				sweep_count = static_cast<std::size_t>(raw_count);
+			}
+
+			auto sfcw_signal = std::make_unique<fers_signal::SteppedFrequencySignal>(
+				start_frequency_offset, step_size, static_cast<std::size_t>(raw_step_count), dwell_time, step_period,
+				sweep_count);
+			auto wave = std::make_unique<fers_signal::RadarSignal>(name, power, carrier, sfcw_signal->getDwellTime(),
+																   std::move(sfcw_signal), id);
+			validate_fmcw_waveform(*wave, "Waveform '" + name + "'");
+			ctx.world->add(std::move(wave));
+		}
 		else if (const XmlElement fmcw_element = waveform.childElement("fmcw_linear_chirp", 0); fmcw_element.isValid())
 		{
 			const auto direction =
@@ -1062,7 +1105,7 @@ namespace serial::xml_parser_utils
 
 		RealType const pri = is_pulsed ? (1.0 / transmitter_obj->getPrf()) : 0.0;
 		auto schedule = parseSchedule(transmitter, name, is_pulsed, pri);
-		if (wave->isFmcwFamily())
+		if (wave->isFmcwFamily() || wave->isSteppedFrequency())
 		{
 			validate_fmcw_schedule(schedule, *wave, "Transmitter '" + name + "'");
 		}
@@ -1080,6 +1123,7 @@ namespace serial::xml_parser_utils
 	{
 		const std::string name = XmlElement::getSafeAttribute(transmitter, "name");
 		const radar::OperationMode mode = parse_mode_elements(transmitter, "Transmitter '" + name + "'");
+		reject_non_empty_sfcw_mode(transmitter, "Transmitter '" + name + "'");
 		if (const XmlElement fmcw_mode = transmitter.childElement("fmcw_mode", 0);
 			fmcw_mode.isValid() && has_dechirp_fields(fmcw_mode))
 		{
@@ -1181,6 +1225,7 @@ namespace serial::xml_parser_utils
 	{
 		const std::string name = XmlElement::getSafeAttribute(receiver, "name");
 		const radar::OperationMode mode = parse_mode_elements(receiver, "Receiver '" + name + "'");
+		reject_non_empty_sfcw_mode(receiver, "Receiver '" + name + "'");
 		return parseReceiverWithMode(receiver, platform, ctx, refs, mode);
 	}
 
@@ -1189,6 +1234,7 @@ namespace serial::xml_parser_utils
 	{
 		const std::string name = XmlElement::getSafeAttribute(monostatic, "name");
 		const radar::OperationMode monostatic_mode = parse_mode_elements(monostatic, "Monostatic '" + name + "'");
+		reject_non_empty_sfcw_mode(monostatic, "Monostatic '" + name + "'");
 		radar::Transmitter* trans = parseTransmitterWithMode(monostatic, platform, ctx, refs, monostatic_mode);
 		radar::Receiver* recv = parseReceiverWithMode(monostatic, platform, ctx, refs, monostatic_mode);
 		if (trans->getMode() != monostatic_mode || recv->getMode() != monostatic_mode)

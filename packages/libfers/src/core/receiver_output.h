@@ -96,6 +96,28 @@ namespace core
 			RealType power = 0.0;
 		};
 
+		struct SfcwContext
+		{
+			bool present = false;
+			SimId waveform_id = 0;
+			std::string waveform_name = {};
+			RealType carrier_frequency = 0.0;
+			RealType power = 0.0;
+			RealType start_frequency_offset = 0.0;
+			RealType step_size = 0.0;
+			std::uint64_t step_count = 0;
+			RealType dwell_time = 0.0;
+			RealType step_period = 0.0;
+			RealType sweep_period = 0.0;
+			std::optional<std::uint64_t> sweep_count = std::nullopt;
+			RealType first_frequency = 0.0;
+			RealType last_frequency = 0.0;
+			RealType frequency_span = 0.0;
+			RealType effective_bandwidth = 0.0;
+			RealType range_resolution = 0.0;
+			RealType unambiguous_range = 0.0;
+		};
+
 		SimId receiver_id = 0;
 		std::string receiver_name = {};
 		std::string mode = {};
@@ -111,6 +133,7 @@ namespace core
 		PulsedContext pulsed = {};
 		CwContext cw = {};
 		FmcwContext fmcw = {};
+		SfcwContext sfcw = {};
 	};
 
 	struct ReceiverSampleBlock

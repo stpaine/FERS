@@ -105,6 +105,41 @@ namespace core
 			return first_index;
 		}
 
+		/// Returns the first SFCW flat step index that can contribute inside an interval.
+		std::optional<std::uint64_t> firstSfcwStepIndex(const ActiveStreamingSource& source,
+														const RealType active_start, const RealType active_end)
+		{
+			if (source.kind != StreamingWaveformKind::Sfcw || source.sfcw_step_period <= 0.0 ||
+				source.sfcw_step_count == 0)
+			{
+				return std::nullopt;
+			}
+
+			const RealType clipped_start = std::max(active_start, source.segment_start);
+			const RealType clipped_end = std::min(active_end, source.segment_end);
+			if (clipped_end <= clipped_start)
+			{
+				return std::nullopt;
+			}
+
+			const auto first_index = clipped_start <= source.segment_start
+				? std::uint64_t{0}
+				: ceilToUint((clipped_start - source.segment_start) / source.sfcw_step_period);
+			if (source.sfcw_sweep_count.has_value() &&
+				first_index >= static_cast<std::uint64_t>(*source.sfcw_sweep_count) * source.sfcw_step_count)
+			{
+				return std::nullopt;
+			}
+
+			const RealType first_start =
+				source.segment_start + static_cast<RealType>(first_index) * source.sfcw_step_period;
+			if (first_start >= clipped_end)
+			{
+				return std::nullopt;
+			}
+			return first_index;
+		}
+
 		/// Reduces a phase to [0, 2*pi).
 		RealType positiveModuloTwoPi(const RealType phase)
 		{
@@ -145,6 +180,25 @@ namespace core
 					source.segment_end =
 						std::min(source.segment_end,
 								 segment_start + static_cast<RealType>(*source.chirp_count) * source.chirp_period);
+				}
+				return;
+			}
+
+			if (const auto* const sfcw = signal->getSteppedFrequencySignal(); sfcw != nullptr)
+			{
+				source.kind = StreamingWaveformKind::Sfcw;
+				source.is_sfcw = true;
+				source.sfcw = sfcw;
+				source.start_freq_off = sfcw->getStartFrequencyOffset();
+				source.sfcw_step_size = sfcw->getStepSize();
+				source.sfcw_step_count = sfcw->getStepCount();
+				source.sfcw_dwell_time = sfcw->getDwellTime();
+				source.sfcw_step_period = sfcw->getStepPeriod();
+				source.sfcw_sweep_period = sfcw->getSweepPeriod();
+				source.sfcw_sweep_count = sfcw->getSweepCount();
+				if (const auto duration = sfcw->totalDuration(); duration.has_value())
+				{
+					source.segment_end = std::min(source.segment_end, segment_start + *duration);
 				}
 				return;
 			}
@@ -297,6 +351,39 @@ namespace core
 		}
 
 		const auto configured = static_cast<std::uint64_t>(*source.triangle_count);
+		return std::min(starts_in_interval, configured - *first_index);
+	}
+
+	std::optional<RealType> firstSfcwStepStart(const ActiveStreamingSource& source, const RealType active_start,
+											   const RealType active_end)
+	{
+		const auto first_index = firstSfcwStepIndex(source, active_start, active_end);
+		if (!first_index.has_value())
+		{
+			return std::nullopt;
+		}
+		return source.segment_start + static_cast<RealType>(*first_index) * source.sfcw_step_period;
+	}
+
+	std::uint64_t countSfcwStepStarts(const ActiveStreamingSource& source, const RealType active_start,
+									  const RealType active_end)
+	{
+		const auto first_index = firstSfcwStepIndex(source, active_start, active_end);
+		if (!first_index.has_value())
+		{
+			return 0;
+		}
+
+		const RealType clipped_end = std::min(active_end, source.segment_end);
+		const RealType first_start =
+			source.segment_start + static_cast<RealType>(*first_index) * source.sfcw_step_period;
+		const auto starts_in_interval = ceilToUint((clipped_end - first_start) / source.sfcw_step_period);
+		if (!source.sfcw_sweep_count.has_value())
+		{
+			return starts_in_interval;
+		}
+
+		const auto configured = static_cast<std::uint64_t>(*source.sfcw_sweep_count) * source.sfcw_step_count;
 		return std::min(starts_in_interval, configured - *first_index);
 	}
 }

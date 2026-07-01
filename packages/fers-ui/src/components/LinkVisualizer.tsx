@@ -419,7 +419,16 @@ export default function LinkVisualizer() {
                                         waveform.chirp_period
                                 )
                             )
-                          : null;
+                          : waveform.waveformType === 'stepped_frequency' &&
+                              waveform.step_period > 0
+                            ? Math.min(
+                                  1,
+                                  Math.max(
+                                      0,
+                                      waveform.dwell_time / waveform.step_period
+                                  )
+                              )
+                            : null;
                 if (dutyCycle === null) {
                     return;
                 }

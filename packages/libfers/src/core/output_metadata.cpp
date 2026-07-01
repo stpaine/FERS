@@ -51,6 +51,14 @@ namespace core
 			{
 				result["emitted_triangle_count"] = *segment.emitted_triangle_count;
 			}
+			if (segment.first_sfcw_step_start_time.has_value())
+			{
+				result["first_sfcw_step_start_time"] = *segment.first_sfcw_step_start_time;
+			}
+			if (segment.emitted_sfcw_step_count.has_value())
+			{
+				result["emitted_sfcw_step_count"] = *segment.emitted_sfcw_step_count;
+			}
 			return result;
 		}
 
@@ -128,6 +136,58 @@ namespace core
 			return result;
 		}
 
+		nlohmann::json sfcwToJson(const SfcwMetadata& sfcw)
+		{
+			nlohmann::json result = {{"carrier_frequency", sfcw.carrier_frequency},
+									 {"start_frequency_offset", sfcw.start_frequency_offset},
+									 {"step_size", sfcw.step_size},
+									 {"step_count", sfcw.step_count},
+									 {"dwell_time", sfcw.dwell_time},
+									 {"step_period", sfcw.step_period},
+									 {"first_frequency", sfcw.first_frequency},
+									 {"last_frequency", sfcw.last_frequency},
+									 {"frequency_span", sfcw.frequency_span},
+									 {"effective_bandwidth", sfcw.effective_bandwidth},
+									 {"range_resolution", sfcw.range_resolution},
+									 {"unambiguous_range", sfcw.unambiguous_range}};
+			if (sfcw.sweep_count.has_value())
+			{
+				result["sweep_count"] = *sfcw.sweep_count;
+			}
+			return result;
+		}
+
+		nlohmann::json sfcwSourceSegmentToJson(const SfcwSourceSegmentMetadata& segment)
+		{
+			nlohmann::json result = {{"start_time", segment.start_time}, {"end_time", segment.end_time}};
+			if (segment.first_step_start_time.has_value())
+			{
+				result["first_step_start_time"] = *segment.first_step_start_time;
+			}
+			if (segment.emitted_step_count.has_value())
+			{
+				result["emitted_step_count"] = *segment.emitted_step_count;
+			}
+			return result;
+		}
+
+		nlohmann::json sfcwSourceToJson(const SfcwSourceMetadata& source)
+		{
+			nlohmann::json segments = nlohmann::json::array();
+			for (const auto& segment : source.segments)
+			{
+				segments.push_back(sfcwSourceSegmentToJson(segment));
+			}
+
+			nlohmann::json result = {{"transmitter_id", source.transmitter_id},
+									 {"transmitter_name", source.transmitter_name},
+									 {"waveform_id", source.waveform_id},
+									 {"waveform_name", source.waveform_name},
+									 {"segments", segments}};
+			result.update(sfcwToJson(source.waveform));
+			return result;
+		}
+
 		template <typename T>
 		void addOptional(nlohmann::json& result, const char* key, const std::optional<T>& value)
 		{
@@ -197,6 +257,12 @@ namespace core
 				fmcw_sources.push_back(fmcwSourceToJson(source));
 			}
 
+			nlohmann::json sfcw_sources = nlohmann::json::array();
+			for (const auto& source : file.sfcw_sources)
+			{
+				sfcw_sources.push_back(sfcwSourceToJson(source));
+			}
+
 			nlohmann::json result = {{"receiver_id", file.receiver_id},
 									 {"receiver_name", file.receiver_name},
 									 {"mode", file.mode},
@@ -212,11 +278,16 @@ namespace core
 									 {"chunks", chunks},
 									 {"streaming_segments", streaming_segments},
 									 {"fmcw_sources", fmcw_sources},
+									 {"sfcw_sources", sfcw_sources},
 									 {"fmcw_dechirp_mode", file.fmcw_dechirp_mode},
 									 {"fmcw_dechirp_reference_source", file.fmcw_dechirp_reference_source}};
 			if (file.fmcw.has_value())
 			{
 				result["fmcw"] = fmcwToJson(*file.fmcw);
+			}
+			if (file.sfcw.has_value())
+			{
+				result["sfcw"] = sfcwToJson(*file.sfcw);
 			}
 			addDechirpReferenceJson(result, file);
 			addFmcwIfJson(result, file);

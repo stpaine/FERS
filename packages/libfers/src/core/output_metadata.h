@@ -43,6 +43,8 @@ namespace core
 		std::optional<std::uint64_t> emitted_chirp_count = std::nullopt; ///< Number of FMCW chirps emitted.
 		std::optional<RealType> first_triangle_start_time = std::nullopt; ///< First emitted FMCW triangle start time.
 		std::optional<std::uint64_t> emitted_triangle_count = std::nullopt; ///< Number of FMCW triangles emitted.
+		std::optional<RealType> first_sfcw_step_start_time = std::nullopt; ///< First emitted SFCW step start time.
+		std::optional<std::uint64_t> emitted_sfcw_step_count = std::nullopt; ///< Number of SFCW steps emitted.
 	};
 
 	/// FMCW waveform metadata captured for a streaming output file.
@@ -85,6 +87,44 @@ namespace core
 		std::vector<FmcwSourceSegmentMetadata> segments = {}; ///< Active transmitter segments.
 	};
 
+	/// SFCW waveform metadata captured for a streaming output file.
+	struct SfcwMetadata
+	{
+		RealType carrier_frequency = 0.0; ///< Waveform carrier frequency in hertz.
+		RealType start_frequency_offset = 0.0; ///< First-step offset relative to carrier in hertz.
+		RealType step_size = 0.0; ///< Uniform frequency step in hertz.
+		std::uint64_t step_count = 0; ///< Steps per sweep.
+		RealType dwell_time = 0.0; ///< Active dwell time per step in seconds.
+		RealType step_period = 0.0; ///< Step period in seconds.
+		std::optional<std::uint64_t> sweep_count = std::nullopt; ///< Optional finite sweep count.
+		RealType first_frequency = 0.0; ///< First RF step frequency in hertz.
+		RealType last_frequency = 0.0; ///< Last RF step frequency in hertz.
+		RealType frequency_span = 0.0; ///< First-to-last absolute span in hertz.
+		RealType effective_bandwidth = 0.0; ///< DFT-convention effective bandwidth in hertz.
+		RealType range_resolution = 0.0; ///< Approximate range resolution in meters.
+		RealType unambiguous_range = 0.0; ///< Uniform-step unambiguous range in meters.
+	};
+
+	/// Metadata for one active SFCW transmitter schedule segment.
+	struct SfcwSourceSegmentMetadata
+	{
+		RealType start_time = 0.0; ///< Transmitter segment start time in seconds.
+		RealType end_time = 0.0; ///< Transmitter segment end time in seconds.
+		std::optional<RealType> first_step_start_time = std::nullopt; ///< First emitted step start in the segment.
+		std::optional<std::uint64_t> emitted_step_count = std::nullopt; ///< Number of step starts in the segment.
+	};
+
+	/// Metadata for one SFCW illuminator represented in a streaming output file.
+	struct SfcwSourceMetadata
+	{
+		SimId transmitter_id = 0; ///< SFCW transmitter SimId.
+		std::string transmitter_name; ///< SFCW transmitter display name.
+		SimId waveform_id = 0; ///< SFCW waveform SimId.
+		std::string waveform_name; ///< SFCW waveform display name.
+		SfcwMetadata waveform; ///< SFCW waveform parameters.
+		std::vector<SfcwSourceSegmentMetadata> segments = {}; ///< Active transmitter segments.
+	};
+
 	/// Metadata for one receiver output file.
 	struct OutputFileMetadata
 	{
@@ -104,6 +144,8 @@ namespace core
 		std::vector<StreamingSegmentMetadata> streaming_segments = {}; ///< Streaming segments written to the file.
 		std::optional<FmcwMetadata> fmcw = std::nullopt; ///< Optional FMCW metadata for streaming outputs.
 		std::vector<FmcwSourceMetadata> fmcw_sources = {}; ///< FMCW illuminators represented in the output.
+		std::optional<SfcwMetadata> sfcw = std::nullopt; ///< Optional SFCW metadata for streaming outputs.
+		std::vector<SfcwSourceMetadata> sfcw_sources = {}; ///< SFCW illuminators represented in the output.
 		std::string fmcw_dechirp_mode = "none"; ///< Receiver dechirp mode for FMCW streaming outputs.
 		std::string fmcw_dechirp_reference_source = "none"; ///< Receiver dechirp reference source.
 		std::optional<SimId> fmcw_dechirp_reference_transmitter_id = std::nullopt; ///< Referenced LO transmitter ID.

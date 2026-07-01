@@ -19,7 +19,7 @@ export type SimulationProgressDetail = {
 
 export type SimulationRunStatus = 'idle' | 'running' | 'completed' | 'failed';
 
-export type SimulationOutputMode = 'pulsed' | 'cw' | 'fmcw';
+export type SimulationOutputMode = 'pulsed' | 'cw' | 'fmcw' | 'sfcw';
 
 export type SimulationOutputChunkMetadata = {
     chunk_index: number;
@@ -41,6 +41,8 @@ export type SimulationOutputStreamingSegmentMetadata = {
     emitted_chirp_count?: number;
     first_triangle_start_time?: number;
     emitted_triangle_count?: number;
+    first_sfcw_step_start_time?: number;
+    emitted_sfcw_step_count?: number;
 };
 
 export type SimulationOutputFmcwMetadata = {
@@ -74,6 +76,38 @@ export type SimulationOutputFmcwSourceMetadata =
         waveform_name: string;
         carrier_frequency: number;
         segments: SimulationOutputFmcwSourceSegmentMetadata[];
+    };
+
+export type SimulationOutputSfcwMetadata = {
+    carrier_frequency: number;
+    start_frequency_offset: number;
+    step_size: number;
+    step_count: number;
+    dwell_time: number;
+    step_period: number;
+    sweep_count?: number;
+    first_frequency: number;
+    last_frequency: number;
+    frequency_span: number;
+    effective_bandwidth: number;
+    range_resolution: number;
+    unambiguous_range: number;
+};
+
+export type SimulationOutputSfcwSourceSegmentMetadata = {
+    start_time: number;
+    end_time: number;
+    first_step_start_time?: number;
+    emitted_step_count?: number;
+};
+
+export type SimulationOutputSfcwSourceMetadata =
+    SimulationOutputSfcwMetadata & {
+        transmitter_id: number;
+        transmitter_name: string;
+        waveform_id: number;
+        waveform_name: string;
+        segments: SimulationOutputSfcwSourceSegmentMetadata[];
     };
 
 export type SimulationOutputVita49Timestamp = {
@@ -130,6 +164,8 @@ export type SimulationOutputFileMetadata = {
     streaming_segments: SimulationOutputStreamingSegmentMetadata[];
     fmcw?: SimulationOutputFmcwMetadata;
     fmcw_sources: SimulationOutputFmcwSourceMetadata[];
+    sfcw?: SimulationOutputSfcwMetadata;
+    sfcw_sources: SimulationOutputSfcwSourceMetadata[];
     fmcw_dechirp_mode?: 'none' | 'physical' | 'ideal';
     fmcw_dechirp_reference_source?:
         | 'none'
@@ -158,12 +194,13 @@ export type SimulationOutputMetadata = {
 
 export type RawSimulationOutputFileMetadata = Omit<
     SimulationOutputFileMetadata,
-    'sampling_rate' | 'streaming_segments' | 'fmcw_sources'
+    'sampling_rate' | 'streaming_segments' | 'fmcw_sources' | 'sfcw_sources'
 > & {
     sampling_rate?: number;
     streaming_segments?: SimulationOutputStreamingSegmentMetadata[];
     cw_segments?: SimulationOutputStreamingSegmentMetadata[];
     fmcw_sources?: SimulationOutputFmcwSourceMetadata[];
+    sfcw_sources?: SimulationOutputSfcwSourceMetadata[];
 };
 
 export type RawSimulationOutputMetadata = Omit<
@@ -182,6 +219,7 @@ export const normalizeSimulationOutputMetadata = (
             cw_segments,
             streaming_segments,
             fmcw_sources,
+            sfcw_sources,
             sampling_rate,
             ...normalizedFile
         } = file;
@@ -194,6 +232,7 @@ export const normalizeSimulationOutputMetadata = (
                 0,
             streaming_segments: streaming_segments ?? cw_segments ?? [],
             fmcw_sources: fmcw_sources ?? [],
+            sfcw_sources: sfcw_sources ?? [],
         };
     }),
 });

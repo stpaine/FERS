@@ -66,6 +66,32 @@ namespace processing
 					: std::nullopt};
 		}
 
+		core::SfcwMetadata buildSfcwMetadata(const core::ActiveStreamingSource& source)
+		{
+			if (source.sfcw == nullptr)
+			{
+				return {};
+			}
+			const RealType effective_bandwidth = source.sfcw->effectiveBandwidth();
+			const RealType step_size = std::abs(source.sfcw->getStepSize());
+			return core::SfcwMetadata{
+				.carrier_frequency = source.carrier_freq,
+				.start_frequency_offset = source.sfcw->getStartFrequencyOffset(),
+				.step_size = source.sfcw->getStepSize(),
+				.step_count = static_cast<std::uint64_t>(source.sfcw->getStepCount()),
+				.dwell_time = source.sfcw->getDwellTime(),
+				.step_period = source.sfcw->getStepPeriod(),
+				.sweep_count = source.sfcw->getSweepCount().has_value()
+					? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*source.sfcw->getSweepCount()))
+					: std::nullopt,
+				.first_frequency = source.sfcw->firstFrequency(source.carrier_freq),
+				.last_frequency = source.sfcw->lastFrequency(source.carrier_freq),
+				.frequency_span = source.sfcw->frequencySpan(),
+				.effective_bandwidth = effective_bandwidth,
+				.range_resolution = effective_bandwidth > 0.0 ? params::c() / (2.0 * effective_bandwidth) : 0.0,
+				.unambiguous_range = step_size > 0.0 ? params::c() / (2.0 * step_size) : 0.0};
+		}
+
 		/// Builds one FMCW source schedule segment from an active source cache.
 		core::FmcwSourceSegmentMetadata buildFmcwSourceSegment(const core::ActiveStreamingSource& source)
 		{
@@ -134,6 +160,63 @@ namespace processing
 			return fmcw_sources;
 		}
 
+		core::SfcwSourceSegmentMetadata buildSfcwSourceSegment(const core::ActiveStreamingSource& source)
+		{
+			const RealType active_start = std::max(params::startTime(), source.segment_start);
+			const RealType active_end = std::min(params::endTime(), source.segment_end);
+			return core::SfcwSourceSegmentMetadata{
+				.start_time = source.segment_start,
+				.end_time = source.segment_end,
+				.first_step_start_time = core::firstSfcwStepStart(source, active_start, active_end),
+				.emitted_step_count = core::countSfcwStepStarts(source, active_start, active_end)};
+		}
+
+		std::vector<core::SfcwSourceMetadata>::iterator findSfcwSource(std::vector<core::SfcwSourceMetadata>& sources,
+																	   const SimId transmitter_id,
+																	   const SimId waveform_id)
+		{
+			return std::ranges::find_if(
+				sources, [&](const core::SfcwSourceMetadata& source)
+				{ return source.transmitter_id == transmitter_id && source.waveform_id == waveform_id; });
+		}
+
+		std::vector<core::SfcwSourceMetadata>
+		buildSfcwSources(const std::vector<core::ActiveStreamingSource>& streaming_sources)
+		{
+			std::vector<core::SfcwSourceMetadata> sfcw_sources;
+			for (const auto& streaming_source : streaming_sources)
+			{
+				if (!streaming_source.is_sfcw || streaming_source.transmitter == nullptr)
+				{
+					continue;
+				}
+
+				const auto* signal = streaming_source.transmitter->getSignal();
+				if (signal == nullptr)
+				{
+					continue;
+				}
+
+				const auto transmitter_id = streaming_source.transmitter->getId();
+				const auto waveform_id = signal->getId();
+				auto existing = findSfcwSource(sfcw_sources, transmitter_id, waveform_id);
+				if (existing == sfcw_sources.end())
+				{
+					core::SfcwSourceMetadata source{.transmitter_id = transmitter_id,
+													.transmitter_name = streaming_source.transmitter->getName(),
+													.waveform_id = waveform_id,
+													.waveform_name = signal->getName(),
+													.waveform = buildSfcwMetadata(streaming_source)};
+					source.segments.push_back(buildSfcwSourceSegment(streaming_source));
+					sfcw_sources.push_back(std::move(source));
+					continue;
+				}
+
+				existing->segments.push_back(buildSfcwSourceSegment(streaming_source));
+			}
+			return sfcw_sources;
+		}
+
 		/// Adds scalar compatibility chirp metadata to receiver streaming segments for one FMCW source.
 		void annotateStreamingSegmentsForSingleFmcwSource(core::OutputFileMetadata& metadata,
 														  const core::ActiveStreamingSource& source)
@@ -161,6 +244,23 @@ namespace processing
 						segment.first_chirp_start_time = first_chirp;
 						segment.emitted_chirp_count = emitted;
 					}
+				}
+			}
+		}
+
+		void annotateStreamingSegmentsForSingleSfcwSource(core::OutputFileMetadata& metadata,
+														  const core::ActiveStreamingSource& source)
+		{
+			for (auto& segment : metadata.streaming_segments)
+			{
+				const RealType active_start = std::max(segment.start_time, source.segment_start);
+				const RealType active_end = std::min(segment.end_time, source.segment_end);
+				const auto first_step = core::firstSfcwStepStart(source, active_start, active_end);
+				const auto emitted = core::countSfcwStepStarts(source, active_start, active_end);
+				if (first_step.has_value() || emitted > 0)
+				{
+					segment.first_sfcw_step_start_time = first_step;
+					segment.emitted_sfcw_step_count = emitted;
 				}
 			}
 		}
@@ -353,6 +453,26 @@ namespace processing
 			}
 		}
 
+		void annotateSingleSfcwSource(core::OutputFileMetadata& metadata,
+									  const std::vector<core::ActiveStreamingSource>& streaming_sources)
+		{
+			metadata.sfcw_sources = buildSfcwSources(streaming_sources);
+			if (metadata.sfcw_sources.size() != 1)
+			{
+				return;
+			}
+
+			metadata.sfcw = metadata.sfcw_sources.front().waveform;
+			for (const auto& streaming_source : streaming_sources)
+			{
+				if (streaming_source.is_sfcw && streaming_source.transmitter != nullptr &&
+					streaming_source.transmitter->getId() == metadata.sfcw_sources.front().transmitter_id)
+				{
+					annotateStreamingSegmentsForSingleSfcwSource(metadata, streaming_source);
+				}
+			}
+		}
+
 		void populateFmcwIfMetadata(core::OutputFileMetadata& metadata, const radar::Receiver* receiver)
 		{
 			const auto& if_request = receiver->getFmcwIfChainRequest();
@@ -418,18 +538,21 @@ namespace processing
 							   const std::vector<core::ActiveStreamingSource>& streaming_sources,
 							   const RealType output_sample_rate, const std::vector<TimeSpan>& dechirp_time_spans = {})
 		{
-			core::OutputFileMetadata metadata{.receiver_id = receiver->getId(),
-											  .receiver_name = receiver->getName(),
-											  .mode = receiver->getMode() == radar::OperationMode::FMCW_MODE ? "fmcw"
-																											 : "cw",
-											  .path = hdf5_filename,
-											  .sampling_rate = output_sample_rate,
-											  .total_samples = static_cast<std::uint64_t>(total_samples),
-											  .sample_start = 0,
-											  .sample_end_exclusive = static_cast<std::uint64_t>(total_samples)};
+			core::OutputFileMetadata metadata{
+				.receiver_id = receiver->getId(),
+				.receiver_name = receiver->getName(),
+				.mode = receiver->getMode() == radar::OperationMode::FMCW_MODE
+					? "fmcw"
+					: (receiver->getMode() == radar::OperationMode::SFCW_MODE ? "sfcw" : "cw"),
+				.path = hdf5_filename,
+				.sampling_rate = output_sample_rate,
+				.total_samples = static_cast<std::uint64_t>(total_samples),
+				.sample_start = 0,
+				.sample_end_exclusive = static_cast<std::uint64_t>(total_samples)};
 
 			appendStreamingSegments(metadata, receiver, total_samples, output_sample_rate, dechirp_time_spans);
 			annotateSingleFmcwSource(metadata, streaming_sources);
+			annotateSingleSfcwSource(metadata, streaming_sources);
 
 			metadata.fmcw_dechirp_mode = std::string(radar::dechirpModeToken(receiver->getDechirpMode()));
 			if (receiver->isDechirpEnabled())
@@ -450,6 +573,8 @@ namespace processing
 				return "pulsed";
 			case radar::OperationMode::FMCW_MODE:
 				return "fmcw";
+			case radar::OperationMode::SFCW_MODE:
+				return "sfcw";
 			case radar::OperationMode::CW_MODE:
 				return "cw";
 			}
@@ -573,6 +698,41 @@ namespace processing
 			context.power = signal->getPower();
 		}
 
+		void populateWaveformIdentity(core::ReceiverStreamDescriptor::SfcwContext& context,
+									  const fers_signal::RadarSignal* signal)
+		{
+			if (signal == nullptr)
+			{
+				return;
+			}
+			context.waveform_id = signal->getId();
+			context.waveform_name = signal->getName();
+			context.carrier_frequency = signal->getCarrier();
+			context.power = signal->getPower();
+			const auto* sfcw = signal->getSteppedFrequencySignal();
+			if (sfcw == nullptr)
+			{
+				return;
+			}
+			const RealType effective_bandwidth = sfcw->effectiveBandwidth();
+			const RealType step_size = std::abs(sfcw->getStepSize());
+			context.start_frequency_offset = sfcw->getStartFrequencyOffset();
+			context.step_size = sfcw->getStepSize();
+			context.step_count = static_cast<std::uint64_t>(sfcw->getStepCount());
+			context.dwell_time = sfcw->getDwellTime();
+			context.step_period = sfcw->getStepPeriod();
+			context.sweep_period = sfcw->getSweepPeriod();
+			context.sweep_count = sfcw->getSweepCount().has_value()
+				? std::optional<std::uint64_t>(static_cast<std::uint64_t>(*sfcw->getSweepCount()))
+				: std::nullopt;
+			context.first_frequency = sfcw->firstFrequency(signal->getCarrier());
+			context.last_frequency = sfcw->lastFrequency(signal->getCarrier());
+			context.frequency_span = sfcw->frequencySpan();
+			context.effective_bandwidth = effective_bandwidth;
+			context.range_resolution = effective_bandwidth > 0.0 ? params::c() / (2.0 * effective_bandwidth) : 0.0;
+			context.unambiguous_range = step_size > 0.0 ? params::c() / (2.0 * step_size) : 0.0;
+		}
+
 		[[nodiscard]] core::ReceiverStreamDescriptor::PulsedContext buildPulsedContext(const radar::Receiver* receiver)
 		{
 			core::ReceiverStreamDescriptor::PulsedContext context;
@@ -618,6 +778,33 @@ namespace processing
 				if (const auto timing = receiver->getTiming(); timing)
 				{
 					context.carrier_frequency = timing->getFrequency();
+				}
+			}
+			return context;
+		}
+
+		[[nodiscard]] core::ReceiverStreamDescriptor::SfcwContext
+		buildSfcwContext(const radar::Receiver* receiver,
+						 const std::span<const core::ActiveStreamingSource> streaming_sources)
+		{
+			core::ReceiverStreamDescriptor::SfcwContext context;
+			if (receiver == nullptr || receiver->getMode() != radar::OperationMode::SFCW_MODE)
+			{
+				return context;
+			}
+
+			context.present = true;
+			if (const auto* transmitter = attachedTransmitter(receiver); transmitter != nullptr)
+			{
+				populateWaveformIdentity(context, transmitter->getSignal());
+			}
+			if (context.waveform_id == 0)
+			{
+				const auto found = std::ranges::find_if(streaming_sources, [](const core::ActiveStreamingSource& source)
+														{ return source.is_sfcw && source.transmitter != nullptr; });
+				if (found != streaming_sources.end())
+				{
+					populateWaveformIdentity(context, found->transmitter->getSignal());
 				}
 			}
 			return context;
@@ -691,7 +878,8 @@ namespace processing
 												  .initial_platform_state = buildInitialPlatformState(receiver),
 												  .pulsed = buildPulsedContext(receiver),
 												  .cw = buildCwContext(receiver),
-												  .fmcw = buildFmcwContext(receiver, streaming_sources)};
+												  .fmcw = buildFmcwContext(receiver, streaming_sources),
+												  .sfcw = buildSfcwContext(receiver, streaming_sources)};
 		if (const auto timing = receiver->getTiming(); timing)
 		{
 			descriptor.reference_frequency = timing->getFrequency();

@@ -11,6 +11,7 @@ FERS can model:
 - Pulsed radar using complex baseband waveform files.
 - Continuous-wave radar.
 - FMCW linear chirps and triangular chirps.
+- Stepped-frequency continuous-wave radar.
 - Monostatic radars, where the transmitter and receiver are attached to the same platform.
 - Bistatic or multistatic layouts, where transmitters, receivers, and targets are on separate moving platforms.
 - Multiple transmitters, receivers, radars, and targets in the same scenario.
@@ -34,6 +35,7 @@ Current limitations to keep in mind:
 - Clutter and environmental propagation effects are not modeled as first-class scenario objects.
 - Target shape is represented through RCS values or RCS pattern files, not physical meshes.
 - Built-in FMCW support is available but still marked alpha in the project README.
+- Built-in SFCW support is available but still marked alpha in the project README.
 - CW support is available but still marked beta in the project README.
 - VITA 49.2 UDP output support is available but still marked Alpha and Unverified in the project README.
 - The XML schema validates structure, but some physical limits are checked only when FERS loads or runs the scenario.
@@ -61,11 +63,11 @@ Current limitations to keep in mind:
 - [[libfers]]: when and how to use the FERS library from another application.
 - [[XML Schema Reference]]: every XML element, attribute, parameter, unit, and practical caveat.
 - [[Examples]]: walkthroughs of the scenarios in the `examples/` directory.
-- [[Simulation Pipelines]]: Mermaid diagrams showing how FERS runs pulsed, CW, and FMCW simulations.
+- [[Simulation Pipelines]]: Mermaid diagrams showing how FERS runs pulsed, CW, FMCW, and SFCW simulations.
 
 ## Migrating Old Scenarios
 
-Older FERS XML used names such as `<pulse>`, `pulse="..."`, and inline radar mode attributes. Current FERS uses `<waveform>`, `waveform="..."`, and explicit mode blocks such as `<pulsed_mode>`, `<cw_mode>`, and `<fmcw_mode>`.
+Older FERS XML used names such as `<pulse>`, `pulse="..."`, and inline radar mode attributes. Current FERS uses `<waveform>`, `waveform="..."`, and explicit mode blocks such as `<pulsed_mode>`, `<cw_mode>`, `<fmcw_mode>`, and `<sfcw_mode>`.
 
 Use the migration script as a starting point:
 

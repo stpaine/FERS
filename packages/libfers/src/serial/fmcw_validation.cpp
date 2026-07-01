@@ -20,7 +20,7 @@ namespace serial::fmcw_validation
 	namespace
 	{
 		/// Emits a warning when a streaming scenario may allocate a large I/Q buffer.
-		void warnStreamingMemory(const std::string& owner)
+		void warnStreamingMemory(const std::string& owner, const std::string_view mode_name)
 		{
 			const RealType duration = std::max<RealType>(0.0, params::endTime() - params::startTime());
 			const RealType effective_rate = params::rate() * params::oversampleRatio();
@@ -34,9 +34,9 @@ namespace serial::fmcw_validation
 
 			const double estimated_gib = static_cast<double>(estimated_bytes) / (1024.0 * 1024.0 * 1024.0);
 			LOG(logging::Level::WARNING,
-				"{} will buffer about {:.2f} GiB of FMCW streaming output for simulation_duration={} s at "
+				"{} will buffer about {:.2f} GiB of {} streaming output for simulation_duration={} s at "
 				"effective_rate={} Hz. Large simulation_time * bandwidth/rate products need chunking.",
-				owner, estimated_gib, duration, effective_rate);
+				owner, estimated_gib, mode_name, duration, effective_rate);
 		}
 
 		/// Returns schedule periods, or the full simulation as one implicit active period.
@@ -84,6 +84,51 @@ namespace serial::fmcw_validation
 				throw_error(owner + " yields a non-positive RF-equivalent frequency.");
 			}
 		}
+
+		void validateSfcwWaveform(const fers_signal::RadarSignal& wave, const std::string& owner,
+								  const fers_signal::SteppedFrequencySignal& sfcw, const Thrower& throw_error)
+		{
+			if (sfcw.getStepCount() < 1U)
+			{
+				throw_error(owner + " has SFCW step_count < 1.");
+			}
+			if (sfcw.getStepSize() == 0.0 || !std::isfinite(sfcw.getStepSize()))
+			{
+				throw_error(owner + " has invalid SFCW step_size.");
+			}
+			if (sfcw.getDwellTime() <= 0.0 || !std::isfinite(sfcw.getDwellTime()))
+			{
+				throw_error(owner + " has SFCW dwell_time <= 0.");
+			}
+			if (sfcw.getStepPeriod() <= 0.0 || !std::isfinite(sfcw.getStepPeriod()))
+			{
+				throw_error(owner + " has SFCW step_period <= 0.");
+			}
+			if (sfcw.getDwellTime() > sfcw.getStepPeriod())
+			{
+				throw_error(owner + " has SFCW dwell_time longer than step_period.");
+			}
+
+			const RealType f_low =
+				std::min(sfcw.firstFrequency(wave.getCarrier()), sfcw.lastFrequency(wave.getCarrier()));
+			if (f_low <= 0.0)
+			{
+				throw_error(owner + " yields a non-positive SFCW RF step frequency.");
+			}
+
+			const RealType output_samples_per_dwell = params::rate() * sfcw.getDwellTime();
+			if (output_samples_per_dwell < 1.0)
+			{
+				LOG(logging::Level::WARNING, "{} has fewer than one output sample per SFCW dwell.", owner);
+			}
+			const RealType internal_samples_per_dwell =
+				params::rate() * static_cast<RealType>(params::oversampleRatio()) * sfcw.getDwellTime();
+			if (internal_samples_per_dwell < 1.0)
+			{
+				LOG(logging::Level::WARNING, "{} has fewer than one internal sample per SFCW dwell.", owner);
+			}
+			warnStreamingMemory(owner, "SFCW");
+		}
 	}
 
 	void validateWaveform(const fers_signal::RadarSignal& wave, const std::string& owner, const Thrower& throw_error)
@@ -100,7 +145,7 @@ namespace serial::fmcw_validation
 				sweep_start + (fmcw->isDownChirp() ? -fmcw->getChirpBandwidth() : fmcw->getChirpBandwidth());
 			validateCommonSweep(wave, owner, fmcw->getChirpDuration(), fmcw->getChirpBandwidth(), sweep_start,
 								sweep_end, throw_error);
-			warnStreamingMemory(owner);
+			warnStreamingMemory(owner, "FMCW");
 			return;
 		}
 
@@ -110,17 +155,24 @@ namespace serial::fmcw_validation
 			const RealType sweep_end = sweep_start + triangle->getChirpBandwidth();
 			validateCommonSweep(wave, owner, triangle->getChirpDuration(), triangle->getChirpBandwidth(), sweep_start,
 								sweep_end, throw_error);
-			warnStreamingMemory(owner);
+			warnStreamingMemory(owner, "FMCW");
+			return;
+		}
+
+		if (const auto* sfcw = wave.getSteppedFrequencySignal(); sfcw != nullptr)
+		{
+			validateSfcwWaveform(wave, owner, *sfcw, throw_error);
 		}
 	}
 
 	void validateWaveformModeMatch(const fers_signal::RadarSignal& wave, const radar::OperationMode mode,
 								   const std::string& owner, const Thrower& throw_error)
 	{
-		const bool is_pulsed = !wave.isCw() && !wave.isFmcwFamily();
+		const bool is_pulsed = !wave.isCw() && !wave.isFmcwFamily() && !wave.isSteppedFrequency();
 		const bool matches = (mode == radar::OperationMode::PULSED_MODE && is_pulsed) ||
 			(mode == radar::OperationMode::CW_MODE && wave.isCw()) ||
-			(mode == radar::OperationMode::FMCW_MODE && wave.isFmcwFamily());
+			(mode == radar::OperationMode::FMCW_MODE && wave.isFmcwFamily()) ||
+			(mode == radar::OperationMode::SFCW_MODE && wave.isSteppedFrequency());
 		if (!matches)
 		{
 			throw_error(owner + " mode does not match waveform '" + wave.getName() + "'.");
@@ -153,6 +205,25 @@ namespace serial::fmcw_validation
 		if (const auto* fmcw = wave.getFmcwChirpSignal(); fmcw != nullptr)
 		{
 			validateSchedule(schedule, *fmcw, owner, throw_error);
+			return;
+		}
+
+		if (const auto* sfcw = wave.getSteppedFrequencySignal(); sfcw != nullptr)
+		{
+			for (const auto& period : effectiveSchedule(schedule))
+			{
+				const RealType duration = period.end - period.start;
+				if (duration < sfcw->getDwellTime())
+				{
+					LOG(logging::Level::WARNING, "{} has schedule period [{}, {}] shorter than one SFCW dwell ({}s).",
+						owner, period.start, period.end, sfcw->getDwellTime());
+				}
+				if (duration < sfcw->getSweepPeriod())
+				{
+					LOG(logging::Level::WARNING, "{} has schedule period [{}, {}] shorter than one SFCW sweep ({}s).",
+						owner, period.start, period.end, sfcw->getSweepPeriod());
+				}
+			}
 			return;
 		}
 

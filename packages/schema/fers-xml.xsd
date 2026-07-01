@@ -147,6 +147,18 @@
                             </xs:sequence>
                         </xs:complexType>
                     </xs:element>
+                    <xs:element name="stepped_frequency">
+                        <xs:complexType>
+                            <xs:sequence>
+                                <xs:element name="start_frequency_offset" type="xs:string"/>
+                                <xs:element name="step_size" type="xs:string"/>
+                                <xs:element name="step_count" type="xs:string"/>
+                                <xs:element name="dwell_time" type="xs:string"/>
+                                <xs:element name="step_period" type="xs:string"/>
+                                <xs:element minOccurs="0" name="sweep_count" type="xs:string"/>
+                            </xs:sequence>
+                        </xs:complexType>
+                    </xs:element>
                 </xs:choice>
             </xs:sequence>
             <xs:attribute name="name" type="xs:string" use="required"/>
@@ -361,6 +373,9 @@
                         <xs:complexType/>
                     </xs:element>
                     <xs:element name="fmcw_mode" type="receiverFmcwModeType"/>
+                    <xs:element name="sfcw_mode">
+                        <xs:complexType/>
+                    </xs:element>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>
@@ -392,6 +407,9 @@
                     <xs:element name="fmcw_mode">
                         <xs:complexType/>
                     </xs:element>
+                    <xs:element name="sfcw_mode">
+                        <xs:complexType/>
+                    </xs:element>
                 </xs:choice>
                 <xs:element minOccurs="0" ref="schedule"/>
             </xs:sequence>
@@ -420,6 +438,9 @@
                         <xs:complexType/>
                     </xs:element>
                     <xs:element name="fmcw_mode" type="receiverFmcwModeType"/>
+                    <xs:element name="sfcw_mode">
+                        <xs:complexType/>
+                    </xs:element>
                 </xs:choice>
                 <xs:element minOccurs="0" name="noise_temp" type="xs:string"/>
                 <xs:element minOccurs="0" ref="schedule"/>

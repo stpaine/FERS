@@ -416,6 +416,53 @@ TEST_CASE("JSON: FMCW triangle round trips", "[serial][json][fmcw]")
 	REQUIRE(reparsed_triangle_count.value_or(0u) == 3u);
 }
 
+TEST_CASE("JSON: SFCW waveform round trips", "[serial][json][sfcw]")
+{
+	ParamGuard const guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 1.0);
+
+	json const wf_json = {{"id", 460},
+						  {"name", "Sfcw"},
+						  {"power", 125.0},
+						  {"carrier_frequency", 9.6e9},
+						  {"stepped_frequency",
+						   {{"start_frequency_offset", -1.0e6},
+							{"step_size", 2.0e5},
+							{"step_count", 16},
+							{"dwell_time", 1.0e-4},
+							{"step_period", 2.0e-4},
+							{"sweep_count", 5}}}};
+
+	auto wf = serial::parse_waveform_from_json(wf_json);
+	REQUIRE(wf != nullptr);
+	REQUIRE(wf->isSteppedFrequency());
+	REQUIRE_FALSE(wf->isFmcwFamily());
+	const auto* sfcw = wf->getSteppedFrequencySignal();
+	REQUIRE(sfcw != nullptr);
+	REQUIRE_THAT(sfcw->getStartFrequencyOffset(), WithinAbs(-1.0e6, 1e-9));
+	REQUIRE_THAT(sfcw->getStepSize(), WithinAbs(2.0e5, 1e-9));
+	REQUIRE(sfcw->getStepCount() == 16u);
+	REQUIRE_THAT(sfcw->getDwellTime(), WithinAbs(1.0e-4, 1e-12));
+	REQUIRE_THAT(sfcw->getStepPeriod(), WithinAbs(2.0e-4, 1e-12));
+	REQUIRE(sfcw->getSweepCount().has_value());
+	REQUIRE(sfcw->getSweepCount().value_or(0u) == 5u);
+
+	json serialized;
+	fers_signal::to_json(serialized, *wf);
+	REQUIRE(serialized.contains("stepped_frequency"));
+	REQUIRE_FALSE(serialized.contains("fmcw_linear_chirp"));
+	REQUIRE_FALSE(serialized.contains("fmcw_triangle"));
+	REQUIRE(serialized.at("stepped_frequency").at("step_count") == 16);
+	REQUIRE(serialized.at("stepped_frequency").at("sweep_count") == 5);
+
+	auto reparsed = serial::parse_waveform_from_json(serialized);
+	REQUIRE(reparsed != nullptr);
+	REQUIRE(reparsed->getSteppedFrequencySignal() != nullptr);
+	REQUIRE(reparsed->getSteppedFrequencySignal()->getSweepCount().value_or(0u) == 5u);
+}
+
 TEST_CASE("JSON: FMCW triangle rejects fractional triangle count", "[serial][json][fmcw]")
 {
 	ParamGuard const guard;

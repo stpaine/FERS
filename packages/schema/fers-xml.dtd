@@ -47,7 +47,7 @@
                 >
 
         <!-- Waveform definition -->
-        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw | fmcw_linear_chirp | fmcw_triangle))>
+        <!ELEMENT waveform (power, carrier_frequency, (pulsed_from_file | cw | fmcw_linear_chirp | fmcw_triangle | stepped_frequency))>
         <!ATTLIST waveform
                 name CDATA #REQUIRED>
 
@@ -64,10 +64,16 @@
         <!ELEMENT fmcw_linear_chirp (chirp_bandwidth, chirp_duration, chirp_period, start_frequency_offset?, chirp_count?)>
         <!ATTLIST fmcw_linear_chirp direction (up|down) #REQUIRED>
         <!ELEMENT fmcw_triangle (chirp_bandwidth, chirp_duration, start_frequency_offset?, triangle_count?)>
+        <!ELEMENT stepped_frequency (start_frequency_offset, step_size, step_count, dwell_time, step_period, sweep_count?)>
         <!ELEMENT chirp_bandwidth (#PCDATA)>
         <!ELEMENT chirp_duration (#PCDATA)>
         <!ELEMENT chirp_period (#PCDATA)>
         <!ELEMENT start_frequency_offset (#PCDATA)>
+        <!ELEMENT step_size (#PCDATA)>
+        <!ELEMENT step_count (#PCDATA)>
+        <!ELEMENT dwell_time (#PCDATA)>
+        <!ELEMENT step_period (#PCDATA)>
+        <!ELEMENT sweep_count (#PCDATA)>
         <!-- Per-schedule-segment maximum chirp count; each scheduled period may emit up to this many chirps. -->
         <!ELEMENT chirp_count (#PCDATA)>
         <!-- Per-schedule-segment maximum full triangle count; each scheduled period may emit up to this many triangles. -->
@@ -162,6 +168,7 @@
         <!ELEMENT cw_mode EMPTY>
         <!ELEMENT fmcw_mode (dechirp_reference?, if_sample_rate?, if_filter_bandwidth?, if_filter_transition_width?)>
         <!ATTLIST fmcw_mode dechirp_mode (none|physical|ideal) "none">
+        <!ELEMENT sfcw_mode EMPTY>
         <!ELEMENT dechirp_reference EMPTY>
         <!ATTLIST dechirp_reference
                 source (attached|transmitter|custom) #REQUIRED
@@ -180,7 +187,7 @@
                 >
 
         <!-- Monostatic radar installations -->
-        <!ELEMENT monostatic ((pulsed_mode | cw_mode | fmcw_mode), noise_temp?, schedule?)>
+        <!ELEMENT monostatic ((pulsed_mode | cw_mode | fmcw_mode | sfcw_mode), noise_temp?, schedule?)>
         <!ATTLIST monostatic
                 name CDATA #REQUIRED
                 antenna CDATA #REQUIRED
@@ -192,7 +199,7 @@
         <!ELEMENT noise_temp (#PCDATA)>
 
         <!-- Standalone Transmitter -->
-        <!ELEMENT transmitter ((pulsed_mode | cw_mode | fmcw_mode), schedule?)>
+        <!ELEMENT transmitter ((pulsed_mode | cw_mode | fmcw_mode | sfcw_mode), schedule?)>
         <!ATTLIST transmitter
                 name CDATA #REQUIRED
                 waveform CDATA #REQUIRED
@@ -200,7 +207,7 @@
                 timing CDATA #REQUIRED>
 
         <!-- Standalone Receiver -->
-        <!ELEMENT receiver ((pulsed_mode | cw_mode | fmcw_mode), noise_temp?, schedule?)>
+        <!ELEMENT receiver ((pulsed_mode | cw_mode | fmcw_mode | sfcw_mode), noise_temp?, schedule?)>
         <!ATTLIST receiver
                 name CDATA #REQUIRED
                 antenna CDATA #REQUIRED

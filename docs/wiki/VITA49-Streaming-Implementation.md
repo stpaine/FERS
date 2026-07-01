@@ -295,6 +295,7 @@ Context flag bits:
 | `5` | `ContextFlagFmcwMetadataPresent` | FMCW metadata is present and allowed by receiver mode. |
 | `6` | `ContextFlagCwMetadataPresent` | CW metadata is present and allowed by receiver mode. |
 | `7` | `ContextFlagPulsedMetadataPresent` | Pulsed metadata is present and allowed by receiver mode. |
+| `8` | `ContextFlagSfcwMetadataPresent` | SFCW metadata is present and allowed by receiver mode. |
 
 ## Context ASCII JSON
 
@@ -342,6 +343,7 @@ The context ASCII metadata JSON always includes:
 - `pulsed`
 - `cw`
 - `fmcw`
+- `sfcw`
 
 The serializer follows the receiver mode when stale mode blocks are present. For example, if receiver mode is `cw`, CW metadata is emitted and stale FMCW metadata is not emitted.
 
@@ -397,6 +399,26 @@ The serializer follows the receiver mode when stale mode blocks are present. For
 - `dechirp_reference_transmitter_name`
 - `dechirp_reference_waveform_id`
 - `dechirp_reference_waveform_name`
+
+### SFCW Metadata
+
+`sfcw` contains:
+
+- `present`
+- `waveform_id`
+- `waveform_name`
+- `carrier_hz`
+- `start_frequency_offset_hz`
+- `step_size_hz`
+- `step_count`
+- `dwell_time_s`
+- `step_period_s`
+- `sweep_period_s`
+- `sweep_count`
+- `first_frequency_hz`
+- `last_frequency_hz`
+- `frequency_span_hz`
+- `effective_bandwidth_hz`
 
 ## Final Output Metadata
 

@@ -456,6 +456,53 @@ TEST_CASE("parseWaveform validates FMCW chirp schema constraints", "[serial][xml
 		REQUIRE(triangle->getTriangleCount().value_or(0u) == 4u);
 	}
 
+	SECTION("well-formed SFCW waveform")
+	{
+		auto doc = loadXml("<waveform name=\"sfcw_good\">"
+						   "  <power>12</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <stepped_frequency>"
+						   "    <start_frequency_offset>-1e6</start_frequency_offset>"
+						   "    <step_size>2e5</step_size>"
+						   "    <step_count>8</step_count>"
+						   "    <dwell_time>1e-4</dwell_time>"
+						   "    <step_period>2e-4</step_period>"
+						   "    <sweep_count>3</sweep_count>"
+						   "  </stepped_frequency>"
+						   "</waveform>");
+
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		REQUIRE(world.getWaveforms().size() == 1);
+		const auto* wave = world.getWaveforms().begin()->second.get();
+		const auto* sfcw = wave->getSteppedFrequencySignal();
+		REQUIRE(sfcw != nullptr);
+		REQUIRE(wave->isSteppedFrequency());
+		REQUIRE_THAT(wave->getLength(), WithinAbs(1.0e-4, 1.0e-12));
+		REQUIRE_THAT(sfcw->getStartFrequencyOffset(), WithinAbs(-1.0e6, 1e-6));
+		REQUIRE_THAT(sfcw->getStepSize(), WithinAbs(2.0e5, 1e-9));
+		REQUIRE(sfcw->getStepCount() == 8u);
+		REQUIRE(sfcw->getSweepCount().has_value());
+		REQUIRE(sfcw->getSweepCount().value_or(0u) == 3u);
+	}
+
+	SECTION("SFCW dwell longer than step period is rejected")
+	{
+		auto doc = loadXml("<waveform name=\"sfcw_bad_dwell\">"
+						   "  <power>10</power>"
+						   "  <carrier_frequency>2.4e9</carrier_frequency>"
+						   "  <stepped_frequency>"
+						   "    <start_frequency_offset>0</start_frequency_offset>"
+						   "    <step_size>1e5</step_size>"
+						   "    <step_count>4</step_count>"
+						   "    <dwell_time>2e-4</dwell_time>"
+						   "    <step_period>1e-4</step_period>"
+						   "  </stepped_frequency>"
+						   "</waveform>");
+
+		REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx),
+							ContainsSubstring("SFCW dwell_time longer than step_period"));
+	}
+
 	SECTION("chirp period shorter than duration is rejected")
 	{
 		auto doc = loadXml("<waveform name=\"fmcw_bad_period\">"
@@ -885,6 +932,55 @@ TEST_CASE("parseTransmitter rejects FMCW waveform and mode mismatches", "[serial
 	REQUIRE_THROWS_WITH(
 		serial::xml_parser_utils::parseTransmitter(transmitter_dechirp_doc.getRootElement(), &platform, ctx, refs),
 		ContainsSubstring("must not contain dechirp configuration"));
+}
+
+TEST_CASE("parseTransmitter accepts native SFCW mode and rejects invalid SFCW blocks",
+		  "[serial][xml_parser_utils][sfcw]")
+{
+	ParamGuard const guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	core::World world;
+	std::mt19937 seeder(42);
+	serial::xml_parser_utils::ParserContext ctx;
+	ctx.world = &world;
+	ctx.master_seeder = &seeder;
+
+	auto sfcw_signal = std::make_unique<fers_signal::SteppedFrequencySignal>(0.0, 1.0e5, 4, 1.0e-4, 2.0e-4);
+	world.add(std::make_unique<fers_signal::RadarSignal>("sfcw_wave", 1.0, 1e9, 1.0e-4, std::move(sfcw_signal), 10));
+	world.add(std::make_unique<antenna::Isotropic>("a1", 20));
+	auto timing_proto = std::make_unique<timing::PrototypeTiming>("t1", 30);
+	timing_proto->setFrequency(1e6);
+	world.add(std::move(timing_proto));
+
+	std::unordered_map<std::string, SimId> const w_refs = {{"sfcw_wave", 10}};
+	std::unordered_map<std::string, SimId> const a_refs = {{"a1", 20}};
+	std::unordered_map<std::string, SimId> const t_refs = {{"t1", 30}};
+	serial::xml_parser_utils::ReferenceLookup const refs{&w_refs, &a_refs, &t_refs};
+	radar::Platform platform("plat");
+
+	auto sfcw_doc = loadXml("<transmitter name=\"tx_sfcw\" waveform=\"sfcw_wave\" antenna=\"a1\" timing=\"t1\">"
+							"  <sfcw_mode/>"
+							"</transmitter>");
+	auto* tx = serial::xml_parser_utils::parseTransmitter(sfcw_doc.getRootElement(), &platform, ctx, refs);
+	REQUIRE(tx->getMode() == radar::OperationMode::SFCW_MODE);
+	REQUIRE(tx->isStreamingMode());
+
+	auto mismatch_doc = loadXml("<transmitter name=\"tx_sfcw_bad\" waveform=\"sfcw_wave\" antenna=\"a1\" timing=\"t1\">"
+								"  <cw_mode/>"
+								"</transmitter>");
+	REQUIRE_THROWS_WITH(serial::xml_parser_utils::parseTransmitter(mismatch_doc.getRootElement(), &platform, ctx, refs),
+						ContainsSubstring("mode does not match waveform"));
+
+	auto non_empty_doc =
+		loadXml("<transmitter name=\"tx_sfcw_non_empty\" waveform=\"sfcw_wave\" antenna=\"a1\" timing=\"t1\">"
+				"  <sfcw_mode><dechirp_reference source=\"attached\"/></sfcw_mode>"
+				"</transmitter>");
+	REQUIRE_THROWS_WITH(
+		serial::xml_parser_utils::parseTransmitter(non_empty_doc.getRootElement(), &platform, ctx, refs),
+		ContainsSubstring("sfcw_mode must be empty"));
 }
 
 TEST_CASE("parseTransmitter validates FMCW schedule duration against chirp timing", "[serial][xml_parser_utils][fmcw]")

@@ -116,11 +116,36 @@ namespace serial::vita49
 					{"dechirp_reference_waveform_name", packet.fmcw.dechirp_reference_waveform_name}};
 		}
 
+		[[nodiscard]] nlohmann::json makeSfcwMetadataJson(const ContextPacket& packet)
+		{
+			nlohmann::json result = {{"present", packet.sfcw.present},
+									 {"waveform_id", packet.sfcw.waveform_id},
+									 {"waveform_name", packet.sfcw.waveform_name},
+									 {"carrier_hz", packet.sfcw.carrier_frequency},
+									 {"start_frequency_offset_hz", packet.sfcw.start_frequency_offset},
+									 {"step_size_hz", packet.sfcw.step_size},
+									 {"step_count", packet.sfcw.step_count},
+									 {"dwell_time_s", packet.sfcw.dwell_time},
+									 {"step_period_s", packet.sfcw.step_period},
+									 {"sweep_period_s", packet.sfcw.sweep_period},
+									 {"first_frequency_hz", packet.sfcw.first_frequency},
+									 {"last_frequency_hz", packet.sfcw.last_frequency},
+									 {"frequency_span_hz", packet.sfcw.frequency_span},
+									 {"effective_bandwidth_hz", packet.sfcw.effective_bandwidth}};
+			result["sweep_count"] = packet.sfcw.sweep_count.has_value() ? nlohmann::json(*packet.sfcw.sweep_count)
+																		: nlohmann::json(nullptr);
+			return result;
+		}
+
 		[[nodiscard]] nlohmann::json makeWaveformMetadataJson(const ContextPacket& packet)
 		{
 			if (packet.receiver_mode == "fmcw")
 			{
 				return {{"kind", "fmcw"}, {"metadata_ref", "fmcw"}};
+			}
+			if (packet.receiver_mode == "sfcw")
+			{
+				return {{"kind", "sfcw"}, {"metadata_ref", "sfcw"}};
 			}
 			if (packet.receiver_mode == "pulsed")
 			{
@@ -133,6 +158,10 @@ namespace serial::vita49
 			if (packet.fmcw.present)
 			{
 				return {{"kind", "fmcw"}, {"metadata_ref", "fmcw"}};
+			}
+			if (packet.sfcw.present)
+			{
+				return {{"kind", "sfcw"}, {"metadata_ref", "sfcw"}};
 			}
 			if (packet.pulsed.present)
 			{
@@ -147,7 +176,8 @@ namespace serial::vita49
 
 		[[nodiscard]] bool hasKnownReceiverMode(const ContextPacket& packet) noexcept
 		{
-			return packet.receiver_mode == "fmcw" || packet.receiver_mode == "pulsed" || packet.receiver_mode == "cw";
+			return packet.receiver_mode == "fmcw" || packet.receiver_mode == "sfcw" ||
+				packet.receiver_mode == "pulsed" || packet.receiver_mode == "cw";
 		}
 
 		[[nodiscard]] nlohmann::json makeContextMetadataJson(const ContextPacket& packet)
@@ -195,6 +225,10 @@ namespace serial::vita49
 			if (packet.receiver_mode == "fmcw" || (!known_mode && packet.fmcw.present))
 			{
 				metadata["fmcw"] = makeFmcwMetadataJson(packet);
+			}
+			if (packet.receiver_mode == "sfcw" || (!known_mode && packet.sfcw.present))
+			{
+				metadata["sfcw"] = makeSfcwMetadataJson(packet);
 			}
 			return metadata;
 		}

@@ -113,6 +113,41 @@ TEST_CASE("FmcwTriangleSignal keeps phase continuous at leg and period boundarie
 	REQUIRE_FALSE(triangle.instantaneousBasebandPhase(4.0 * triangle.getTrianglePeriod()).has_value());
 }
 
+TEST_CASE("SteppedFrequencySignal selects active dwell steps and finite sweeps", "[signal][radar][sfcw]")
+{
+	fers_signal::SteppedFrequencySignal const sfcw(10.0, 2.0, 4, 0.25, 0.5, std::size_t{2});
+
+	REQUIRE_THAT(sfcw.firstFrequency(100.0), WithinAbs(110.0, 1e-12));
+	REQUIRE_THAT(sfcw.lastFrequency(100.0), WithinAbs(116.0, 1e-12));
+	REQUIRE_THAT(sfcw.frequencySpan(), WithinAbs(6.0, 1e-12));
+	REQUIRE_THAT(sfcw.effectiveBandwidth(), WithinAbs(8.0, 1e-12));
+	REQUIRE_THAT(sfcw.getSweepPeriod(), WithinAbs(2.0, 1e-12));
+	REQUIRE(sfcw.totalDuration().has_value());
+	REQUIRE_THAT(sfcw.totalDuration().value_or(0.0), WithinAbs(4.0, 1e-12));
+
+	const auto first = sfcw.activeStepAt(0.1, 100.0);
+	REQUIRE(first.has_value());
+	REQUIRE(first->sweep_index == 0u);
+	REQUIRE(first->step_index == 0u);
+	REQUIRE_THAT(first->rf_frequency, WithinAbs(110.0, 1e-12));
+	REQUIRE_THAT(first->step_start_time, WithinAbs(0.0, 1e-12));
+	REQUIRE_THAT(first->dwell_end_time, WithinAbs(0.25, 1e-12));
+
+	REQUIRE_FALSE(sfcw.activeStepAt(0.3, 100.0).has_value());
+
+	const auto second_sweep = sfcw.activeStepAt(2.55, 100.0);
+	REQUIRE(second_sweep.has_value());
+	REQUIRE(second_sweep->sweep_index == 1u);
+	REQUIRE(second_sweep->step_index == 1u);
+	REQUIRE_THAT(second_sweep->rf_frequency, WithinAbs(112.0, 1e-12));
+	REQUIRE_FALSE(sfcw.activeStepAt(4.0, 100.0).has_value());
+
+	fers_signal::SteppedFrequencySignal const descending(0.0, -5.0, 3, 0.1, 0.2);
+	REQUIRE_THAT(descending.lastFrequency(100.0), WithinAbs(90.0, 1e-12));
+	REQUIRE_THAT(descending.frequencySpan(), WithinAbs(10.0, 1e-12));
+	REQUIRE_FALSE(descending.totalDuration().has_value());
+}
+
 TEST_CASE("RadarSignal exposes metadata", "[signal][radar]")
 {
 	ParamGuard const guard;

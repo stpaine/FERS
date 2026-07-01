@@ -52,6 +52,12 @@ Run an FMCW example into a separate output folder:
 ./build/release/packages/fers-cli/fers-cli examples/fmcw_monostatic_dechirp/example.fersxml --out-dir=./results --log-level=INFO -n=4
 ```
 
+Run an SFCW example:
+
+```bash
+./build/release/packages/fers-cli/fers-cli examples/sfcw_monostatic/example.fersxml --out-dir=. --log-level=INFO
+```
+
 Export KML for a scenario:
 
 ```bash

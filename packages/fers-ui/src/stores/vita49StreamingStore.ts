@@ -118,7 +118,7 @@ export type Vita49StreamRow = {
     backendObserved: boolean;
 };
 
-export type Vita49StreamMode = 'pulsed' | 'cw' | 'fmcw' | 'unknown';
+export type Vita49StreamMode = 'pulsed' | 'cw' | 'fmcw' | 'sfcw' | 'unknown';
 
 export const DEFAULT_VITA49_CONFIG: Vita49RuntimeConfig = {
     host: '127.0.0.1',
@@ -212,7 +212,9 @@ export const toVita49BackendConfig = (
 const normalizeStreamMode = (
     mode: string | null | undefined
 ): Vita49StreamMode =>
-    mode === 'pulsed' || mode === 'cw' || mode === 'fmcw' ? mode : 'unknown';
+    mode === 'pulsed' || mode === 'cw' || mode === 'fmcw' || mode === 'sfcw'
+        ? mode
+        : 'unknown';
 
 export const deriveExpectedVita49Streams = (
     scenario: Pick<ScenarioData, 'globalParameters' | 'platforms' | 'waveforms'>
@@ -363,7 +365,8 @@ export const mergeVita49StreamRows = (
         pulsed: 0,
         cw: 1,
         fmcw: 2,
-        unknown: 3,
+        sfcw: 3,
+        unknown: 4,
     };
     return Array.from(rowsByResolvedKey.values()).sort(
         (a, b) =>

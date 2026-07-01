@@ -427,6 +427,14 @@ export const SimulationView = React.memo(function SimulationView() {
             fmcw.chirp_duration
         )}, T_rep=${formatMetric(fmcw.chirp_period ?? 0)}`;
     };
+    const formatSfcwMetadata = (
+        sfcw: NonNullable<SimulationOutputFileMetadata['sfcw']>
+    ) =>
+        `steps=${sfcw.step_count}, df=${formatMetric(
+            sfcw.step_size
+        )} Hz, dwell=${formatMetric(
+            sfcw.dwell_time
+        )}, T_step=${formatMetric(sfcw.step_period)}`;
     const formatPulseOrSegmentSummary = (
         file: SimulationOutputFileMetadata
     ) => {
@@ -441,6 +449,16 @@ export const SimulationView = React.memo(function SimulationView() {
         const segmentSummary = `${
             file.streaming_segments.length
         } streaming segments`;
+        if (file.mode === 'sfcw') {
+            if (file.sfcw) {
+                return `${segmentSummary}, ${formatSfcwMetadata(file.sfcw)}`;
+            }
+            if (file.sfcw_sources.length > 0) {
+                return `${segmentSummary}, ${file.sfcw_sources.length} SFCW sources`;
+            }
+            return segmentSummary;
+        }
+
         if (file.mode !== 'fmcw' || !file.fmcw) {
             if (file.mode === 'fmcw' && file.fmcw_sources.length > 0) {
                 return `${segmentSummary}, ${file.fmcw_sources.length} FMCW sources`;
@@ -525,6 +543,58 @@ export const SimulationView = React.memo(function SimulationView() {
                                     {segment.emitted_triangle_count !==
                                     undefined
                                         ? `${segment.emitted_triangle_count} triangles`
+                                        : ''}
+                                </Typography>
+                            ))}
+                        </Box>
+                    ))
+                )}
+            </Box>
+        );
+    };
+
+    const renderSfcwDetails = (file: SimulationOutputFileMetadata) => {
+        if (file.mode !== 'sfcw') {
+            return null;
+        }
+
+        return (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="body2">
+                    File sample rate: {formatMetric(file.sampling_rate)}{' '}
+                    samples/s
+                </Typography>
+                {file.sfcw_sources.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                        No SFCW source metadata was emitted for this receiver.
+                    </Typography>
+                ) : (
+                    file.sfcw_sources.map((source) => (
+                        <Box
+                            key={`${source.transmitter_id}:${source.waveform_id}`}
+                            sx={{ pl: 2 }}
+                        >
+                            <Typography variant="body2">
+                                {source.transmitter_name} /{' '}
+                                {source.waveform_name}:{' '}
+                                {formatSfcwMetadata(source)}, B_eff=
+                                {formatMetric(source.effective_bandwidth)} Hz,
+                                R_res=
+                                {formatMetric(source.range_resolution)} m,
+                                R_amb=
+                                {formatMetric(source.unambiguous_range)} m
+                            </Typography>
+                            {source.segments.map((segment) => (
+                                <Typography
+                                    key={`${segment.start_time}:${segment.end_time}`}
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ display: 'block' }}
+                                >
+                                    [{formatMetric(segment.start_time)},{' '}
+                                    {formatMetric(segment.end_time)}]:{' '}
+                                    {segment.emitted_step_count !== undefined
+                                        ? `${segment.emitted_step_count} steps`
                                         : ''}
                                 </Typography>
                             ))}
@@ -887,7 +957,8 @@ export const SimulationView = React.memo(function SimulationView() {
                                                         file.path
                                                     );
                                                 const canExpand =
-                                                    file.mode === 'fmcw';
+                                                    file.mode === 'fmcw' ||
+                                                    file.mode === 'sfcw';
                                                 return (
                                                     <React.Fragment
                                                         key={file.path}
@@ -971,6 +1042,9 @@ export const SimulationView = React.memo(function SimulationView() {
                                                                             }}
                                                                         >
                                                                             {renderFmcwDetails(
+                                                                                file
+                                                                            )}
+                                                                            {renderSfcwDetails(
                                                                                 file
                                                                             )}
                                                                         </Box>

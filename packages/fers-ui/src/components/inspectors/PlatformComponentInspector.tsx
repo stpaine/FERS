@@ -46,7 +46,7 @@ import {
     Section,
 } from './InspectorControls';
 
-export type RadarType = 'pulsed' | 'cw' | 'fmcw';
+export type RadarType = 'pulsed' | 'cw' | 'fmcw' | 'sfcw';
 type CompatibleWaveform = {
     id: string;
     name: string;
@@ -64,12 +64,14 @@ export const RADAR_MODE_OPTIONS: ReadonlyArray<{
     { value: 'pulsed', label: 'Pulsed' },
     { value: 'cw', label: 'CW' },
     { value: 'fmcw', label: 'FMCW' },
+    { value: 'sfcw', label: 'SFCW' },
 ];
 
 const WAVEFORM_TYPE_BY_RADAR_TYPE: Record<RadarType, string[]> = {
     pulsed: ['pulsed_from_file'],
     cw: ['cw'],
     fmcw: ['fmcw_linear_chirp', 'fmcw_triangle'],
+    sfcw: ['stepped_frequency'],
 };
 
 export function isWaveformCompatibleWithRadarType(

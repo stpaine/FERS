@@ -164,6 +164,55 @@ describe('FMCW schema', () => {
     });
 });
 
+describe('SFCW schema', () => {
+    const validWaveform: Extract<
+        Waveform,
+        { waveformType: 'stepped_frequency' }
+    > = {
+        ...createWaveformForType('stepped_frequency'),
+        id: '14',
+        name: 'SFCW',
+    };
+
+    test('accepts valid SFCW waveform fields and radar mode', () => {
+        expect(WaveformSchema.safeParse(validWaveform).success).toBe(true);
+        const component: PlatformComponent = {
+            id: '21',
+            type: 'transmitter',
+            name: 'SFCW TX',
+            radarType: 'sfcw',
+            prf: null,
+            antennaId: null,
+            waveformId: null,
+            timingId: null,
+            schedule: [],
+        };
+
+        expect(PlatformComponentSchema.safeParse(component).success).toBe(true);
+    });
+
+    test('rejects invalid SFCW waveform fields', () => {
+        const invalidWaveforms = [
+            { ...validWaveform, step_size: 0 },
+            { ...validWaveform, step_count: 0 },
+            { ...validWaveform, step_count: 1.5 },
+            { ...validWaveform, dwell_time: 0 },
+            { ...validWaveform, step_period: 0 },
+            {
+                ...validWaveform,
+                dwell_time: 2e-3,
+                step_period: 1e-3,
+            },
+            { ...validWaveform, sweep_count: 0 },
+            { ...validWaveform, sweep_count: 2.5 },
+        ];
+
+        for (const waveform of invalidWaveforms) {
+            expect(WaveformSchema.safeParse(waveform).success).toBe(false);
+        }
+    });
+});
+
 describe('serializeWaveform', () => {
     test('serializes FMCW waveform payload and omits unset optional fields', () => {
         const waveform: Waveform = {
@@ -226,6 +275,35 @@ describe('serializeWaveform', () => {
             },
         });
     });
+
+    test('serializes SFCW waveform payload', () => {
+        const waveform: Waveform = {
+            ...createWaveformForType('stepped_frequency'),
+            id: '33',
+            name: 'SFCW',
+            start_frequency_offset: 0,
+            step_size: 2e5,
+            step_count: 8,
+            dwell_time: 1e-4,
+            step_period: 2e-4,
+            sweep_count: 4,
+        };
+
+        expect(serializeWaveform(waveform)).toEqual({
+            id: '33',
+            name: 'SFCW',
+            power: 1000,
+            carrier_frequency: 1e9,
+            stepped_frequency: {
+                start_frequency_offset: 0,
+                step_size: 2e5,
+                step_count: 8,
+                dwell_time: 1e-4,
+                step_period: 2e-4,
+                sweep_count: 4,
+            },
+        });
+    });
 });
 
 describe('serializeComponentInner', () => {
@@ -280,6 +358,30 @@ describe('serializeComponentInner', () => {
             noise_temp: null,
             nodirect: false,
             nopropagationloss: false,
+            schedule: [],
+        });
+    });
+
+    test('serializes SFCW mode without pulsed or dechirp fields', () => {
+        const component: PlatformComponent = {
+            id: '44',
+            type: 'transmitter',
+            name: 'SFCW Tx',
+            radarType: 'sfcw',
+            prf: 3,
+            antennaId: null,
+            waveformId: null,
+            timingId: null,
+            schedule: [],
+        };
+
+        expect(serializeComponentInner(component)).toEqual({
+            id: '44',
+            name: 'SFCW Tx',
+            sfcw_mode: {},
+            antenna: 0,
+            waveform: 0,
+            timing: 0,
             schedule: [],
         });
     });

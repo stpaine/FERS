@@ -53,6 +53,7 @@ interface BackendPlatformComponentData {
     pulsed_mode?: BackendPulsedMode;
     cw_mode?: object;
     fmcw_mode?: Record<string, unknown>;
+    sfcw_mode?: object;
     schedule?: BackendSchedulePeriod[];
     rcs?: { type: 'isotropic' | 'file'; value?: number; filename?: string };
     model?: { type: 'constant' | 'chisquare' | 'gamma'; k?: number };
@@ -113,6 +114,14 @@ interface BackendWaveform {
         chirp_duration: number;
         start_frequency_offset?: number | null;
         triangle_count?: number | null;
+    };
+    stepped_frequency?: {
+        start_frequency_offset: number;
+        step_size: number;
+        step_count: number;
+        dwell_time: number;
+        step_period: number;
+        sweep_count?: number | null;
     };
 }
 
@@ -323,6 +332,18 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                         w.fmcw_triangle.start_frequency_offset ?? null,
                     triangle_count: w.fmcw_triangle.triangle_count ?? null,
                 };
+            } else if (w.stepped_frequency) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'stepped_frequency',
+                    start_frequency_offset:
+                        w.stepped_frequency.start_frequency_offset,
+                    step_size: w.stepped_frequency.step_size,
+                    step_count: w.stepped_frequency.step_count,
+                    dwell_time: w.stepped_frequency.dwell_time,
+                    step_period: w.stepped_frequency.step_period,
+                    sweep_count: w.stepped_frequency.sweep_count ?? null,
+                };
             } else if (w.cw) {
                 waveform = {
                     ...commonWaveform,
@@ -464,7 +485,9 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                           ? 'cw'
                           : cData.fmcw_mode
                             ? 'fmcw'
-                            : 'pulsed';
+                            : cData.sfcw_mode
+                              ? 'sfcw'
+                              : 'pulsed';
                     const pulsed = cData.pulsed_mode;
                     const fmcwModeConfig =
                         radarType === 'fmcw' && cData.fmcw_mode

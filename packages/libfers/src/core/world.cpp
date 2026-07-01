@@ -249,7 +249,8 @@ namespace core
 		{
 			if (receiver_ptr == nullptr ||
 				(receiver_ptr->getMode() != radar::OperationMode::CW_MODE &&
-				 receiver_ptr->getMode() != radar::OperationMode::FMCW_MODE))
+				 receiver_ptr->getMode() != radar::OperationMode::FMCW_MODE &&
+				 receiver_ptr->getMode() != radar::OperationMode::SFCW_MODE))
 			{
 				continue;
 			}

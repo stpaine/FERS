@@ -102,6 +102,7 @@ describe('Waveform inspector authoring options', () => {
             { value: 'cw', label: 'CW' },
             { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
             { value: 'fmcw_triangle', label: 'FMCW Triangle' },
+            { value: 'stepped_frequency', label: 'SFCW' },
         ]);
     });
 
@@ -136,6 +137,35 @@ describe('Waveform inspector authoring options', () => {
         });
     });
 
+    test('creates SFCW defaults while preserving common waveform fields', () => {
+        const sfcwWaveform = createWaveformForType(
+            {
+                id: '2',
+                type: 'Waveform',
+                name: 'Step sweep',
+                waveformType: 'cw',
+                power: 125,
+                carrier_frequency: 5.8e9,
+            },
+            'stepped_frequency'
+        );
+
+        expect(sfcwWaveform).toMatchObject({
+            id: '2',
+            type: 'Waveform',
+            name: 'Step sweep',
+            waveformType: 'stepped_frequency',
+            power: 125,
+            carrier_frequency: 5.8e9,
+            start_frequency_offset: 0,
+            step_size: 1e3,
+            step_count: 16,
+            dwell_time: 1e-3,
+            step_period: 1e-3,
+            sweep_count: null,
+        });
+    });
+
     test('reports FMCW chirp fields only for FMCW waveforms', () => {
         expect(getVisibleWaveformFieldLabels('fmcw_linear_chirp')).toEqual([
             'Direction',
@@ -150,6 +180,14 @@ describe('Waveform inspector authoring options', () => {
             'Chirp Duration (s)',
             'Start Frequency Offset (Hz)',
             'Triangle Count',
+        ]);
+        expect(getVisibleWaveformFieldLabels('stepped_frequency')).toEqual([
+            'Start Frequency Offset (Hz)',
+            'Step Size (Hz)',
+            'Step Count',
+            'Dwell Time (s)',
+            'Step Period (s)',
+            'Sweep Count',
         ]);
         expect(getVisibleWaveformFieldLabels('cw')).toEqual([]);
     });
@@ -209,6 +247,7 @@ describe('Platform component inspector waveform compatibility', () => {
         { id: '2', name: 'Tone', waveformType: 'cw' },
         { id: '3', name: 'Chirp', waveformType: 'fmcw_linear_chirp' },
         { id: '4', name: 'Triangle', waveformType: 'fmcw_triangle' },
+        { id: '5', name: 'Steps', waveformType: 'stepped_frequency' },
     ];
 
     test('offers FMCW radar mode and hides pulsed-only fields for FMCW/CW', () => {
@@ -216,6 +255,7 @@ describe('Platform component inspector waveform compatibility', () => {
             { value: 'pulsed', label: 'Pulsed' },
             { value: 'cw', label: 'CW' },
             { value: 'fmcw', label: 'FMCW' },
+            { value: 'sfcw', label: 'SFCW' },
         ]);
 
         expect(getPulsedRadarFieldLabels('pulsed')).toEqual([
@@ -225,6 +265,7 @@ describe('Platform component inspector waveform compatibility', () => {
         ]);
         expect(getPulsedRadarFieldLabels('cw')).toEqual([]);
         expect(getPulsedRadarFieldLabels('fmcw')).toEqual([]);
+        expect(getPulsedRadarFieldLabels('sfcw')).toEqual([]);
     });
 
     test('filters waveform dropdown choices by radar mode', () => {
@@ -235,6 +276,9 @@ describe('Platform component inspector waveform compatibility', () => {
         expect(getCompatibleWaveforms(waveforms, 'fmcw')).toEqual([
             waveforms[2],
             waveforms[3],
+        ]);
+        expect(getCompatibleWaveforms(waveforms, 'sfcw')).toEqual([
+            waveforms[4],
         ]);
     });
 
@@ -251,6 +295,13 @@ describe('Platform component inspector waveform compatibility', () => {
         expect(resolveWaveformSelectValue('1', waveforms, 'fmcw')).toBe('');
         expect(resolveWaveformSelectValue('3', waveforms, 'fmcw')).toBe('3');
         expect(resolveWaveformSelectValue('4', waveforms, 'fmcw')).toBe('4');
+        expect(shouldClearWaveformForRadarType('3', waveforms, 'sfcw')).toBe(
+            true
+        );
+        expect(shouldClearWaveformForRadarType('5', waveforms, 'sfcw')).toBe(
+            false
+        );
+        expect(resolveWaveformSelectValue('5', waveforms, 'sfcw')).toBe('5');
     });
 
     test('offers dechirp modes and source options for receiver FMCW mode', () => {

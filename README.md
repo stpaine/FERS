@@ -23,7 +23,7 @@ semi-independent packages.
   simulation of both pulsed and continuous-wave scenarios, with optimized multithreading.
 - **Visual Scenario Builder:** An intuitive 3D interface to construct, configure, and visualize radar scenarios.
 - **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed,
-  continuous wave (CW), and native FMCW streaming modes.
+  continuous wave (CW), native FMCW streaming, and native stepped-frequency continuous-wave (SFCW) modes.
 - **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and
@@ -48,6 +48,7 @@ should rely on it for important results.
 | Pulsed radar | Stable | Verified |
 | CW radar | Beta | Unverified |
 | FMCW radar | Alpha | Unverified |
+| SFCW radar | Alpha | Unverified |
 | Multimodal | Alpha | Unverified |
 | VITA 49.2 UDP output | Alpha | Unverified |
 | KML generation | Stable | Verified |

@@ -104,6 +104,7 @@ After a run, applications can request JSON metadata describing the output files.
 - Sample counts.
 - Time span.
 - FMCW dechirp and IF settings, when applicable.
+- SFCW step timing, frequency, bandwidth, range, and emitted-step metadata, when applicable.
 - Fullscale information.
 
 Prefer this metadata over hard-coded output assumptions.

@@ -47,7 +47,8 @@ namespace core
 		 */
 		[[nodiscard]] bool isStreamingReceiver(const radar::Receiver& receiver) noexcept
 		{
-			return receiver.getMode() == OperationMode::CW_MODE || receiver.getMode() == OperationMode::FMCW_MODE;
+			return receiver.getMode() == OperationMode::CW_MODE || receiver.getMode() == OperationMode::FMCW_MODE ||
+				receiver.getMode() == OperationMode::SFCW_MODE;
 		}
 
 		/**

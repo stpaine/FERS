@@ -192,6 +192,15 @@ namespace
 			mode_json.contains("if_filter_transition_width");
 	}
 
+	void reject_non_empty_sfcw_mode(const nlohmann::json& comp_json, const std::string& owner)
+	{
+		if (comp_json.contains("sfcw_mode") &&
+			(!comp_json.at("sfcw_mode").is_object() || !comp_json.at("sfcw_mode").empty()))
+		{
+			throw std::runtime_error(owner + " sfcw_mode must be an empty object.");
+		}
+	}
+
 	std::optional<RealType> get_optional_positive_real(const nlohmann::json& object, const std::string_view key,
 													   const std::string& owner)
 	{
@@ -608,6 +617,18 @@ namespace fers_signal
 		{
 			j["cw"] = nlohmann::json::object();
 		}
+		else if (const auto* sfcw = rs.getSteppedFrequencySignal(); sfcw != nullptr)
+		{
+			j["stepped_frequency"] = {{"start_frequency_offset", sfcw->getStartFrequencyOffset()},
+									  {"step_size", sfcw->getStepSize()},
+									  {"step_count", sfcw->getStepCount()},
+									  {"dwell_time", sfcw->getDwellTime()},
+									  {"step_period", sfcw->getStepPeriod()}};
+			if (sfcw->getSweepCount().has_value())
+			{
+				j["stepped_frequency"]["sweep_count"] = *sfcw->getSweepCount();
+			}
+		}
 		else if (const auto* fmcw = rs.getFmcwChirpSignal(); fmcw != nullptr)
 		{
 			j["fmcw_linear_chirp"] = {{"direction", std::string(fmcwChirpDirectionToken(fmcw->getDirection()))},
@@ -662,6 +683,32 @@ namespace fers_signal
 			auto cw_signal = std::make_unique<CwSignal>();
 			rs = std::make_unique<RadarSignal>(name, power, carrier, params::endTime() - params::startTime(),
 											   std::move(cw_signal), id);
+		}
+		else if (j.contains("stepped_frequency"))
+		{
+			const auto& sfcw_json = j.at("stepped_frequency");
+			const auto step_count = sfcw_json.at("step_count").get<long long>();
+			if (step_count <= 0)
+			{
+				throw std::runtime_error("Waveform '" + name + "' has an invalid step_count.");
+			}
+			std::optional<std::size_t> sweep_count;
+			if (sfcw_json.contains("sweep_count"))
+			{
+				const auto parsed_count = sfcw_json.at("sweep_count").get<long long>();
+				if (parsed_count <= 0)
+				{
+					throw std::runtime_error("Waveform '" + name + "' has an invalid sweep_count.");
+				}
+				sweep_count = static_cast<std::size_t>(parsed_count);
+			}
+			auto sfcw_signal = std::make_unique<SteppedFrequencySignal>(
+				sfcw_json.at("start_frequency_offset").get<RealType>(), sfcw_json.at("step_size").get<RealType>(),
+				static_cast<std::size_t>(step_count), sfcw_json.at("dwell_time").get<RealType>(),
+				sfcw_json.at("step_period").get<RealType>(), sweep_count);
+			rs = std::make_unique<RadarSignal>(name, power, carrier, sfcw_signal->getDwellTime(),
+											   std::move(sfcw_signal), id);
+			validate_fmcw_waveform(*rs, "Waveform '" + name + "'");
 		}
 		else if (j.contains("fmcw_linear_chirp"))
 		{
@@ -861,6 +908,10 @@ namespace radar
 		{
 			j["fmcw_mode"] = nlohmann::json::object();
 		}
+		else if (t.getMode() == OperationMode::SFCW_MODE)
+		{
+			j["sfcw_mode"] = nlohmann::json::object();
+		}
 		else
 		{
 			j["cw_mode"] = nlohmann::json::object();
@@ -889,6 +940,10 @@ namespace radar
 		else if (r.getMode() == OperationMode::FMCW_MODE)
 		{
 			j["fmcw_mode"] = receiver_fmcw_mode_to_json(r);
+		}
+		else if (r.getMode() == OperationMode::SFCW_MODE)
+		{
+			j["sfcw_mode"] = nlohmann::json::object();
 		}
 		else
 		{
@@ -1037,6 +1092,10 @@ namespace
 		else if (transmitter.getMode() == radar::OperationMode::FMCW_MODE)
 		{
 			monostatic_comp["fmcw_mode"] = receiver_fmcw_mode_to_json(receiver);
+		}
+		else if (transmitter.getMode() == radar::OperationMode::SFCW_MODE)
+		{
+			monostatic_comp["sfcw_mode"] = nlohmann::json::object();
 		}
 		else
 		{
@@ -1266,7 +1325,8 @@ namespace
 	{
 		return static_cast<std::size_t>(comp_json.contains("pulsed_mode")) +
 			static_cast<std::size_t>(comp_json.contains("fmcw_mode")) +
-			static_cast<std::size_t>(comp_json.contains("cw_mode"));
+			static_cast<std::size_t>(comp_json.contains("cw_mode")) +
+			static_cast<std::size_t>(comp_json.contains("sfcw_mode"));
 	}
 
 	/// Throws when a partial update or full component declares conflicting modes.
@@ -1275,7 +1335,8 @@ namespace
 		if (mode_block_count(comp_json) > 1)
 		{
 			throw std::runtime_error(error_context +
-									 " must have at most one of 'pulsed_mode', 'cw_mode', or 'fmcw_mode'.");
+									 " must have at most one of 'pulsed_mode', 'cw_mode', "
+									 "'fmcw_mode', or 'sfcw_mode'.");
 		}
 	}
 
@@ -1291,11 +1352,17 @@ namespace
 		{
 			return radar::OperationMode::FMCW_MODE;
 		}
+		if (comp_json.contains("sfcw_mode"))
+		{
+			return radar::OperationMode::SFCW_MODE;
+		}
 		if (comp_json.contains("cw_mode"))
 		{
 			return radar::OperationMode::CW_MODE;
 		}
-		throw std::runtime_error(error_context + " must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block.");
+		throw std::runtime_error(error_context +
+								 " must have a 'pulsed_mode', 'cw_mode', or 'fmcw_mode' block, or an 'sfcw_mode' "
+								 "block.");
 	}
 
 	/// Parses a transmitter component from JSON into the world.
@@ -1329,6 +1396,7 @@ namespace
 
 		radar::OperationMode const mode =
 			parse_mode(comp_json, "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
+		reject_non_empty_sfcw_mode(comp_json, "Transmitter component '" + comp_json.value("name", "Unnamed") + "'");
 		if (mode == radar::OperationMode::FMCW_MODE && comp_json.contains("fmcw_mode") &&
 			has_dechirp_fields(comp_json.at("fmcw_mode")))
 		{
@@ -1365,13 +1433,13 @@ namespace
 			}
 			auto schedule =
 				radar::processRawSchedule(raw, trans->getName(), mode == radar::OperationMode::PULSED_MODE, pri);
-			if (waveform->isFmcwFamily())
+			if (waveform->isFmcwFamily() || waveform->isSteppedFrequency())
 			{
 				validate_fmcw_schedule(schedule, *waveform, "Transmitter component '" + trans->getName() + "'");
 			}
 			trans->setSchedule(std::move(schedule));
 		}
-		else if (waveform->isFmcwFamily())
+		else if (waveform->isFmcwFamily() || waveform->isSteppedFrequency())
 		{
 			validate_fmcw_schedule(trans->getSchedule(), *waveform, "Transmitter component '" + trans->getName() + "'");
 		}
@@ -1404,6 +1472,7 @@ namespace
 
 		radar::OperationMode const mode =
 			parse_mode(comp_json, "Receiver component '" + comp_json.value("name", "Unnamed") + "'");
+		reject_non_empty_sfcw_mode(comp_json, "Receiver component '" + comp_json.value("name", "Unnamed") + "'");
 
 		const auto recv_id = parse_json_id(comp_json, "id", "Receiver");
 		auto recv =
@@ -1540,6 +1609,7 @@ namespace
 
 		radar::OperationMode const mode =
 			parse_mode(comp_json, "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
+		reject_non_empty_sfcw_mode(comp_json, "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
 
 		// Transmitter part
 		const auto tx_id = parse_json_id(comp_json, "tx_id", "Monostatic");
@@ -1599,7 +1669,7 @@ namespace
 			// Process once, apply to both
 			auto processed_schedule =
 				radar::processRawSchedule(raw, trans->getName(), mode == radar::OperationMode::PULSED_MODE, pri);
-			if (waveform->isFmcwFamily())
+			if (waveform->isFmcwFamily() || waveform->isSteppedFrequency())
 			{
 				validate_fmcw_schedule(processed_schedule, *waveform,
 									   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
@@ -1608,7 +1678,7 @@ namespace
 			trans->setSchedule(processed_schedule);
 			recv->setSchedule(processed_schedule);
 		}
-		else if (waveform->isFmcwFamily())
+		else if (waveform->isFmcwFamily() || waveform->isSteppedFrequency())
 		{
 			validate_fmcw_schedule(trans->getSchedule(), *waveform,
 								   "Monostatic component '" + comp_json.value("name", "Unnamed") + "'");
@@ -1899,6 +1969,11 @@ namespace serial
 			}
 			tx.setMode(radar::OperationMode::FMCW_MODE);
 		}
+		else if (j.contains("sfcw_mode"))
+		{
+			reject_non_empty_sfcw_mode(j, "Transmitter '" + tx.getName() + "'");
+			tx.setMode(radar::OperationMode::SFCW_MODE);
+		}
 		else if (j.contains("cw_mode"))
 		{
 			tx.setMode(radar::OperationMode::CW_MODE);
@@ -1963,7 +2038,7 @@ namespace serial
 		}
 		validate_fmcw_waveform(*tx.getSignal(), "Waveform '" + tx.getSignal()->getName() + "'");
 		validate_waveform_mode_match(*tx.getSignal(), tx.getMode(), owner);
-		if (tx.getSignal()->isFmcwFamily())
+		if (tx.getSignal()->isFmcwFamily() || tx.getSignal()->isSteppedFrequency())
 		{
 			validate_fmcw_schedule(tx.getSchedule(), *tx.getSignal(), owner);
 		}
@@ -1980,7 +2055,7 @@ namespace serial
 		const bool pulsed = tx.getMode() == radar::OperationMode::PULSED_MODE;
 		const RealType pri = pulsed ? 1.0 / tx.getPrf() : 0.0;
 		auto schedule = radar::processRawSchedule(raw, tx.getName(), pulsed, pri);
-		if (tx.getSignal() != nullptr && tx.getSignal()->isFmcwFamily())
+		if (tx.getSignal() != nullptr && (tx.getSignal()->isFmcwFamily() || tx.getSignal()->isSteppedFrequency()))
 		{
 			validate_fmcw_schedule(schedule, *tx.getSignal(), owner);
 		}
@@ -2015,6 +2090,11 @@ namespace serial
 		else if (j.contains("fmcw_mode"))
 		{
 			rx.setMode(radar::OperationMode::FMCW_MODE);
+		}
+		else if (j.contains("sfcw_mode"))
+		{
+			reject_non_empty_sfcw_mode(j, "Receiver '" + rx.getName() + "'");
+			rx.setMode(radar::OperationMode::SFCW_MODE);
 		}
 		else if (j.contains("cw_mode"))
 		{
@@ -2169,7 +2249,7 @@ namespace serial
 		const bool pulsed = tx.getMode() == radar::OperationMode::PULSED_MODE;
 		const RealType pri = pulsed ? 1.0 / tx.getPrf() : 0.0;
 		auto processed_schedule = radar::processRawSchedule(raw, tx.getName(), pulsed, pri);
-		if (tx.getSignal() != nullptr && tx.getSignal()->isFmcwFamily())
+		if (tx.getSignal() != nullptr && (tx.getSignal()->isFmcwFamily() || tx.getSignal()->isSteppedFrequency()))
 		{
 			validate_fmcw_schedule(processed_schedule, *tx.getSignal(), "Monostatic '" + tx.getName() + "'");
 		}

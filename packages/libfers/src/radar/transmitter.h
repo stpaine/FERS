@@ -77,7 +77,8 @@ namespace radar
 		/// Returns true when the transmitter uses a continuous streaming mode.
 		[[nodiscard]] bool isStreamingMode() const noexcept
 		{
-			return _mode == OperationMode::CW_MODE || _mode == OperationMode::FMCW_MODE;
+			return _mode == OperationMode::CW_MODE || _mode == OperationMode::FMCW_MODE ||
+				_mode == OperationMode::SFCW_MODE;
 		}
 
 		/**

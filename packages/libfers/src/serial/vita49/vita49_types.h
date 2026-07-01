@@ -93,6 +93,7 @@ namespace serial::vita49
 		ContextFlagFmcwMetadataPresent = 1u << 5u,
 		ContextFlagCwMetadataPresent = 1u << 6u,
 		ContextFlagPulsedMetadataPresent = 1u << 7u,
+		ContextFlagSfcwMetadataPresent = 1u << 8u,
 	};
 
 	struct Timestamp
@@ -136,6 +137,7 @@ namespace serial::vita49
 		core::ReceiverStreamDescriptor::PulsedContext pulsed;
 		core::ReceiverStreamDescriptor::CwContext cw;
 		core::ReceiverStreamDescriptor::FmcwContext fmcw;
+		core::ReceiverStreamDescriptor::SfcwContext sfcw;
 	};
 
 	struct SerializedPacket

@@ -60,7 +60,7 @@ Required children, in order:
 | --- | --- | --- |
 | `<starttime>` | seconds | Start time of the simulation. Usually `0`. |
 | `<endtime>` | seconds | End time of the simulation. Must be after `starttime`. |
-| `<rate>` | Hz | Base output sample rate. Raw CW/FMCW streaming output is written at this rate. Dechirped FMCW without `<if_sample_rate>` is written at the effective simulation rate, `<rate> * <oversample>`. Dechirped FMCW with `<if_sample_rate>` is written at the realized IF output rate. |
+| `<rate>` | Hz | Base output sample rate. Raw CW/FMCW/SFCW streaming output is written at this rate. Dechirped FMCW without `<if_sample_rate>` is written at the effective simulation rate, `<rate> * <oversample>`. Dechirped FMCW with `<if_sample_rate>` is written at the realized IF output rate. |
 
 Optional children, in order:
 
@@ -148,6 +148,7 @@ Then choose exactly one waveform type:
 - `<cw/>`.
 - `<fmcw_linear_chirp>`.
 - `<fmcw_triangle>`.
+- `<stepped_frequency>`.
 
 The chosen waveform type must match the radar mode that uses it.
 
@@ -181,6 +182,44 @@ Use this for continuous-wave simulation.
 ```
 
 There are no child parameters. The signal is a continuous tone at the chosen carrier frequency.
+
+### `<stepped_frequency>`
+
+Use this for native stepped-frequency continuous-wave operation. The transmitter emits narrowband CW dwells at a sequence of RF frequencies instead of one wide instantaneous baseband waveform.
+
+```xml
+<stepped_frequency>
+    <start_frequency_offset>-1.5e9</start_frequency_offset>
+    <step_size>3.0e6</step_size>
+    <step_count>1000</step_count>
+    <dwell_time>2.0e-6</dwell_time>
+    <step_period>3.0e-6</step_period>
+    <sweep_count>1</sweep_count>
+</stepped_frequency>
+```
+
+| Element | Required | Unit | Meaning |
+| --- | --- | --- | --- |
+| `<start_frequency_offset>` | Yes | Hz | Offset from `<carrier_frequency>` for the first RF step. |
+| `<step_size>` | Yes | Hz | Frequency increment between adjacent steps. May be positive or negative, but not zero. |
+| `<step_count>` | Yes | count | Positive integer number of frequency steps in one sweep. |
+| `<dwell_time>` | Yes | seconds | Active transmit time within each step period. Must be positive. |
+| `<step_period>` | Yes | seconds | Time from one step start to the next. Must be positive and at least `dwell_time`. |
+| `<sweep_count>` | No | count | Positive integer maximum sweeps per active schedule period. If omitted, sweeps continue until the active period ends. |
+
+For every active schedule period, the SFCW sweep restarts at that period's start time. If `dwell_time` is less than `step_period`, the transmitter is silent between dwells.
+
+Derived values reported in metadata include:
+
+```text
+first_frequency = carrier_frequency + start_frequency_offset
+last_frequency = first_frequency + (step_count - 1) * step_size
+effective_bandwidth = step_count * abs(step_size)
+range_resolution = c / (2 * effective_bandwidth)
+unambiguous_range = c / (2 * abs(step_size))
+```
+
+FERS rejects SFCW waveforms with zero step size, non-positive counts or timing values, `dwell_time > step_period`, or any generated RF step at or below zero.
 
 ### `<fmcw_linear_chirp>`
 
@@ -471,6 +510,7 @@ Each transmitter, receiver, or monostatic radar chooses exactly one mode:
 - `<pulsed_mode>`.
 - `<cw_mode/>`.
 - `<fmcw_mode>`.
+- `<sfcw_mode/>`.
 
 The mode must match the waveform type.
 
@@ -511,6 +551,10 @@ No child parameters.
 ### Transmitter `<fmcw_mode>`
 
 No child parameters for transmitters. Dechirp and IF settings belong on receivers or monostatic radars.
+
+### Transmitter `<sfcw_mode/>`
+
+No child parameters. The transmitter must reference a `<stepped_frequency>` waveform.
 
 ## `<receiver>`
 
@@ -559,6 +603,10 @@ No child parameters.
 
 See the "FMCW Mode: Receiver And Monostatic" section below.
 
+### Receiver `<sfcw_mode/>`
+
+No child parameters in the first native implementation. The receiver writes raw streaming complex baseband; step timing and RF metadata come from active SFCW transmitters.
+
 ### `<noise_temp>`
 
 | Element | Unit | Default | Meaning |
@@ -596,6 +644,8 @@ Children:
 3. Optional `<schedule>`.
 
 Mode blocks are the same as receiver mode blocks, except that a monostatic pulsed mode also supplies the transmitter PRF.
+
+A monostatic `<sfcw_mode/>` must use a `<stepped_frequency>` waveform and writes raw streaming complex baseband with SFCW metadata in the result file.
 
 ## FMCW Mode: Receiver And Monostatic
 
@@ -795,6 +845,7 @@ The XML schema is intentionally simple, so some important checks happen when FER
 - FMCW count fields must be positive integers when present.
 - FMCW sweep edges, including `start_frequency_offset`, must fit the effective sample rate `<rate> * <oversample>`.
 - FMCW receiver IF-chain fields are allowed only when dechirping is enabled.
+- SFCW `step_size` must be nonzero, count fields must be positive integers, `dwell_time` must be no greater than `step_period`, and every emitted RF step must be positive.
 - Receiver noise temperature must not be negative.
 - UTM KML/geospatial export needs a valid zone and hemisphere.
 - File-backed waveform, antenna, and RCS assets must exist and match the expected file structure.

@@ -13,6 +13,7 @@ terminal and to maintain backward compatibility with the original FERS workflow.
 - Full access to all core `libfers` simulation capabilities.
 - Parses command-line arguments for simulation control.
 - Loads scenarios from FERS XML files.
+- Runs pulsed, CW, FMCW, and SFCW scenarios using the same XML workflow.
 - Displays real-time simulation progress in the console.
 - Automatically outputs results to the scenario's directory by default.
 - Generates KML files for scenario visualization.

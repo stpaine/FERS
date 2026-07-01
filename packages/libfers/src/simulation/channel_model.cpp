@@ -108,6 +108,12 @@ namespace
 		RealType dist{}; ///< Distance between Source and Destination.
 	};
 
+	struct StreamingWaveformEvaluation
+	{
+		RealType phase = 0.0;
+		RealType rf_frequency = 0.0;
+	};
+
 	/**
 	 * @brief Computes the geometry (distance and direction) between two points.
 	 * @param p_from Starting position.
@@ -444,9 +450,10 @@ namespace
 		return true;
 	}
 
-	/// Computes streaming phase for CW or FMCW sources at a receiver time.
-	bool computeStreamingPhase(const core::ActiveStreamingSource& source, const RealType rx_time, const RealType tau,
-							   core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
+	/// Computes streaming waveform phase and active RF at a receiver time.
+	bool computeStreamingEvaluation(const core::ActiveStreamingSource& source, const RealType rx_time,
+									const RealType tau, core::FmcwChirpBoundaryTracker* const chirp_tracker,
+									StreamingWaveformEvaluation& eval)
 	{
 		if (source.carrier_freq <= 0.0)
 		{
@@ -461,23 +468,42 @@ namespace
 
 		if (source.kind == core::StreamingWaveformKind::FmcwLinear)
 		{
+			eval.rf_frequency = source.carrier_freq;
 			if (chirp_tracker == nullptr)
 			{
-				return computeLinearFmcwPhaseWithoutTracker(source, t_ret, tau, phase_out);
+				return computeLinearFmcwPhaseWithoutTracker(source, t_ret, tau, eval.phase);
 			}
-			return computeLinearFmcwPhaseWithTracker(source, t_ret, tau, *chirp_tracker, phase_out);
+			return computeLinearFmcwPhaseWithTracker(source, t_ret, tau, *chirp_tracker, eval.phase);
 		}
 
 		if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
 		{
+			eval.rf_frequency = source.carrier_freq;
 			if (chirp_tracker == nullptr)
 			{
-				return computeTriangleFmcwPhaseWithoutTracker(source, t_ret, tau, phase_out);
+				return computeTriangleFmcwPhaseWithoutTracker(source, t_ret, tau, eval.phase);
 			}
-			return computeTriangleFmcwPhaseWithTracker(source, t_ret, tau, *chirp_tracker, phase_out);
+			return computeTriangleFmcwPhaseWithTracker(source, t_ret, tau, *chirp_tracker, eval.phase);
 		}
 
-		phase_out = -2.0 * PI * source.carrier_freq * tau;
+		if (source.kind == core::StreamingWaveformKind::Sfcw)
+		{
+			if (source.sfcw == nullptr)
+			{
+				return false;
+			}
+			const auto step = source.sfcw->activeStepAt(t_ret - source.segment_start, source.carrier_freq);
+			if (!step.has_value() || step->rf_frequency <= 0.0)
+			{
+				return false;
+			}
+			eval.rf_frequency = step->rf_frequency;
+			eval.phase = -2.0 * PI * step->rf_frequency * tau;
+			return true;
+		}
+
+		eval.rf_frequency = source.carrier_freq;
+		eval.phase = -2.0 * PI * source.carrier_freq * tau;
 		return true;
 	}
 
@@ -739,11 +765,12 @@ namespace simulation
 		}
 
 		const RealType tau = link.dist / params::c();
-		if (source.carrier_freq <= 0.0)
+		StreamingWaveformEvaluation eval;
+		if (!computeStreamingEvaluation(source, timeK, tau, chirp_tracker, eval))
 		{
 			return {0.0, 0.0};
 		}
-		const RealType lambda = params::c() / source.carrier_freq;
+		const RealType lambda = params::c() / eval.rf_frequency;
 
 		// Tx Gain: Direction Tx -> Rx
 		const RealType tx_gain = computeAntennaGain(trans, link.u_vec, timeK, lambda);
@@ -757,12 +784,7 @@ namespace simulation
 		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
 		// Carrier Phase
-		RealType phase = 0.0;
-		if (!computeStreamingPhase(source, timeK, tau, chirp_tracker, phase))
-		{
-			return {0.0, 0.0};
-		}
-		ComplexType contribution = std::polar(amplitude, phase);
+		ComplexType contribution = std::polar(amplitude, eval.phase);
 
 		// Non-coherent Local Oscillator Effects
 		const RealType non_coherent_phase =
@@ -775,7 +797,13 @@ namespace simulation
 	bool calculateStreamingReferencePhase(const core::ActiveStreamingSource& source, const RealType timeK,
 										  core::FmcwChirpBoundaryTracker* const chirp_tracker, RealType& phase_out)
 	{
-		return computeStreamingPhase(source, timeK, 0.0, chirp_tracker, phase_out);
+		StreamingWaveformEvaluation eval;
+		if (!computeStreamingEvaluation(source, timeK, 0.0, chirp_tracker, eval))
+		{
+			return false;
+		}
+		phase_out = eval.phase;
+		return true;
 	}
 
 	ComplexType calculateReflectedPathContribution(const Transmitter* trans, const Receiver* recv, const Target* targ,
@@ -823,11 +851,12 @@ namespace simulation
 		}
 
 		const RealType tau = (link_tx_tgt.dist + link_tgt_rx.dist) / params::c();
-		if (source.carrier_freq <= 0.0)
+		StreamingWaveformEvaluation eval;
+		if (!computeStreamingEvaluation(source, timeK, tau, chirp_tracker, eval))
 		{
 			return {0.0, 0.0};
 		}
-		const RealType lambda = params::c() / source.carrier_freq;
+		const RealType lambda = params::c() / eval.rf_frequency;
 
 		// RCS Lookups: In (Tx->Tgt), Out (Rx->Tgt = - (Tgt->Rx))
 		SVec3 in_angle(link_tx_tgt.u_vec);
@@ -846,12 +875,7 @@ namespace simulation
 		// Include Signal Power
 		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
-		RealType phase = 0.0;
-		if (!computeStreamingPhase(source, timeK, tau, chirp_tracker, phase))
-		{
-			return {0.0, 0.0};
-		}
-		ComplexType contribution = std::polar(amplitude, phase);
+		ComplexType contribution = std::polar(amplitude, eval.phase);
 
 		// Non-coherent Local Oscillator Effects
 		const RealType non_coherent_phase =

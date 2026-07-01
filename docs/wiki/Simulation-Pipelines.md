@@ -88,10 +88,35 @@ Events include:
 
 - Pulsed transmitter pulse starts.
 - Pulsed receiver window starts and ends.
-- CW/FMCW transmitter streaming starts and ends.
-- CW/FMCW receiver streaming starts and ends.
+- CW/FMCW/SFCW transmitter streaming starts and ends.
+- CW/FMCW/SFCW receiver streaming starts and ends.
 
 Schedules control when these events are created.
+
+## SFCW Streaming Pipeline
+
+Stepped-frequency continuous-wave radar uses the same streaming event path as CW and raw FMCW, but the active RF frequency changes at each configured step.
+
+```mermaid
+flowchart TD
+    A[Stepped-frequency waveform] --> B[Active schedule period starts]
+    B --> C[Create one SFCW streaming source]
+    C --> D[For each receiver sample and path, compute retarded transmit time]
+    D --> E[Select active RF step from dwell/step timing]
+    E --> F[Use step RF for phase, wavelength, antenna gain, and path power]
+    F --> G[Write I_data and Q_data]
+    G --> H[Store SFCW metadata and emitted step counts]
+```
+
+Important SFCW settings:
+
+| Setting | Effect |
+| --- | --- |
+| `<step_size>` | RF spacing between consecutive dwells. Its magnitude controls unambiguous range. |
+| `<step_count>` | Number of frequency steps in one sweep. Together with `abs(step_size)`, it controls effective bandwidth. |
+| `<dwell_time>` | Active transmit time inside each step period. |
+| `<step_period>` | Time from one step start to the next. Larger values introduce silent gaps. |
+| `<sweep_count>` | Optional finite number of sweeps per active schedule period. |
 
 ## Pulsed Radar Pipeline
 

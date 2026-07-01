@@ -105,6 +105,25 @@ export const WaveformSchema = z
                 z.number().int().positive().nullable()
             ),
         }),
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('stepped_frequency'),
+            start_frequency_offset: z.number().finite(),
+            step_size: z
+                .number()
+                .finite()
+                .refine((val) => val !== 0, {
+                    message: 'Step size cannot be zero.',
+                }),
+            step_count: z
+                .number()
+                .int()
+                .positive('Step count must be positive.'),
+            dwell_time: z.number().positive('Dwell time must be positive.'),
+            step_period: z.number().positive('Step period must be positive.'),
+            sweep_count: nullableNumber.pipe(
+                z.number().int().positive().nullable()
+            ),
+        }),
     ])
     .superRefine((data, ctx) => {
         if (
@@ -116,6 +135,17 @@ export const WaveformSchema = z
                 message:
                     'Chirp period must be greater than or equal to chirp duration.',
                 path: ['chirp_period'],
+            });
+        }
+        if (
+            data.waveformType === 'stepped_frequency' &&
+            data.step_period < data.dwell_time
+        ) {
+            ctx.addIssue({
+                code: 'custom',
+                message:
+                    'Step period must be greater than or equal to dwell time.',
+                path: ['step_period'],
             });
         }
     });
@@ -251,7 +281,7 @@ const MonostaticComponentSchema = z.object({
     name: z.string().min(1),
     txId: SimIdSchema,
     rxId: SimIdSchema,
-    radarType: z.enum(['pulsed', 'cw', 'fmcw']),
+    radarType: z.enum(['pulsed', 'cw', 'fmcw', 'sfcw']),
     window_skip: nullableNumber,
     window_length: nullableNumber,
     prf: nullableNumber,
@@ -269,7 +299,7 @@ const TransmitterComponentSchema = z.object({
     id: SimIdSchema,
     type: z.literal('transmitter'),
     name: z.string().min(1),
-    radarType: z.enum(['pulsed', 'cw', 'fmcw']),
+    radarType: z.enum(['pulsed', 'cw', 'fmcw', 'sfcw']),
     prf: nullableNumber,
     antennaId: SimIdSchema.nullable(),
     waveformId: SimIdSchema.nullable(),
@@ -281,7 +311,7 @@ const ReceiverComponentSchema = z.object({
     id: SimIdSchema,
     type: z.literal('receiver'),
     name: z.string().min(1),
-    radarType: z.enum(['pulsed', 'cw', 'fmcw']),
+    radarType: z.enum(['pulsed', 'cw', 'fmcw', 'sfcw']),
     window_skip: nullableNumber,
     window_length: nullableNumber,
     prf: nullableNumber,
