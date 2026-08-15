@@ -71,6 +71,26 @@ export const WaveformSchema = z
                 .min(1, 'A filename is required for this waveform type.'),
         }),
         BaseWaveformSchema.extend({
+            waveformType: z.literal('cw_from_file'),
+            filename: z
+                .string()
+                .min(1, 'A filename is required for this waveform type.')
+                .regex(
+                    /\.h5$/i,
+                    'CW file waveforms require an HDF5 (.h5) file.'
+                ),
+        }),
+        BaseWaveformSchema.extend({
+            waveformType: z.literal('fmcw_from_file'),
+            filename: z
+                .string()
+                .min(1, 'A filename is required for this waveform type.')
+                .regex(
+                    /\.h5$/i,
+                    'FMCW file waveforms require an HDF5 (.h5) file.'
+                ),
+        }),
+        BaseWaveformSchema.extend({
             waveformType: z.literal('cw'),
         }),
         BaseWaveformSchema.extend({

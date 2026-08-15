@@ -26,7 +26,7 @@ export type FmcwValidationIssue = {
     field?: string;
 };
 
-type FmcwWaveform = Extract<
+type AnalyticFmcwWaveform = Extract<
     Waveform,
     { waveformType: 'fmcw_linear_chirp' | 'fmcw_triangle' }
 >;
@@ -45,11 +45,14 @@ const IF_CHAIN_FIELD_KEYS = [
     'if_filter_transition_width',
 ] as const;
 
-const isFmcwWaveform = (
+const isAnalyticFmcwWaveform = (
     waveform: Waveform | undefined
-): waveform is FmcwWaveform =>
+): waveform is AnalyticFmcwWaveform =>
     waveform?.waveformType === 'fmcw_linear_chirp' ||
     waveform?.waveformType === 'fmcw_triangle';
+
+const isFmcwWaveform = (waveform: Waveform | undefined): boolean =>
+    isFmcwWaveformType(waveform?.waveformType);
 
 const isSfcwWaveform = (
     waveform: Waveform | undefined
@@ -156,7 +159,7 @@ export function validateFmcwWaveform(
         return issues;
     }
 
-    if (!isFmcwWaveform(waveform)) {
+    if (!isAnalyticFmcwWaveform(waveform)) {
         return [];
     }
 
@@ -226,7 +229,7 @@ export function validateFmcwWaveform(
 
 function validateFmcwEmitterSchedule(
     component: FmcwEmitterComponent,
-    waveform: FmcwWaveform,
+    waveform: AnalyticFmcwWaveform,
     globalParameters: GlobalParameters
 ): FmcwValidationIssue[] {
     const issues: FmcwValidationIssue[] = [];
@@ -663,13 +666,15 @@ export function validateFmcwScenario(
                 continue;
             }
 
-            issues.push(
-                ...validateFmcwEmitterSchedule(
-                    component,
-                    waveform,
-                    scenario.globalParameters
-                )
-            );
+            if (isAnalyticFmcwWaveform(waveform)) {
+                issues.push(
+                    ...validateFmcwEmitterSchedule(
+                        component,
+                        waveform,
+                        scenario.globalParameters
+                    )
+                );
+            }
         }
     }
 

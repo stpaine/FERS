@@ -110,7 +110,21 @@ namespace serial::xml_serializer_utils
 		addChildWithNumber(parent, "power", waveform.getPower());
 		addChildWithNumber(parent, "carrier_frequency", waveform.getCarrier());
 
-		if (dynamic_cast<const fers_signal::CwSignal*>(waveform.getSignal()) != nullptr)
+		if (const auto* file = waveform.getFileSignal(); file != nullptr)
+		{
+			std::string_view element_name = "pulsed_from_file";
+			if (file->getKind() == fers_signal::FileWaveformKind::Cw)
+			{
+				element_name = "cw_from_file";
+			}
+			else if (file->getKind() == fers_signal::FileWaveformKind::Fmcw)
+			{
+				element_name = "fmcw_from_file";
+			}
+			const XmlElement file_element = parent.addChild(element_name);
+			file_element.setAttribute("filename", waveform.getFilename().value_or(""));
+		}
+		else if (dynamic_cast<const fers_signal::CwSignal*>(waveform.getSignal()) != nullptr)
 		{
 			(void)parent.addChild("cw"); // Empty element
 		}
@@ -161,8 +175,7 @@ namespace serial::xml_serializer_utils
 		else
 		{
 			const XmlElement pulsed_file = parent.addChild("pulsed_from_file");
-			const auto& filename = waveform.getFilename();
-			pulsed_file.setAttribute("filename", filename.value_or(""));
+			pulsed_file.setAttribute("filename", waveform.getFilename().value_or(""));
 		}
 	}
 

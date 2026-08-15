@@ -526,6 +526,95 @@ TEST_CASE("CW streaming direct path gates schedules by retarded transmit time", 
 			0.0);
 }
 
+TEST_CASE("File streaming reference follows finite HDF5-style samples for CW and FMCW",
+		  "[simulation][channel_model][direct][file][hdf5]")
+{
+	ParamGuard const guard;
+	params::params.reset();
+	params::setOversampleRatio(1);
+	constexpr RealType rate = 32.0;
+	constexpr unsigned sample_count = 64;
+	constexpr RealType baseband_frequency = 3.0;
+	constexpr RealType carrier = 5.0;
+	std::vector<ComplexType> samples(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * baseband_frequency * static_cast<RealType>(i) / rate;
+		samples[i] = {std::cos(phase), std::sin(phase)};
+	}
+
+	for (const auto kind : {fers_signal::FileWaveformKind::Cw, fers_signal::FileWaveformKind::Fmcw})
+	{
+		auto signal = std::make_unique<fers_signal::FileSignal>(kind);
+		signal->load(samples, sample_count, rate);
+		fers_signal::RadarSignal const waveform("file", 4.0, carrier, 2.0, std::move(signal));
+		const auto source = core::makeActiveSourceFromWaveform(&waveform, 0.25, 5.0);
+		const RealType local_time = 0.3125;
+		ComplexType first{};
+		ComplexType after_end{};
+		REQUIRE(simulation::calculateStreamingReferenceSample(source, 0.25 + local_time, nullptr, first));
+		REQUIRE_FALSE(
+			simulation::calculateStreamingReferenceSample(source, 0.25 + local_time + 2.0, nullptr, after_end));
+		const RealType expected_phase = 2.0 * PI * baseband_frequency * local_time;
+		const ComplexType expected = std::polar(1.0, expected_phase);
+		REQUIRE_THAT(first.real(), WithinAbs(expected.real(), 1e-6));
+		REQUIRE_THAT(first.imag(), WithinAbs(expected.imag(), 1e-6));
+		REQUIRE((after_end == ComplexType{0.0, 0.0}));
+		REQUIRE_THAT(source.segment_end, WithinAbs(2.25, 1e-12));
+	}
+}
+
+TEST_CASE("File CW direct path samples the complex envelope at retarded transmit time",
+		  "[simulation][channel_model][direct][file]")
+{
+	ParamGuard const guard;
+	params::params.reset();
+	params::setC(100.0);
+	params::setOversampleRatio(1);
+	constexpr RealType rate = 32.0;
+	constexpr RealType tone = 3.0;
+	constexpr unsigned sample_count = 64;
+	std::vector<ComplexType> samples(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * tone * static_cast<RealType>(i) / rate;
+		samples[i] = std::polar(1.0, phase);
+	}
+
+	radar::Platform tx_platform("tx-platform");
+	setupPlatform(tx_platform, math::Vec3{0.0, 0.0, 0.0});
+	radar::Platform rx_platform("rx-platform");
+	setupPlatform(rx_platform, math::Vec3{10.0, 0.0, 0.0});
+	antenna::Isotropic antenna("isotropic");
+	auto clock = std::make_shared<timing::Timing>("clock", 42);
+	radar::Transmitter tx(&tx_platform, "tx", radar::OperationMode::CW_MODE);
+	tx.setAntenna(&antenna);
+	tx.setTiming(clock);
+	auto signal = std::make_unique<fers_signal::FileSignal>(fers_signal::FileWaveformKind::Cw);
+	signal->load(samples, sample_count, rate);
+	fers_signal::RadarSignal waveform("file-cw", 4.0, 10.0, 2.0, std::move(signal));
+	tx.setSignal(&waveform);
+	radar::Receiver rx(&rx_platform, "rx", 43, radar::OperationMode::CW_MODE);
+	rx.setAntenna(&antenna);
+	rx.setTiming(clock);
+
+	const auto source = core::makeActiveSource(&tx, 0.0, 5.0);
+	const RealType delay = 10.0 / params::c();
+	const RealType first_local_time = 0.3125;
+	const ComplexType first =
+		simulation::calculateStreamingDirectPathContribution(source, &rx, delay + first_local_time);
+	const ComplexType next =
+		simulation::calculateStreamingDirectPathContribution(source, &rx, delay + first_local_time + 1.0 / rate);
+	const ComplexType after_end =
+		simulation::calculateStreamingDirectPathContribution(source, &rx, delay + first_local_time + 2.0);
+
+	REQUIRE(std::abs(first) > 0.0);
+	REQUIRE_THAT(std::abs(next / first), WithinAbs(1.0, 1e-6));
+	REQUIRE_THAT(std::arg(next / first), WithinAbs(2.0 * PI * tone / rate, 1e-6));
+	REQUIRE(std::abs(after_end) == 0.0);
+	REQUIRE_THAT(source.segment_end, WithinAbs(2.0, 1e-12));
+}
+
 TEST_CASE("FMCW streaming direct path keeps chirp cache per source", "[simulation][channel_model][direct][fmcw]")
 {
 	ParamGuard const guard;

@@ -1,8 +1,11 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <highfive/highfive.hpp>
 #include <string>
+#include <vector>
 
 #include "core/parameters.h"
 #include "core/world.h"
@@ -61,6 +64,15 @@ namespace
 		std::ofstream out(path);
 		out << content;
 		return path;
+	}
+
+	void writeHdf5Waveform(const std::filesystem::path& path)
+	{
+		HighFive::File file(path.string(), HighFive::File::Overwrite);
+		const std::vector<RealType> i_values{1.0, 0.0, -1.0, 0.0};
+		const std::vector<RealType> q_values{0.0, 1.0, 0.0, -1.0};
+		file.createGroup("/I").createDataSet<RealType>("value", HighFive::DataSpace::From(i_values)).write(i_values);
+		file.createGroup("/Q").createDataSet<RealType>("value", HighFive::DataSpace::From(q_values)).write(q_values);
 	}
 }
 
@@ -140,6 +152,38 @@ TEST_CASE("parseSimulation handles file loading and includes", "[serial][xml_par
 
 	std::filesystem::remove(include_path);
 	std::filesystem::remove(main_path);
+}
+
+TEST_CASE("parseSimulation resolves relative CW and FMCW HDF5 waveform files",
+		  "[serial][xml_parser][file-waveform][hdf5]")
+{
+	ParamGuard const guard;
+	const auto directory = std::filesystem::temp_directory_path() /
+		("fers_relative_file_waveforms_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+	std::filesystem::create_directories(directory);
+	const auto hdf5_path = directory / "sampled_iq.h5";
+	const auto scenario_path = directory / "scenario.fersxml";
+	writeHdf5Waveform(hdf5_path);
+	{
+		std::ofstream scenario(scenario_path);
+		scenario << R"(<?xml version="1.0" encoding="UTF-8"?>
+<simulation name="RelativeFileWaveforms">
+  <parameters><starttime>0</starttime><endtime>1</endtime><rate>8</rate></parameters>
+  <waveform name="FileCw"><power>1</power><carrier_frequency>100</carrier_frequency><cw_from_file filename="sampled_iq.h5"/></waveform>
+  <waveform name="FileFmcw"><power>1</power><carrier_frequency>100</carrier_frequency><fmcw_from_file filename="sampled_iq.h5"/></waveform>
+</simulation>)";
+	}
+
+	core::World world;
+	std::mt19937 seeder(42);
+	REQUIRE_NOTHROW(serial::parseSimulation(scenario_path.string(), &world, true, seeder));
+	REQUIRE(world.getWaveforms().size() == 2u);
+	REQUIRE(world.findWaveformByName("FileCw")->isCw());
+	REQUIRE(world.findWaveformByName("FileFmcw")->isFmcwFamily());
+	REQUIRE(world.findWaveformByName("FileCw")->getFilename() == hdf5_path.string());
+	REQUIRE(world.findWaveformByName("FileFmcw")->getFilename() == hdf5_path.string());
+	std::error_code ec;
+	std::filesystem::remove_all(directory, ec);
 }
 
 TEST_CASE("parseSimulation throws on missing file", "[serial][xml_parser]")

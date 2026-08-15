@@ -101,6 +101,12 @@ interface BackendWaveform {
     pulsed_from_file?: {
         filename: string;
     };
+    cw_from_file?: {
+        filename: string;
+    };
+    fmcw_from_file?: {
+        filename: string;
+    };
     fmcw_linear_chirp?: {
         direction: 'up' | 'down';
         chirp_bandwidth: number;
@@ -310,7 +316,13 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                 carrier_frequency: w.carrier_frequency,
             };
             let waveform: Waveform;
-            if (w.fmcw_linear_chirp) {
+            if (w.fmcw_from_file) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'fmcw_from_file',
+                    filename: w.fmcw_from_file.filename ?? '',
+                };
+            } else if (w.fmcw_linear_chirp) {
                 waveform = {
                     ...commonWaveform,
                     waveformType: 'fmcw_linear_chirp',
@@ -343,6 +355,12 @@ export function parseScenarioData(backendData: unknown): ScenarioData | null {
                     dwell_time: w.stepped_frequency.dwell_time,
                     step_period: w.stepped_frequency.step_period,
                     sweep_count: w.stepped_frequency.sweep_count ?? null,
+                };
+            } else if (w.cw_from_file) {
+                waveform = {
+                    ...commonWaveform,
+                    waveformType: 'cw_from_file',
+                    filename: w.cw_from_file.filename ?? '',
                 };
             } else if (w.cw) {
                 waveform = {

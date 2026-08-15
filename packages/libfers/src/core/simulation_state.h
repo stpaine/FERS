@@ -23,6 +23,7 @@ namespace fers_signal
 {
 	class FmcwChirpSignal;
 	class FmcwTriangleSignal;
+	class FileSignal;
 	class RadarSignal;
 	class SteppedFrequencySignal;
 }
@@ -35,6 +36,8 @@ namespace core
 		Cw,
 		FmcwLinear,
 		FmcwTriangle,
+		FileCw,
+		FileFmcw,
 		Sfcw
 	};
 
@@ -53,6 +56,7 @@ namespace core
 
 		const fers_signal::FmcwChirpSignal* fmcw = nullptr; ///< Stable pointer to the linear FMCW waveform, if any.
 		const fers_signal::FmcwTriangleSignal* triangle = nullptr; ///< Stable pointer to the triangle waveform, if any.
+		const fers_signal::FileSignal* file = nullptr; ///< Stable pointer to the finite sampled waveform, if any.
 		const fers_signal::SteppedFrequencySignal* sfcw =
 			nullptr; ///< Stable pointer to the stepped-frequency waveform, if any.
 		RealType chirp_duration = 0.0; ///< Cached FMCW chirp duration in seconds.
@@ -71,6 +75,7 @@ namespace core
 		RealType mod_phi_tri = 0.0; ///< Triangle period phase increment modulo 2*pi.
 		RealType triangle_period = 0.0; ///< Cached full triangle period in seconds.
 		std::optional<std::size_t> triangle_count; ///< Optional finite triangle count for the segment.
+		RealType file_duration = 0.0; ///< Duration of the finite file waveform in seconds.
 
 		RealType sfcw_step_size = 0.0; ///< Cached SFCW frequency step in hertz.
 		std::size_t sfcw_step_count = 0; ///< Cached SFCW steps per sweep.

@@ -421,6 +421,10 @@ export const SimulationView = React.memo(function SimulationView() {
             )}, T_tri=${formatMetric(fmcw.triangle_period ?? 0)}`;
         }
 
+        if (fmcw.waveform_shape === 'file') {
+            return `file, duration=${formatMetric(fmcw.sampled_duration ?? 0)}, samples=${fmcw.sampled_count ?? 0}`;
+        }
+
         return `${fmcw.chirp_direction ?? 'up'}, B=${formatMetric(
             fmcw.chirp_bandwidth
         )}, T_c=${formatMetric(

@@ -243,6 +243,16 @@ namespace core
 				source.segment_end = segment_start + static_cast<RealType>(emitted_triangles) * source.triangle_period;
 				return;
 			}
+
+			if (const auto* const file = signal->getFileSignal();
+				file != nullptr && file->getKind() != fers_signal::FileWaveformKind::Pulsed)
+			{
+				source.file = file;
+				source.file_duration = signal->getLength();
+				source.is_fmcw = file->getKind() == fers_signal::FileWaveformKind::Fmcw;
+				source.kind = source.is_fmcw ? StreamingWaveformKind::FileFmcw : StreamingWaveformKind::FileCw;
+				source.segment_end = std::min(source.segment_end, segment_start + source.file_duration);
+			}
 		}
 	}
 

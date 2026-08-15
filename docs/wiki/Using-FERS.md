@@ -42,8 +42,8 @@ The complete XML reference is in [[XML Schema Reference]].
 | Mode | Use when | Scenario pieces |
 | --- | --- | --- |
 | Pulsed | You have a pulse waveform and want range-gated receiver windows. | `<pulsed_from_file>`, `<pulsed_mode>`, `prf`, `window_skip`, `window_length`. |
-| CW | You want continuous-wave Doppler-style output. | `<cw/>`, `<cw_mode/>`. |
-| FMCW | You want chirp-based ranging or range-Doppler analysis. | `<fmcw_linear_chirp>` or `<fmcw_triangle>`, `<fmcw_mode>`, optional dechirp settings. |
+| CW | You want continuous-wave Doppler-style output. | Prefer `<cw_from_file>`; `<cw/>` generates a simple tone. Use `<cw_mode/>`. |
+| FMCW | You want chirp-based ranging or range-Doppler analysis. | Prefer `<fmcw_from_file>`; generated `<fmcw_linear_chirp>` and `<fmcw_triangle>` remain available. Use `<fmcw_mode>` and optional dechirp settings. |
 | SFCW | You want stepped narrowband RF dwells that synthesize a wider range profile without one wide baseband waveform. | `<stepped_frequency>`, `<sfcw_mode/>`, step size/count, dwell time, and step period. |
 
 The waveform type and radar mode must match. For example, a `<cw/>` waveform must be used with `<cw_mode/>`.

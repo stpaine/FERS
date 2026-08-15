@@ -69,8 +69,8 @@ export const RADAR_MODE_OPTIONS: ReadonlyArray<{
 
 const WAVEFORM_TYPE_BY_RADAR_TYPE: Record<RadarType, string[]> = {
     pulsed: ['pulsed_from_file'],
-    cw: ['cw'],
-    fmcw: ['fmcw_linear_chirp', 'fmcw_triangle'],
+    cw: ['cw_from_file', 'cw'],
+    fmcw: ['fmcw_from_file', 'fmcw_linear_chirp', 'fmcw_triangle'],
     sfcw: ['stepped_frequency'],
 };
 

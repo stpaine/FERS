@@ -48,6 +48,7 @@ const DECHIRP_REFERENCE_SOURCES = new Set<DechirpReferenceSource>([
 ]);
 
 export const FMCW_WAVEFORM_TYPES = [
+    'fmcw_from_file',
     'fmcw_linear_chirp',
     'fmcw_triangle',
 ] as const;

@@ -145,6 +145,45 @@ describe('buildHydratedScenarioState', () => {
 });
 
 describe('parseScenarioData FMCW hydration', () => {
+    test('hydrates CW and FMCW file waveform variants', () => {
+        const scenario = parseScenarioData({
+            name: 'File waveforms',
+            parameters: {},
+            waveforms: [
+                {
+                    id: 11,
+                    name: 'CW File',
+                    power: 1,
+                    carrier_frequency: 1e9,
+                    cw_from_file: { filename: 'cw.h5' },
+                },
+                {
+                    id: 12,
+                    name: 'FMCW File',
+                    power: 2,
+                    carrier_frequency: 2e9,
+                    fmcw_from_file: { filename: 'fmcw.h5' },
+                },
+            ],
+            timings: [],
+            antennas: [],
+            platforms: [],
+        });
+
+        expect(scenario?.waveforms).toEqual([
+            expect.objectContaining({
+                id: '11',
+                waveformType: 'cw_from_file',
+                filename: 'cw.h5',
+            }),
+            expect.objectContaining({
+                id: '12',
+                waveformType: 'fmcw_from_file',
+                filename: 'fmcw.h5',
+            }),
+        ]);
+    });
+
     test('hydrates FMCW waveform and component mode from backend data', () => {
         const scenario = parseScenarioData({
             name: 'FMCW Scenario',

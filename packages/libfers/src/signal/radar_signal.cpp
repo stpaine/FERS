@@ -297,7 +297,15 @@ namespace fers_signal
 		return data;
 	}
 
-	bool RadarSignal::isCw() const noexcept { return dynamic_cast<const CwSignal*>(_signal.get()) != nullptr; }
+	bool RadarSignal::isCw() const noexcept
+	{
+		if (dynamic_cast<const CwSignal*>(_signal.get()) != nullptr)
+		{
+			return true;
+		}
+		const auto* file = getFileSignal();
+		return file != nullptr && file->getKind() == FileWaveformKind::Cw;
+	}
 
 	bool RadarSignal::isFmcwChirp() const noexcept
 	{
@@ -331,6 +339,11 @@ namespace fers_signal
 		return dynamic_cast<const SteppedFrequencySignal*>(_signal.get());
 	}
 
+	const FileSignal* RadarSignal::getFileSignal() const noexcept
+	{
+		return dynamic_cast<const FileSignal*>(_signal.get());
+	}
+
 	void Signal::clear() noexcept
 	{
 		_size = 0;
@@ -358,6 +371,32 @@ namespace fers_signal
 		{
 			upsample(inData, samples, _data);
 		}
+	}
+
+	ComplexType Signal::sampleAt(const RealType time_since_start) const noexcept
+	{
+		if (_data.empty() || _rate <= 0.0 || !std::isfinite(time_since_start) || time_since_start < 0.0 ||
+			time_since_start >= static_cast<RealType>(_size) / _rate)
+		{
+			return {0.0, 0.0};
+		}
+
+		const RealType position = time_since_start * _rate;
+		const auto center = static_cast<long long>(std::floor(position));
+		const RealType fraction = position - std::floor(position);
+		const auto& filter = interp::InterpFilter::getInstance().getFilter(fraction);
+		const auto filter_length = static_cast<long long>(filter.size());
+		const auto sample_count = static_cast<long long>(_data.size());
+		ComplexType value{0.0, 0.0};
+		for (long long tap = 0; tap < filter_length; ++tap)
+		{
+			const long long sample_index = center + tap - filter_length / 2;
+			if (sample_index >= 0 && sample_index < sample_count)
+			{
+				value += _data[static_cast<std::size_t>(sample_index)] * filter[static_cast<std::size_t>(tap)];
+			}
+		}
+		return value;
 	}
 
 	std::vector<ComplexType> Signal::render(const std::vector<interp::InterpPoint>& points, unsigned& size,

@@ -16,6 +16,8 @@ import { BufferedTextField, FileInput, NumberField } from './InspectorControls';
 
 export type WaveformType =
     | 'pulsed_from_file'
+    | 'cw_from_file'
+    | 'fmcw_from_file'
     | 'cw'
     | 'fmcw_linear_chirp'
     | 'fmcw_triangle'
@@ -59,9 +61,11 @@ export const WAVEFORM_TYPE_OPTIONS: ReadonlyArray<{
     label: string;
 }> = [
     { value: 'pulsed_from_file', label: 'Pulse File' },
-    { value: 'cw', label: 'CW' },
-    { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
-    { value: 'fmcw_triangle', label: 'FMCW Triangle' },
+    { value: 'cw_from_file', label: 'CW File' },
+    { value: 'fmcw_from_file', label: 'FMCW File' },
+    { value: 'cw', label: 'CW Tone (Generated)' },
+    { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp (Generated)' },
+    { value: 'fmcw_triangle', label: 'FMCW Triangle (Generated)' },
     { value: 'stepped_frequency', label: 'SFCW' },
 ];
 
@@ -101,7 +105,11 @@ export function createWaveformForType(
         waveformType,
     };
 
-    if (waveformType === 'pulsed_from_file') {
+    if (
+        waveformType === 'pulsed_from_file' ||
+        waveformType === 'cw_from_file' ||
+        waveformType === 'fmcw_from_file'
+    ) {
         return {
             ...nextWaveform,
             filename:
@@ -186,6 +194,9 @@ export function getVisibleWaveformFieldLabels(
 ): string[] {
     if (waveformType === 'pulsed_from_file') {
         return ['Waveform File (.csv, .h5)'];
+    }
+    if (waveformType === 'cw_from_file' || waveformType === 'fmcw_from_file') {
+        return ['Waveform File (.h5)'];
     }
 
     if (waveformType === 'fmcw_linear_chirp') {
@@ -311,13 +322,25 @@ export function WaveformInspector({ item }: WaveformInspectorProps) {
                     {issue.message}
                 </Alert>
             ))}
-            {waveform.waveformType === 'pulsed_from_file' && (
+            {(waveform.waveformType === 'pulsed_from_file' ||
+                waveform.waveformType === 'cw_from_file' ||
+                waveform.waveformType === 'fmcw_from_file') && (
                 <FileInput
-                    label="Waveform File (.csv, .h5)"
+                    label={
+                        waveform.waveformType === 'pulsed_from_file'
+                            ? 'Waveform File (.csv, .h5)'
+                            : 'Waveform File (.h5)'
+                    }
                     value={waveform.filename}
                     onChange={(v) => handleChange('filename', v)}
                     filters={[
-                        { name: 'Waveform', extensions: ['csv', 'h5'] },
+                        {
+                            name: 'Waveform',
+                            extensions:
+                                waveform.waveformType === 'pulsed_from_file'
+                                    ? ['csv', 'h5']
+                                    : ['h5'],
+                        },
                         { name: 'All Files', extensions: ['*'] },
                     ]}
                 />

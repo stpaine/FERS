@@ -17,11 +17,7 @@
 
 #include "core/config.h"
 #include "core/sim_id.h"
-
-namespace fers_signal
-{
-	class RadarSignal;
-}
+#include "signal/radar_signal.h"
 
 namespace serial
 {
@@ -32,11 +28,13 @@ namespace serial
 	 * @param filename The path to the file containing the waveform data.
 	 * @param power The power of the radar signal in the waveform.
 	 * @param carrierFreq The carrier frequency of the radar signal.
+	 * @param id Optional explicit waveform identifier.
+	 * @param kind Radar mode assigned to the loaded samples.
 	 * @return A unique pointer to a RadarSignal object loaded with the waveform data.
 	 * @throws std::runtime_error If the file cannot be opened or the file format is unrecognized.
 	 */
-	[[nodiscard]] std::unique_ptr<fers_signal::RadarSignal> loadWaveformFromFile(const std::string& name,
-																				 const std::string& filename,
-																				 RealType power, RealType carrierFreq,
-																				 const SimId id = 0);
+	[[nodiscard]] std::unique_ptr<fers_signal::RadarSignal>
+	loadWaveformFromFile(const std::string& name, const std::string& filename, RealType power, RealType carrierFreq,
+						 const SimId id = 0,
+						 fers_signal::FileWaveformKind kind = fers_signal::FileWaveformKind::Pulsed);
 }

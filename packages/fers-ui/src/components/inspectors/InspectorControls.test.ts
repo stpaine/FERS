@@ -96,14 +96,42 @@ describe('InspectorControls blur resolution', () => {
 });
 
 describe('Waveform inspector authoring options', () => {
-    test('offers pulse file, CW, and FMCW waveform types', () => {
+    test('offers file waveform types first and generated alternatives after them', () => {
         expect(WAVEFORM_TYPE_OPTIONS).toEqual([
             { value: 'pulsed_from_file', label: 'Pulse File' },
-            { value: 'cw', label: 'CW' },
-            { value: 'fmcw_linear_chirp', label: 'FMCW Linear Chirp' },
-            { value: 'fmcw_triangle', label: 'FMCW Triangle' },
+            { value: 'cw_from_file', label: 'CW File' },
+            { value: 'fmcw_from_file', label: 'FMCW File' },
+            { value: 'cw', label: 'CW Tone (Generated)' },
+            {
+                value: 'fmcw_linear_chirp',
+                label: 'FMCW Linear Chirp (Generated)',
+            },
+            { value: 'fmcw_triangle', label: 'FMCW Triangle (Generated)' },
             { value: 'stepped_frequency', label: 'SFCW' },
         ]);
+    });
+
+    test('creates file waveform defaults and shows only the file field', () => {
+        for (const waveformType of [
+            'cw_from_file',
+            'fmcw_from_file',
+        ] as const) {
+            const waveform = createWaveformForType(
+                {
+                    id: 'file',
+                    type: 'Waveform',
+                    name: 'File waveform',
+                    waveformType: 'cw',
+                    power: 10,
+                    carrier_frequency: 1e9,
+                },
+                waveformType
+            );
+            expect(waveform).toMatchObject({ waveformType, filename: '' });
+            expect(getVisibleWaveformFieldLabels(waveformType)).toEqual([
+                'Waveform File (.h5)',
+            ]);
+        }
     });
 
     test('creates FMCW defaults while preserving common waveform fields', () => {
@@ -248,6 +276,8 @@ describe('Platform component inspector waveform compatibility', () => {
         { id: '3', name: 'Chirp', waveformType: 'fmcw_linear_chirp' },
         { id: '4', name: 'Triangle', waveformType: 'fmcw_triangle' },
         { id: '5', name: 'Steps', waveformType: 'stepped_frequency' },
+        { id: '6', name: 'CW File', waveformType: 'cw_from_file' },
+        { id: '7', name: 'FMCW File', waveformType: 'fmcw_from_file' },
     ];
 
     test('offers FMCW radar mode and hides pulsed-only fields for FMCW/CW', () => {
@@ -272,10 +302,14 @@ describe('Platform component inspector waveform compatibility', () => {
         expect(getCompatibleWaveforms(waveforms, 'pulsed')).toEqual([
             waveforms[0],
         ]);
-        expect(getCompatibleWaveforms(waveforms, 'cw')).toEqual([waveforms[1]]);
+        expect(getCompatibleWaveforms(waveforms, 'cw')).toEqual([
+            waveforms[1],
+            waveforms[5],
+        ]);
         expect(getCompatibleWaveforms(waveforms, 'fmcw')).toEqual([
             waveforms[2],
             waveforms[3],
+            waveforms[6],
         ]);
         expect(getCompatibleWaveforms(waveforms, 'sfcw')).toEqual([
             waveforms[4],
@@ -410,6 +444,15 @@ describe('Platform component inspector waveform compatibility', () => {
                 start_frequency_offset: 0,
                 chirp_count: null,
             },
+            {
+                id: '3',
+                type: 'Waveform' as const,
+                name: 'FMCW File LO',
+                waveformType: 'fmcw_from_file' as const,
+                power: 1,
+                carrier_frequency: 1,
+                filename: 'fmcw.h5',
+            },
         ];
         const platforms = [
             {
@@ -462,7 +505,10 @@ describe('Platform component inspector waveform compatibility', () => {
             },
         ];
 
-        expect(getFmcwWaveformNames(fullWaveforms)).toEqual(['FMCW LO']);
+        expect(getFmcwWaveformNames(fullWaveforms)).toEqual([
+            'FMCW LO',
+            'FMCW File LO',
+        ]);
         expect(getFmcwEmitterNames(platforms, fullWaveforms)).toEqual([
             'FMCW TX',
         ]);

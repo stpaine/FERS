@@ -164,6 +164,38 @@ describe('FMCW schema', () => {
     });
 });
 
+describe('file waveform schema', () => {
+    test('requires a non-empty filename for CW and FMCW file variants', () => {
+        const waveforms = [
+            {
+                ...createWaveformForType('cw_from_file'),
+                id: '11',
+                name: 'CW File',
+            },
+            {
+                ...createWaveformForType('fmcw_from_file'),
+                id: '12',
+                name: 'FMCW File',
+            },
+        ];
+        for (const waveform of waveforms) {
+            expect(WaveformSchema.safeParse(waveform).success).toBe(false);
+            expect(
+                WaveformSchema.safeParse({
+                    ...waveform,
+                    filename: `${waveform.waveformType}.h5`,
+                }).success
+            ).toBe(true);
+            expect(
+                WaveformSchema.safeParse({
+                    ...waveform,
+                    filename: `${waveform.waveformType}.csv`,
+                }).success
+            ).toBe(false);
+        }
+    });
+});
+
 describe('SFCW schema', () => {
     const validWaveform: Extract<
         Waveform,
@@ -214,6 +246,28 @@ describe('SFCW schema', () => {
 });
 
 describe('serializeWaveform', () => {
+    test('serializes CW and FMCW file waveform payloads', () => {
+        const cw: Waveform = {
+            ...createWaveformForType('cw_from_file'),
+            id: 'file-cw',
+            name: 'CW File',
+            filename: 'waveforms/cw.h5',
+        };
+        const fmcw: Waveform = {
+            ...createWaveformForType('fmcw_from_file'),
+            id: 'file-fmcw',
+            name: 'FMCW File',
+            filename: 'waveforms/fmcw.h5',
+        };
+
+        expect(serializeWaveform(cw)).toMatchObject({
+            cw_from_file: { filename: 'waveforms/cw.h5' },
+        });
+        expect(serializeWaveform(fmcw)).toMatchObject({
+            fmcw_from_file: { filename: 'waveforms/fmcw.h5' },
+        });
+    });
+
     test('serializes FMCW waveform payload and omits unset optional fields', () => {
         const waveform: Waveform = {
             ...createWaveformForType('fmcw_linear_chirp'),

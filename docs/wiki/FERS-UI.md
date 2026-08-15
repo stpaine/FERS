@@ -149,10 +149,9 @@ If you change the rotation angle unit after entering rotation values, the UI ask
 
 Waveform editing supports:
 
-- Pulse file waveforms from `.csv` or `.h5`.
-- CW waveforms.
-- FMCW linear chirps.
-- FMCW triangular chirps.
+- Pulse file waveforms from `.csv` or `.h5`; CW and FMCW file waveforms use the same pulsed HDF5 I/Q layout and are listed first as the primary authoring choices.
+- Generated CW tones.
+- Generated FMCW linear and triangular chirps.
 - SFCW stepped-frequency sweeps.
 
 For FMCW waveforms, the UI warns or blocks when settings violate major FMCW constraints, such as chirp period shorter than chirp duration or a baseband sweep edge too close to the effective sample-rate limit `<rate> * <oversample>`.

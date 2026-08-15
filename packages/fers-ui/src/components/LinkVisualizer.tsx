@@ -407,7 +407,8 @@ export default function LinkVisualizer() {
                 }
 
                 const dutyCycle =
-                    waveform.waveformType === 'fmcw_triangle'
+                    waveform.waveformType === 'fmcw_triangle' ||
+                    waveform.waveformType === 'fmcw_from_file'
                         ? 1
                         : waveform.waveformType === 'fmcw_linear_chirp' &&
                             waveform.chirp_period > 0

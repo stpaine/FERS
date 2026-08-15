@@ -172,6 +172,24 @@ TEST_CASE("serializeWaveform processes CW and Pulsed correctly", "[serial][xml_s
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("<pulsed_from_file filename=\"\"/>"));
 	}
+
+	SECTION("CW file")
+	{
+		auto sig = std::make_unique<fers_signal::FileSignal>(fers_signal::FileWaveformKind::Cw);
+		fers_signal::RadarSignal wave("cw-file", 20.0, 2e9, 1.0, std::move(sig));
+		wave.setFilename("cw.h5");
+		serial::xml_serializer_utils::serializeWaveform(wave, root);
+		REQUIRE_THAT(dumpElement(root), ContainsSubstring("<cw_from_file filename=\"cw.h5\"/>"));
+	}
+
+	SECTION("FMCW file")
+	{
+		auto sig = std::make_unique<fers_signal::FileSignal>(fers_signal::FileWaveformKind::Fmcw);
+		fers_signal::RadarSignal wave("fmcw-file", 20.0, 2e9, 1.0, std::move(sig));
+		wave.setFilename("fmcw.h5");
+		serial::xml_serializer_utils::serializeWaveform(wave, root);
+		REQUIRE_THAT(dumpElement(root), ContainsSubstring("<fmcw_from_file filename=\"fmcw.h5\"/>"));
+	}
 }
 
 TEST_CASE("serializeWaveform round trips FMCW linear chirp direction", "[serial][xml_serializer][fmcw]")

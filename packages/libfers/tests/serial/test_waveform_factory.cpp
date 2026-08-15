@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
 #include <complex>
 #include <filesystem>
@@ -15,6 +16,7 @@
 #include "serial/waveform_factory.h"
 #include "signal/radar_signal.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace
@@ -118,6 +120,54 @@ TEST_CASE("Waveform factory loads CSV waveform metadata", "[serial][waveform_fac
 	REQUIRE_THAT(waveform->getRate(), WithinAbs(csvRate * params::oversampleRatio(), 1e-12));
 	REQUIRE_THAT(waveform->getLength(), WithinAbs(static_cast<RealType>(samples.size()) / csvRate, 1e-12));
 
+	removeIfExists(path);
+}
+
+TEST_CASE("Waveform factory assigns CW and FMCW identity to pulsed-compatible HDF5 samples",
+		  "[serial][waveform_factory][hdf5]")
+{
+	ParamGuard const guard;
+	params::params.reset();
+	params::setOversampleRatio(1);
+	params::setRate(8.0);
+	const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_kind", ".h5"));
+	removeIfExists(path);
+	writeHdf5Waveform(path, {ComplexType(1.0, 0.0), ComplexType(0.0, 1.0)});
+
+	const auto cw = serial::loadWaveformFromFile("cw", path.string(), 1.0, 10.0, 1, fers_signal::FileWaveformKind::Cw);
+	const auto fmcw =
+		serial::loadWaveformFromFile("fmcw", path.string(), 1.0, 10.0, 2, fers_signal::FileWaveformKind::Fmcw);
+
+	REQUIRE(cw->isCw());
+	REQUIRE(cw->getFileSignal()->getKind() == fers_signal::FileWaveformKind::Cw);
+	REQUIRE(fmcw->isFmcwFamily());
+	REQUIRE(fmcw->getFileSignal()->getKind() == fers_signal::FileWaveformKind::Fmcw);
+	removeIfExists(path);
+}
+
+TEST_CASE("CW and FMCW file loading rejects legacy CSV input", "[serial][waveform_factory][hdf5]")
+{
+	const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_mode_csv", ".csv"));
+	removeIfExists(path);
+	writeCsvWaveform(path, 8.0, {ComplexType(1.0, 0.0)});
+
+	REQUIRE_THROWS_WITH(
+		serial::loadWaveformFromFile("cw", path.string(), 1.0, 10.0, 1, fers_signal::FileWaveformKind::Cw),
+		ContainsSubstring("require the pulsed-compatible HDF5"));
+	REQUIRE_THROWS_WITH(
+		serial::loadWaveformFromFile("fmcw", path.string(), 1.0, 10.0, 2, fers_signal::FileWaveformKind::Fmcw),
+		ContainsSubstring("require the pulsed-compatible HDF5"));
+
+	removeIfExists(path);
+}
+
+TEST_CASE("Waveform factory rejects empty file waveforms", "[serial][waveform_factory]")
+{
+	const std::filesystem::path path = tempFilePath(uniqueFileName("waveform_factory_empty", ".csv"));
+	removeIfExists(path);
+	writeCsvWaveform(path, 8.0, {});
+
+	REQUIRE_THROWS_AS(serial::loadWaveformFromFile("empty", path.string(), 1.0, 10.0), std::runtime_error);
 	removeIfExists(path);
 }
 

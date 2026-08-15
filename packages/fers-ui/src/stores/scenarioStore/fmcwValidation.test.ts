@@ -71,6 +71,20 @@ const makeScenario = (waveform: Waveform): ScenarioData => ({
 });
 
 describe('FMCW validation', () => {
+    test('accepts file-backed FMCW without applying analytic chirp constraints', () => {
+        const waveform: Waveform = {
+            ...createWaveformForType('fmcw_from_file'),
+            id: 'file-fmcw',
+            name: 'File FMCW',
+            filename: 'fmcw.h5',
+        };
+
+        expect(validateFmcwWaveform(waveform, defaultGlobalParameters)).toEqual(
+            []
+        );
+        expect(validateFmcwScenario(makeScenario(waveform))).toEqual([]);
+    });
+
     test('matches backend baseband and RF sweep checks', () => {
         const aliasIssues = validateFmcwWaveform(
             makeLinearWaveform({ chirp_bandwidth: 20e3 }),

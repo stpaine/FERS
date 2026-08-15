@@ -36,6 +36,15 @@ namespace processing
 		/// Converts a cached streaming source to reusable FMCW waveform metadata.
 		core::FmcwMetadata buildFmcwMetadata(const core::ActiveStreamingSource& source)
 		{
+			if (source.kind == core::StreamingWaveformKind::FileFmcw)
+			{
+				return core::FmcwMetadata{.waveform_shape = "file",
+										  .sampled_duration = source.file_duration,
+										  .sampled_count = source.file != nullptr
+											  ? std::optional<std::uint64_t>(static_cast<std::uint64_t>(
+													std::llround(source.file_duration * params::rate())))
+											  : std::nullopt};
+			}
 			if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
 			{
 				return core::FmcwMetadata{
@@ -98,6 +107,10 @@ namespace processing
 			const RealType active_start = std::max(params::startTime(), source.segment_start);
 			const RealType active_end = std::min(params::endTime(), source.segment_end);
 			core::FmcwSourceSegmentMetadata segment{.start_time = source.segment_start, .end_time = source.segment_end};
+			if (source.kind == core::StreamingWaveformKind::FileFmcw)
+			{
+				return segment;
+			}
 			if (source.kind == core::StreamingWaveformKind::FmcwTriangle)
 			{
 				segment.first_triangle_start_time = core::firstFmcwTriangleStart(source, active_start, active_end);

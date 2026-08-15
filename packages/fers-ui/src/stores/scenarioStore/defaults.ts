@@ -49,6 +49,12 @@ export function createWaveformForType(
     waveformType: 'cw'
 ): WaveformDefaults<'cw'>;
 export function createWaveformForType(
+    waveformType: 'cw_from_file'
+): WaveformDefaults<'cw_from_file'>;
+export function createWaveformForType(
+    waveformType: 'fmcw_from_file'
+): WaveformDefaults<'fmcw_from_file'>;
+export function createWaveformForType(
     waveformType: 'fmcw_linear_chirp'
 ): WaveformDefaults<'fmcw_linear_chirp'>;
 export function createWaveformForType(
@@ -68,6 +74,8 @@ export function createWaveformForType(
 
     switch (waveformType) {
         case 'pulsed_from_file':
+        case 'cw_from_file':
+        case 'fmcw_from_file':
             return {
                 ...common,
                 waveformType,

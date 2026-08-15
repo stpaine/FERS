@@ -252,6 +252,37 @@ TEST_CASE("Output metadata uses per-file sampling rates when outputs differ", "[
 	REQUIRE(json.at("files").at(1).at("sampling_rate") == 4'000.0);
 }
 
+TEST_CASE("HDF5 writer preserves finite file FMCW sample metadata", "[serial][hdf5][file-waveform]")
+{
+	const std::string path = tempFilePath(uniqueFileName("file_fmcw_metadata"));
+	removeIfExists(path);
+	core::OutputFileMetadata metadata{
+		.receiver_id = 9,
+		.receiver_name = "FileFmcwRx",
+		.mode = "fmcw",
+		.path = path,
+		.fmcw = core::FmcwMetadata{.waveform_shape = "file", .sampled_duration = 0.00025, .sampled_count = 8}};
+	{
+		HighFive::File file(path, HighFive::File::Overwrite);
+		std::scoped_lock const lock(serial::hdf5_global_mutex);
+		serial::writeOutputFileMetadataAttributes(file, metadata);
+	}
+	{
+		HighFive::File const file(path, HighFive::File::ReadOnly);
+		std::string shape;
+		RealType duration = 0.0;
+		std::uint64_t sample_count = 0;
+		file.getAttribute("fmcw_waveform_shape").read(shape);
+		file.getAttribute("fmcw_sampled_duration").read(duration);
+		file.getAttribute("fmcw_sampled_count").read(sample_count);
+		REQUIRE(shape == "file");
+		REQUIRE_THAT(duration, WithinAbs(0.00025, 1e-15));
+		REQUIRE(sample_count == 8u);
+		REQUIRE_FALSE(file.hasAttribute("fmcw_chirp_period"));
+	}
+	removeIfExists(path);
+}
+
 TEST_CASE("HDF5 writer exposes FMCW segment metadata without cw_segments JSON alias", "[serial][hdf5]")
 {
 	const std::string path = tempFilePath(uniqueFileName("fmcw_metadata"));

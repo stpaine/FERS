@@ -19,6 +19,49 @@ const baseMetadata = {
 } satisfies Omit<SimulationOutputMetadata, 'files'>;
 
 describe('simulation output metadata', () => {
+    test('keeps file-backed FMCW waveform metadata', () => {
+        const metadata: SimulationOutputMetadata = {
+            ...baseMetadata,
+            files: [
+                {
+                    receiver_id: 1,
+                    receiver_name: 'File FMCW Rx',
+                    mode: 'fmcw',
+                    path: '/tmp/fers/file-fmcw.h5',
+                    sampling_rate: 1e6,
+                    total_samples: 4,
+                    sample_start: 0,
+                    sample_end_exclusive: 4,
+                    pulse_count: 0,
+                    min_pulse_length_samples: 0,
+                    max_pulse_length_samples: 0,
+                    uniform_pulse_length: true,
+                    chunks: [],
+                    streaming_segments: [],
+                    fmcw: {
+                        waveform_shape: 'file',
+                        chirp_bandwidth: 0,
+                        chirp_duration: 0,
+                        chirp_rate: 0,
+                        start_frequency_offset: 0,
+                        sampled_duration: 250e-6,
+                        sampled_count: 8,
+                    },
+                    fmcw_sources: [],
+                    sfcw_sources: [],
+                },
+            ],
+        };
+
+        expect(
+            normalizeSimulationOutputMetadata(metadata).files[0].fmcw
+        ).toMatchObject({
+            waveform_shape: 'file',
+            sampled_duration: 250e-6,
+            sampled_count: 8,
+        });
+    });
+
     test('keeps FMCW metadata and streaming segments', () => {
         const metadata: SimulationOutputMetadata = {
             ...baseMetadata,

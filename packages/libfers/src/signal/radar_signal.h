@@ -39,6 +39,14 @@ namespace fers_signal
 		Down ///< Instantaneous baseband frequency decreases over the chirp.
 	};
 
+	/// Simulation mode assigned to samples loaded from a waveform file.
+	enum class FileWaveformKind : std::uint8_t
+	{
+		Pulsed,
+		Cw,
+		Fmcw
+	};
+
 	/// Converts a chirp direction to the schema token.
 	[[nodiscard]] std::string_view fmcwChirpDirectionToken(FmcwChirpDirection direction) noexcept;
 
@@ -107,6 +115,10 @@ namespace fers_signal
 
 		/// Returns true when this signal belongs to the FMCW waveform family.
 		[[nodiscard]] virtual bool isFmcwFamily() const noexcept { return false; }
+
+		/// Samples the finite stored complex envelope using the render interpolation filter.
+		/// Times outside [0, duration) return zero; file-backed signals never wrap implicitly.
+		[[nodiscard]] ComplexType sampleAt(RealType time_since_start) const noexcept;
 
 	private:
 		std::vector<ComplexType> _data; ///< The complex signal data.
@@ -259,6 +271,9 @@ namespace fers_signal
 		/// Gets the stepped-frequency implementation, if this signal owns one.
 		[[nodiscard]] const class SteppedFrequencySignal* getSteppedFrequencySignal() const noexcept;
 
+		/// Gets the file-backed signal implementation, if this signal owns one.
+		[[nodiscard]] const class FileSignal* getFileSignal() const noexcept;
+
 		/**
 		 * @brief Renders the radar signal.
 		 *
@@ -283,6 +298,26 @@ namespace fers_signal
 		RealType _length; ///< The length of the radar signal.
 		std::unique_ptr<Signal> _signal; ///< The `Signal` object containing the radar signal data.
 		std::optional<std::string> _filename; ///< The original filename for file-based signals.
+	};
+
+	/// File-backed sampled waveform with explicit radar-mode identity.
+	class FileSignal final : public Signal
+	{
+	public:
+		explicit FileSignal(FileWaveformKind kind) : _kind(kind) {}
+
+		~FileSignal() override = default;
+
+		FileSignal(const FileSignal&) = delete;
+		FileSignal& operator=(const FileSignal&) = delete;
+		FileSignal(FileSignal&&) = delete;
+		FileSignal& operator=(FileSignal&&) = delete;
+
+		[[nodiscard]] FileWaveformKind getKind() const noexcept { return _kind; }
+		[[nodiscard]] bool isFmcwFamily() const noexcept override { return _kind == FileWaveformKind::Fmcw; }
+
+	private:
+		FileWaveformKind _kind;
 	};
 
 	/// Continuous-wave signal implementation.

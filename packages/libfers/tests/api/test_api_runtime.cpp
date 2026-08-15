@@ -1,12 +1,17 @@
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <chrono>
+#include <complex>
 #include <filesystem>
+#include <highfive/highfive.hpp>
 #include <libfers/api.h>
 #include <limits>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <vector>
 
 #include "api_test_helpers.h"
@@ -19,6 +24,32 @@ namespace
 	std::string uniqueLogMessage(const std::string& prefix)
 	{
 		return prefix + "_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+	}
+
+	void replaceAll(std::string& value, const std::string_view needle, const std::string_view replacement)
+	{
+		std::size_t position = 0;
+		while ((position = value.find(needle, position)) != std::string::npos)
+		{
+			value.replace(position, needle.size(), replacement);
+			position += replacement.size();
+		}
+	}
+
+	void writeHdf5IqWaveform(const std::filesystem::path& path, const std::vector<ComplexType>& samples)
+	{
+		std::vector<RealType> i_values;
+		std::vector<RealType> q_values;
+		i_values.reserve(samples.size());
+		q_values.reserve(samples.size());
+		for (const auto& sample : samples)
+		{
+			i_values.push_back(sample.real());
+			q_values.push_back(sample.imag());
+		}
+		HighFive::File file(path.string(), HighFive::File::Overwrite);
+		file.createGroup("/I").createDataSet<RealType>("value", HighFive::DataSpace::From(i_values)).write(i_values);
+		file.createGroup("/Q").createDataSet<RealType>("value", HighFive::DataSpace::From(q_values)).write(q_values);
 	}
 
 	struct CallbackState
@@ -470,6 +501,93 @@ TEST_CASE("API run simulation accepts a minimal valid scenario", "[api][runtime]
 	REQUIRE(metadata_json.get() != nullptr);
 	const auto metadata = api_test::json::parse(metadata_json.str());
 	CHECK_FALSE(metadata.contains("vita49"));
+}
+
+TEST_CASE("API runs pulsed-compatible HDF5 CW and FMCW scenarios end to end", "[api][runtime][file-waveform][hdf5]")
+{
+	api_test::ParamGuard const guard;
+	const auto temp_dir = api_test::uniqueTempPath("api_file_waveform_e2e");
+	std::filesystem::create_directories(temp_dir);
+	api_test::ScopedPath const temp_guard(temp_dir);
+	const auto waveform_path = temp_dir / "sampled_iq.h5";
+	std::vector<ComplexType> input_samples;
+	input_samples.reserve(64);
+	for (std::size_t index = 0; index < 64; ++index)
+	{
+		const RealType magnitude = 0.25 + 0.75 * static_cast<RealType>(index) / 63.0;
+		const RealType phase = 0.007 * static_cast<RealType>(index * index);
+		input_samples.push_back(std::polar(magnitude, phase));
+	}
+	writeHdf5IqWaveform(waveform_path, input_samples);
+
+	for (const auto& [element, mode, receiver_name] :
+		 std::array<std::tuple<std::string_view, std::string_view, std::string_view>, 2>{
+			 std::tuple{"cw_from_file", "cw_mode", "file_cw_rx"},
+			 std::tuple{"fmcw_from_file", "fmcw_mode", "file_fmcw_rx"}})
+	{
+		api_test::clearLastError();
+		api_test::Context const context;
+		REQUIRE(fers_set_output_directory(context.get(), temp_dir.string().c_str()) == 0);
+		std::string xml = api_test::previewScenarioXml(std::string(receiver_name));
+		replaceAll(xml, "<endtime>0.1</endtime>", "<endtime>0.002</endtime>");
+		replaceAll(xml, "<rate>1000000</rate>", "<rate>32000</rate>");
+		replaceAll(xml, "<cw/>", "<" + std::string(element) + " filename=\"" + waveform_path.string() + "\"/>");
+		if (mode == "cw_mode")
+		{
+			replaceAll(xml, "<cw_mode/>", "<cw_mode/>");
+		}
+		else
+		{
+			const auto transmitter_mode = xml.find("<cw_mode/>");
+			REQUIRE(transmitter_mode != std::string::npos);
+			xml.replace(transmitter_mode, std::string_view("<cw_mode/>").size(), "<fmcw_mode/>");
+			const auto receiver_mode = xml.find("<cw_mode/>");
+			REQUIRE(receiver_mode != std::string::npos);
+			xml.replace(receiver_mode, std::string_view("<cw_mode/>").size(),
+						"<fmcw_mode dechirp_mode=\"physical\"><dechirp_reference source=\"custom\" "
+						"waveform_name=\"api_preview_wave\"/></fmcw_mode>");
+		}
+		replaceAll(xml, "api_preview_rx", receiver_name);
+		replaceAll(xml, "<noise_temp>290</noise_temp>", "<noise_temp>0</noise_temp>");
+
+		REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+		REQUIRE(fers_run_simulation(context.get(), nullptr, nullptr) == 0);
+		const auto output_path = temp_dir / (std::string(receiver_name) + "_results.h5");
+		REQUIRE(std::filesystem::exists(output_path));
+		HighFive::File const output(output_path.string(), HighFive::File::ReadOnly);
+		std::vector<RealType> i_samples;
+		std::vector<RealType> q_samples;
+		output.getDataSet("I_data").read(i_samples);
+		output.getDataSet("Q_data").read(q_samples);
+		REQUIRE(i_samples.size() == 64u);
+		REQUIRE(q_samples.size() == i_samples.size());
+		RealType minimum_power = std::numeric_limits<RealType>::max();
+		RealType maximum_power = 0.0;
+		for (std::size_t index = 0; index < i_samples.size(); ++index)
+		{
+			const RealType power = i_samples[index] * i_samples[index] + q_samples[index] * q_samples[index];
+			minimum_power = std::min(minimum_power, power);
+			maximum_power = std::max(maximum_power, power);
+		}
+		REQUIRE(maximum_power > 0.0);
+		REQUIRE(maximum_power > minimum_power * 2.0);
+		api_test::ApiString const metadata_json(fers_get_last_output_metadata_json(context.get()));
+		const auto metadata = api_test::json::parse(metadata_json.str());
+		REQUIRE(metadata.at("files").size() == 1u);
+		REQUIRE(metadata.at("files").front().at("total_samples").get<std::uint64_t>() > 0u);
+		if (element == "fmcw_from_file")
+		{
+			REQUIRE(metadata.at("files").front().at("fmcw_sources").size() == 1u);
+			const auto& source = metadata.at("files").front().at("fmcw_sources").front();
+			REQUIRE(source.at("waveform_shape") == "file");
+			REQUIRE(source.at("sampled_duration") == 64.0 / 32000.0);
+			REQUIRE(source.at("sampled_count") == 64u);
+			REQUIRE_FALSE(source.contains("chirp_period"));
+			REQUIRE_FALSE(source.at("segments").front().contains("emitted_chirp_count"));
+			REQUIRE(metadata.at("files").front().at("fmcw_dechirp_mode") == "physical");
+			REQUIRE(metadata.at("files").front().at("fmcw_dechirp_reference_source") == "custom");
+		}
+	}
 }
 
 TEST_CASE("VITA49 metadata section records runtime output config", "[api][runtime][vita49]")

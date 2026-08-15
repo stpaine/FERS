@@ -80,6 +80,17 @@ namespace core
 					result["chirp_count"] = *fmcw.chirp_count;
 				}
 			}
+			else if (fmcw.waveform_shape == "file")
+			{
+				if (fmcw.sampled_duration.has_value())
+				{
+					result["sampled_duration"] = *fmcw.sampled_duration;
+				}
+				if (fmcw.sampled_count.has_value())
+				{
+					result["sampled_count"] = *fmcw.sampled_count;
+				}
+			}
 			else if (fmcw.waveform_shape == "triangle")
 			{
 				if (fmcw.triangle_period.has_value())

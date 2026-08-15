@@ -50,7 +50,7 @@ namespace core
 	/// FMCW waveform metadata captured for a streaming output file.
 	struct FmcwMetadata
 	{
-		std::string waveform_shape = "linear"; ///< FMCW waveform shape token: linear or triangle.
+		std::string waveform_shape = "linear"; ///< FMCW waveform shape token: linear, triangle, or file.
 		RealType chirp_bandwidth = 0.0; ///< Chirp bandwidth in hertz.
 		RealType chirp_duration = 0.0; ///< Active chirp duration in seconds.
 		RealType chirp_period = 0.0; ///< Chirp repetition period in seconds.
@@ -61,6 +61,8 @@ namespace core
 		std::optional<std::uint64_t> chirp_count = std::nullopt; ///< Optional finite chirp count.
 		std::optional<RealType> triangle_period = std::nullopt; ///< Full triangle period in seconds.
 		std::optional<std::uint64_t> triangle_count = std::nullopt; ///< Optional finite triangle count.
+		std::optional<RealType> sampled_duration = std::nullopt; ///< Finite file-backed waveform duration in seconds.
+		std::optional<std::uint64_t> sampled_count = std::nullopt; ///< Native samples in a file-backed waveform.
 	};
 
 	/// Metadata for one active FMCW transmitter schedule segment.

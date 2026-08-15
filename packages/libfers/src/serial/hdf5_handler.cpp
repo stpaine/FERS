@@ -121,6 +121,11 @@ namespace serial
 					createOptionalUnsignedAttribute(file, prefix + "chirp_count", waveform.chirp_count);
 				}
 			}
+			else if (waveform.waveform_shape == "file")
+			{
+				createOptionalAttribute(file, prefix + "sampled_duration", waveform.sampled_duration);
+				createOptionalUnsignedAttribute(file, prefix + "sampled_count", waveform.sampled_count);
+			}
 			else if (waveform.waveform_shape == "triangle" && waveform.triangle_period.has_value())
 			{
 				file.createAttribute(prefix + "triangle_period", *waveform.triangle_period);

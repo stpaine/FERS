@@ -203,6 +203,11 @@ namespace simulation
 														core::FmcwChirpBoundaryTracker* chirp_tracker,
 														RealType& phase_out);
 
+	/// Evaluates the complete complex reference envelope, including file-backed amplitude modulation.
+	[[nodiscard]] bool calculateStreamingReferenceSample(const core::ActiveStreamingSource& source, RealType timeK,
+														 core::FmcwChirpBoundaryTracker* chirp_tracker,
+														 ComplexType& sample_out);
+
 	/**
 	 * @brief Calculates the complex envelope contribution for a reflected path (Tx -> Tgt -> Rx) at a specific time.
 	 * This function is used for Continuous Wave (CW) simulations.

@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // Copyright (c) 2025-present FERS Contributors (see AUTHORS.md).
 
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <highfive/highfive.hpp>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "antenna/antenna_factory.h"
 #include "core/logging.h"
@@ -87,6 +93,34 @@ namespace
 		params::setOversampleRatio(1);
 		params::setTime(0.0, 1.0);
 	}
+
+	class TemporaryWaveformHdf5
+	{
+	public:
+		TemporaryWaveformHdf5()
+		{
+			path = std::filesystem::temp_directory_path() /
+				("fers_json_file_waveform_" +
+				 std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".h5");
+			HighFive::File file(path.string(), HighFive::File::Overwrite);
+			const std::vector<RealType> i_values{1.0, 0.0, -1.0, 0.0};
+			const std::vector<RealType> q_values{0.0, 1.0, 0.0, -1.0};
+			file.createGroup("/I")
+				.createDataSet<RealType>("value", HighFive::DataSpace::From(i_values))
+				.write(i_values);
+			file.createGroup("/Q")
+				.createDataSet<RealType>("value", HighFive::DataSpace::From(q_values))
+				.write(q_values);
+		}
+		~TemporaryWaveformHdf5()
+		{
+			std::error_code ec;
+			std::filesystem::remove(path, ec);
+		}
+		TemporaryWaveformHdf5(const TemporaryWaveformHdf5&) = delete;
+		TemporaryWaveformHdf5& operator=(const TemporaryWaveformHdf5&) = delete;
+		std::filesystem::path path;
+	};
 
 	[[nodiscard]] json linearChirpJson(const std::string_view direction)
 	{
@@ -373,6 +407,33 @@ TEST_CASE("JSON: FMCW linear chirp direction round trips", "[serial][json][fmcw]
 	for (const auto* const direction : {"up", "down"})
 	{
 		requireLinearChirpDirectionRoundTrip(direction);
+	}
+}
+
+TEST_CASE("JSON: CW and FMCW file waveforms round trip", "[serial][json][file]")
+{
+	ParamGuard const guard;
+	params::setOversampleRatio(1);
+	params::setRate(8.0);
+	TemporaryWaveformHdf5 const file;
+
+	for (const auto& [key, kind] : std::array<std::pair<std::string, fers_signal::FileWaveformKind>, 2>{
+			 std::pair{"cw_from_file", fers_signal::FileWaveformKind::Cw},
+			 std::pair{"fmcw_from_file", fers_signal::FileWaveformKind::Fmcw}})
+	{
+		const json input = {{"id", 459},
+							{"name", key},
+							{"power", 2.0},
+							{"carrier_frequency", 10.0},
+							{key, {{"filename", file.path.string()}}}};
+		auto waveform = serial::parse_waveform_from_json(input);
+		REQUIRE(waveform->getFileSignal() != nullptr);
+		REQUIRE(waveform->getFileSignal()->getKind() == kind);
+
+		json output;
+		fers_signal::to_json(output, *waveform);
+		REQUIRE(output.at(key).at("filename") == file.path.string());
+		REQUIRE_FALSE(output.contains(kind == fers_signal::FileWaveformKind::Cw ? "fmcw_from_file" : "cw_from_file"));
 	}
 }
 

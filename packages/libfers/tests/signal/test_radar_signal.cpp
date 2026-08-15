@@ -55,6 +55,53 @@ TEST_CASE("CwSignal render returns empty data", "[signal][radar][cw]")
 	REQUIRE(size == 0);
 }
 
+TEST_CASE("FileSignal preserves radar-mode identity", "[signal][radar][file]")
+{
+	auto cw_signal = std::make_unique<fers_signal::FileSignal>(fers_signal::FileWaveformKind::Cw);
+	cw_signal->load(std::vector<ComplexType>{{1.0, 0.0}}, 1, 8.0);
+	fers_signal::RadarSignal const cw("cw-file", 1.0, 10.0, 0.125, std::move(cw_signal), 1);
+
+	auto fmcw_signal = std::make_unique<fers_signal::FileSignal>(fers_signal::FileWaveformKind::Fmcw);
+	fmcw_signal->load(std::vector<ComplexType>{{1.0, 0.0}}, 1, 8.0);
+	fers_signal::RadarSignal const fmcw("fmcw-file", 1.0, 10.0, 0.125, std::move(fmcw_signal), 2);
+
+	REQUIRE(cw.isCw());
+	REQUIRE_FALSE(cw.isFmcwFamily());
+	REQUIRE(cw.getFileSignal()->getKind() == fers_signal::FileWaveformKind::Cw);
+	REQUIRE_FALSE(fmcw.isCw());
+	REQUIRE(fmcw.isFmcwFamily());
+	REQUIRE(fmcw.getFileSignal()->getKind() == fers_signal::FileWaveformKind::Fmcw);
+}
+
+TEST_CASE("FileSignal interpolates a finite complex envelope without wrapping", "[signal][radar][file][hdf5]")
+{
+	ParamGuard const guard;
+	params::setOversampleRatio(1);
+	constexpr RealType rate = 32.0;
+	constexpr unsigned sample_count = 64;
+	std::vector<ComplexType> samples(sample_count);
+	for (unsigned i = 0; i < sample_count; ++i)
+	{
+		const RealType phase = 2.0 * PI * 3.0 * static_cast<RealType>(i) / rate;
+		samples[i] = {std::cos(phase), std::sin(phase)};
+	}
+
+	fers_signal::FileSignal signal(fers_signal::FileWaveformKind::Fmcw);
+	signal.load(samples, sample_count, rate);
+	const RealType duration = static_cast<RealType>(sample_count) / rate;
+	const RealType sample_time = 0.3125;
+	const auto first = signal.sampleAt(sample_time);
+	const auto at_end = signal.sampleAt(duration);
+	const auto after_end = signal.sampleAt(sample_time + duration);
+	const auto negative = signal.sampleAt(-sample_time);
+
+	REQUIRE_THAT(std::abs(first), WithinAbs(1.0, 1e-6));
+	REQUIRE_THAT(std::arg(first), WithinAbs(std::remainder(2.0 * PI * 3.0 * sample_time, 2.0 * PI), 1e-6));
+	REQUIRE((at_end == ComplexType{0.0, 0.0}));
+	REQUIRE((after_end == ComplexType{0.0, 0.0}));
+	REQUIRE((negative == ComplexType{0.0, 0.0}));
+}
+
 TEST_CASE("RadarSignal requires a signal", "[signal][radar]")
 {
 	REQUIRE_THROWS_AS(fers_signal::RadarSignal("test", 1.0, 1.0, 1.0, std::unique_ptr<fers_signal::Signal>{}, 0),

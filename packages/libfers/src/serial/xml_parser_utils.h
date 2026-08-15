@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -37,6 +38,7 @@ namespace antenna
 }
 namespace fers_signal
 {
+	enum class FileWaveformKind : std::uint8_t;
 	class RadarSignal;
 }
 namespace timing
@@ -82,10 +84,10 @@ namespace serial::xml_parser_utils
 	 */
 	struct AssetLoaders
 	{
-		/// Hook to load a pulsed waveform from an external file.
-		std::function<std::unique_ptr<fers_signal::RadarSignal>(const std::string& name,
-																const std::filesystem::path& pulse_path, RealType power,
-																RealType carrierFreq, SimId id)>
+		/// Hook to load a mode-tagged waveform from an external file.
+		std::function<std::unique_ptr<fers_signal::RadarSignal>(
+			const std::string& name, const std::filesystem::path& waveform_path, RealType power, RealType carrierFreq,
+			SimId id, fers_signal::FileWaveformKind kind)>
 			loadWaveform;
 
 		/// Hook to load an antenna pattern defined in a legacy XML format.

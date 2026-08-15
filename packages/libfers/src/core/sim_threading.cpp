@@ -1555,7 +1555,7 @@ namespace core
 	std::optional<ComplexType> SimulationEngine::calculateDechirpMixer(Receiver* rx, const RealType t_step,
 																	   ReceiverTrackerCache& tracker_cache) const
 	{
-		RealType reference_phase = 0.0;
+		ComplexType reference_sample{0.0, 0.0};
 		const auto& dechirp_sources = rx->getDechirpSources();
 		if (tracker_cache.dechirp_reference.size() < dechirp_sources.size())
 		{
@@ -1579,8 +1579,8 @@ namespace core
 		{
 			const auto& reference_source = dechirp_sources[source_index];
 			if (t_step >= reference_source.segment_start && t_step < reference_source.segment_end &&
-				simulation::calculateStreamingReferencePhase(
-					reference_source, t_step, &tracker_cache.dechirp_reference[source_index], reference_phase))
+				simulation::calculateStreamingReferenceSample(
+					reference_source, t_step, &tracker_cache.dechirp_reference[source_index], reference_sample))
 			{
 				reference_active = true;
 			}
@@ -1596,7 +1596,7 @@ namespace core
 		{
 			receiver_phase = _cw_phase_noise_lookup->sample(rx->getTiming().get(), t_step);
 		}
-		return std::polar(1.0, reference_phase + receiver_phase);
+		return reference_sample * std::polar(1.0, receiver_phase);
 	}
 
 	ComplexType SimulationEngine::calculateStreamingSample(Receiver* rx, const RealType t_step,

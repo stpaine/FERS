@@ -613,7 +613,28 @@ namespace fers_signal
 						   {"name", rs.getName()},
 						   {"power", rs.getPower()},
 						   {"carrier_frequency", rs.getCarrier()}};
-		if (dynamic_cast<const CwSignal*>(rs.getSignal()) != nullptr)
+		if (const auto* file = rs.getFileSignal(); file != nullptr)
+		{
+			std::string_view key = "pulsed_from_file";
+			if (file->getKind() == FileWaveformKind::Cw)
+			{
+				key = "cw_from_file";
+			}
+			else if (file->getKind() == FileWaveformKind::Fmcw)
+			{
+				key = "fmcw_from_file";
+			}
+			if (const auto& filename = rs.getFilename(); filename.has_value())
+			{
+				j[key] = {{"filename", *filename}};
+			}
+			else
+			{
+				throw std::logic_error("Attempted to serialize a file-based waveform named '" + rs.getName() +
+									   "' without a source filename.");
+			}
+		}
+		else if (dynamic_cast<const CwSignal*>(rs.getSignal()) != nullptr)
 		{
 			j["cw"] = nlohmann::json::object();
 		}
@@ -769,6 +790,26 @@ namespace fers_signal
 				return; // rs remains nullptr
 			}
 			rs = serial::loadWaveformFromFile(name, filename, power, carrier, id);
+		}
+		else if (j.contains("cw_from_file"))
+		{
+			const auto filename = j.at("cw_from_file").value("filename", "");
+			if (filename.empty())
+			{
+				LOG(logging::Level::WARNING, "Skipping load of file-based waveform '{}': filename is empty.", name);
+				return;
+			}
+			rs = serial::loadWaveformFromFile(name, filename, power, carrier, id, FileWaveformKind::Cw);
+		}
+		else if (j.contains("fmcw_from_file"))
+		{
+			const auto filename = j.at("fmcw_from_file").value("filename", "");
+			if (filename.empty())
+			{
+				LOG(logging::Level::WARNING, "Skipping load of file-based waveform '{}': filename is empty.", name);
+				return;
+			}
+			rs = serial::loadWaveformFromFile(name, filename, power, carrier, id, FileWaveformKind::Fmcw);
 		}
 		else
 		{

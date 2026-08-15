@@ -145,6 +145,8 @@ Required children:
 Then choose exactly one waveform type:
 
 - `<pulsed_from_file>`.
+- `<cw_from_file>`.
+- `<fmcw_from_file>`.
 - `<cw/>`.
 - `<fmcw_linear_chirp>`.
 - `<fmcw_triangle>`.
@@ -173,9 +175,22 @@ Supported file types:
 
 The file contains complex baseband samples. Do not include the RF carrier in the file; use `<carrier_frequency>` for that.
 
+### `<cw_from_file>` and `<fmcw_from_file>`
+
+File input is the primary way to define CW and FMCW waveforms. Parameter-generated `<cw/>`, `<fmcw_linear_chirp>`, and `<fmcw_triangle>` remain available as convenient alternatives.
+
+```xml
+<cw_from_file filename="recorded_cw.h5"/>
+<fmcw_from_file filename="sampled_fmcw.h5"/>
+```
+
+Both elements use the same HDF5 layout and path resolution as pulsed HDF5 input: one-dimensional real samples in `/I/value` and imaginary samples in `/Q/value`. The scenario `<rate>` supplies the sample rate. The file is a finite complex-baseband timeline; it starts at the beginning of an active transmitter segment and stops after its last sample without implicit wrapping. `<power>` scales the complex sample envelope.
+
+FMCW dechirp references use the same finite complex samples. A file-backed FMCW waveform therefore may contain an arbitrary sampled sweep or phase/amplitude modulation; FERS does not infer analytic chirp bandwidth, direction, or repetition from the file.
+
 ### `<cw/>`
 
-Use this for continuous-wave simulation.
+Use this to generate a simple continuous tone without a file.
 
 ```xml
 <cw/>

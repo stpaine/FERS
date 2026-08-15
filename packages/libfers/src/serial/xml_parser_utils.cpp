@@ -648,19 +648,31 @@ namespace serial::xml_parser_utils
 		const auto power = get_child_real_type(waveform, "power");
 		const auto carrier = get_child_real_type(waveform, "carrier_frequency");
 
-		if (const XmlElement pulsed_file = waveform.childElement("pulsed_from_file", 0); pulsed_file.isValid())
+		auto load_file_waveform = [&](const XmlElement& file_element, const fers_signal::FileWaveformKind kind)
 		{
-			const std::string filename_str = XmlElement::getSafeAttribute(pulsed_file, "filename");
-			fs::path pulse_path(filename_str);
+			const std::string filename_str = XmlElement::getSafeAttribute(file_element, "filename");
+			fs::path waveform_path(filename_str);
 
-			if (!fs::exists(pulse_path))
+			if (!fs::exists(waveform_path))
 			{
-				pulse_path = ctx.base_dir / filename_str;
+				waveform_path = ctx.base_dir / filename_str;
 			}
 
-			// Defer to dependency-injected file loader
-			auto wave = ctx.loaders.loadWaveform(name, pulse_path, power, carrier, id);
+			auto wave = ctx.loaders.loadWaveform(name, waveform_path, power, carrier, id, kind);
 			ctx.world->add(std::move(wave));
+		};
+
+		if (const XmlElement pulsed_file = waveform.childElement("pulsed_from_file", 0); pulsed_file.isValid())
+		{
+			load_file_waveform(pulsed_file, fers_signal::FileWaveformKind::Pulsed);
+		}
+		else if (const XmlElement cw_file = waveform.childElement("cw_from_file", 0); cw_file.isValid())
+		{
+			load_file_waveform(cw_file, fers_signal::FileWaveformKind::Cw);
+		}
+		else if (const XmlElement fmcw_file = waveform.childElement("fmcw_from_file", 0); fmcw_file.isValid())
+		{
+			load_file_waveform(fmcw_file, fers_signal::FileWaveformKind::Fmcw);
 		}
 		else if (waveform.childElement("cw", 0).isValid())
 		{
@@ -1549,9 +1561,9 @@ namespace serial::xml_parser_utils
 
 	AssetLoaders createDefaultAssetLoaders()
 	{
-		return {.loadWaveform = [](const std::string& name, const fs::path& pulse_path, RealType power,
-								   RealType carrierFreq, SimId id)
-				{ return serial::loadWaveformFromFile(name, pulse_path.string(), power, carrierFreq, id); },
+		return {.loadWaveform = [](const std::string& name, const fs::path& waveform_path, RealType power,
+								   RealType carrierFreq, SimId id, const fers_signal::FileWaveformKind kind)
+				{ return serial::loadWaveformFromFile(name, waveform_path.string(), power, carrierFreq, id, kind); },
 				.loadXmlAntenna = [](const std::string& name, const std::string& filename, SimId id)
 				{ return std::make_unique<antenna::XmlAntenna>(name, filename, id); },
 				.loadH5Antenna = [](const std::string& name, const std::string& filename, SimId id)

@@ -70,10 +70,10 @@ namespace
 	serial::xml_parser_utils::AssetLoaders createMockLoaders()
 	{
 		serial::xml_parser_utils::AssetLoaders loaders;
-		loaders.loadWaveform =
-			[](const std::string& name, const std::filesystem::path&, RealType power, RealType carrierFreq, SimId id)
+		loaders.loadWaveform = [](const std::string& name, const std::filesystem::path&, RealType power,
+								  RealType carrierFreq, SimId id, const fers_signal::FileWaveformKind kind)
 		{
-			auto sig = std::make_unique<fers_signal::CwSignal>();
+			auto sig = std::make_unique<fers_signal::FileSignal>(kind);
 			return std::make_unique<fers_signal::RadarSignal>(name, power, carrierFreq, 1.0, std::move(sig), id);
 		};
 		loaders.loadXmlAntenna = [](const std::string& name, const std::string&, SimId id)
@@ -356,6 +356,28 @@ TEST_CASE("parseWaveform handles CW and delegates file loading", "[serial][xml_p
 		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
 		REQUIRE(world.getWaveforms().size() == 1);
 		REQUIRE(world.getWaveforms().begin()->second->getName() == "p1");
+	}
+
+	SECTION("CW from file")
+	{
+		auto doc = loadXml("<waveform name=\"cw-file\"><power>5</power><carrier_frequency>2e9</carrier_frequency>"
+						   "<cw_from_file filename=\"dummy.h5\"/></waveform>");
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		const auto* wave = world.getWaveforms().begin()->second.get();
+		REQUIRE(wave->isCw());
+		REQUIRE(wave->getFileSignal() != nullptr);
+		REQUIRE(wave->getFileSignal()->getKind() == fers_signal::FileWaveformKind::Cw);
+	}
+
+	SECTION("FMCW from file")
+	{
+		auto doc = loadXml("<waveform name=\"fmcw-file\"><power>5</power><carrier_frequency>2e9</carrier_frequency>"
+						   "<fmcw_from_file filename=\"dummy.h5\"/></waveform>");
+		serial::xml_parser_utils::parseWaveform(doc.getRootElement(), ctx);
+		const auto* wave = world.getWaveforms().begin()->second.get();
+		REQUIRE(wave->isFmcwFamily());
+		REQUIRE(wave->getFileSignal() != nullptr);
+		REQUIRE(wave->getFileSignal()->getKind() == fers_signal::FileWaveformKind::Fmcw);
 	}
 }
 

@@ -101,6 +101,16 @@
                             <xs:attribute name="filename" type="xs:string" use="required"/>
                         </xs:complexType>
                     </xs:element>
+                    <xs:element name="cw_from_file">
+                        <xs:complexType>
+                            <xs:attribute name="filename" type="xs:string" use="required"/>
+                        </xs:complexType>
+                    </xs:element>
+                    <xs:element name="fmcw_from_file">
+                        <xs:complexType>
+                            <xs:attribute name="filename" type="xs:string" use="required"/>
+                        </xs:complexType>
+                    </xs:element>
                     <xs:element name="cw">
                         <xs:complexType/>
                     </xs:element>

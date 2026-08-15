@@ -112,6 +112,7 @@ namespace
 	{
 		RealType phase = 0.0;
 		RealType rf_frequency = 0.0;
+		ComplexType envelope{1.0, 0.0};
 	};
 
 	/**
@@ -502,6 +503,18 @@ namespace
 			return true;
 		}
 
+		if (source.kind == core::StreamingWaveformKind::FileCw || source.kind == core::StreamingWaveformKind::FileFmcw)
+		{
+			if (source.file == nullptr || source.file_duration <= 0.0)
+			{
+				return false;
+			}
+			eval.rf_frequency = source.carrier_freq;
+			eval.phase = -2.0 * PI * source.carrier_freq * tau;
+			eval.envelope = source.file->sampleAt(t_ret - source.segment_start);
+			return true;
+		}
+
 		eval.rf_frequency = source.carrier_freq;
 		eval.phase = -2.0 * PI * source.carrier_freq * tau;
 		return true;
@@ -784,7 +797,7 @@ namespace simulation
 		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
 		// Carrier Phase
-		ComplexType contribution = std::polar(amplitude, eval.phase);
+		ComplexType contribution = amplitude * eval.envelope * std::polar(1.0, eval.phase);
 
 		// Non-coherent Local Oscillator Effects
 		const RealType non_coherent_phase =
@@ -803,6 +816,22 @@ namespace simulation
 			return false;
 		}
 		phase_out = eval.phase;
+		if (std::abs(eval.envelope) > 0.0)
+		{
+			phase_out += std::arg(eval.envelope);
+		}
+		return true;
+	}
+
+	bool calculateStreamingReferenceSample(const core::ActiveStreamingSource& source, const RealType timeK,
+										   core::FmcwChirpBoundaryTracker* const chirp_tracker, ComplexType& sample_out)
+	{
+		StreamingWaveformEvaluation eval;
+		if (!computeStreamingEvaluation(source, timeK, 0.0, chirp_tracker, eval))
+		{
+			return false;
+		}
+		sample_out = eval.envelope * std::polar(1.0, eval.phase);
 		return true;
 	}
 
@@ -875,7 +904,7 @@ namespace simulation
 		// Include Signal Power
 		const RealType amplitude = source.amplitude * std::sqrt(scaling_factor);
 
-		ComplexType contribution = std::polar(amplitude, eval.phase);
+		ComplexType contribution = amplitude * eval.envelope * std::polar(1.0, eval.phase);
 
 		// Non-coherent Local Oscillator Effects
 		const RealType non_coherent_phase =
