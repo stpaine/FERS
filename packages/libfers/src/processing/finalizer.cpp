@@ -682,6 +682,46 @@ namespace processing
 			return receiver == nullptr ? nullptr : dynamic_cast<const radar::Transmitter*>(receiver->getAttached());
 		}
 
+		[[nodiscard]] bool isCwContextSource(const core::ActiveStreamingSource& source) noexcept
+		{
+			return source.transmitter != nullptr &&
+				(source.kind == core::StreamingWaveformKind::Cw || source.kind == core::StreamingWaveformKind::FileCw);
+		}
+
+		/// Returns the sole logical CW source represented by the active segments.
+		/// Repeated schedule segments from the same transmitter/waveform remain one
+		/// source; multiple distinct CW sources are intentionally left unbound because
+		/// the scalar VITA CW context cannot describe their superposition faithfully.
+		[[nodiscard]] const radar::Transmitter*
+		uniqueCwContextTransmitter(const std::span<const core::ActiveStreamingSource> streaming_sources)
+		{
+			const radar::Transmitter* candidate = nullptr;
+			const fers_signal::RadarSignal* candidate_signal = nullptr;
+			for (const auto& source : streaming_sources)
+			{
+				if (!isCwContextSource(source))
+				{
+					continue;
+				}
+				const auto* signal = source.transmitter->getSignal();
+				if (signal == nullptr)
+				{
+					continue;
+				}
+				if (candidate == nullptr)
+				{
+					candidate = source.transmitter;
+					candidate_signal = signal;
+					continue;
+				}
+				if (candidate != source.transmitter || candidate_signal != signal)
+				{
+					return nullptr;
+				}
+			}
+			return candidate;
+		}
+
 		void populateWaveformIdentity(core::ReceiverStreamDescriptor::PulsedContext& context,
 									  const fers_signal::RadarSignal* signal)
 		{
@@ -773,7 +813,9 @@ namespace processing
 			return context;
 		}
 
-		[[nodiscard]] core::ReceiverStreamDescriptor::CwContext buildCwContext(const radar::Receiver* receiver)
+		[[nodiscard]] core::ReceiverStreamDescriptor::CwContext
+		buildCwContext(const radar::Receiver* receiver,
+					   const std::span<const core::ActiveStreamingSource> streaming_sources)
 		{
 			core::ReceiverStreamDescriptor::CwContext context;
 			if (receiver == nullptr || receiver->getMode() != radar::OperationMode::CW_MODE)
@@ -782,7 +824,12 @@ namespace processing
 			}
 
 			context.present = true;
-			if (const auto* transmitter = attachedTransmitter(receiver); transmitter != nullptr)
+			const auto* transmitter = attachedTransmitter(receiver);
+			if (transmitter == nullptr || transmitter->getSignal() == nullptr)
+			{
+				transmitter = uniqueCwContextTransmitter(streaming_sources);
+			}
+			if (transmitter != nullptr)
 			{
 				populateWaveformIdentity(context, transmitter->getSignal());
 			}
@@ -890,7 +937,7 @@ namespace processing
 												  .coordinate = buildCoordinateContext(),
 												  .initial_platform_state = buildInitialPlatformState(receiver),
 												  .pulsed = buildPulsedContext(receiver),
-												  .cw = buildCwContext(receiver),
+												  .cw = buildCwContext(receiver, streaming_sources),
 												  .fmcw = buildFmcwContext(receiver, streaming_sources),
 												  .sfcw = buildSfcwContext(receiver, streaming_sources)};
 		if (const auto timing = receiver->getTiming(); timing)
