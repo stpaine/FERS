@@ -211,7 +211,8 @@ Timestamp behavior:
 
 - The timestamp is the first sample time in the packet.
 - `--vita49-epoch` or the configured API epoch supplies the Unix-nanosecond base.
-- If no epoch is configured, the sink uses `std::chrono::system_clock::now()` during `initializeRun`.
+- If no epoch is configured, the sink samples `std::chrono::system_clock::now()` when the first synchronized data batch
+  has been prepared and pacing is ready to start. A context-only run selects its epoch during finalization.
 - Fractional seconds are rounded to picoseconds.
 - Integer UTC seconds must fit in a 32-bit unsigned field.
 
@@ -499,7 +500,29 @@ Each `streams` entry contains:
 - Optional stream counter JSON.
 - Optional packet trace batch JSON.
 
-Stream counter JSON uses `context_packets` for live stats. Final output metadata uses `context_packet_count`.
+The stream-counter object contains `mode`, `epoch_unix_nanoseconds`, and `streams`. Each live `streams` entry contains:
+
+- `receiver_id`
+- `receiver_name`
+- `stream_id`
+- `mode`
+- `sample_rate`
+- `reference_frequency`
+- `packets_emitted`
+- `context_packets`
+- `samples_emitted`
+- `packets_dropped`
+- `samples_dropped`
+- `over_range_count`
+- `late_data_packet_count`
+- `late_context_packet_count`
+- `first_sample_time`
+- `end_sample_time`
+- `first_timestamp`
+- `end_timestamp`
+
+Live stats use `context_packets`; final output metadata uses `context_packet_count`. Both interfaces expose
+`late_data_packet_count` and `late_context_packet_count` without an aggregate `late_packet_count` field.
 
 Packet trace fields:
 

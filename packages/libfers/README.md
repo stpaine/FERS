@@ -18,7 +18,8 @@ including the official `fers-cli` and `fers-ui` applications.
   radar systems.
 - **Waveform Sources:** Finite HDF5 complex-I/Q input for CW and FMCW, CSV/HDF5 pulse input, and generated CW/FMCW
   alternatives.
-- **Data Export:** Advanced data export in HDF5, CSV, and XML formats.
+- **Output Backends:** Write receiver results to HDF5 or stream paced VITA 49.2 UDP signal and context packets, with
+  final metadata and live stream telemetry available through the C API.
 - **Geographic Visualization:** Generate KML files from scenarios.
 - **Performance:** A unified event-driven architecture for efficient simulation of both pulsed and continuous-wave scenarios, with a global thread pool for parallelizing tasks.
 

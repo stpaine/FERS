@@ -109,7 +109,11 @@ After a run, applications can request JSON metadata describing the output files.
 
 Prefer this metadata over hard-coded output assumptions.
 
-When VITA 49.2 output is selected, the metadata includes a `vita49` section with endpoint, epoch, class ID, fixed full-scale, packet sizing, queue depth, receiver mode, and per-stream packet/sample counters when the streaming backend has populated them. Dropped packet/sample counters represent socket send failures, not queue overflow.
+When VITA 49.2 output is selected, the metadata includes a `vita49` section with endpoint, epoch, class ID, fixed
+full-scale, packet sizing, queue depth, and per-stream mode, sample rate, waveform-derived RF reference, packet/sample
+counts, context counts, and timestamps. `late_data_packet_count` and `late_context_packet_count` report the two packet
+kinds independently; no aggregate late field is emitted. Dropped packet/sample counters represent socket send failures,
+not queue overflow.
 
 ## KML Generation
 

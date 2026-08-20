@@ -26,7 +26,8 @@ semi-independent packages.
   continuous wave (CW), native FMCW streaming, and native stepped-frequency continuous-wave (SFCW) modes.
 - **Sampled Waveform Input:** Load complex-baseband pulse waveforms from CSV or HDF5 and finite CW/FMCW waveforms
   from the same HDF5 I/Q layout, while retaining generated CW tones and analytic FMCW chirps.
-- **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
+- **Advanced Data Export:** Write receiver results to HDF5 for offline analysis or stream paced VITA 49.2 UDP signal
+  and context packets to external consumers.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and
   deployed [documentation site](https://davidbits.github.io/FERS/)

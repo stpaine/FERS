@@ -288,7 +288,7 @@ The local catalog is stored by the app as `asset-library.json` in the applicatio
 
 ## Running Simulations In The UI
 
-Open the Simulation Run view to run the current scenario.
+Use **Simulation Run** for the default HDF5 output backend:
 
 1. Choose an output directory.
 2. Press `Run Simulation`.
@@ -296,7 +296,7 @@ Open the Simulation Run view to run the current scenario.
 4. Review the output metadata table after completion.
 5. Open the generated HDF5 files in your analysis tools.
 
-The UI writes the same HDF5 result files as `fers-cli`.
+This flow writes the same HDF5 result files as `fers-cli` when the CLI runs without `--vita49`.
 
 The output metadata table shows:
 
@@ -311,6 +311,31 @@ The output metadata table shows:
 - SFCW details when available, including effective bandwidth, range resolution, unambiguous range, and emitted step counts.
 
 Use `Export JSON` to save the output metadata beside the generated HDF5 files.
+
+### VITA 49.2 Streaming
+
+Open **VITA49 Streams** from the left rail to use the paced UDP output backend. This is a separate runtime output choice;
+it does not change the `.fersxml` scenario. Configure:
+
+- Destination host and UDP port.
+- Fixed ADC full-scale for int16 IQ conversion.
+- Automatic or fixed Unix-nanosecond epoch.
+- Maximum UDP payload and sender queue depth.
+- Optional packet tracing and bounded trace-ring size.
+
+An automatic epoch is selected when the first synchronized data batch has been calculated and is ready for playout. A
+fixed epoch remains exactly the configured timestamp base, while wall-clock pacing still starts when that first batch is
+ready.
+
+During and after the run, the view shows the endpoint, profile, epoch, aggregate counters, and a row for each receiver
+stream. Stream rows include sample rate, waveform-derived RF reference, data packet and sample totals, drops, late
+packets, context packets, simulation span, and UTC span. The concise `Late` value is the sum of data and context packets
+dispatched more than 1 ms after their scheduled wall-clock deadlines. Use its info control to see the classified counts;
+this timing counter is separate from UDP drops and sample-loss indicators.
+
+When packet tracing is enabled, the view retains only the configured number of recent trace events. Stream packet and
+sample counters remain complete even when older trace events leave that bounded history. Final VITA metadata is written
+to the selected output directory; VITA mode does not write HDF5 receiver result files.
 
 ## Generating KML
 
