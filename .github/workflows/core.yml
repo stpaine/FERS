@@ -45,7 +45,7 @@ jobs:
 
         steps:
             - name: Checkout repository
-              uses: actions/checkout@v6
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
             - name: Install Linux dependencies
               if: runner.os == 'Linux'
@@ -54,11 +54,14 @@ jobs:
                   sudo apt-get install -y pkg-config build-essential
 
             - name: Get CMake
-              uses: lukka/get-cmake@latest
+              uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # latest
+              with:
+                  cmakeVersion: 4.4.2
+                  ninjaVersion: 1.13.2
 
             - name: Setup MSVC
               if: runner.os == 'Windows'
-              uses: ilammy/msvc-dev-cmd@v1
+              uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
               with:
                   arch: ${{ matrix.msvc_arch }}
 
@@ -78,7 +81,7 @@ jobs:
 
             - name: Setup ccache
               if: runner.os != 'Windows'
-              uses: hendrikmuhs/ccache-action@v1.2
+              uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2
               with:
                   key: ${{ matrix.os }}-coverage
                   variant: ccache
@@ -108,7 +111,7 @@ jobs:
                   echo "VCPKG_KEEP_ENV_VARS=ACTIONS_CACHE_URL;ACTIONS_RUNTIME_TOKEN;CMAKE_C_COMPILER_LAUNCHER;CMAKE_CXX_COMPILER_LAUNCHER" >> "$GITHUB_ENV"
 
             - name: Cache vcpkg downloads
-              uses: actions/cache@v5
+              uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
               with:
                   path: ${{ github.workspace }}/.cache/vcpkg/downloads
                   key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
@@ -117,7 +120,7 @@ jobs:
 
             - name: Cache Windows vcpkg binary packages
               if: runner.os == 'Windows'
-              uses: actions/cache@v5
+              uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
               with:
                   path: ${{ github.workspace }}/.cache/vcpkg/binary-cache/${{ matrix.vcpkg_triplet }}
                   key: ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-${{ hashFiles('vcpkg.json') }}
@@ -125,7 +128,7 @@ jobs:
                       ${{ runner.os }}-vcpkg-binary-${{ matrix.vcpkg_triplet }}-
 
             - name: Setup vcpkg
-              uses: lukka/run-vcpkg@v11
+              uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2 # v11
               with:
                   vcpkgDirectory: ${{ github.workspace }}/vcpkg
                   vcpkgJsonGlob: 'vcpkg.json'
