@@ -24,6 +24,8 @@ semi-independent packages.
 - **Visual Scenario Builder:** An intuitive 3D interface to construct, configure, and visualize radar scenarios.
 - **Flexible System Modeling:** Simulate a wide range of radar systems, including monostatic, multistatic, pulsed,
   continuous wave (CW), native FMCW streaming, and native stepped-frequency continuous-wave (SFCW) modes.
+- **Sampled Waveform Input:** Load complex-baseband pulse waveforms from CSV or HDF5 and finite CW/FMCW waveforms
+  from the same HDF5 I/Q layout, while retaining generated CW tones and analytic FMCW chirps.
 - **Advanced Data Export:** Output simulation data in HDF5 format for analysis.
 - **Geographic Visualization:** Generate KML files from scenarios for accurate visualization in tools like Google Earth.
 - **Modern Documentation:** A continuously updated and

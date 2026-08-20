@@ -8,9 +8,9 @@ FERS is useful when you need to study how radar waveforms, platform motion, timi
 
 FERS can model:
 
-- Pulsed radar using complex baseband waveform files.
-- Continuous-wave radar.
-- FMCW linear chirps and triangular chirps.
+- Pulsed radar using complex-baseband waveform files.
+- Continuous-wave radar using finite HDF5 I/Q waveforms or generated tones.
+- FMCW radar using finite HDF5 I/Q waveforms or generated linear and triangular chirps.
 - Stepped-frequency continuous-wave radar.
 - Monostatic radars, where the transmitter and receiver are attached to the same platform.
 - Bistatic or multistatic layouts, where transmitters, receivers, and targets are on separate moving platforms.

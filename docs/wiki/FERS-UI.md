@@ -154,7 +154,7 @@ Waveform editing supports:
 - Generated FMCW linear and triangular chirps.
 - SFCW stepped-frequency sweeps.
 
-For FMCW waveforms, the UI warns or blocks when settings violate major FMCW constraints, such as chirp period shorter than chirp duration or a baseband sweep edge too close to the effective sample-rate limit `<rate> * <oversample>`.
+For generated FMCW waveforms, the UI warns or blocks when settings violate major FMCW constraints, such as chirp period shorter than chirp duration or a baseband sweep edge too close to the effective sample-rate limit `<rate> * <oversample>`. File-backed FMCW validates its HDF5 filename but does not apply analytic chirp constraints that cannot be inferred from arbitrary samples.
 
 For SFCW waveforms, the UI validates step count, step size, dwell time, step period, optional sweep count, and whether the generated RF steps remain positive.
 
@@ -234,7 +234,7 @@ For FMCW receivers and monostatic radars, the UI supports:
 
 IF settings are valid only when dechirping is enabled. If dechirping is enabled without an IF sample rate, FERS writes legacy full-rate IF output at `<rate> * <oversample>`. If an IF sample rate is provided, it is receiver-local and must be no higher than `<rate> * <oversample>`.
 
-The UI blocks simulations and KML generation when it detects invalid FMCW settings that would fail later.
+The UI blocks simulations and KML generation when it detects invalid generated-FMCW settings or an invalid file-backed FMCW filename that would fail later.
 
 ### SFCW Receiver Settings
 

@@ -26,6 +26,10 @@ by scenario documents.
 - **Target-RCS XML assets** are loaded by `libfers` according to the `target-rcs` structure. The schemas are provided for
   user/tool validation of those standalone assets.
 
+Scenario waveform choices include `<pulsed_from_file>`, `<cw_from_file>`, and `<fmcw_from_file>`. CW and FMCW file
+variants require the pulsed-compatible HDF5 layout with `/I/value` and `/Q/value`; pulsed file input also retains legacy
+CSV support.
+
 During the build process of the `libfers` package, the scenario and antenna-pattern schema files are converted into C
 header files and embedded directly into the library binary. This ensures that the simulator always has access to those
 schema versions for validation without relying on external files. The target-RCS schemas are provided for standalone

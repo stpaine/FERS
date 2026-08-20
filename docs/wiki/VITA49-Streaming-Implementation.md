@@ -400,6 +400,10 @@ The serializer follows the receiver mode when stale mode blocks are present. For
 - `dechirp_reference_waveform_id`
 - `dechirp_reference_waveform_name`
 
+For file-backed FMCW, `waveform_shape` is `file`. Analytic chirp fields are not inferred from the HDF5 samples. The
+current VITA context profile does not include the HDF5 `sampled_duration` and `sampled_count` fields available in normal
+FERS output metadata.
+
 ### SFCW Metadata
 
 `sfcw` contains:

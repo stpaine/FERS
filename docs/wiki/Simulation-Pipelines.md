@@ -152,20 +152,23 @@ Pulsed output is written as one I/Q dataset pair per receiver window.
 
 ## CW Streaming Pipeline
 
-CW output is continuous over the receiver's active intervals.
+CW output is streamed over the receiver's active intervals. `<cw_from_file>` supplies a finite complex envelope sampled
+at `<rate>`; each active transmitter segment starts at the first HDF5 sample and stops at the file end without wrapping.
+Generated `<cw/>` remains a continuous unit-envelope tone.
 
 ```mermaid
 flowchart TD
-    A[CW waveform] --> B[Active transmitter interval]
+    A[CW HDF5 waveform or generated tone] --> B[Active transmitter interval]
     B --> C[For each receiver sample]
-    C --> D[Update platform geometry]
-    D --> E[Calculate direct path if enabled]
-    D --> F[Calculate target reflections]
-    E --> G[Sum received complex sample]
-    F --> G
-    G --> H[Apply timing effects and noise]
-    H --> I[Normalize and optional ADC quantization]
-    I --> J[Write I_data and Q_data]
+    C --> D[Evaluate file envelope or generated tone at retarded transmit time]
+    D --> E[Update platform geometry]
+    E --> F[Calculate direct path if enabled]
+    E --> G[Calculate target reflections]
+    F --> H[Sum received complex sample]
+    G --> H
+    H --> I[Apply timing effects and noise]
+    I --> J[Normalize and optional ADC quantization]
+    J --> K[Write I_data and Q_data]
 ```
 
 Important CW settings:
@@ -173,6 +176,8 @@ Important CW settings:
 | Setting | Effect |
 | --- | --- |
 | `<rate>` | Output sample rate. |
+| `<cw_from_file>` | Finite HDF5 complex envelope; no implicit repetition. |
+| `<cw/>` | Generated continuous tone. |
 | Schedules | Active transmit and receive intervals. |
 | Antenna patterns and platform rotation | Directional gain over time. |
 | `nodirect` | Removes direct transmitter-to-receiver path. |
@@ -184,7 +189,7 @@ Use `dechirp_mode="none"` when you want FERS to write the received FMCW signal a
 
 ```mermaid
 flowchart TD
-    A[FMCW chirp waveform] --> B[Active transmitter interval]
+    A[FMCW HDF5 waveform or generated chirp] --> B[Active transmitter interval]
     B --> C[Generate received raw baseband samples]
     C --> D[Apply delays, Doppler, gain, RCS, and path loss]
     D --> E[Sum direct and reflected paths]
@@ -200,14 +205,17 @@ Use this mode when:
 - You are testing a custom processing chain.
 - You want to compare FERS output with another FMCW processor.
 
+For `<fmcw_from_file>`, raw output preserves the supplied finite complex envelope after propagation. FERS does not infer
+an analytic chirp bandwidth, direction, period, or repetition from the samples.
+
 ## FMCW Pipeline With Built-In Dechirp
 
 Use `dechirp_mode="physical"` or `dechirp_mode="ideal"` when you want FERS to write IF output directly.
 
 ```mermaid
 flowchart TD
-    A[FMCW chirp waveform] --> B[Received raw baseband sample]
-    C[Dechirp reference] --> D[Mix received signal with reference]
+    A[FMCW HDF5 waveform or generated chirp] --> B[Received raw baseband sample]
+    C[Matching complex dechirp reference] --> D[Mix received signal with reference]
     B --> D
     D --> E[Low-pass IF filtering when if_sample_rate is configured]
     E --> F[Resample to receiver-local if_sample_rate when configured]
@@ -216,6 +224,9 @@ flowchart TD
 ```
 
 If `if_sample_rate` is omitted, dechirped FMCW is written as legacy full-rate IF output at `<rate> * <oversample>`.
+
+For `<fmcw_from_file>`, the dechirp reference uses the same finite complex samples, including their amplitude and phase
+modulation. Reference playback ends at the file boundary and does not synthesize chirp repetition.
 
 Reference choices:
 

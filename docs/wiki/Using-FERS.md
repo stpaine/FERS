@@ -28,7 +28,7 @@ A scenario describes the radar scene, not the analysis you want to run afterward
 At a high level it contains:
 
 - Global settings, such as start time, end time, sample rate, and KML/geospatial reference settings.
-- Waveforms, such as pulsed waveform files, CW tones, or FMCW chirps.
+- Waveforms, including pulsed files, finite HDF5-backed CW/FMCW signals, generated CW tones, and generated FMCW chirps.
 - Timing sources, which model oscillator frequency, phase, and noise behavior.
 - Antennas, which determine gain as a function of direction.
 - Platforms, which move through the scene.
@@ -46,7 +46,8 @@ The complete XML reference is in [[XML Schema Reference]].
 | FMCW | You want chirp-based ranging or range-Doppler analysis. | Prefer `<fmcw_from_file>`; generated `<fmcw_linear_chirp>` and `<fmcw_triangle>` remain available. Use `<fmcw_mode>` and optional dechirp settings. |
 | SFCW | You want stepped narrowband RF dwells that synthesize a wider range profile without one wide baseband waveform. | `<stepped_frequency>`, `<sfcw_mode/>`, step size/count, dwell time, and step period. |
 
-The waveform type and radar mode must match. For example, a `<cw/>` waveform must be used with `<cw_mode/>`.
+The waveform type and radar mode must match. For example, `<cw_from_file>` and `<cw/>` use `<cw_mode/>`, while
+`<fmcw_from_file>`, `<fmcw_linear_chirp>`, and `<fmcw_triangle>` use `<fmcw_mode>`.
 
 ## Monostatic And Bistatic Layouts
 
@@ -87,7 +88,7 @@ I_data
 Q_data
 ```
 
-For FMCW with dechirping enabled, these datasets contain the dechirped IF output. Without dechirping, they contain the received complex baseband signal. SFCW output is raw streaming complex baseband; the HDF5 metadata records the step timing and RF frequencies needed for downstream range-profile reconstruction.
+For FMCW with dechirping enabled, these datasets contain the dechirped IF output. Without dechirping, they contain the received complex baseband signal. File-backed CW/FMCW sources stop after their final HDF5 sample and do not wrap implicitly. File-backed FMCW metadata reports sampled duration and count instead of inferred analytic chirp parameters. SFCW output is raw streaming complex baseband; the HDF5 metadata records the step timing and RF frequencies needed for downstream range-profile reconstruction.
 
 ## Reconstruct Physical I/Q Values
 
@@ -128,7 +129,7 @@ The most important rates are:
 | `<oversample>` | Internal oversampling multiplier. FMCW aliasing checks and legacy full-rate dechirped IF output use `<rate> * <oversample>`. |
 | `<if_sample_rate>` | Optional receiver-local FMCW IF output rate after dechirping and resampling. |
 
-Use a high enough `<rate>` and `<oversample>` to represent the signal bandwidth you expect. For FMCW, the waveform definition must also satisfy the baseband sweep-edge checks described in [[XML Schema Reference]]. For SFCW, `<rate>` must be high enough to capture the dwell intervals you want to analyze; the wide effective bandwidth comes from RF step metadata, not a wide instantaneous baseband waveform.
+Use a high enough `<rate>` and `<oversample>` to represent the signal bandwidth you expect. Generated FMCW waveforms must also satisfy the baseband sweep-edge checks described in [[XML Schema Reference]]. For file-backed CW/FMCW, `<rate>` is the HDF5 sample rate; FERS does not infer bandwidth, sweep direction, or repetition from the samples. For SFCW, `<rate>` must be high enough to capture the dwell intervals you want to analyze; the wide effective bandwidth comes from RF step metadata, not a wide instantaneous baseband waveform.
 
 ## Validation
 
@@ -172,7 +173,9 @@ If KML generation fails, `fers-cli` exits with a nonzero status and logs the rea
 | Scenario loads but does not run | A referenced waveform, antenna, timing source, or platform object name is wrong. |
 | Output is all zeros | Receiver schedule/window may miss the return, antenna pointing may be wrong, target may be outside the simulated time span, or path loss may make the signal very small. |
 | Pulsed range looks offset | Check `window_skip`, `window_length`, waveform sample rate, and speed of propagation `c`. |
-| FMCW run fails validation | Check chirp bandwidth, chirp duration, chirp period, count fields, `start_frequency_offset`, `<rate>`, `<oversample>`, and IF-chain settings. |
+| Generated FMCW run fails validation | Check chirp bandwidth, chirp duration, chirp period, count fields, `start_frequency_offset`, `<rate>`, `<oversample>`, and IF-chain settings. |
+| CW/FMCW file waveform fails to load | Use an HDF5 `.h5` file with equal-length one-dimensional `/I/value` and `/Q/value` datasets; CSV is supported only for pulsed file waveforms. |
+| File-backed CW/FMCW output stops early | File playback is finite and does not wrap; provide enough samples for the active transmitter interval or schedule another active segment to restart playback. |
 | SFCW run fails validation | Check `step_size`, `step_count`, `dwell_time`, `step_period`, `sweep_count`, and that every RF step remains positive. |
 | KML looks wrong geographically | Check KML/geospatial `<origin>`, `<coordinatesystem>`, UTM zone, and hemisphere. |
 

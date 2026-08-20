@@ -14,6 +14,7 @@
 - **Hierarchical Scene Tree:** An intuitive tree view for all simulation elements, enabling easy selection, parenting, and organization of complex scenarios.
 - **Integrated Simulation Runner:** A focused workspace to configure global simulation parameters, trigger the FERS core engine, and monitor progress.
 - **FERS XML Import/Export:** Generate a valid FERS XML configuration file directly from the visual scenario, or load an existing one to begin editing.
+- **Waveform Authoring:** Configure HDF5-backed CW/FMCW waveforms as the primary authoring choices, with generated CW tones and analytic FMCW chirps retained as alternatives.
 
 ## Technology Stack
 
