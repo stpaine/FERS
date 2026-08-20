@@ -56,9 +56,21 @@ namespace serial::vita49
 			RealType last_context_time = -1.0e300;
 		};
 
+		struct PendingContext
+		{
+			std::uint32_t stream_id = 0;
+			RealType simulation_time = 0.0;
+			bool stream_open = false;
+			bool stream_close = false;
+		};
+
 		[[nodiscard]] StreamState& stateFor(std::uint32_t stream_id);
 		[[nodiscard]] const StreamState& stateFor(std::uint32_t stream_id) const;
 		[[nodiscard]] core::OutputStats snapshotStatsLocked() const;
+		void ensurePacketizer();
+		void startPacing();
+		void appendPendingContexts(std::vector<SerializedPacket>& packets,
+								   std::vector<std::uint32_t>& context_stream_ids);
 		[[nodiscard]] bool enqueuePacket(SerializedPacket&& packet);
 		[[nodiscard]] bool enqueuePackets(std::vector<SerializedPacket> packets);
 		void emitTelemetry(std::vector<core::ReceiverOutputPacketTrace> packets = {}, bool force_stats = false);
@@ -79,6 +91,7 @@ namespace serial::vita49
 		std::unique_ptr<Vita49Packetizer> _packetizer;
 		std::unique_ptr<PacedSender> _sender;
 		std::unordered_map<std::uint32_t, StreamState> _streams;
+		std::vector<PendingContext> _pending_contexts;
 		mutable std::recursive_mutex _mutex;
 		std::chrono::steady_clock::time_point _last_stats_emit = std::chrono::steady_clock::time_point::min();
 		std::chrono::steady_clock::time_point _last_packet_trace_emit = std::chrono::steady_clock::time_point::min();
@@ -86,6 +99,7 @@ namespace serial::vita49
 		std::uint64_t _trace_sequence = 0;
 		bool _initialized = false;
 		bool _finalized = false;
+		bool _pacing_started = false;
 	};
 
 	[[nodiscard]] std::unique_ptr<core::ReceiverOutputSink>

@@ -87,13 +87,12 @@ namespace serial::vita49
 
 		_config = config;
 		_simulation_name = std::move(simulation_name);
-		const auto epoch_ns = config.vita49.epoch_unix_nanoseconds.value_or(defaultEpochNanoseconds());
-		_packetizer =
-			std::make_unique<Vita49Packetizer>(epoch_ns, config.vita49.adc_fullscale, config.vita49.max_udp_payload);
+		_packetizer.reset();
 		_sender = std::make_unique<PacedSender>(
 			_provided_sender ? std::move(_provided_sender) : std::make_unique<UdpSender>(), config.vita49.queue_depth);
 		_sender->open(config.vita49.host, config.vita49.port);
-		_sender->start(params::startTime());
+		_pending_contexts.clear();
+		_pacing_started = false;
 		_last_stats_emit = std::chrono::steady_clock::time_point::min();
 		_last_packet_trace_emit = std::chrono::steady_clock::now();
 		_pending_packet_traces.clear();
@@ -136,11 +135,12 @@ namespace serial::vita49
 	void Vita49OutputSink::submitBlocks(const std::span<const core::ReceiverSampleBlock> blocks)
 	{
 		std::scoped_lock const lock(_mutex);
-		if (!_initialized || !_packetizer)
+		if (!_initialized || !_sender)
 		{
 			throw std::logic_error("VITA output sink has not been initialized");
 		}
 		emitTelemetry(consumeSenderDropsLocked(), false);
+		ensurePacketizer();
 
 		struct PacketAccounting
 		{
@@ -155,18 +155,18 @@ namespace serial::vita49
 
 		std::vector<SerializedPacket> packets;
 		std::vector<PacketAccounting> accounting;
-		std::vector<std::uint32_t> opened_streams;
+		std::vector<std::uint32_t> context_stream_ids;
 		for (const auto& block : blocks)
 		{
 			const auto stream_id = registerStream(block.stream);
 			auto& state = stateFor(stream_id);
 			if (!state.opened)
 			{
-				packets.push_back(buildContextPacket(stream_id, block.first_sample_time, true, false));
-				opened_streams.push_back(stream_id);
+				emitContext(stream_id, block.first_sample_time, true, false);
 				state.opened = true;
 			}
 		}
+		appendPendingContexts(packets, context_stream_ids);
 
 		for (const auto& block : blocks)
 		{
@@ -196,12 +196,13 @@ namespace serial::vita49
 
 		std::stable_sort(packets.begin(), packets.end(), [](const SerializedPacket& lhs, const SerializedPacket& rhs)
 						 { return lhs.first_sample_time < rhs.first_sample_time; });
+		startPacing();
 		if (!enqueuePackets(std::move(packets)))
 		{
 			return;
 		}
 
-		for (const auto stream_id : opened_streams)
+		for (const auto stream_id : context_stream_ids)
 		{
 			++stateFor(stream_id).stats.context_packets;
 		}
@@ -275,6 +276,25 @@ namespace serial::vita49
 			}
 		}
 
+		if (!_pacing_started && !_pending_contexts.empty())
+		{
+			ensurePacketizer();
+			std::vector<SerializedPacket> packets;
+			std::vector<std::uint32_t> context_stream_ids;
+			appendPendingContexts(packets, context_stream_ids);
+			std::stable_sort(packets.begin(), packets.end(),
+							 [](const SerializedPacket& lhs, const SerializedPacket& rhs)
+							 { return lhs.first_sample_time < rhs.first_sample_time; });
+			startPacing();
+			if (enqueuePackets(std::move(packets)))
+			{
+				for (const auto stream_id : context_stream_ids)
+				{
+					++stateFor(stream_id).stats.context_packets;
+				}
+			}
+		}
+
 		if (_sender)
 		{
 			_sender->stop();
@@ -284,7 +304,7 @@ namespace serial::vita49
 		core::OutputStats stats{.mode = core::OutputMode::Vita49Udp,
 								.epoch_unix_nanoseconds = _packetizer
 									? std::optional<std::uint64_t>(_packetizer->epochUnixNanoseconds())
-									: std::nullopt,
+									: _config.vita49.epoch_unix_nanoseconds,
 								.streams = {}};
 		for (auto& [stream_id, state] : _streams)
 		{
@@ -326,12 +346,51 @@ namespace serial::vita49
 		return found->second;
 	}
 
+	void Vita49OutputSink::ensurePacketizer()
+	{
+		if (_packetizer)
+		{
+			return;
+		}
+		const auto epoch_ns = _config.vita49.epoch_unix_nanoseconds.value_or(defaultEpochNanoseconds());
+		_packetizer =
+			std::make_unique<Vita49Packetizer>(epoch_ns, _config.vita49.adc_fullscale, _config.vita49.max_udp_payload);
+	}
+
+	void Vita49OutputSink::startPacing()
+	{
+		if (_pacing_started)
+		{
+			return;
+		}
+		if (!_sender)
+		{
+			throw std::logic_error("VITA paced sender is unavailable");
+		}
+		_sender->start(params::startTime());
+		_pacing_started = true;
+	}
+
+	void Vita49OutputSink::appendPendingContexts(std::vector<SerializedPacket>& packets,
+												 std::vector<std::uint32_t>& context_stream_ids)
+	{
+		packets.reserve(packets.size() + _pending_contexts.size());
+		context_stream_ids.reserve(context_stream_ids.size() + _pending_contexts.size());
+		for (const auto& pending : _pending_contexts)
+		{
+			packets.push_back(buildContextPacket(pending.stream_id, pending.simulation_time, pending.stream_open,
+												 pending.stream_close));
+			context_stream_ids.push_back(pending.stream_id);
+		}
+		_pending_contexts.clear();
+	}
+
 	core::OutputStats Vita49OutputSink::snapshotStatsLocked() const
 	{
 		core::OutputStats stats{.mode = core::OutputMode::Vita49Udp,
 								.epoch_unix_nanoseconds = _packetizer
 									? std::optional<std::uint64_t>(_packetizer->epochUnixNanoseconds())
-									: std::nullopt,
+									: _config.vita49.epoch_unix_nanoseconds,
 								.streams = {}};
 		for (const auto& [stream_id, state] : _streams)
 		{
@@ -527,6 +586,16 @@ namespace serial::vita49
 	void Vita49OutputSink::emitContext(const std::uint32_t stream_id, const RealType simulation_time,
 									   const bool stream_open, const bool stream_close)
 	{
+		if (!_pacing_started)
+		{
+			const RealType context_time = simulation_time <= -1.0e200 ? 0.0 : simulation_time;
+			_pending_contexts.push_back(PendingContext{.stream_id = stream_id,
+													   .simulation_time = context_time,
+													   .stream_open = stream_open,
+													   .stream_close = stream_close});
+			stateFor(stream_id).last_context_time = context_time;
+			return;
+		}
 		auto packet = buildContextPacket(stream_id, simulation_time, stream_open, stream_close);
 		if (enqueuePacket(std::move(packet)))
 		{

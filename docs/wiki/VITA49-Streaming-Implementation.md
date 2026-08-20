@@ -106,11 +106,19 @@ The VITA sink creates:
 - `PacedSender`: bounded queue and wall-clock pacing thread.
 - `UdpSender`: UDP socket sender using `getaddrinfo`, `SOCK_DGRAM`, and `sendto`.
 
-Pacing maps simulation sample time to `std::chrono::steady_clock` time. The sender starts at `params::startTime()`. A packet due time is:
+Pacing maps simulation sample time to `std::chrono::steady_clock` time. Opening and pre-data heartbeat contexts remain
+pending until the first synchronized data batch has been calculated and packetized. The sender then anchors its steady
+clock at `params::startTime()` immediately before admitting that complete context/data batch. This one-block playout
+prebuffer prevents engine setup and first-block calculation time from making initial data packets late. A packet due time
+is:
 
 ```text
 steady_epoch + (packet.first_sample_time - simulation_start_time)
 ```
+
+When the VITA UTC epoch is automatic, it is selected as this first batch is prepared instead of during sink
+initialization. A configured fixed UTC epoch remains unchanged. If no data arrives, finalization creates the epoch, starts
+pacing, and drains the pending context-only batch.
 
 Packets are ordered by scheduled sample time across streams; packets with equal deadlines retain deterministic insertion
 order. A newly arrived earlier deadline preempts a wait on a later queue head. Synchronized receiver blocks are
