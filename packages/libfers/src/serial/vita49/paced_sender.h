@@ -51,7 +51,8 @@ namespace serial::vita49
 		void flush();
 		void stop();
 
-		[[nodiscard]] std::uint64_t latePacketCount(std::uint32_t stream_id) const;
+		[[nodiscard]] std::uint64_t lateDataPacketCount(std::uint32_t stream_id) const;
+		[[nodiscard]] std::uint64_t lateContextPacketCount(std::uint32_t stream_id) const;
 		[[nodiscard]] std::uint64_t sentPacketCount(std::uint32_t stream_id) const;
 		[[nodiscard]] std::uint64_t sendFailureCount(std::uint32_t stream_id) const;
 		[[nodiscard]] std::uint64_t droppedDataPacketCount(std::uint32_t stream_id) const;
@@ -74,7 +75,8 @@ namespace serial::vita49
 		mutable std::mutex _mutex;
 		std::condition_variable _cv;
 		std::list<SerializedPacket> _queue;
-		std::unordered_map<std::uint32_t, std::uint64_t> _late_packets;
+		std::unordered_map<std::uint32_t, std::uint64_t> _late_data_packets;
+		std::unordered_map<std::uint32_t, std::uint64_t> _late_context_packets;
 		std::unordered_map<std::uint32_t, std::uint64_t> _sent_packets;
 		std::unordered_map<std::uint32_t, std::uint64_t> _send_failures;
 		std::unordered_map<std::uint32_t, std::uint64_t> _dropped_data_packets;

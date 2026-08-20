@@ -37,6 +37,10 @@ import React, {
     useRef,
     useState,
 } from 'react';
+import {
+    totalLatePacketCount,
+    Vita49LatePacketInfo,
+} from '@/components/Vita49LatePacketInfo';
 import { useScenarioStore } from '@/stores/scenarioStore';
 import { getBlockingFmcwValidationMessage } from '@/stores/scenarioStore/fmcwValidation';
 import {
@@ -379,7 +383,8 @@ export const Vita49StreamingView = React.memo(function Vita49StreamingView() {
                     packets: acc.packets + row.packetsEmitted,
                     samples: acc.samples + row.samplesEmitted,
                     drops: acc.drops + row.packetsDropped,
-                    late: acc.late + row.latePacketCount,
+                    lateData: acc.lateData + row.lateDataPacketCount,
+                    lateContext: acc.lateContext + row.lateContextPacketCount,
                     overRange: acc.overRange + row.overRangeCount,
                     context: acc.context + row.contextPackets,
                 }),
@@ -387,7 +392,8 @@ export const Vita49StreamingView = React.memo(function Vita49StreamingView() {
                     packets: 0,
                     samples: 0,
                     drops: 0,
-                    late: 0,
+                    lateData: 0,
+                    lateContext: 0,
                     overRange: 0,
                     context: 0,
                 }
@@ -767,20 +773,45 @@ export const Vita49StreamingView = React.memo(function Vita49StreamingView() {
 
                         <Grid container spacing={1}>
                             {[
-                                ['Packets', aggregate.packets],
-                                ['Samples', aggregate.samples],
-                                ['Drops', aggregate.drops],
-                                ['Late', aggregate.late],
-                                ['Over-range', aggregate.overRange],
-                                ['Context', aggregate.context],
-                            ].map(([label, value]) => (
+                                { label: 'Packets', value: aggregate.packets },
+                                { label: 'Samples', value: aggregate.samples },
+                                { label: 'Drops', value: aggregate.drops },
+                                {
+                                    label: 'Late',
+                                    value: totalLatePacketCount(
+                                        aggregate.lateData,
+                                        aggregate.lateContext
+                                    ),
+                                    lateInfo: true,
+                                },
+                                {
+                                    label: 'Over-range',
+                                    value: aggregate.overRange,
+                                },
+                                { label: 'Context', value: aggregate.context },
+                            ].map(({ label, value, lateInfo }) => (
                                 <Grid size={{ xs: 6, md: 2 }} key={label}>
                                     <Paper variant="outlined" sx={{ p: 1.5 }}>
-                                        <Typography variant="caption">
-                                            {label}
-                                        </Typography>
+                                        <Stack
+                                            direction="row"
+                                            alignItems="center"
+                                        >
+                                            <Typography variant="caption">
+                                                {label}
+                                            </Typography>
+                                            {lateInfo && (
+                                                <Vita49LatePacketInfo
+                                                    dataPacketCount={
+                                                        aggregate.lateData
+                                                    }
+                                                    contextPacketCount={
+                                                        aggregate.lateContext
+                                                    }
+                                                />
+                                            )}
+                                        </Stack>
                                         <Typography variant="h6">
-                                            {formatMetric(value as number)}
+                                            {formatMetric(value)}
                                         </Typography>
                                     </Paper>
                                 </Grid>
@@ -827,7 +858,21 @@ export const Vita49StreamingView = React.memo(function Vita49StreamingView() {
                                 <TableCell align="right">Packets</TableCell>
                                 <TableCell align="right">Samples</TableCell>
                                 <TableCell align="right">Drops</TableCell>
-                                <TableCell align="right">Late</TableCell>
+                                <TableCell align="right">
+                                    <Stack
+                                        direction="row"
+                                        alignItems="center"
+                                        justifyContent="flex-end"
+                                    >
+                                        Late
+                                        <Vita49LatePacketInfo
+                                            dataPacketCount={aggregate.lateData}
+                                            contextPacketCount={
+                                                aggregate.lateContext
+                                            }
+                                        />
+                                    </Stack>
+                                </TableCell>
                                 <TableCell align="right">Context</TableCell>
                                 <TableCell>Simulation span</TableCell>
                                 <TableCell>UTC span</TableCell>
@@ -870,7 +915,26 @@ export const Vita49StreamingView = React.memo(function Vita49StreamingView() {
                                         {formatMetric(row.packetsDropped)}
                                     </TableCell>
                                     <TableCell align="right">
-                                        {formatMetric(row.latePacketCount)}
+                                        <Stack
+                                            direction="row"
+                                            alignItems="center"
+                                            justifyContent="flex-end"
+                                        >
+                                            {formatMetric(
+                                                totalLatePacketCount(
+                                                    row.lateDataPacketCount,
+                                                    row.lateContextPacketCount
+                                                )
+                                            )}
+                                            <Vita49LatePacketInfo
+                                                dataPacketCount={
+                                                    row.lateDataPacketCount
+                                                }
+                                                contextPacketCount={
+                                                    row.lateContextPacketCount
+                                                }
+                                            />
+                                        </Stack>
                                     </TableCell>
                                     <TableCell align="right">
                                         {formatMetric(row.contextPackets)}

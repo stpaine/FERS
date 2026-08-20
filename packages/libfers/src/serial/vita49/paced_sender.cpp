@@ -169,11 +169,18 @@ namespace serial::vita49
 		_sender->close();
 	}
 
-	std::uint64_t PacedSender::latePacketCount(const std::uint32_t stream_id) const
+	std::uint64_t PacedSender::lateDataPacketCount(const std::uint32_t stream_id) const
 	{
 		std::scoped_lock const lock(_mutex);
-		const auto found = _late_packets.find(stream_id);
-		return found == _late_packets.end() ? 0 : found->second;
+		const auto found = _late_data_packets.find(stream_id);
+		return found == _late_data_packets.end() ? 0 : found->second;
+	}
+
+	std::uint64_t PacedSender::lateContextPacketCount(const std::uint32_t stream_id) const
+	{
+		std::scoped_lock const lock(_mutex);
+		const auto found = _late_context_packets.find(stream_id);
+		return found == _late_context_packets.end() ? 0 : found->second;
 	}
 
 	std::uint64_t PacedSender::sentPacketCount(const std::uint32_t stream_id) const
@@ -307,7 +314,14 @@ namespace serial::vita49
 		++_sent_packets[packet.stream_id];
 		if (now > due + std::chrono::milliseconds(1))
 		{
-			++_late_packets[packet.stream_id];
+			if (packet.context_packet)
+			{
+				++_late_context_packets[packet.stream_id];
+			}
+			else
+			{
+				++_late_data_packets[packet.stream_id];
+			}
 		}
 	}
 

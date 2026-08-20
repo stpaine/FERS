@@ -267,7 +267,8 @@ namespace
 			{"packets_dropped", stream.packets_dropped},
 			{"samples_dropped", stream.samples_dropped},
 			{"over_range_count", stream.over_range_count},
-			{"late_packet_count", stream.late_packet_count},
+			{"late_data_packet_count", stream.late_data_packet_count},
+			{"late_context_packet_count", stream.late_context_packet_count},
 			{"first_sample_time",
 			 stream.first_sample_time.has_value() ? nlohmann::json(*stream.first_sample_time)
 												  : nlohmann::json(nullptr)},

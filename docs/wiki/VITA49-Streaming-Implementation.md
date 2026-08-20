@@ -469,7 +469,8 @@ Each `streams` entry contains:
 - `packets_dropped`
 - `samples_dropped`
 - `over_range_count`
-- `late_packet_count`
+- `late_data_packet_count`
+- `late_context_packet_count`
 - `context_packet_count`
 - `first_sample_time`
 - `end_sample_time`
@@ -526,4 +527,6 @@ When a send failure occurs:
 - The sink marks sample loss pending for that stream.
 - A later data or context packet carries the sample-loss indicator.
 
-`late_packet_count` increments when a packet is sent more than 1 ms after its scheduled due time.
+`late_data_packet_count` and `late_context_packet_count` independently record packets sent more than 1 ms after their
+scheduled due time. The UI displays their sum as the concise `Late` value and exposes the classified counts and threshold
+in an info tooltip on the summary card and stream table.

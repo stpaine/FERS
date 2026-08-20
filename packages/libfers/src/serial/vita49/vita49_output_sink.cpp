@@ -290,7 +290,8 @@ namespace serial::vita49
 		{
 			if (_sender)
 			{
-				state.stats.late_packet_count = _sender->latePacketCount(stream_id);
+				state.stats.late_data_packet_count = _sender->lateDataPacketCount(stream_id);
+				state.stats.late_context_packet_count = _sender->lateContextPacketCount(stream_id);
 			}
 			stats.streams.push_back(state.stats);
 		}
@@ -337,7 +338,8 @@ namespace serial::vita49
 			auto stream_stats = state.stats;
 			if (_sender)
 			{
-				stream_stats.late_packet_count = _sender->latePacketCount(stream_id);
+				stream_stats.late_data_packet_count = _sender->lateDataPacketCount(stream_id);
+				stream_stats.late_context_packet_count = _sender->lateContextPacketCount(stream_id);
 			}
 			stats.streams.push_back(std::move(stream_stats));
 		}

@@ -129,7 +129,8 @@ export type SimulationOutputVita49StreamMetadata = {
     packets_dropped: number;
     samples_dropped: number;
     over_range_count: number;
-    late_packet_count: number;
+    late_data_packet_count: number;
+    late_context_packet_count: number;
     context_packet_count: number;
     first_sample_time: number | null;
     end_sample_time: number | null;

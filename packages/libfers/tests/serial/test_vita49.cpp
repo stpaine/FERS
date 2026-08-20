@@ -920,8 +920,10 @@ TEST_CASE("VITA paced sender preempts a later deadline when an earlier packet ar
 	REQUIRE(recording_raw->sent.size() == 2u);
 	CHECK(recording_raw->sent.at(0).back() == 1u);
 	CHECK(recording_raw->sent.at(1).back() == 2u);
-	CHECK(sender.latePacketCount(1) == 0u);
-	CHECK(sender.latePacketCount(2) == 0u);
+	CHECK(sender.lateDataPacketCount(1) == 0u);
+	CHECK(sender.lateDataPacketCount(2) == 0u);
+	CHECK(sender.lateContextPacketCount(1) == 0u);
+	CHECK(sender.lateContextPacketCount(2) == 0u);
 }
 
 TEST_CASE("VITA paced sender admits an earlier deadline through saturated backpressure",
@@ -954,8 +956,10 @@ TEST_CASE("VITA paced sender admits an earlier deadline through saturated backpr
 	REQUIRE(recording_raw->sent.size() == 2u);
 	CHECK(recording_raw->sent.at(0).back() == 1u);
 	CHECK(recording_raw->sent.at(1).back() == 2u);
-	CHECK(sender.latePacketCount(1) == 0u);
-	CHECK(sender.latePacketCount(2) == 0u);
+	CHECK(sender.lateDataPacketCount(1) == 0u);
+	CHECK(sender.lateDataPacketCount(2) == 0u);
+	CHECK(sender.lateContextPacketCount(1) == 0u);
+	CHECK(sender.lateContextPacketCount(2) == 0u);
 }
 
 TEST_CASE("VITA paced sender preserves insertion order for equal deadlines", "[serial][vita49][ordering]")
@@ -981,6 +985,32 @@ TEST_CASE("VITA paced sender preserves insertion order for equal deadlines", "[s
 	CHECK(recording_raw->sent.at(0).back() == 1u);
 	CHECK(recording_raw->sent.at(1).back() == 2u);
 	CHECK(recording_raw->sent.at(2).back() == 3u);
+}
+
+TEST_CASE("VITA paced sender classifies late data and context packets independently", "[serial][vita49][late]")
+{
+	using namespace serial::vita49;
+
+	auto recording = std::make_unique<RecordingSender>();
+	PacedSender sender(std::move(recording), 4);
+	sender.open("127.0.0.1", 1);
+	sender.start(1.0);
+
+	auto data = testSerializedPacket(1, 1);
+	data.stream_id = 7;
+	auto context = testSerializedPacket(2, 0);
+	context.stream_id = 7;
+	context.data_packet = false;
+	context.context_packet = true;
+
+	REQUIRE(sender.enqueue(data).enqueued);
+	REQUIRE(sender.enqueue(context).enqueued);
+	sender.stop();
+
+	CHECK(sender.lateDataPacketCount(7) == 1u);
+	CHECK(sender.lateContextPacketCount(7) == 1u);
+	CHECK(sender.lateDataPacketCount(8) == 0u);
+	CHECK(sender.lateContextPacketCount(8) == 0u);
 }
 
 TEST_CASE("VITA paced sender catches datagram send failures", "[serial][vita49]")
@@ -1459,8 +1489,11 @@ TEST_CASE("VITA output sink deadline-merges synchronized receiver blocks under s
 	CHECK(data_stream_ids.at(0) == data_stream_ids.at(4));
 	CHECK(data_stream_ids.at(1) == data_stream_ids.at(5));
 	REQUIRE(stats.streams.size() == 2u);
-	CAPTURE(stats.streams.at(0).late_packet_count, stats.streams.at(1).late_packet_count);
-	CHECK(std::ranges::all_of(stats.streams, [](const auto& stream) { return stream.late_packet_count <= 1u; }));
+	CAPTURE(stats.streams.at(0).late_data_packet_count, stats.streams.at(1).late_data_packet_count,
+			stats.streams.at(0).late_context_packet_count, stats.streams.at(1).late_context_packet_count);
+	CHECK(std::ranges::all_of(stats.streams, [](const auto& stream) { return stream.late_data_packet_count == 0u; }));
+	CHECK(
+		std::ranges::all_of(stats.streams, [](const auto& stream) { return stream.late_context_packet_count <= 1u; }));
 	CHECK(std::ranges::all_of(stats.streams, [](const auto& stream) { return stream.packets_dropped == 0u; }));
 }
 

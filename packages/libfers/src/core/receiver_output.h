@@ -163,7 +163,8 @@ namespace core
 		std::uint64_t packets_dropped = 0;
 		std::uint64_t samples_dropped = 0;
 		std::uint64_t over_range_count = 0;
-		std::uint64_t late_packet_count = 0;
+		std::uint64_t late_data_packet_count = 0;
+		std::uint64_t late_context_packet_count = 0;
 		std::optional<RealType> first_sample_time = std::nullopt;
 		std::optional<RealType> end_sample_time = std::nullopt;
 		std::optional<Vita49Timestamp> first_timestamp = std::nullopt;

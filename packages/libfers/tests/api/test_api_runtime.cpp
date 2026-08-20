@@ -68,6 +68,11 @@ namespace
 		std::vector<std::string> lines;
 	};
 
+	struct Vita49TelemetryCallbackState
+	{
+		std::vector<std::string> stats_json;
+	};
+
 	void recordProgress(const char* message, int /*current*/, int /*total*/, void* user_data)
 	{
 		auto* state = static_cast<CallbackState*>(user_data);
@@ -84,6 +89,14 @@ namespace
 		state->seen_user_data = user_data;
 		state->levels.push_back(level);
 		state->lines.emplace_back((line != nullptr) ? line : "");
+	}
+
+	void recordVita49Telemetry(const char* stats_json, const char* /*packet_batch_json*/, void* user_data)
+	{
+		if (stats_json != nullptr)
+		{
+			static_cast<Vita49TelemetryCallbackState*>(user_data)->stats_json.emplace_back(stats_json);
+		}
 	}
 
 	int requestCancel(void* user_data)
@@ -610,6 +623,8 @@ TEST_CASE("VITA49 metadata section records runtime output config", "[api][runtim
 	stream.packets_emitted = 2930;
 	stream.samples_emitted = 1000000;
 	stream.context_packet_count = 12;
+	stream.late_data_packet_count = 7;
+	stream.late_context_packet_count = 11;
 	stream.first_sample_time = 0.0;
 	stream.end_sample_time = 10.0;
 	stream.first_timestamp =
@@ -633,6 +648,9 @@ TEST_CASE("VITA49 metadata section records runtime output config", "[api][runtim
 	const auto& json_stream = vita49.at("streams").front();
 	CHECK(json_stream.at("mode").get<std::string>() == "pulsed");
 	CHECK(json_stream.at("samples_emitted").get<std::uint64_t>() == 1000000ULL);
+	CHECK(json_stream.at("late_data_packet_count").get<std::uint64_t>() == 7ULL);
+	CHECK(json_stream.at("late_context_packet_count").get<std::uint64_t>() == 11ULL);
+	CHECK_FALSE(json_stream.contains("late_packet_count"));
 	CHECK(json_stream.at("first_sample_time").get<double>() == 0.0);
 	CHECK(json_stream.at("end_sample_time").get<double>() == 10.0);
 	CHECK(json_stream.at("first_timestamp").at("integer_seconds").get<std::uint32_t>() == 1700000000u);
@@ -658,6 +676,34 @@ TEST_CASE("API VITA49 completion waits for wall-clock stream drain", "[api][runt
 	REQUIRE(fers_run_simulation(context.get(), recordProgress, &state) == 0);
 
 	requireVita49DrainCompletionTiming(state, start);
+}
+
+TEST_CASE("API VITA49 telemetry classifies late packet counters", "[api][runtime][vita49][telemetry]")
+{
+	api_test::ParamGuard const guard;
+	api_test::clearLastError();
+	api_test::Context const context;
+	REQUIRE(context.get() != nullptr);
+
+	const std::string xml = vita49DrainTimingScenarioXml();
+	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
+	REQUIRE(fers_enable_vita49_udp_output(context.get(), "127.0.0.1", 4991) == 0);
+	REQUIRE(fers_set_vita49_fullscale(context.get(), 1.0) == 0);
+
+	Vita49TelemetryCallbackState telemetry;
+	REQUIRE(fers_run_simulation_ex(context.get(), nullptr, nullptr, nullptr, nullptr, recordVita49Telemetry,
+								   &telemetry) == 0);
+	REQUIRE_FALSE(telemetry.stats_json.empty());
+
+	const auto stats = api_test::json::parse(telemetry.stats_json.back());
+	REQUIRE(stats.at("streams").is_array());
+	REQUIRE_FALSE(stats.at("streams").empty());
+	for (const auto& stream : stats.at("streams"))
+	{
+		CHECK(stream.at("late_data_packet_count").is_number_unsigned());
+		CHECK(stream.at("late_context_packet_count").is_number_unsigned());
+		CHECK_FALSE(stream.contains("late_packet_count"));
+	}
 }
 
 TEST_CASE("API run simulation invokes progress callbacks with caller user data", "[api][runtime]")

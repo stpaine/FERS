@@ -60,7 +60,8 @@ export type Vita49StreamCounter = {
     packets_dropped: number;
     samples_dropped: number;
     over_range_count: number;
-    late_packet_count: number;
+    late_data_packet_count: number;
+    late_context_packet_count: number;
     first_sample_time: number | null;
     end_sample_time: number | null;
     first_timestamp: Vita49Timestamp | null;
@@ -110,7 +111,8 @@ export type Vita49StreamRow = {
     packetsDropped: number;
     samplesDropped: number;
     overRangeCount: number;
-    latePacketCount: number;
+    lateDataPacketCount: number;
+    lateContextPacketCount: number;
     firstSampleTime: number | null;
     endSampleTime: number | null;
     firstTimestamp: Vita49Timestamp | null;
@@ -258,7 +260,8 @@ export const deriveExpectedVita49Streams = (
                 packetsDropped: 0,
                 samplesDropped: 0,
                 overRangeCount: 0,
-                latePacketCount: 0,
+                lateDataPacketCount: 0,
+                lateContextPacketCount: 0,
                 firstSampleTime: null,
                 endSampleTime: null,
                 firstTimestamp: null,
@@ -287,7 +290,8 @@ const rowFromCounter = (counter: Vita49StreamCounter): Vita49StreamRow => ({
     packetsDropped: counter.packets_dropped,
     samplesDropped: counter.samples_dropped,
     overRangeCount: counter.over_range_count,
-    latePacketCount: counter.late_packet_count,
+    lateDataPacketCount: counter.late_data_packet_count,
+    lateContextPacketCount: counter.late_context_packet_count,
     firstSampleTime: counter.first_sample_time,
     endSampleTime: counter.end_sample_time,
     firstTimestamp: counter.first_timestamp,
@@ -352,7 +356,8 @@ export const mergeVita49StreamRows = (
             packetsDropped: counter.packets_dropped,
             samplesDropped: counter.samples_dropped,
             overRangeCount: counter.over_range_count,
-            latePacketCount: counter.late_packet_count,
+            lateDataPacketCount: counter.late_data_packet_count,
+            lateContextPacketCount: counter.late_context_packet_count,
             firstSampleTime: counter.first_sample_time,
             endSampleTime: counter.end_sample_time,
             firstTimestamp: counter.first_timestamp,
