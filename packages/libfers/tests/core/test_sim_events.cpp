@@ -30,6 +30,6 @@ TEST_CASE("EventType toString covers all values", "[core][events]")
 	REQUIRE(core::toString(core::EventType::RX_STREAMING_START) == "RxStreamingStart");
 	REQUIRE(core::toString(core::EventType::RX_STREAMING_END) == "RxStreamingEnd");
 
-	const auto unknown = static_cast<core::EventType>(-1);
+	const auto unknown = static_cast<core::EventType>(255);
 	REQUIRE(core::toString(unknown) == "UnknownEvent");
 }

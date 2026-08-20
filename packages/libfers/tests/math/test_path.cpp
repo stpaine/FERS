@@ -43,7 +43,7 @@ TEST_CASE("Path: Error Handling and Edge Cases", "[math][path]")
 
 	SECTION("Invalid Interpolation Type Fallback")
 	{
-		Path p_invalid(static_cast<Path::InterpType>(999));
+		Path p_invalid(static_cast<Path::InterpType>(255));
 		p_invalid.addCoord({Vec3(0, 0, 0), 0.0});
 		p_invalid.finalize();
 		Vec3 const v = p_invalid.getVelocity(0.0);

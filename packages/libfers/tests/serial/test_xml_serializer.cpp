@@ -399,7 +399,7 @@ TEST_CASE("serializeRotation translates internal math to compass correctly", "[s
 
 	SECTION("Default/Unknown")
 	{
-		rot.setInterp(static_cast<math::RotationPath::InterpType>(999));
+		rot.setInterp(static_cast<math::RotationPath::InterpType>(255));
 		serial::xml_serializer_utils::serializeRotation(rot, root);
 		std::string s = dumpElement(root);
 		REQUIRE_THAT(s, ContainsSubstring("<rotationpath/>"));

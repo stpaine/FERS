@@ -18,7 +18,7 @@ TEST_CASE("RotationPath: State Management and Errors", "[math][rotation_path]")
 	rp.addCoord(RotationCoord(0.0, 0.0, 0.0));
 	REQUIRE_THROWS_AS(rp.getPosition(0.0), PathException);
 
-	RotationPath rp_invalid(static_cast<RotationPath::InterpType>(999));
+	RotationPath rp_invalid(static_cast<RotationPath::InterpType>(255));
 	rp_invalid.addCoord(RotationCoord(0.0, 0.0, 0.0));
 	rp_invalid.finalize();
 	REQUIRE_THROWS_AS(rp_invalid.getPosition(0.0), PathException);
