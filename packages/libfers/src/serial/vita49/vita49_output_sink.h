@@ -37,6 +37,7 @@ namespace serial::vita49
 		std::uint32_t registerStream(const core::ReceiverStreamDescriptor& stream) override;
 		void openStream(std::uint32_t stream_id, RealType first_sample_time) override;
 		void submitBlock(const core::ReceiverSampleBlock& block) override;
+		void submitBlocks(std::span<const core::ReceiverSampleBlock> blocks) override;
 		void emitContextHeartbeat(RealType simulation_time) override;
 		void closeStream(std::uint32_t stream_id) override;
 		core::OutputStats finalize() override;
@@ -59,11 +60,14 @@ namespace serial::vita49
 		[[nodiscard]] const StreamState& stateFor(std::uint32_t stream_id) const;
 		[[nodiscard]] core::OutputStats snapshotStatsLocked() const;
 		[[nodiscard]] bool enqueuePacket(SerializedPacket&& packet);
+		[[nodiscard]] bool enqueuePackets(std::vector<SerializedPacket> packets);
 		void emitTelemetry(std::vector<core::ReceiverOutputPacketTrace> packets = {}, bool force_stats = false);
 		[[nodiscard]] std::vector<core::ReceiverOutputPacketTrace> consumeSenderDropsLocked();
 		[[nodiscard]] core::ReceiverOutputPacketTrace makeTrace(const SerializedPacket& packet,
 																std::string event) const;
 		[[nodiscard]] core::ReceiverOutputPacketTrace makeDropTrace(const DroppedDatagram& dropped) const;
+		[[nodiscard]] SerializedPacket buildContextPacket(std::uint32_t stream_id, RealType simulation_time,
+														  bool stream_open, bool stream_close);
 		void emitContext(std::uint32_t stream_id, RealType simulation_time, bool stream_open, bool stream_close);
 		void applyDropped(const DroppedDatagram& dropped);
 

@@ -205,6 +205,13 @@ namespace core
 		virtual std::uint32_t registerStream(const ReceiverStreamDescriptor& stream) = 0;
 		virtual void openStream(std::uint32_t stream_id, RealType first_sample_time) = 0;
 		virtual void submitBlock(const ReceiverSampleBlock& block) = 0;
+		virtual void submitBlocks(const std::span<const ReceiverSampleBlock> blocks)
+		{
+			for (const auto& block : blocks)
+			{
+				submitBlock(block);
+			}
+		}
 		virtual void emitContextHeartbeat(RealType simulation_time) = 0;
 		virtual void closeStream(std::uint32_t stream_id) = 0;
 		virtual OutputStats finalize() = 0;

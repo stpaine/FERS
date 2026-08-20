@@ -80,18 +80,59 @@ namespace serial::vita49
 			};
 		}
 
-		_cv.wait(lock, [this] { return _stopping || queuedOrSendingCount() < _queue_depth; });
-		if (_stopping)
+		while (queuedOrSendingCount() >= _queue_depth)
 		{
-			return EnqueueResult{
-				.enqueued = false,
-				.dropped = std::nullopt,
-			};
+			const bool precedes_latest = !_queue.empty() && packet.first_sample_time < _queue.back().first_sample_time;
+			if (!_priority_overflow_in_progress && precedes_latest)
+			{
+				_priority_overflow_in_progress = true;
+				insertByDeadlineUnlocked(std::move(packet));
+				_cv.notify_all();
+				_cv.wait(lock, [this] { return _stopping || queuedOrSendingCount() <= _queue_depth; });
+				_priority_overflow_in_progress = false;
+				_cv.notify_all();
+				return EnqueueResult{.enqueued = true, .dropped = std::nullopt};
+			}
+
+			_cv.wait(lock);
+			if (_stopping)
+			{
+				return EnqueueResult{
+					.enqueued = false,
+					.dropped = std::nullopt,
+				};
+			}
 		}
 
-		_queue.push_back(std::move(packet));
-		_cv.notify_one();
+		insertByDeadlineUnlocked(std::move(packet));
+		_cv.notify_all();
 		return EnqueueResult{.enqueued = true, .dropped = std::nullopt};
+	}
+
+	bool PacedSender::enqueueBatch(std::vector<SerializedPacket> packets)
+	{
+		if (packets.empty())
+		{
+			return true;
+		}
+
+		std::unique_lock lock(_mutex);
+		if (!_started)
+		{
+			throw std::logic_error("PacedSender must be started before enqueue");
+		}
+		if (_stopping)
+		{
+			return false;
+		}
+
+		for (auto& packet : packets)
+		{
+			insertByDeadlineUnlocked(std::move(packet));
+		}
+		_cv.notify_all();
+		_cv.wait(lock, [this] { return _stopping || queuedOrSendingCount() <= _queue_depth; });
+		return true;
 	}
 
 	void PacedSender::flush()
@@ -194,7 +235,11 @@ namespace serial::vita49
 			}
 
 			const auto due = dueTime(_queue.front());
-			waitUntilDue(lock, due);
+			if (std::chrono::steady_clock::now() < due)
+			{
+				waitUntilDue(lock, due);
+				continue;
+			}
 
 			auto packet = std::move(_queue.front());
 			_queue.pop_front();
@@ -210,32 +255,37 @@ namespace serial::vita49
 
 	void PacedSender::waitUntilDue(std::unique_lock<std::mutex>& lock, const std::chrono::steady_clock::time_point due)
 	{
-		while (true)
+		const auto now = std::chrono::steady_clock::now();
+		if (now >= due)
 		{
-			const auto now = std::chrono::steady_clock::now();
-			if (now >= due)
-			{
-				return;
-			}
-
-			const auto remaining = due - now;
-			if (remaining > kCoarsePacingSleep)
-			{
-				const auto coarse_sleep =
-					std::chrono::duration_cast<std::chrono::steady_clock::duration>(kCoarsePacingSleep);
-				const auto fine_spin = std::chrono::duration_cast<std::chrono::steady_clock::duration>(kFinePacingSpin);
-				const auto wait_duration = std::min(remaining - fine_spin, coarse_sleep);
-				_cv.wait_for(lock, wait_duration);
-				continue;
-			}
-
-			lock.unlock();
-			while (std::chrono::steady_clock::now() < due)
-			{
-				cpuPause();
-			}
-			lock.lock();
+			return;
 		}
+
+		const auto remaining = due - now;
+		const auto fine_spin = std::chrono::duration_cast<std::chrono::steady_clock::duration>(kFinePacingSpin);
+		if (remaining > fine_spin)
+		{
+			const auto coarse_sleep =
+				std::chrono::duration_cast<std::chrono::steady_clock::duration>(kCoarsePacingSleep);
+			const auto wait_duration = std::min(remaining - fine_spin, coarse_sleep);
+			_cv.wait_for(lock, wait_duration);
+			return;
+		}
+
+		lock.unlock();
+		while (std::chrono::steady_clock::now() < due)
+		{
+			cpuPause();
+		}
+		lock.lock();
+	}
+
+	void PacedSender::insertByDeadlineUnlocked(SerializedPacket packet)
+	{
+		const auto position = std::upper_bound(_queue.begin(), _queue.end(), packet.first_sample_time,
+											   [](const RealType deadline, const SerializedPacket& queued)
+											   { return deadline < queued.first_sample_time; });
+		_queue.insert(position, std::move(packet));
 	}
 
 	void PacedSender::sendOneUnlocked(SerializedPacket packet, const std::chrono::steady_clock::time_point now)

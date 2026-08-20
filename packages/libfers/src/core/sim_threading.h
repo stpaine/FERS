@@ -243,14 +243,16 @@ namespace core
 										 ComplexType sample);
 
 		/// Flushes all pending live streaming output blocks.
-		void flushStreamingOutputBlocks();
+		void flushStreamingOutputBlocks(bool full_blocks_only = false);
 
 		/// Flushes one receiver's pending live streaming output block.
-		void flushStreamingOutputBlock(std::size_t receiver_index, bool finish_downsampler = false);
+		void flushStreamingOutputBlock(std::size_t receiver_index, bool finish_downsampler = false,
+									   std::vector<ReceiverSampleBlock>* batch = nullptr);
 
 		/// Emits an already processed streaming block to the selected output sink.
 		void emitStreamingOutputBlock(std::size_t receiver_index, RealType first_sample_time, RealType sample_rate,
-									  std::span<const ComplexType> samples, std::uint64_t sample_start);
+									  std::span<const ComplexType> samples, std::uint64_t sample_start,
+									  std::vector<ReceiverSampleBlock>* batch = nullptr);
 
 		/// Returns the sink-visible sample rate for one live streaming receiver.
 		[[nodiscard]] RealType streamingOutputSampleRate(std::size_t receiver_index) const;

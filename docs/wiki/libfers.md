@@ -59,7 +59,7 @@ fers_set_vita49_fullscale(context, 1.0);
 fers_set_vita49_epoch_unix_nanoseconds(context, 1700000000123456789ULL);
 ```
 
-The VITA epoch setter is optional. The full-scale setter is required before running in VITA mode. Additional tuning setters are available for maximum UDP payload and sender queue depth. When the queue is full, VITA output blocks the producer until the paced sender frees a slot:
+The VITA epoch setter is optional. The full-scale setter is required before running in VITA mode. Additional tuning setters are available for maximum UDP payload and sender queue depth. The paced sender orders packets by deadline across streams. Queue depth acts as the steady-state backpressure watermark; synchronized multi-stream batches are admitted atomically and then block the producer until the queue drains to that watermark:
 
 ```c
 fers_set_vita49_max_udp_payload(context, 1400);

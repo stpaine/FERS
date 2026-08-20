@@ -1163,6 +1163,11 @@ namespace core
 		{
 			appendReceiverStreamingSample(receiver_index, sample_index, t_step);
 		}
+		if (std::ranges::any_of(_streaming_output_block_buffers,
+								[](const auto& block) { return block.size() >= streaming_output_block_size; }))
+		{
+			flushStreamingOutputBlocks(true);
+		}
 	}
 
 	void SimulationEngine::appendReceiverStreamingSample(const std::size_t receiver_index,
@@ -1216,21 +1221,28 @@ namespace core
 			_streaming_output_block_start_indices[receiver_index] = static_cast<std::uint64_t>(sample_index);
 		}
 		block.push_back(sample);
-		if (block.size() >= streaming_output_block_size)
-		{
-			flushStreamingOutputBlock(receiver_index);
-		}
 	}
 
-	void SimulationEngine::flushStreamingOutputBlocks()
+	void SimulationEngine::flushStreamingOutputBlocks(const bool full_blocks_only)
 	{
+		std::vector<ReceiverSampleBlock> batch;
+		batch.reserve(_streaming_output_block_buffers.size());
 		for (std::size_t receiver_index = 0; receiver_index < _streaming_output_block_buffers.size(); ++receiver_index)
 		{
-			flushStreamingOutputBlock(receiver_index);
+			if (!full_blocks_only ||
+				_streaming_output_block_buffers[receiver_index].size() >= streaming_output_block_size)
+			{
+				flushStreamingOutputBlock(receiver_index, false, &batch);
+			}
+		}
+		if (_output_sink != nullptr && !batch.empty())
+		{
+			_output_sink->submitBlocks(batch);
 		}
 	}
 
-	void SimulationEngine::flushStreamingOutputBlock(const std::size_t receiver_index, const bool finish_downsampler)
+	void SimulationEngine::flushStreamingOutputBlock(const std::size_t receiver_index, const bool finish_downsampler,
+													 std::vector<ReceiverSampleBlock>* batch)
 	{
 		if (_output_sink == nullptr || receiver_index >= _world->getReceivers().size())
 		{
@@ -1252,7 +1264,8 @@ namespace core
 					const RealType output_start_time = _streaming_downsample_segment_start_times[receiver_index] +
 						static_cast<RealType>(output_start_index) / output_sample_rate;
 					emitStreamingOutputBlock(receiver_index, output_start_time, output_sample_rate, output,
-											 _streaming_downsample_base_indices[receiver_index] + output_start_index);
+											 _streaming_downsample_base_indices[receiver_index] + output_start_index,
+											 batch);
 				}
 				_streaming_downsamplers[receiver_index].reset();
 			}
@@ -1299,7 +1312,7 @@ namespace core
 		if (!output_samples.empty() && (!downsampled_block.empty() || dechirped || params::oversampleRatio() <= 1))
 		{
 			emitStreamingOutputBlock(receiver_index, output_start_time, output_sample_rate, output_samples,
-									 output_sample_start);
+									 output_sample_start, batch);
 		}
 		block.clear();
 		if (finish_downsampler && _streaming_downsamplers[receiver_index])
@@ -1378,7 +1391,8 @@ namespace core
 	void SimulationEngine::emitStreamingOutputBlock(const std::size_t receiver_index, const RealType first_sample_time,
 													const RealType sample_rate,
 													const std::span<const ComplexType> samples,
-													const std::uint64_t sample_start)
+													const std::uint64_t sample_start,
+													std::vector<ReceiverSampleBlock>* batch)
 	{
 		if (_output_sink == nullptr || samples.empty() || receiver_index >= _world->getReceivers().size())
 		{
@@ -1397,7 +1411,14 @@ namespace core
 		const auto block = processing::buildReceiverSampleBlock(receiver.get(), first_sample_time, sample_rate,
 																processed, sample_start, streaming_sources,
 																_streaming_output_file_metadata[receiver_index]);
-		_output_sink->submitBlock(block);
+		if (batch != nullptr)
+		{
+			batch->push_back(block);
+		}
+		else
+		{
+			_output_sink->submitBlock(block);
+		}
 		_streaming_output_sample_cursors[receiver_index] = sample_start + static_cast<std::uint64_t>(processed.size());
 	}
 

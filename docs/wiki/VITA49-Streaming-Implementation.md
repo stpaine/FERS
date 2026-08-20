@@ -112,7 +112,14 @@ Pacing maps simulation sample time to `std::chrono::steady_clock` time. The send
 steady_epoch + (packet.first_sample_time - simulation_start_time)
 ```
 
-If the queue is full, enqueue blocks until the sender frees space. Queue pressure does not create dropped packets. Dropped packet counters are updated when socket send fails.
+Packets are ordered by scheduled sample time across streams; packets with equal deadlines retain deterministic insertion
+order. A newly arrived earlier deadline preempts a wait on a later queue head. Synchronized receiver blocks are
+packetized and admitted together so bounded-queue backpressure cannot serialize one receiver ahead of another.
+
+Queue depth is the steady-state backpressure watermark. Single-packet enqueue blocks when that watermark is full.
+Multi-stream batches are admitted atomically, then their producer blocks until the queue drains back to the configured
+depth; batch admission reuses packet memory already allocated by packetization and does not create an unbounded staging
+queue. Queue pressure does not create dropped packets. Dropped packet counters are updated when socket send fails.
 
 `finalize()` flushes queued packets, emits close context packets for streams that are still open, stops the sender, and returns final stream stats. `core::sim_threading.cpp` reports `Waiting for VITA output stream drain...` before finalization in VITA mode.
 

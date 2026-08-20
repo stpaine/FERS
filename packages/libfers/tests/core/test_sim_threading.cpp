@@ -98,6 +98,14 @@ namespace
 			sample_rates.push_back(block.sample_rate);
 			blocks.emplace_back(block.samples.begin(), block.samples.end());
 		}
+		void submitBlocks(const std::span<const core::ReceiverSampleBlock> submitted_blocks) override
+		{
+			batch_sizes.push_back(submitted_blocks.size());
+			for (const auto& block : submitted_blocks)
+			{
+				submitBlock(block);
+			}
+		}
 		void emitContextHeartbeat(RealType simulation_time) override { heartbeat_times.push_back(simulation_time); }
 		void closeStream(std::uint32_t id) override { closed_streams.push_back(id); }
 		core::OutputStats finalize() override { return {}; }
@@ -112,6 +120,7 @@ namespace
 		std::vector<RealType> sample_rates;
 		std::vector<RealType> heartbeat_times;
 		std::vector<std::vector<ComplexType>> blocks;
+		std::vector<std::size_t> batch_sizes;
 	};
 
 	ComplexType sampleAt(const RecordingOutputSink& sink, const std::uint64_t sample_index)
@@ -766,6 +775,55 @@ TEST_CASE("SimulationEngine live streaming output emits bounded CW blocks", "[co
 	REQUIRE(sink.blocks.front().size() == 4096u);
 	REQUIRE(sink.blocks.back().size() == 4096u);
 	REQUIRE(sink.opened_streams.size() == 1u);
+	REQUIRE(sink.batch_sizes == std::vector<std::size_t>{1u, 1u});
+}
+
+TEST_CASE("SimulationEngine batches synchronized receiver output blocks", "[core][threading][vita49][ordering]")
+{
+	ParamGuard const guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 10.0);
+
+	auto world = createPhysicsWorld();
+	auto* tx = world->getTransmitters().front().get();
+	auto* first_rx = world->getReceivers().front().get();
+
+	auto second_platform = std::make_unique<radar::Platform>("RxPlat2", 13);
+	second_platform->getMotionPath()->addCoord(math::Coord{math::Vec3(100.0, 10.0, 0.0), 0.0});
+	second_platform->getMotionPath()->addCoord(math::Coord{math::Vec3(100.0, 10.0, 0.0), 100.0});
+	second_platform->getMotionPath()->finalize();
+	second_platform->getRotationPath()->addCoord(math::RotationCoord(0.0, 0.0, 0.0));
+	second_platform->getRotationPath()->addCoord(math::RotationCoord(0.0, 0.0, 100.0));
+	second_platform->getRotationPath()->finalize();
+	auto* second_platform_ptr = second_platform.get();
+
+	auto second_rx =
+		std::make_unique<radar::Receiver>(second_platform_ptr, "Rx2", 43, radar::OperationMode::CW_MODE, 14);
+	second_rx->setTiming(tx->getTiming());
+	second_rx->setAntenna(tx->getAntenna());
+	second_rx->setWindowProperties(0.001, 1000.0, 0.0);
+	auto* second_rx_ptr = second_rx.get();
+	world->add(std::move(second_platform));
+	world->add(std::move(second_rx));
+
+	pool::ThreadPool pool(1);
+	RecordingOutputSink sink;
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".", nullptr, &sink);
+
+	first_rx->setActive(true);
+	second_rx_ptr->setActive(true);
+	world->getSimulationState().t_current = 0.0;
+	engine.handleTxStreamingStart(core::makeActiveSource(tx, params::startTime(), params::endTime()));
+
+	engine.processStreamingPhysics(4.096);
+
+	REQUIRE(sink.batch_sizes == std::vector<std::size_t>{2u});
+	REQUIRE(sink.blocks.size() == 2u);
+	CHECK(sink.blocks[0].size() == 4096u);
+	CHECK(sink.blocks[1].size() == 4096u);
+	CHECK(sink.sample_starts == std::vector<std::uint64_t>{0u, 0u});
+	CHECK(sink.first_sample_times == std::vector<RealType>{0.0, 0.0});
 }
 
 TEST_CASE("SimulationEngine emits output heartbeats on streaming simulation time", "[core][threading][vita49]")

@@ -47,6 +47,7 @@ namespace serial::vita49
 		void open(const std::string& host, std::uint16_t port);
 		void start(RealType simulation_epoch_time = 0.0);
 		[[nodiscard]] EnqueueResult enqueue(SerializedPacket packet);
+		[[nodiscard]] bool enqueueBatch(std::vector<SerializedPacket> packets);
 		void flush();
 		void stop();
 
@@ -61,6 +62,7 @@ namespace serial::vita49
 	private:
 		void run();
 		void waitUntilDue(std::unique_lock<std::mutex>& lock, std::chrono::steady_clock::time_point due);
+		void insertByDeadlineUnlocked(SerializedPacket packet);
 		void sendOneUnlocked(SerializedPacket packet, std::chrono::steady_clock::time_point now);
 		void recordDroppedUnlocked(const SerializedPacket& packet);
 		[[nodiscard]] DroppedDatagram makeDroppedDatagram(const SerializedPacket& packet) const noexcept;
@@ -84,6 +86,7 @@ namespace serial::vita49
 		bool _started = false;
 		bool _stopping = false;
 		bool _send_in_progress = false;
+		bool _priority_overflow_in_progress = false;
 		std::thread _thread;
 	};
 }
