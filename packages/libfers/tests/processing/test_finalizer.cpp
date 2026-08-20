@@ -388,7 +388,7 @@ TEST_CASE("buildReceiverSampleBlock captures receiver identity, timing, and samp
 	REQUIRE(block.stream.fmcw.chirp_count.has_value());
 	REQUIRE(block.stream.fmcw.chirp_count.value_or(0u) == 7u);
 	REQUIRE_THAT(block.stream.sample_rate, WithinAbs(2.0e6, 1e-12));
-	REQUIRE_THAT(block.stream.reference_frequency, WithinAbs(10.5e9, 1e-6));
+	REQUIRE_THAT(block.stream.reference_frequency, WithinAbs(10.0e9, 1e-6));
 	REQUIRE_THAT(block.first_sample_time, WithinAbs(1.25, 1e-12));
 	REQUIRE(block.sample_start == 17u);
 	REQUIRE(block.samples.size() == samples.size());
@@ -416,6 +416,37 @@ TEST_CASE("buildReceiverStreamDescriptor keeps CW metadata isolated from active 
 	REQUIRE(descriptor.cw.present);
 	REQUIRE_FALSE(descriptor.fmcw.present);
 	REQUIRE_THAT(descriptor.cw.carrier_frequency, WithinAbs(5.0e9, 1e-6));
+	REQUIRE_THAT(descriptor.reference_frequency, WithinAbs(5.0e9, 1e-6));
+}
+
+TEST_CASE("buildReceiverStreamDescriptor uses detached file-FMCW carrier as the RF reference",
+		  "[processing][finalizer][fmcw][file][vita49]")
+{
+	ParamGuard const guard;
+	params::setTime(0.0, 1.0);
+	params::setRate(204'800.0);
+	params::setOversampleRatio(1);
+
+	radar::Platform rx_platform("DetachedFileFmcwRxPlatform");
+	radar::Receiver receiver(&rx_platform, "DetachedFileFmcwRx", 66, radar::OperationMode::FMCW_MODE);
+	auto timing_owner = makeQuietTiming("detached_file_fmcw_clk", 32, 204'800.0);
+	receiver.setTiming(timing_owner.timing);
+
+	auto file_signal = std::make_unique<fers_signal::FileSignal>(fers_signal::FileWaveformKind::Fmcw);
+	file_signal->load(std::vector<ComplexType>{{1.0, 0.0}, {0.0, 1.0}}, 2, 204'800.0);
+	radar::Platform tx_platform("DetachedFileFmcwTxPlatform");
+	auto waveform =
+		std::make_unique<fers_signal::RadarSignal>("FileFmcwWaveform", 10.0, 77.0e6, 1.0, std::move(file_signal), 1802);
+	radar::Transmitter transmitter(&tx_platform, "DetachedFileFmcwTx", radar::OperationMode::FMCW_MODE, 1801);
+	transmitter.setSignal(waveform.get());
+	const std::vector sources = {core::makeActiveSource(&transmitter, 0.0, params::endTime())};
+
+	const auto descriptor = processing::buildReceiverStreamDescriptor(&receiver, params::rate(), sources);
+
+	REQUIRE(descriptor.mode == "fmcw");
+	REQUIRE(descriptor.fmcw.present);
+	REQUIRE(descriptor.fmcw.waveform_shape == "file");
+	REQUIRE_THAT(descriptor.reference_frequency, WithinAbs(77.0e6, 1e-6));
 }
 
 TEST_CASE("buildReceiverStreamDescriptor binds a sole detached file-CW source",
@@ -448,6 +479,7 @@ TEST_CASE("buildReceiverStreamDescriptor binds a sole detached file-CW source",
 	REQUIRE(descriptor.cw.waveform_name == "TxWaveform");
 	REQUIRE_THAT(descriptor.cw.carrier_frequency, WithinAbs(89.0e6, 1e-6));
 	REQUIRE_THAT(descriptor.cw.power, WithinAbs(16'400.0, 1e-12));
+	REQUIRE_THAT(descriptor.reference_frequency, WithinAbs(89.0e6, 1e-6));
 }
 
 TEST_CASE("buildReceiverStreamDescriptor preserves attached CW source precedence",
@@ -483,6 +515,7 @@ TEST_CASE("buildReceiverStreamDescriptor preserves attached CW source precedence
 	REQUIRE(descriptor.cw.waveform_name == "AttachedCwWave");
 	REQUIRE_THAT(descriptor.cw.carrier_frequency, WithinAbs(5.0e9, 1e-6));
 	REQUIRE_THAT(descriptor.cw.power, WithinAbs(25.0, 1e-12));
+	REQUIRE_THAT(descriptor.reference_frequency, WithinAbs(5.0e9, 1e-6));
 }
 
 TEST_CASE("buildReceiverStreamDescriptor leaves ambiguous detached CW sources unbound",
@@ -518,6 +551,7 @@ TEST_CASE("buildReceiverStreamDescriptor leaves ambiguous detached CW sources un
 	REQUIRE(descriptor.cw.waveform_name.empty());
 	REQUIRE_THAT(descriptor.cw.carrier_frequency, WithinAbs(2'000.0, 1e-12));
 	REQUIRE_THAT(descriptor.cw.power, WithinAbs(0.0, 1e-12));
+	REQUIRE_THAT(descriptor.reference_frequency, WithinAbs(2'000.0, 1e-12));
 }
 
 TEST_CASE("buildReceiverStreamDescriptor records SFCW waveform metadata", "[processing][finalizer][sfcw][vita49]")
@@ -556,6 +590,7 @@ TEST_CASE("buildReceiverStreamDescriptor records SFCW waveform metadata", "[proc
 	REQUIRE_THAT(descriptor.sfcw.effective_bandwidth, WithinAbs(1.6e6, 1e-6));
 	REQUIRE_THAT(descriptor.sfcw.range_resolution, WithinAbs(params::c() / (2.0 * 1.6e6), 1e-9));
 	REQUIRE_THAT(descriptor.sfcw.unambiguous_range, WithinAbs(params::c() / (2.0 * 2.0e5), 1e-9));
+	REQUIRE_THAT(descriptor.reference_frequency, WithinAbs(10.0e9, 1e-6));
 }
 
 TEST_CASE("buildStreamingOutputMetadata records FMCW source metadata for detached receivers",

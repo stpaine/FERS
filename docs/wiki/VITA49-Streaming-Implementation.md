@@ -251,6 +251,10 @@ Context packet byte layout:
 | `84` | 8 | receiver ID |
 | `92` | variable | NUL-terminated, 32-bit-padded ASCII JSON metadata |
 
+The reference frequency is the RF carrier resolved from the receiver mode's bound waveform source; it is distinct from
+the stream sample rate and the receiver timing-clock frequency. When no scalar RF source can be bound, such as an
+ambiguous detached multi-source stream, FERS retains the receiver timing frequency as a compatibility fallback.
+
 The serializer accepts exactly `kFersContextCif0` and rejects any other CIF0 value. Current CIF0 includes:
 
 - State indicators

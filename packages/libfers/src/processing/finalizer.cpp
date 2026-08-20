@@ -910,6 +910,48 @@ namespace processing
 			context.triangle_count = waveform.triangle_count;
 			return context;
 		}
+
+		/// Resolves the RF reference represented by the receiver stream. The receiver
+		/// timing source is a clock model, not normally an RF carrier, so it is only a
+		/// compatibility fallback when the mode-specific metadata has no bound source.
+		[[nodiscard]] RealType referenceFrequency(const radar::Receiver* receiver,
+												  const core::ReceiverStreamDescriptor& descriptor,
+												  const std::span<const core::ActiveStreamingSource> streaming_sources)
+		{
+			switch (receiver->getMode())
+			{
+			case radar::OperationMode::PULSED_MODE:
+				if (descriptor.pulsed.waveform_id != 0 || !descriptor.pulsed.waveform_name.empty())
+				{
+					return descriptor.pulsed.carrier_frequency;
+				}
+				break;
+			case radar::OperationMode::CW_MODE:
+				if (descriptor.cw.waveform_id != 0 || !descriptor.cw.waveform_name.empty())
+				{
+					return descriptor.cw.carrier_frequency;
+				}
+				break;
+			case radar::OperationMode::FMCW_MODE:
+				if (const auto* source = findFmcwContextSource(receiver, streaming_sources); source != nullptr)
+				{
+					return source->carrier_freq;
+				}
+				break;
+			case radar::OperationMode::SFCW_MODE:
+				if (descriptor.sfcw.waveform_id != 0 || !descriptor.sfcw.waveform_name.empty())
+				{
+					return descriptor.sfcw.carrier_frequency;
+				}
+				break;
+			}
+
+			if (const auto timing = receiver->getTiming(); timing)
+			{
+				return timing->getFrequency();
+			}
+			return 0.0;
+		}
 	}
 
 	core::OutputFileMetadata buildStreamingOutputMetadata(
@@ -940,10 +982,7 @@ namespace processing
 												  .cw = buildCwContext(receiver, streaming_sources),
 												  .fmcw = buildFmcwContext(receiver, streaming_sources),
 												  .sfcw = buildSfcwContext(receiver, streaming_sources)};
-		if (const auto timing = receiver->getTiming(); timing)
-		{
-			descriptor.reference_frequency = timing->getFrequency();
-		}
+		descriptor.reference_frequency = referenceFrequency(receiver, descriptor, streaming_sources);
 		return descriptor;
 	}
 
