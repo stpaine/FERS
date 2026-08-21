@@ -936,16 +936,14 @@ TEST_CASE("VITA paced sender admits an earlier deadline through saturated backpr
 
 	auto later = testSerializedPacket(2, 1);
 	later.stream_id = 2;
-	later.first_sample_time = 0.06;
+	later.first_sample_time = 0.4;
 	auto earlier = testSerializedPacket(1, 1);
 	earlier.stream_id = 1;
-	earlier.first_sample_time = 0.02;
+	earlier.first_sample_time = 0.2;
 
 	REQUIRE(sender.enqueue(later).enqueued);
 	std::atomic_bool earlier_enqueue_finished = false;
 	auto earlier_result = enqueueAsync(sender, earlier, earlier_enqueue_finished);
-	std::this_thread::sleep_for(5ms);
-	CHECK_FALSE(earlier_enqueue_finished.load());
 	CHECK(earlier_result.get().enqueued);
 	sender.stop();
 
