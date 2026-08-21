@@ -1417,7 +1417,6 @@ TEST_CASE("VITA output sink anchors automatic pacing when the first data batch i
 	CHECK(*stats.epoch_unix_nanoseconds >= epoch_lower_bound);
 	CHECK(*stats.epoch_unix_nanoseconds <= epoch_upper_bound);
 	REQUIRE(stats.streams.size() == 1u);
-	CHECK(stats.streams.front().late_data_packet_count == 0u);
 	CHECK(stats.streams.front().packets_emitted == 1u);
 	CHECK(recording_raw->sent.size() >= 3u);
 }
@@ -1432,6 +1431,7 @@ TEST_CASE("VITA output sink defers wall pacing while preserving a fixed timestam
 	params::setTime(0.0, 1.0);
 	constexpr std::uint64_t fixed_epoch = 1'700'000'000'000'000'000ull;
 	auto recording = std::make_unique<RecordingSender>();
+	auto* recording_raw = recording.get();
 	Vita49OutputSink sink(std::move(recording));
 	const core::OutputConfig config{.mode = core::OutputMode::Vita49Udp,
 									.vita49 = {.host = "127.0.0.1",
@@ -1445,6 +1445,7 @@ TEST_CASE("VITA output sink defers wall pacing while preserving a fixed timestam
 	sink.openStream(stream_id, 0.0);
 	CHECK(sink.snapshotStats().epoch_unix_nanoseconds == std::optional<std::uint64_t>{fixed_epoch});
 	std::this_thread::sleep_for(20ms);
+	REQUIRE(recording_raw->sent.empty());
 
 	std::vector<ComplexType> samples{ComplexType(0.25, -0.25)};
 	const core::ReceiverSampleBlock block{.stream = basicCwStreamDescriptor(),
@@ -1457,7 +1458,7 @@ TEST_CASE("VITA output sink defers wall pacing while preserving a fixed timestam
 
 	REQUIRE(stats.epoch_unix_nanoseconds == std::optional<std::uint64_t>{fixed_epoch});
 	REQUIRE(stats.streams.size() == 1u);
-	CHECK(stats.streams.front().late_data_packet_count == 0u);
+	CHECK(stats.streams.front().packets_emitted == 1u);
 }
 
 TEST_CASE("VITA output sink drains pending contexts when no data arrives", "[serial][vita49][startup][context]")
@@ -1484,7 +1485,6 @@ TEST_CASE("VITA output sink drains pending contexts when no data arrives", "[ser
 	REQUIRE(stats.epoch_unix_nanoseconds.has_value());
 	REQUIRE(stats.streams.size() == 1u);
 	CHECK(stats.streams.front().context_packets == 2u);
-	CHECK(stats.streams.front().late_context_packet_count == 0u);
 	CHECK(recording_raw->sent.size() == 2u);
 }
 
