@@ -28,7 +28,7 @@ Windows:
 | `--vita49-fullscale <positive-real>` | Required with `--vita49`; fixed ADC full-scale for int16 IQ scaling. |
 | `--vita49-epoch <unix-nanoseconds>` | Optional deterministic VITA stream epoch for replay. |
 | `--vita49-max-udp-payload <bytes>` | Optional VITA UDP payload cap, `64..65507` bytes. Default is `1400`. |
-| `--vita49-queue-depth <packets>` | Optional VITA sender queue depth. Must be greater than zero. Default is `1024`. |
+| `--vita49-queue-depth <packets>` | Optional VITA sender backpressure watermark. Must be greater than zero. Default is `1024`. |
 | `--log-level=<level>` | Set logging detail. Use `TRACE`, `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `FATAL`. |
 | `--log-file=<file>` | Write logs to a `.log` or `.txt` file as well as the terminal. |
 | `-n=<threads>` | Choose how many worker threads to use. |

@@ -51,7 +51,7 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 | `--help`, `-h`                       | Show the help message and exit.                                                                                                      |
 | `--version`, `-v`                    | Show version information and exit.                                                                                                   |
 | `--no-validate`                      | Disable the validation of the scenario file before running.                                                                          |
-| `--kml[=<file>]`                     | Generate a KML visualization of the scenario and exit. If a filename is provided, it will be used. Otherwise, it defaults to the scenario name with a `.kml` extension in the output directory. |
+| `--kml[=<file>]`                     | Generate a KML visualization of the scenario and exit. If a filename is provided, it will be used. Otherwise, it defaults to the scenario filename with a `.kml` extension in the output directory. |
 | `--out-dir=<dir>`                    | Set the output directory for simulation results, VITA run metadata, and default KML output. Defaults to the directory containing the input scenario file. |
 | `--vita49 <host:port>`               | Stream receiver output using the FERS VITA 49.2 UDP profile instead of writing HDF5 receiver files.                                  |
 | `--vita49-fullscale <positive-real>` | Set the required fixed ADC full-scale used for VITA int16 IQ conversion.                                                             |
@@ -65,7 +65,7 @@ Run the simulator from the command line, providing the path to a scenario XML fi
 ### Example
 
 ```bash
-./build/release/packages/fers-cli/fers-cli examples/mixed_scenario/example.fersxml --out-dir=./results --log-level=INFO -n=8
+./build/release/packages/fers-cli/fers-cli examples/sfcw_monostatic/example.fersxml --out-dir=./results --log-level=INFO -n=2
 ```
 
 Stream receiver output as VITA 49.2 UDP:

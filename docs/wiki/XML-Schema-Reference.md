@@ -41,7 +41,7 @@ Root element for one scenario.
 
 | Attribute | Required | Meaning |
 | --- | --- | --- |
-| `name` | Yes | Human-readable scenario name. Used in logs, serialized output, and KML defaults. |
+| `name` | Yes | Human-readable scenario name. Used in logs, serialized output, VITA metadata filenames, and the KML document title. |
 
 Children:
 

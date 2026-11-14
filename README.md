@@ -50,8 +50,8 @@ should rely on it for important results.
 | fers-ui | Beta | N/A |
 | Pulsed radar | Stable | Verified |
 | CW radar | Beta | Unverified |
-| FMCW radar | Alpha | Unverified |
-| SFCW radar | Alpha | Unverified |
+| FMCW radar | Beta | Unverified |
+| SFCW radar | Beta | Unverified |
 | Multimodal | Alpha | Unverified |
 | VITA 49.2 UDP output | Alpha | Unverified |
 | KML generation | Stable | Verified |

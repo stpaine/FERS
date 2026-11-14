@@ -28,7 +28,7 @@ A scenario describes the radar scene, not the analysis you want to run afterward
 At a high level it contains:
 
 - Global settings, such as start time, end time, sample rate, and KML/geospatial reference settings.
-- Waveforms, including pulsed files, finite HDF5-backed CW/FMCW signals, generated CW tones, and generated FMCW chirps.
+- Waveforms, including pulsed files, finite HDF5-backed CW/FMCW signals, generated CW tones, generated FMCW chirps, and stepped-frequency sweeps.
 - Timing sources, which model oscillator frequency, phase, and noise behavior.
 - Antennas, which determine gain as a function of direction.
 - Platforms, which move through the scene.
@@ -124,7 +124,7 @@ Use the metadata whenever possible instead of hard-coding assumptions in analysi
 
 ### SFCW HDF5 Metadata
 
-Complete native SFCW metadata uses this hierarchy:
+SFCW metadata is stored in HDF5 groups:
 
 ```text
 /metadata/sfcw
@@ -140,7 +140,7 @@ Complete native SFCW metadata uses this hierarchy:
 
 Each source group records transmitter and waveform identity. Its `waveform` group records carrier, step grid, dwell timing, sweep count, and derived range values. Each segment group records schedule bounds, first emitted step time, and emitted step count when available. This hierarchy represents every SFCW source in a receiver output and is semantically equivalent to `sfcw_sources` inside `fers_metadata_json`.
 
-Root-level `sfcw_*` attributes remain compatibility summaries for single-source files. They do not contain source or schedule nesting and must not be treated as complete multi-source metadata. `sfcw_flat_attributes_are_summary` marks this explicitly, while `sfcw_metadata_path` points to the complete native hierarchy.
+Root-level `sfcw_*` attributes remain compatibility summaries for single-source files. They do not contain source or schedule nesting and must not be treated as complete multi-source metadata. `sfcw_flat_attributes_are_summary` marks this explicitly, while `sfcw_metadata_path` points to the complete hierarchy.
 
 ## Sample Rates
 
@@ -182,7 +182,7 @@ KML export helps inspect platform paths and scenario geometry in a map or geospa
 Default output:
 
 ```text
-<out-dir>/<scenario-name>.kml
+<out-dir>/<scenario-file-stem>.kml
 ```
 
 KML generation uses the scenario's KML/geospatial `<origin>` and `<coordinatesystem>` settings to place exported geometry in latitude/longitude. These settings do not affect the signal simulation.

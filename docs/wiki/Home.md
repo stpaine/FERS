@@ -34,8 +34,8 @@ Current limitations to keep in mind:
 - Multipath from terrain, ground bounce, buildings, and reflectors is not part of the current XML model.
 - Clutter and environmental propagation effects are not modeled as first-class scenario objects.
 - Target shape is represented through RCS values or RCS pattern files, not physical meshes.
-- Built-in FMCW support is available but still marked alpha in the project README.
-- Built-in SFCW support is available but still marked alpha in the project README.
+- Built-in FMCW support is available and marked beta in the project README.
+- Built-in SFCW support is available and marked beta in the project README.
 - CW support is available but still marked beta in the project README.
 - VITA 49.2 UDP output support is available but still marked Alpha and Unverified in the project README.
 - The XML schema validates structure, but some physical limits are checked only when FERS loads or runs the scenario.

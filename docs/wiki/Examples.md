@@ -104,8 +104,8 @@ What to look at:
 
 - The waveform uses `<stepped_frequency>`.
 - The monostatic radar uses `<sfcw_mode/>`.
-- Native HDF5 groups under `/metadata/sfcw/sources` preserve waveform and schedule-segment nesting.
-- `analysis.py` samples each SFCW dwell, reads native HDF5 SFCW metadata, forms an IFFT range profile, and checks the peak against the target range.
+- HDF5 groups under `/metadata/sfcw/sources` preserve waveform and schedule-segment nesting.
+- `analysis.py` samples each SFCW dwell, reads HDF5 SFCW metadata, forms an IFFT range profile, and checks the peak against the target range.
 
 ## FMCW Monostatic Dechirp
 

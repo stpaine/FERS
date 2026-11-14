@@ -48,7 +48,7 @@ CLI VITA options:
 | `--vita49-fullscale <positive-real>` | Yes, with `--vita49` | Sets fixed ADC full-scale used to scale complex samples to signed int16 IQ. Must be positive and finite. |
 | `--vita49-epoch <unix-nanoseconds>` | No | Sets deterministic VRT UTC epoch as Unix nanoseconds. Must be an unsigned decimal integer that fits the VRT 32-bit UTC seconds field. Maximum accepted value is `4294967295999999999`. |
 | `--vita49-max-udp-payload <bytes>` | No | Caps one UDP datagram payload. Valid range is `64..65507` bytes. Default is `1400`. |
-| `--vita49-queue-depth <packets>` | No | Sets bounded sender queue depth. Valid range is `1..4294967295`. Default is `1024`. |
+| `--vita49-queue-depth <packets>` | No | Sets the steady-state backpressure watermark. Valid range is `1..4294967295`. Default is `1024`. |
 
 When `--vita49` is absent, `fers-cli` uses the default HDF5 backend. When `--vita49` is present, receiver samples are streamed to UDP instead of written through the HDF5 output sink.
 
