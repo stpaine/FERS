@@ -256,14 +256,15 @@ Finalization is where FERS turns simulated receiver voltage samples into the sel
 flowchart TD
     A[Rendered receiver samples] --> B[Add receiver thermal noise]
     B --> C[Apply timing phase effects]
-    C --> D[Find fullscale value]
-    D --> E{adc_bits > 0?}
-    E -- yes --> F[Quantize samples]
-    E -- no --> G[Normalize floating-point samples]
-    F --> H{Output mode}
+    C --> D{Output mode}
+    D -- HDF5 --> E[Measure fullscale value]
+    E --> F{Nonzero fullscale and adc_bits > 0?}
+    F -- yes --> G[Quantize samples]
+    F -- no --> H[Normalize nonzero samples and retain zeros]
     G --> H
     H --> I[Write HDF5 datasets and attributes]
-    H --> J[Emit VITA Signal Data and Context packets]
+    D -- VITA --> J[Convert I/Q to int16 using fixed ADC fullscale]
+    J --> K[Emit VITA Signal Data and Context packets]
 ```
 
 Important output behavior:
@@ -271,6 +272,6 @@ Important output behavior:
 - Stored samples are normalized.
 - Use the HDF5 `fullscale` attribute to reconstruct physical I/Q values.
 - Pulsed outputs write chunk datasets.
-- CW and FMCW outputs write `I_data` and `Q_data`.
+- CW, FMCW, and SFCW outputs write `I_data` and `Q_data`.
 - Metadata attributes describe the receiver mode and sampling settings.
 - VITA output uses configured fixed full-scale; clipping is reported through VITA stream statistics and packet indicators.

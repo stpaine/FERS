@@ -191,17 +191,21 @@ TEST_CASE("quantizeAndScaleWindow applies adc quantization", "[processing][signa
 TEST_CASE("quantizeAndScaleWindow leaves zeros unchanged", "[processing][signal]")
 {
 	ParamGuard const guard;
-	params::setAdcBits(0);
 
-	std::vector<ComplexType> window = {ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0}};
+	for (const unsigned adc_bits : {0U, 12U})
+	{
+		CAPTURE(adc_bits);
+		params::setAdcBits(adc_bits);
+		std::vector<ComplexType> window = {ComplexType{0.0, 0.0}, ComplexType{0.0, 0.0}};
 
-	const RealType fullscale = processing::quantizeAndScaleWindow(window);
+		const RealType fullscale = processing::quantizeAndScaleWindow(window);
 
-	REQUIRE_THAT(fullscale, WithinAbs(0.0, 0.0));
-	REQUIRE_THAT(window[0].real(), WithinAbs(0.0, 0.0));
-	REQUIRE_THAT(window[0].imag(), WithinAbs(0.0, 0.0));
-	REQUIRE_THAT(window[1].real(), WithinAbs(0.0, 0.0));
-	REQUIRE_THAT(window[1].imag(), WithinAbs(0.0, 0.0));
+		REQUIRE_THAT(fullscale, WithinAbs(0.0, 0.0));
+		REQUIRE_THAT(window[0].real(), WithinAbs(0.0, 0.0));
+		REQUIRE_THAT(window[0].imag(), WithinAbs(0.0, 0.0));
+		REQUIRE_THAT(window[1].real(), WithinAbs(0.0, 0.0));
+		REQUIRE_THAT(window[1].imag(), WithinAbs(0.0, 0.0));
+	}
 }
 
 TEST_CASE("scaleToInt16FixedFullscale uses configured full-scale without future normalization",

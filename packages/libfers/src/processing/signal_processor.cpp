@@ -169,7 +169,7 @@ namespace processing
 			max_value = std::max({max_value, real_abs, imag_abs});
 		}
 
-		if (const auto adc_bits = params::adcBits(); adc_bits > 0)
+		if (const auto adc_bits = params::adcBits(); adc_bits > 0 && max_value != 0.0)
 		{
 			adcSimulate(window, adc_bits, max_value);
 		}

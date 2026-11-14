@@ -94,6 +94,8 @@ For FMCW with dechirping enabled, these datasets contain the dechirped IF output
 
 FERS normalizes stored samples. To recover the physical sample values, multiply by the `fullscale` attribute.
 
+An all-zero window has `fullscale = 0` and retains zero-valued I/Q samples with ADC quantization enabled or disabled.
+
 ```python
 import h5py
 
