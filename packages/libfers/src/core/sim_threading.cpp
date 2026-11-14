@@ -886,10 +886,9 @@ namespace core
 			{
 				break;
 			}
-			const Event event = event_queue.top();
-			event_queue.pop();
+			const RealType admitted_timestamp = event_queue.top().timestamp;
 
-			processStreamingPhysics(event.timestamp);
+			processStreamingPhysics(admitted_timestamp);
 			if (isCancellationRequested())
 			{
 				break;
@@ -897,10 +896,19 @@ namespace core
 			flushFmcwIfBlocks();
 			flushStreamingOutputBlocks();
 
-			state.t_current = event.timestamp;
+			state.t_current = admitted_timestamp;
 
-			processEvent(event);
-			updateProgress();
+			// Termination is evaluated between timestamps, never between events at the same timestamp. Once a timestamp
+			// is admitted under the existing endpoint policy, process its complete batch so heap tie order cannot drop
+			// an otherwise equivalent receiver or event. Events created at this timestamp join the same atomic batch.
+			do
+			{
+				const Event event = event_queue.top();
+				event_queue.pop();
+				processEvent(event);
+				updateProgress();
+			}
+			while (!event_queue.empty() && event_queue.top().timestamp == admitted_timestamp);
 		}
 
 		const bool has_active_if_overrender =

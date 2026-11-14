@@ -20,6 +20,20 @@ TEST_CASE("EventComparator orders earliest timestamps first", "[core][events]")
 	REQUIRE(queue.top().timestamp == early.timestamp);
 }
 
+TEST_CASE("EventComparator has no event-type tie-break for equal timestamps", "[core][events][equal-time]")
+{
+	core::EventComparator const comparator;
+
+	const core::Event transmit{2.0, core::EventType::TX_STREAMING_START, nullptr};
+	const core::Event receive{2.0, core::EventType::RX_STREAMING_END, nullptr};
+
+	// The current comparator is timestamp-only. Distinct event types at the same
+	// timestamp are therefore equivalent under the priority-queue comparator; the
+	// EventType declaration order is not a secondary priority rule.
+	REQUIRE_FALSE(comparator(transmit, receive));
+	REQUIRE_FALSE(comparator(receive, transmit));
+}
+
 TEST_CASE("EventType toString covers all values", "[core][events]")
 {
 	REQUIRE(core::toString(core::EventType::TX_PULSED_START) == "TxPulsedStart");

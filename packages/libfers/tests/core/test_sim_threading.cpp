@@ -245,6 +245,77 @@ namespace
 		radar::Target* target = nullptr;
 	};
 
+	struct EqualTimeBatchResult
+	{
+		std::vector<std::vector<RealType>> finalizer_job_starts;
+		std::vector<RealType> pending_event_times;
+		RealType final_time = 0.0;
+	};
+
+	EqualTimeBatchResult runEqualTimeReceiverCloseBatch(const std::vector<std::size_t>& insertion_order)
+	{
+		auto world = std::make_unique<core::World>();
+		auto platform = std::make_unique<radar::Platform>("BatchRxPlatform", 300);
+		setupStaticPlatform(*platform, math::Vec3{0.0, 0.0, 0.0});
+		auto timing_prototype = std::make_unique<timing::PrototypeTiming>("BatchRxClock", 301);
+		timing_prototype->setFrequency(1000.0);
+		auto timing = std::make_shared<timing::Timing>("BatchRxClockInstance", 302);
+		timing->initializeModel(timing_prototype.get());
+
+		std::vector<radar::Receiver*> receivers;
+		for (std::size_t index = 0; index < insertion_order.size(); ++index)
+		{
+			auto receiver = std::make_unique<radar::Receiver>(platform.get(), "BatchRx" + std::to_string(index), 42,
+															  radar::OperationMode::PULSED_MODE, 310 + index);
+			receiver->setTiming(timing);
+			receiver->setWindowProperties(0.005, 1.0, 0.0);
+			receiver->setActive(true);
+			receivers.push_back(receiver.get());
+			world->add(std::move(receiver));
+		}
+		world->add(std::move(platform));
+		world->add(std::move(timing_prototype));
+
+		constexpr RealType end_time = 1.0;
+		constexpr RealType close_time = 1.005;
+		constexpr RealType later_time = 1.006;
+		params::setTime(0.0, end_time);
+		world->getSimulationState().t_current = end_time;
+		for (const std::size_t receiver_index : insertion_order)
+		{
+			world->getEventQueue().push(
+				{close_time, core::EventType::RX_PULSED_WINDOW_END, receivers.at(receiver_index)});
+		}
+		world->getEventQueue().push({later_time, core::EventType::RX_PULSED_WINDOW_START, receivers.front()});
+
+		pool::ThreadPool pool(1);
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".");
+		engine.run();
+
+		EqualTimeBatchResult result;
+		result.final_time = world->getSimulationState().t_current;
+		result.finalizer_job_starts.resize(receivers.size());
+		for (std::size_t index = 0; index < receivers.size(); ++index)
+		{
+			// The engine's shutdown sentinel was consumed by its joined finalizer. This fixture drains jobs directly,
+			// so it owns a separate terminator for the blocking queue reader below.
+			core::RenderingJob drain_shutdown_job{};
+			drain_shutdown_job.duration = -1.0;
+			receivers[index]->enqueueFinalizerJob(std::move(drain_shutdown_job));
+			core::RenderingJob job;
+			while (receivers[index]->waitAndDequeueFinalizerJob(job))
+			{
+				result.finalizer_job_starts[index].push_back(job.ideal_start_time);
+			}
+		}
+		while (!world->getEventQueue().empty())
+		{
+			result.pending_event_times.push_back(world->getEventQueue().top().timestamp);
+			world->getEventQueue().pop();
+		}
+		return result;
+	}
+
 	StreamingPathWorld
 	createStreamingPathWorld(const math::Path::InterpType tx_interpolation, const std::vector<math::Coord>& tx_coords,
 							 const math::Path::InterpType rx_interpolation, const std::vector<math::Coord>& rx_coords,
@@ -1514,6 +1585,47 @@ TEST_CASE("SimulationEngine runEventDrivenSim executes full loop", "[core][threa
 		// Simulation time should have advanced to the last event
 		REQUIRE_THAT(world->getSimulationState().t_current, WithinAbs(0.004, 1e-9));
 	}
+}
+
+TEST_CASE("SimulationEngine equal-time receiver close batching is independent of heap insertion order",
+		  "[core][threading][equal-time][regression]")
+{
+	ParamGuard const guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+
+	const auto forward = runEqualTimeReceiverCloseBatch({0, 1});
+	const auto reversed = runEqualTimeReceiverCloseBatch({1, 0});
+
+	REQUIRE(forward.finalizer_job_starts == reversed.finalizer_job_starts);
+	REQUIRE(forward.finalizer_job_starts.size() == 2u);
+	for (const auto& receiver_job_starts : forward.finalizer_job_starts)
+	{
+		REQUIRE(receiver_job_starts.size() == 1u);
+		REQUIRE_THAT(receiver_job_starts.front(), WithinAbs(1.0, 1.0e-12));
+	}
+	REQUIRE_THAT(forward.final_time, WithinAbs(1.005, 1.0e-12));
+	REQUIRE_THAT(reversed.final_time, WithinAbs(1.005, 1.0e-12));
+}
+
+TEST_CASE("SimulationEngine preserves every finalizer job in an admitted end-boundary batch",
+		  "[core][threading][equal-time][finalizer][regression]")
+{
+	ParamGuard const guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+
+	const auto result = runEqualTimeReceiverCloseBatch({2, 0, 1});
+
+	REQUIRE(result.finalizer_job_starts.size() == 3u);
+	for (const auto& receiver_job_starts : result.finalizer_job_starts)
+	{
+		REQUIRE(receiver_job_starts.size() == 1u);
+		REQUIRE_THAT(receiver_job_starts.front(), WithinAbs(1.0, 1.0e-12));
+	}
+	REQUIRE(result.pending_event_times.size() == 1u);
+	REQUIRE_THAT(result.pending_event_times.front(), WithinAbs(1.006, 1.0e-12));
+	REQUIRE_THAT(result.final_time, WithinAbs(1.005, 1.0e-12));
 }
 
 TEST_CASE("SimulationEngine reports progress while processing long streaming spans", "[core][threading]")

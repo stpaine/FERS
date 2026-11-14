@@ -70,18 +70,17 @@ What can fail here:
 
 ## Event-Driven Simulation
 
-FERS does not simply render every object independently from start to finish. It builds a time-ordered set of events and processes them over the simulation interval.
+FERS builds a time-ordered set of events and processes all events at each admitted timestamp as one batch. Events created at that same timestamp join the batch. Termination is checked between batches, preserving simultaneous receiver completions at the simulation boundary.
 
 ```mermaid
 flowchart TD
     A[Start simulation time] --> B[Schedule initial transmitter and receiver events]
-    B --> C{Next event time}
-    C --> D[Advance platform positions and rotations]
+    B --> C{Admit next timestamp?}
+    C -- yes --> D[Advance platform positions and rotations]
     D --> E[Process continuous streaming signals up to event time]
-    E --> F[Handle event]
-    F --> G{More events before end time?}
-    G -- yes --> C
-    G -- no --> H[Flush remaining streaming and IF data]
+    E --> F[Handle every event at this timestamp]
+    F --> C
+    C -- no --> H[Flush remaining streaming and IF data]
     H --> I[Finish output files]
 ```
 
