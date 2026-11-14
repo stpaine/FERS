@@ -141,12 +141,17 @@ Expected C++ artifacts:
 > [!TIP]
 > You can install the built `fers-cli` release to your system using:
 >
-> **Linux / macOS:**
+> **Linux:**
 > ```bash
 > sudo cmake --install build/release
-> sudo ldconfig # For Linux only, to update the library cache
+> sudo ldconfig
 > ```
-> This installs to `/usr/local` by default.
+>
+> **macOS:**
+> ```bash
+> sudo cmake --install build/release
+> ```
+> Both install to `/usr/local` by default.
 >
 > **Windows:**
 > Open an **Administrator** Developer PowerShell and run:

@@ -76,11 +76,17 @@ You do not have to install FERS system-wide. You can run the CLI directly from t
 
 If you do want to install it:
 
-Linux/macOS:
+Linux:
 
 ```bash
 sudo cmake --install build/release
 sudo ldconfig
+```
+
+macOS:
+
+```bash
+sudo cmake --install build/release
 ```
 
 Windows, from an Administrator Developer PowerShell:
@@ -131,10 +137,32 @@ Run these commands from the repository root.
 
 Use the MSVC toolchain. MinGW is not supported by the top-level build.
 
-Run from a Visual Studio Developer PowerShell with an x64 compiler active. If necessary:
+Use a Visual Studio Developer PowerShell configured for the architecture you are building:
+
+| Native build target | Compiler path suffix | vcpkg target triplet | Rust target for the UI |
+| --- | --- | --- | --- |
+| Windows x64 | `Hostx64\x64\cl.exe` | `x64-windows-static-md` | `x86_64-pc-windows-msvc` |
+| Windows ARM64 | `HostARM64\ARM64\cl.exe` | `arm64-windows-static-md` | `aarch64-pc-windows-msvc` |
+
+For an x64 build on an x64 host, select the x64 tools explicitly if needed:
 
 ```powershell
 & "C:\Program Files\Microsoft Visual Studio\<VS_VERSION>\<EDITION>\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64
+```
+
+For a native ARM64 build, use Visual Studio for ARM64 with the **Desktop development with C++** workload and its native ARM64 compiler environment. Microsoft documents the toolset and compiler paths in [Visual Studio on Arm-powered devices](https://learn.microsoft.com/en-us/visualstudio/install/visual-studio-on-arm-devices).
+
+Confirm the selected compiler before configuring:
+
+```powershell
+(Get-Command cl.exe).Source
+```
+
+The path should match the native target in the table. For ARM64, configure the matching dependencies explicitly:
+
+```powershell
+cmake --preset=release -DVCPKG_TARGET_TRIPLET=arm64-windows-static-md
+cmake --build --preset=release
 ```
 
 ### macOS

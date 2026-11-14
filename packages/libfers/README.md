@@ -5,13 +5,15 @@
 **libfers** is the core C++ simulation engine for the **Flexible Extensible Radar Simulator (FERS)**. It contains all
 the logic for parsing scenarios, modeling physics, executing simulations, and processing output data.
 
-This library is built with modern C++23 standards for optimal performance and maintainability. It exposes a stable
+This library is built with modern C++23 standards for optimal performance and maintainability. It exposes a
 C-style Foreign Function Interface (FFI) in `include/libfers/api.h`, allowing it to be used by various frontends,
 including the official `fers-cli` and `fers-ui` applications.
 
+The C API can change without notice during active development, as described in the [project development status](../../README.md#disclaimer--development-status).
+
 ## Features
 
-- **C-API:** A stable C-style API for creating and managing simulation contexts.
+- **C-API:** A C-style API for creating and managing simulation contexts.
 - **JSON & XML Serialization:** Robust serialization of the entire simulation state to and from JSON (for UI interoperability) and XML (for file-based workflows).
 - **Signal-Level Modeling:** Creation of radar signal returns, including Doppler and phase modeling.
 - **System Simulation:** Support for monostatic, multistatic, continuous wave (CW), pulsed, FMCW, and SFCW
@@ -67,10 +69,17 @@ You can customize the build by passing CMake options alongside the preset:
 
 You can install the libraries, headers, and CLI executable to your system.
 
-#### Linux / macOS:
+#### Linux:
+
 ```bash
 sudo cmake --install build/release
-sudo ldconfig # On Linux, to update the library cache
+sudo ldconfig
+```
+
+#### macOS:
+
+```bash
+sudo cmake --install build/release
 ```
 
 #### Windows:

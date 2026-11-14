@@ -114,9 +114,7 @@ if (NOT FERS_DOCS_ONLY)
 	set(CMAKE_VERBOSE_MAKEFILE ON)
 	set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 	# CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS simplifies DLL exports on Windows.
-	# macOS and Linux do not need this but it is harmless there.
-	# Windows is not a currently supported target but this flag is kept to ease
-	# a future port.
+	# Enable it for the supported Windows x64 and ARM64 MSVC builds.
 	if (WIN32)
 		set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 	endif ()
