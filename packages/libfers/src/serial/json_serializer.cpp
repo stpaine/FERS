@@ -24,6 +24,7 @@
 #include <random>
 #include <stdexcept>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 
 #include "antenna/antenna_factory.h"
@@ -2413,8 +2414,29 @@ namespace serial
 
 	void json_to_world(const nlohmann::json& j, core::World& world, std::mt19937& masterSeeder)
 	{
+		static_assert(std::is_nothrow_swappable_v<params::Parameters>);
+		static_assert(std::is_nothrow_copy_assignable_v<std::mt19937>);
+
 		core::World parsed_world;
-		populate_world_from_json(j, parsed_world, masterSeeder);
+		params::Parameters previous_params = params::params;
+		std::mt19937 candidate_master_seeder = masterSeeder;
+		try
+		{
+			populate_world_from_json(j, parsed_world, candidate_master_seeder);
+		}
+		catch (...)
+		{
+			// Parsing currently exposes candidate parameters through the process-global
+			// parameter object because constructors and event scheduling read it. Restore
+			// the saved state with a non-throwing swap before propagating the rejection.
+			using std::swap;
+			swap(params::params, previous_params);
+			throw;
+		}
+
+		// Both publication operations are non-throwing. Until this point the live
+		// World and caller-owned master seeder have remained untouched.
 		world.swap(parsed_world);
+		masterSeeder = candidate_master_seeder;
 	}
 }

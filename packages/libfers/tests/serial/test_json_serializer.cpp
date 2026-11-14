@@ -20,6 +20,7 @@
 #include "antenna/antenna_factory.h"
 #include "core/logging.h"
 #include "core/parameters.h"
+#include "core/sim_id.h"
 #include "core/world.h"
 #include "math/coord.h"
 #include "math/path.h"
@@ -86,6 +87,29 @@ namespace
 		LogLevelGuard& operator=(LogLevelGuard&&) = delete;
 		~LogLevelGuard() { logging::logger.setLevel(logging::Level::INFO); }
 	};
+
+	void requireParametersEqual(const params::Parameters& actual, const params::Parameters& expected)
+	{
+		REQUIRE(actual.c == expected.c);
+		REQUIRE(actual.boltzmann_k == expected.boltzmann_k);
+		REQUIRE(actual.start == expected.start);
+		REQUIRE(actual.end == expected.end);
+		REQUIRE(actual.sim_sampling_rate == expected.sim_sampling_rate);
+		REQUIRE(actual.origin_latitude == expected.origin_latitude);
+		REQUIRE(actual.origin_longitude == expected.origin_longitude);
+		REQUIRE(actual.origin_altitude == expected.origin_altitude);
+		REQUIRE(actual.coordinate_frame == expected.coordinate_frame);
+		REQUIRE(actual.rotation_angle_unit == expected.rotation_angle_unit);
+		REQUIRE(actual.utm_zone == expected.utm_zone);
+		REQUIRE(actual.utm_north_hemisphere == expected.utm_north_hemisphere);
+		REQUIRE(actual.rate == expected.rate);
+		REQUIRE(actual.random_seed == expected.random_seed);
+		REQUIRE(actual.adc_bits == expected.adc_bits);
+		REQUIRE(actual.filter_length == expected.filter_length);
+		REQUIRE(actual.render_threads == expected.render_threads);
+		REQUIRE(actual.simulation_name == expected.simulation_name);
+		REQUIRE(actual.oversample_ratio == expected.oversample_ratio);
+	}
 
 	void configureFmcwRoundTripParams()
 	{
@@ -776,6 +800,125 @@ TEST_CASE("JSON: Full world rejects duplicate scenario object names", "[serial][
 		serial::json_to_world(scenario, world, seeder),
 		ContainsSubstring(
 			"Duplicate name 'MonoRadar Monostatic' found for monostatic; previously used by monostatic."));
+}
+
+TEST_CASE("JSON: Failed full replacement rolls back World parameters and master seeder",
+		  "[serial][json][verification][transaction]")
+{
+	ParamGuard const guard;
+	core::World world;
+	world.add(std::make_unique<radar::Platform>("existing-platform", 999));
+
+	constexpr unsigned original_seed = 12'345;
+	constexpr unsigned candidate_seed = 98'765;
+	constexpr RealType original_rate = 2'000.0;
+	constexpr RealType candidate_rate = 4'321.0;
+	params::params.c = 299'123'456.0;
+	params::params.boltzmann_k = 1.23e-23;
+	params::params.start = 2.0;
+	params::params.end = 8.0;
+	params::params.sim_sampling_rate = 250.0;
+	params::params.origin_latitude = -34.0;
+	params::params.origin_longitude = 19.0;
+	params::params.origin_altitude = 123.0;
+	params::params.coordinate_frame = params::CoordinateFrame::UTM;
+	params::params.rotation_angle_unit = params::RotationAngleUnit::Radians;
+	params::params.utm_zone = 34;
+	params::params.utm_north_hemisphere = false;
+	params::params.rate = original_rate;
+	params::params.random_seed = original_seed;
+	params::params.adc_bits = 14;
+	params::params.filter_length = 65;
+	params::params.render_threads = 3;
+	params::params.simulation_name = "accepted-scenario";
+	params::params.oversample_ratio = 2;
+	const params::Parameters accepted_params = params::params;
+
+	std::mt19937 seeder(original_seed);
+	std::mt19937 untouched_seeder = seeder;
+
+	json scenario = badComponentScenario(json::array({{{"target",
+														{{"id", 1},
+														 {"name", "bad-target"},
+														 {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
+														 {"model", {{"type", "unsupported"}}}}}}}));
+	scenario["simulation"]["name"] = "rejected-scenario";
+	scenario["simulation"]["parameters"]["rate"] = candidate_rate;
+	scenario["simulation"]["parameters"]["randomseed"] = candidate_seed;
+	scenario["simulation"]["parameters"]["c"] = 123.0;
+	scenario["simulation"]["parameters"]["simSamplingRate"] = 999.0;
+	scenario["simulation"]["parameters"]["adc_bits"] = 4;
+	scenario["simulation"]["parameters"]["oversample"] = 4;
+	scenario["simulation"]["parameters"]["rotationangleunit"] = "deg";
+
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder),
+						ContainsSubstring("Unsupported fluctuation model type: unsupported"));
+
+	// In this ordinary non-reentrant call, none of the three targeted live domains
+	// (World, Parameters, or caller seeder) publishes the rejected candidate.
+	REQUIRE(world.getPlatforms().size() == 1);
+	REQUIRE(world.findPlatform(999) != nullptr);
+	REQUIRE(world.findPlatform(100) == nullptr);
+	requireParametersEqual(params::params, accepted_params);
+	for (std::size_t draw = 0; draw < 32; ++draw)
+	{
+		REQUIRE(seeder() == untouched_seeder());
+	}
+}
+
+TEST_CASE("JSON: Successful full replacement commits World parameters and master seeder",
+		  "[serial][json][verification][transaction]")
+{
+	ParamGuard const guard;
+	core::World world;
+	world.add(std::make_unique<radar::Platform>("existing-platform", 999));
+
+	constexpr unsigned original_seed = 12'345;
+	constexpr unsigned candidate_seed = 98'765;
+	constexpr RealType candidate_rate = 4'321.0;
+	params::setRate(2'000.0);
+	params::setRandomSeed(original_seed);
+	std::mt19937 seeder(original_seed);
+
+	json scenario = badComponentScenario(json::array());
+	scenario["simulation"]["name"] = "accepted-candidate";
+	scenario["simulation"]["parameters"]["rate"] = candidate_rate;
+	scenario["simulation"]["parameters"]["randomseed"] = candidate_seed;
+
+	REQUIRE_NOTHROW(serial::json_to_world(scenario, world, seeder));
+	REQUIRE(world.findPlatform(999) == nullptr);
+	REQUIRE(world.findPlatform(100) != nullptr);
+	REQUIRE(params::params.rate == candidate_rate);
+	REQUIRE(params::params.random_seed == candidate_seed);
+	REQUIRE(params::params.simulation_name == "accepted-candidate");
+
+	std::mt19937 expected_seeder(candidate_seed);
+	for (std::size_t draw = 0; draw < 32; ++draw)
+	{
+		REQUIRE(seeder() == expected_seeder());
+	}
+}
+
+TEST_CASE("JSON: Rejected zero-ID candidate can advance the global SimId counter",
+		  "[serial][json][verification][transaction][negative]")
+{
+	ParamGuard const guard;
+	core::World world;
+	std::mt19937 seeder(42);
+	json scenario = badComponentScenario(json::array({{{"target",
+														{{"id", 0},
+														 {"name", "zero-id-target"},
+														 {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
+														 {"model", {{"type", "unsupported"}}}}}}}));
+
+	const SimId before = SimIdGenerator::instance().generateDebugId();
+	REQUIRE_THROWS_WITH(serial::json_to_world(scenario, world, seeder),
+						ContainsSubstring("Unsupported fluctuation model type: unsupported"));
+	const SimId after = SimIdGenerator::instance().generateDebugId();
+
+	// One target ID is generated during rejected candidate construction, and
+	// the second increment is the 'after' observation itself.
+	REQUIRE(SimIdGenerator::getCounter(after) == SimIdGenerator::getCounter(before) + 2);
 }
 
 TEST_CASE("JSON: Rotation parsing warns when values look like the opposite unit", "[serial][json]")

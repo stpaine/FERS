@@ -226,7 +226,7 @@ TEST_CASE("API update scenario from JSON modifies serialized state", "[api][scen
 	REQUIRE(updated.at("simulation").at("name") == "After Update");
 }
 
-TEST_CASE("API failed JSON scenario update preserves previous world for later granular edits", "[api][scenario]")
+TEST_CASE("API failed JSON scenario update rolls back world and global parameters", "[api][scenario][transaction]")
 {
 	api_test::ParamGuard const guard;
 	api_test::clearLastError();
@@ -237,13 +237,28 @@ TEST_CASE("API failed JSON scenario update preserves previous world for later gr
 	REQUIRE(fers_load_scenario_from_xml_string(context.get(), xml.c_str(), 0) == 0);
 
 	auto scenario = api_test::parseScenarioJson(context.get());
+	const auto accepted_scenario = scenario;
+	const auto accepted_params = params::params;
 	const auto original_platform = scenario["simulation"]["platforms"][0];
 	const uint64_t platform_id = api_test::parseId(original_platform["id"]);
 
 	auto invalid = scenario;
-	invalid["simulation"]["platforms"][0].erase("name");
-	REQUIRE(fers_update_scenario_from_json(context.get(), invalid.dump().c_str()) == 2);
+	invalid["simulation"]["name"] = "Rejected Update";
+	invalid["simulation"]["parameters"]["rate"] = 4'321.0;
+	invalid["simulation"]["parameters"]["randomseed"] = 98'765;
+	invalid["simulation"]["platforms"][0]["components"].push_back({{"target",
+																	{{"id", 9'000'000'000ULL},
+																	 {"name", "rejected-target"},
+																	 {"rcs", {{"type", "isotropic"}, {"value", 1.0}}},
+																	 {"model", {{"type", "unsupported"}}}}}});
+	REQUIRE(fers_update_scenario_from_json(context.get(), invalid.dump().c_str()) == 1);
 
+	REQUIRE(api_test::parseScenarioJson(context.get()) == accepted_scenario);
+	REQUIRE(params::params.rate == accepted_params.rate);
+	REQUIRE(params::params.random_seed == accepted_params.random_seed);
+	REQUIRE(params::params.simulation_name == accepted_params.simulation_name);
+
+	// The preserved world remains usable after the rejected full replacement.
 	auto platform_update = original_platform;
 	platform_update["name"] = "Rename After Failed Full Sync";
 	REQUIRE(fers_update_platform_from_json(context.get(), platform_id, platform_update.dump().c_str()) == 0);

@@ -45,6 +45,8 @@ XML-string loading is useful when another application already has the XML in mem
 
 XML file and string loads apply `<randomseed>` before constructing timing sources, receivers, and targets. When the seed is omitted, the API generates one and retains it in the scenario parameters; save the serialized scenario to replay that seed. A rejected XML load restores the context's master generator state.
 
+`fers_update_scenario_from_json` replaces the full scenario after successful parsing. A rejected replacement preserves the loaded world, global parameters, and master generator, so the accepted scenario remains available for subsequent edits and runs. Automatically allocated object IDs continue increasing across rejected updates.
+
 ## Running Simulations
 
 A `libfers` simulation run is synchronous: the call does not return until the simulation is finished or has failed.

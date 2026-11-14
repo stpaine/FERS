@@ -358,6 +358,10 @@ char* fers_get_memory_projection_json(fers_context_t* context);
  * This is the primary method for the UI to push its state back to the C++
  * core. It performs a full replacement of the existing scenario.
  *
+ * A rejected replacement preserves the loaded world, global parameters, and
+ * master random-number generator. Automatically allocated object IDs continue
+ * increasing across rejected updates.
+ *
  * @param context A valid `fers_context_t` handle.
  * @param scenario_json A null-terminated UTF-8 string containing the FERS scenario in JSON format.
  * @return 0 on success.
