@@ -86,7 +86,7 @@ FERS supports native development on Linux, macOS, and Windows.
 
 Please install the following external dependencies using their official guides:
 
-- A C++23 compatible compiler (GCC 11+, Clang 14+, or MSVC v143+)
+- A C++23 compiler and standard library providing `std::format` and `std::expected`
 - [**CMake**](https://cmake.org/download/) (3.22+) and [**Ninja**](https://ninja-build.org/)
 - [**vcpkg**](https://vcpkg.io/en/getting-started.html) (C++ package manager)
 - [**Bun**](https://bun.sh/) (JavaScript runtime and package manager)
@@ -95,9 +95,11 @@ Please install the following external dependencies using their official guides:
 
 Then also review [Platform-Specific Notes](#platform-specific-notes) below.
 
+The current Linux Debug and Release builds have been tested with GCC 16.2.1 and CMake 4.5.0.
+
 ### 2. Environment Configuration
 
-**Important:** FERS relies on `vcpkg` to manage its C++ dependencies. You **must** set the `VCPKG_ROOT` environment variable to point to your vcpkg installation directory before building.
+FERS uses `vcpkg` for C++ dependencies. Set `VCPKG_ROOT` to select your installation; CMake also searches standard installation locations and the `vcpkg` executable on `PATH`.
 
 *Linux / macOS:*
 ```bash
@@ -173,13 +175,19 @@ bun ui:build
 
 ### 6. Run C++ Unit Tests (optional)
 
-Use the `coverage` preset to compile and run the Catch2 unit tests. This preset enables `FERS_BUILD_TESTS` across all platforms.
+The `debug` preset enables the Catch2 tests. Enable them explicitly for Release with `FERS_BUILD_TESTS=ON`:
 
 ```bash
-cmake --preset=coverage
-cmake --build --preset=coverage --parallel
-ctest --preset=coverage --output-on-failure
+cmake --preset=debug
+cmake --build --preset=debug --parallel
+ctest --preset=debug --output-on-failure
+
+cmake --preset=release -DFERS_BUILD_TESTS=ON
+cmake --build --preset=release --parallel
+ctest --preset=release --output-on-failure
 ```
+
+The `coverage` preset enables tests and coverage instrumentation. See [scripts](scripts/README.md) for HTML coverage reporting.
 
 ## Using Old XML Scenarios
 

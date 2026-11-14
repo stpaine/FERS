@@ -6,12 +6,14 @@ This page covers the normal build used by FERS users who want to run scenarios w
 
 Install:
 
-- A C++23 compiler: GCC 11 or newer, Clang 14 or newer, or MSVC v143 or newer.
+- A C++23 compiler and standard library providing `std::format` and `std::expected`.
 - CMake 3.22 or newer.
 - Ninja.
 - vcpkg.
 - Bun, if you want to use the repository's JavaScript tooling or the desktop UI.
 - Rust and the Tauri platform prerequisites, only if you want to build the desktop UI.
+
+The current Linux Debug and Release builds have been tested with GCC 16.2.1 and CMake 4.5.0.
 
 Set `VCPKG_ROOT` before configuring FERS:
 
@@ -94,10 +96,16 @@ The default install prefix is usually `/usr/local` on Linux/macOS and `C:\Progra
 Use this when you want to verify your local build:
 
 ```bash
-cmake --preset=coverage
-cmake --build --preset=coverage --parallel
-ctest --preset=coverage --output-on-failure
+cmake --preset=debug
+cmake --build --preset=debug --parallel
+ctest --preset=debug --output-on-failure
+
+cmake --preset=release -DFERS_BUILD_TESTS=ON
+cmake --build --preset=release --parallel
+ctest --preset=release --output-on-failure
 ```
+
+The `debug` preset enables tests. Release uses the explicit `FERS_BUILD_TESTS=ON` setting above. Use the `coverage` preset for instrumented builds and `scripts/run_tests_gen_coverage.sh` to generate an HTML coverage report.
 
 ## Build The Desktop UI
 

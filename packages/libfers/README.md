@@ -42,13 +42,15 @@ The compiled artifacts will be located in the `build/release/` directory. Librar
 
 ### Running Tests
 
-The `release` preset builds the library and CLI but does not enable unit tests. Use the `coverage` preset when you need to compile and run the Catch2 test suite:
+The `debug` preset enables the Catch2 suite. Release tests are enabled explicitly:
 
 ```bash
-cmake --fresh --preset=coverage
-cmake --build --preset=coverage --parallel
-ctest --preset=coverage --output-on-failure
+cmake --preset=release -DFERS_BUILD_TESTS=ON
+cmake --build --preset=release --parallel
+ctest --preset=release --output-on-failure
 ```
+
+Use the `coverage` preset for coverage instrumentation, or `scripts/run_tests_gen_coverage.sh` for an HTML report.
 
 ### Build Options
 
@@ -59,6 +61,7 @@ You can customize the build by passing CMake options alongside the preset:
 | `-DFERS_BUILD_SHARED_LIBS=ON` | Build the shared library (`.so`/`.dll`).        | ON      |
 | `-DFERS_BUILD_STATIC_LIBS=ON` | Build the static library (`.a`/`.lib`).         | ON      |
 | `-DFERS_BUILD_DOCS=ON`        | Enable the `doc` target for Doxygen generation. | OFF     |
+| `-DFERS_BUILD_TESTS=ON`       | Build the library and CLI Catch2 tests.        | OFF; ON in the `debug` and `coverage` presets |
 
 ### 2. Install (Optional)
 
