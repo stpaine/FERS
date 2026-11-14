@@ -347,6 +347,8 @@ Use this to inspect:
 - Geospatial placement.
 - Antenna pointing.
 
+Exported moving paths retain altitude in `LineString` geometry. Platform folders list attached objects, and receiver, transmitter, and target roles use distinct symbol colors.
+
 If KML geometry looks wrong, check Global Parameters, especially KML origin and KML coordinate system.
 
 ## Logs And Diagnostics

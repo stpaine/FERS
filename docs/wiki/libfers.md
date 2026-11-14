@@ -129,6 +129,8 @@ not queue overflow.
 
 The KML output depends on the scenario's KML/geospatial settings. Check `<origin>` and `<coordinatesystem>` if exported geometry looks wrong. These settings do not affect the signal simulation.
 
+Moving paths use altitude-aware `LineString` geometry, while single-position and zero-duration paths use points. Platform folders identify attached objects, and role colors use built-in viewer symbols.
+
 ## Scenario Preview Features
 
 `libfers` includes utility functions for UI-style previews:

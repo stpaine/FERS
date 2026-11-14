@@ -187,6 +187,8 @@ Default output:
 
 KML generation uses the scenario's KML/geospatial `<origin>` and `<coordinatesystem>` settings to place exported geometry in latitude/longitude. These settings do not affect the signal simulation.
 
+Moving platforms are exported as altitude-aware `LineString` paths; single-position or zero-duration paths use points. Platform folders describe attached transmitters, receivers, and targets. Role colors use the viewer's built-in point symbols.
+
 If KML generation fails, `fers-cli` exits with a nonzero status and logs the reason. Common causes are an invalid output path, missing parent directory, scenario loading failure, or invalid KML/geospatial settings.
 
 ## Troubleshooting

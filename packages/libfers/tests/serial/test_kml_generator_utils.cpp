@@ -153,6 +153,8 @@ TEST_CASE("KML Formatting: Strings and XML", "[serial][kml][formatting]")
 		REQUIRE_THAT(out, ContainsSubstring("<?xml version=\"1.0\""));
 		REQUIRE_THAT(out, ContainsSubstring("<name>TestSim</name>"));
 		REQUIRE_THAT(out, ContainsSubstring("<Style id=\"target\">"));
+		REQUIRE_THAT(out, ContainsSubstring("FERS scenario geometry with platform paths and attached radar objects."));
+		REQUIRE_THAT(out, !ContainsSubstring("<href>http"));
 	}
 
 	SECTION("writePoint")
@@ -259,9 +261,10 @@ TEST_CASE("KML Generation: Path Visualization", "[serial][kml][generation]")
 		serial::kml_generator_utils::generatePlatformPathKml(oss, &plat, "#style", 0.0, ctx, "");
 		std::string out = oss.str();
 
-		REQUIRE_THAT(out, ContainsSubstring("<gx:Track>"));
-		REQUIRE_THAT(out, ContainsSubstring("<when>0</when>"));
-		REQUIRE_THAT(out, ContainsSubstring("<when>10</when>"));
+		REQUIRE_THAT(out, ContainsSubstring("<LineString>"));
+		REQUIRE_THAT(out, ContainsSubstring("<coordinates>"));
+		REQUIRE_THAT(out, !ContainsSubstring("<gx:Track>"));
+		REQUIRE_THAT(out, !ContainsSubstring("<when>"));
 		REQUIRE_THAT(out, ContainsSubstring("Start: plat"));
 		REQUIRE_THAT(out, ContainsSubstring("End: plat"));
 	}
@@ -293,6 +296,7 @@ TEST_CASE("KML Generation: Full Stream Facade", "[serial][kml][generation]")
 	REQUIRE_THAT(out, ContainsSubstring("<?xml version=\"1.0\""));
 	REQUIRE_THAT(out, ContainsSubstring("<name>Reference Coordinate</name>"));
 	REQUIRE_THAT(out, ContainsSubstring("<name>UAV</name>"));
+	REQUIRE_THAT(out, ContainsSubstring("Attached objects: transmitter Tx"));
 	REQUIRE_THAT(out, ContainsSubstring("Isotropic pattern range"));
 	REQUIRE_THAT(out, ContainsSubstring("</kml>"));
 }
@@ -434,10 +438,8 @@ TEST_CASE("KML Generation: Dynamic Path Edge Cases", "[serial][kml][generation]"
 		serial::kml_generator_utils::generatePlatformPathKml(oss, &plat, "#style", 0.0, ctx, "");
 		std::string out = oss.str();
 
-		// Should have gx:Track
-		REQUIRE_THAT(out, ContainsSubstring("<gx:Track>"));
-		// Should have exactly one <when>
-		REQUIRE_THAT(out, ContainsSubstring("<when>5</when>"));
+		REQUIRE_THAT(out, ContainsSubstring("<Point>"));
+		REQUIRE_THAT(out, !ContainsSubstring("<when>"));
 		// Should NOT have Start/End placemarks (endpoints early return due to size <= 1)
 		REQUIRE_THAT(out, !ContainsSubstring("Start: plat"));
 	}
@@ -452,10 +454,8 @@ TEST_CASE("KML Generation: Dynamic Path Edge Cases", "[serial][kml][generation]"
 		serial::kml_generator_utils::generatePlatformPathKml(oss, &plat, "#style", 0.0, ctx, "");
 		std::string out = oss.str();
 
-		// Should have gx:Track
-		REQUIRE_THAT(out, ContainsSubstring("<gx:Track>"));
-		// Should have exactly one <when> because time_diff <= 0.0
-		REQUIRE_THAT(out, ContainsSubstring("<when>5</when>"));
+		REQUIRE_THAT(out, ContainsSubstring("<Point>"));
+		REQUIRE_THAT(out, !ContainsSubstring("<when>"));
 		// Should have Start/End placemarks because size > 1
 		REQUIRE_THAT(out, ContainsSubstring("Start: plat"));
 	}

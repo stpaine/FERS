@@ -180,22 +180,17 @@ namespace serial::kml_generator_utils
 			out << ctx.parameters.simulation_name;
 		}
 		out << "</name>\n";
-		out << "  <Style "
-			   "id=\"receiver\"><IconStyle><Icon><href>https://cdn-icons-png.flaticon.com/512/645/645436.png</href></"
-			   "Icon></IconStyle></Style>\n";
-		out << "  <Style "
-			   "id=\"transmitter\"><IconStyle><Icon><href>https://cdn-icons-png.flaticon.com/128/224/224666.png</"
-			   "href></Icon></IconStyle></Style>\n";
-		out << "  <Style "
-			   "id=\"target\"><IconStyle><Icon><href>https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/"
-			   "Target_red_dot1.svg/1200px-Target_red_dot1.svg.png</href></Icon></IconStyle><LineStyle><width>2</"
-			   "width></LineStyle></Style>\n";
+		out << "  <description>FERS scenario geometry with platform paths and attached radar objects.</description>\n";
+		// Omit custom icon hrefs: Google Earth supplies its built-in default point
+		// symbol, while the colors distinguish roles without network or licensing dependencies.
+		out << "  <Style id=\"receiver\"><IconStyle><color>ff00aa00</color><scale>1.1</scale></IconStyle></Style>\n";
+		out << "  <Style id=\"transmitter\"><IconStyle><color>ff0000ff</color><scale>1.1</scale></IconStyle></Style>\n";
+		out << "  <Style id=\"target\"><IconStyle><color>ff00ffff</color><scale>1.1</scale></IconStyle>"
+			   "<LineStyle><color>ff00ffff</color><width>2</width></LineStyle></Style>\n";
 		out << "  <Style "
 			   "id=\"translucentPolygon\"><LineStyle><color>ff0000ff</color><width>2</width></"
 			   "LineStyle><PolyStyle><color>00ffffff</color></PolyStyle></Style>\n";
-		out << "  <Style "
-			   "id=\"arrowStyle\"><IconStyle><Icon><href>http://maps.google.com/mapfiles/kml/shapes/arrow.png</href></"
-			   "Icon><scale>0.5</scale></IconStyle></Style>\n";
+		out << "  <Style id=\"arrowStyle\"><IconStyle><color>9900ffff</color><scale>0.6</scale></IconStyle></Style>\n";
 		out << "  <Style id=\"lineStyle\"><LineStyle><color>ff0000ff</color><width>2</width></LineStyle></Style>\n";
 		out << "  <Style id=\"lineStyleBlue\"><LineStyle><color>ffff0000</color><width>2</width></LineStyle></Style>\n";
 	}
@@ -483,13 +478,6 @@ namespace serial::kml_generator_utils
 		out << indent << "<Placemark>\n";
 		out << indent << "  <name>" << platform->getName() << " Path</name>\n";
 		out << indent << "  <styleUrl>" << styleUrl << "</styleUrl>\n";
-		out << indent << "  <gx:Track>\n";
-		out << indent << "    <altitudeMode>absolute</altitudeMode>\n";
-		if (first_alt_abs > refAlt)
-		{
-			out << indent << "    <extrude>1</extrude>\n";
-		}
-
 		const double start_time = waypoints.front().t;
 		const double end_time = waypoints.back().t;
 
@@ -500,11 +488,21 @@ namespace serial::kml_generator_utils
 			double p_lat = unassignedCoordinate();
 			double p_alt_abs = unassignedCoordinate();
 			ctx.converter(p_pos, p_lat, p_lon, p_alt_abs);
-			out << indent << "    <when>" << start_time << "</when>\n";
-			out << indent << "    <gx:coord>" << p_lon << " " << p_lat << " " << p_alt_abs << "</gx:coord>\n";
+			out << indent << "  <Point>\n";
+			out << indent << "    <altitudeMode>absolute</altitudeMode>\n";
+			out << indent << "    <coordinates>" << formatCoordinates(p_lon, p_lat, p_alt_abs) << "</coordinates>\n";
+			out << indent << "  </Point>\n";
 		}
 		else
 		{
+			out << indent << "  <LineString>\n";
+			out << indent << "    <altitudeMode>absolute</altitudeMode>\n";
+			out << indent << "    <tessellate>1</tessellate>\n";
+			if (first_alt_abs > refAlt)
+			{
+				out << indent << "    <extrude>1</extrude>\n";
+			}
+			out << indent << "    <coordinates>\n";
 			const double time_step = time_diff / TRACK_NUM_DIVISIONS;
 			for (int i = 0; i <= TRACK_NUM_DIVISIONS; ++i)
 			{
@@ -514,12 +512,12 @@ namespace serial::kml_generator_utils
 				double p_lat = unassignedCoordinate();
 				double p_alt_abs = unassignedCoordinate();
 				ctx.converter(p_pos, p_lat, p_lon, p_alt_abs);
-				out << indent << "    <when>" << current_time << "</when>\n";
-				out << indent << "    <gx:coord>" << p_lon << " " << p_lat << " " << p_alt_abs << "</gx:coord>\n";
+				out << indent << "      " << formatCoordinates(p_lon, p_lat, p_alt_abs) << "\n";
 			}
+			out << indent << "    </coordinates>\n";
+			out << indent << "  </LineString>\n";
 		}
 
-		out << indent << "  </gx:Track>\n";
 		out << indent << "</Placemark>\n";
 	}
 
@@ -610,6 +608,32 @@ namespace serial::kml_generator_utils
 
 		out << indent << "<Folder>\n";
 		out << indent << "  <name>" << platform->getName() << "</name>\n";
+		if (!objects.empty())
+		{
+			out << indent << "  <description>Attached objects: ";
+			for (std::size_t index = 0; index < objects.size(); ++index)
+			{
+				if (index > 0)
+				{
+					out << "; ";
+				}
+				const radar::Object* object = objects[index];
+				if (dynamic_cast<const radar::Target*>(object) != nullptr)
+				{
+					out << "target ";
+				}
+				else if (dynamic_cast<const radar::Transmitter*>(object) != nullptr)
+				{
+					out << "transmitter ";
+				}
+				else if (dynamic_cast<const radar::Receiver*>(object) != nullptr)
+				{
+					out << "receiver ";
+				}
+				out << object->getName();
+			}
+			out << "</description>\n";
+		}
 
 		const std::string inner_indent = indent + "  ";
 		const auto placemark_style = getPlacemarkStyleForPlatform(objects);
