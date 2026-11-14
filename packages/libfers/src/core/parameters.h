@@ -243,7 +243,7 @@ namespace params
 	/**
 	 * @brief Set the oversampling ratio.
 	 * @param ratio The new oversampling ratio.
-	 * @throws std::runtime_error if the ratio is zero.
+	 * @throws std::runtime_error if the ratio is outside the supported range 1..8.
 	 */
 	inline void setOversampleRatio(unsigned ratio)
 	{

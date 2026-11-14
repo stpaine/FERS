@@ -1,6 +1,8 @@
 # Oversampling Audit Harness
 
-This directory contains a standalone C++ executable for auditing the oversampling implementation used by `libfers`.
+This directory contains a standalone C++ executable with source snapshots of the `libfers` oversampling paths. Its results describe the copies under `src/`; current library regressions run through the main CTest suite.
+
+Current `libfers` accepts oversampling ratios from 1 through 8 with the default render filter length of 33. The harness also exercises larger ratios and configurable filter lengths to characterize the filter response. See [REPORT.md](REPORT.md) for the recorded sweep.
 
 ## Practical Envelope
 
@@ -14,7 +16,7 @@ Warnings are advisory only in this harness version. Out-of-envelope cases still 
 
 ## Scope
 
-- Source-faithful copies of the core oversampling path:
+- Source snapshots of the core oversampling path:
   - `packages/libfers/src/signal/dsp_filters.*`
   - `packages/libfers/src/signal/radar_signal.*`
   - `packages/libfers/src/interpolation/interpolation_filter.*`
