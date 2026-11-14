@@ -115,6 +115,10 @@ namespace serial
 			auto& state = stateFor(stream_id);
 			if (state.opened)
 			{
+				if (!isPulsed(state) && state.closed)
+				{
+					state.closed = false;
+				}
 				return;
 			}
 			std::filesystem::create_directories(output_dir);
@@ -307,10 +311,13 @@ namespace serial
 			metadata.sample_start = 0;
 			metadata.sample_end_exclusive = static_cast<std::uint64_t>(state.streaming_buffer.size());
 
-			const RealType fullscale = processing::quantizeAndScaleWindow(state.streaming_buffer);
-			processing::pipeline::exportStreamingToHdf5(state.metadata.path, state.streaming_buffer, fullscale,
-														state.descriptor.reference_frequency, &metadata,
-														state.descriptor.sample_rate);
+			auto export_buffer = state.streaming_buffer;
+			const RealType fullscale = processing::quantizeAndScaleWindow(export_buffer);
+			const RealType reference_frequency = state.descriptor.reference_frequency;
+			const RealType sample_rate = state.descriptor.sample_rate;
+			const auto& path = state.metadata.path;
+			using processing::pipeline::exportStreamingToHdf5;
+			exportStreamingToHdf5(path, export_buffer, fullscale, reference_frequency, &metadata, sample_rate);
 			if (metadata_collector)
 			{
 				metadata_collector->addFile(std::move(metadata));

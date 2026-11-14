@@ -90,6 +90,8 @@ Q_data
 
 For FMCW with dechirping enabled, these datasets contain the dechirped IF output. Without dechirping, they contain the received complex baseband signal. File-backed CW/FMCW sources stop after their final HDF5 sample and do not wrap implicitly. File-backed FMCW metadata reports sampled duration and count instead of inferred analytic chirp parameters. SFCW output is raw streaming complex baseband; the HDF5 metadata records the step timing and RF frequencies needed for downstream range-profile reconstruction.
 
+Scheduled receiver intervals share one file and sample timeline. Later intervals extend the same datasets, gaps between active intervals contain zeros, and the completed file uses one `fullscale` value across all intervals. Output metadata contains one entry per file with its receiver segments and sample ranges.
+
 ## Reconstruct Physical I/Q Values
 
 FERS normalizes stored samples. To recover the physical sample values, multiply by the `fullscale` attribute.

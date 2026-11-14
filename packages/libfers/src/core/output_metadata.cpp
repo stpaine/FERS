@@ -6,6 +6,7 @@
 
 #include "output_metadata.h"
 
+#include <algorithm>
 #include <nlohmann/json.hpp>
 #include <utility>
 
@@ -431,6 +432,13 @@ namespace core
 	void OutputMetadataCollector::addFile(OutputFileMetadata file_metadata)
 	{
 		std::scoped_lock const lock(_mutex);
+		const auto existing = std::ranges::find_if(_metadata.files, [&file_metadata](const auto& metadata)
+												   { return metadata.path == file_metadata.path; });
+		if (existing != _metadata.files.end())
+		{
+			*existing = std::move(file_metadata);
+			return;
+		}
 		_metadata.files.push_back(std::move(file_metadata));
 	}
 

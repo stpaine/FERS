@@ -14,6 +14,7 @@
 
 #include "antenna/antenna_factory.h"
 #include "core/config.h"
+#include "core/output_metadata.h"
 #include "core/parameters.h"
 #include "core/rendering_job.h"
 #include "core/sim_threading.h"
@@ -340,6 +341,83 @@ TEST_CASE("Hdf5OutputSink writes streaming blocks through the receiver output co
 	}
 
 	std::filesystem::remove_all(out_dir);
+}
+
+TEST_CASE("Hdf5OutputSink retains scheduled CW FMCW and SFCW receiver segments with one shared scale",
+		  "[processing][finalizer][hdf5][schedule]")
+{
+	ParamGuard const guard;
+	params::setTime(0.0, 6.0);
+	params::setAdcBits(0);
+
+	for (const std::string mode : {"cw", "fmcw", "sfcw"})
+	{
+		const std::string receiver_name = uniqueName("hdf5_scheduled_" + mode);
+		const auto out_dir = std::filesystem::temp_directory_path() / uniqueName("hdf5_scheduled_dir_" + mode);
+		std::filesystem::create_directories(out_dir);
+		const auto output_path = resultPath(out_dir, receiver_name);
+		removeIfExists(output_path);
+
+		auto collector = std::make_shared<core::OutputMetadataCollector>(out_dir.string());
+		serial::Hdf5OutputSink sink(out_dir.string(), collector);
+		sink.initializeRun(core::OutputConfig{}, "scheduled_" + mode);
+
+		core::ReceiverStreamDescriptor stream;
+		stream.receiver_id = 42;
+		stream.receiver_name = receiver_name;
+		stream.mode = mode;
+		stream.sample_rate = 1.0;
+		stream.reference_frequency = 1.0e9;
+		auto metadata = std::make_shared<core::OutputFileMetadata>();
+		metadata->receiver_id = stream.receiver_id;
+		metadata->receiver_name = receiver_name;
+		metadata->mode = mode;
+		metadata->streaming_segments = {
+			{.start_time = 0.0, .end_time = 2.0, .sample_count = 2, .sample_start = 0, .sample_end_exclusive = 2},
+			{.start_time = 4.0, .end_time = 6.0, .sample_count = 2, .sample_start = 4, .sample_end_exclusive = 6}};
+
+		const std::vector<ComplexType> first_samples{ComplexType{0.25, 0.0}, ComplexType{0.125, 0.0}};
+		const std::vector<ComplexType> second_samples{ComplexType{1.0, 0.0}, ComplexType{0.5, 0.0}};
+		const auto stream_id = sink.registerStream(stream);
+		sink.openStream(stream_id, 0.0);
+		sink.submitBlock(core::ReceiverSampleBlock{.stream = stream,
+												   .first_sample_time = 0.0,
+												   .sample_rate = 1.0,
+												   .samples = first_samples,
+												   .sample_start = 0,
+												   .file_metadata = metadata});
+		sink.closeStream(stream_id);
+		sink.openStream(stream_id, 4.0);
+		sink.submitBlock(core::ReceiverSampleBlock{.stream = stream,
+												   .first_sample_time = 4.0,
+												   .sample_rate = 1.0,
+												   .samples = second_samples,
+												   .sample_start = 4,
+												   .file_metadata = metadata});
+		sink.closeStream(stream_id);
+		sink.finalize();
+
+		{
+			HighFive::File const file(output_path.string(), HighFive::File::ReadOnly);
+			const auto i_data = readDataset(file, "I_data");
+			const auto q_data = readDataset(file, "Q_data");
+
+			REQUIRE(i_data.size() == 6u);
+			REQUIRE(q_data.size() == 6u);
+			REQUIRE_THAT(i_data[0], WithinAbs(0.25, 1e-12));
+			REQUIRE_THAT(i_data[1], WithinAbs(0.125, 1e-12));
+			REQUIRE_THAT(i_data[2], WithinAbs(0.0, 1e-12));
+			REQUIRE_THAT(i_data[3], WithinAbs(0.0, 1e-12));
+			REQUIRE_THAT(i_data[4], WithinAbs(1.0, 1e-12));
+			REQUIRE_THAT(i_data[5], WithinAbs(0.5, 1e-12));
+		}
+
+		const auto collected = collector->snapshot();
+		REQUIRE(collected.files.size() == 1u);
+		REQUIRE(collected.files.front().path == output_path.string());
+		REQUIRE(collected.files.front().streaming_segments.size() == 2u);
+		std::filesystem::remove_all(out_dir);
+	}
 }
 
 TEST_CASE("buildReceiverSampleBlock captures receiver identity, timing, and sample basis",
