@@ -437,6 +437,33 @@ namespace
 		bool failed_signal_send = false;
 		std::vector<std::vector<std::uint8_t>> sent;
 	};
+
+	serial::vita49::SerializedPacket countedPacket(const std::uint32_t stream_id, const unsigned time_index,
+												   const std::uint8_t count, const bool context)
+	{
+		using namespace serial::vita49;
+		const Timestamp timestamp{100u, static_cast<std::uint64_t>(time_index) * 1'000'000'000ull};
+		auto bytes = context ? Vita49Serializer::serializeContext(
+								   Vita49ContextBuilder::build(ContextBuildRequest{.stream = basicCwStreamDescriptor(),
+																				   .stream_id = stream_id,
+																				   .simulation_name = "counter-order",
+																				   .adc_fullscale = 1.0,
+																				   .timestamp = timestamp,
+																				   .packet_count = count}))
+							 : Vita49Serializer::serializeSignalData(
+								   SignalDataPacket{.stream_id = stream_id,
+													.timestamp = timestamp,
+													.packet_count = count,
+													.iq_interleaved = {1, -1},
+													.trailer = makeTrailer(true, true, true, false, false)});
+		return SerializedPacket{.bytes = std::move(bytes),
+								.stream_id = stream_id,
+								.sample_count = context ? 0u : 1u,
+								.first_sample_time = static_cast<RealType>(time_index) * 0.001,
+								.data_packet = !context,
+								.context_packet = context,
+								.timestamp = timestamp};
+	}
 }
 
 TEST_CASE("VITA signal data packet serializes golden header and IQ bytes", "[serial][vita49]")
@@ -975,6 +1002,68 @@ TEST_CASE("VITA paced sender preserves insertion order for equal deadlines", "[s
 	CHECK(recording_raw->sent.at(0).back() == 1u);
 	CHECK(recording_raw->sent.at(1).back() == 2u);
 	CHECK(recording_raw->sent.at(2).back() == 3u);
+}
+
+TEST_CASE("VITA paced sender assigns wrapping packet counts in wire order independently per stream",
+		  "[serial][vita49][ordering][packet-count]")
+{
+	using namespace serial::vita49;
+	auto recording = std::make_unique<RecordingSender>();
+	auto* recording_raw = recording.get();
+	PacedSender sender(std::move(recording), 8);
+	sender.open("127.0.0.1", 1);
+	sender.start(0.0);
+
+	std::vector<SerializedPacket> packets;
+	// Producers construct later deadlines first. Context and data packets share
+	// one counter per stream, which must follow transmission order after sorting.
+	for (unsigned created = 0; created < 18; ++created)
+	{
+		const unsigned time_index = 17u - created;
+		for (const std::uint32_t stream_id : {5u, 6u})
+		{
+			packets.push_back(
+				countedPacket(stream_id, time_index, static_cast<std::uint8_t>(created % 16u), time_index % 5u == 0u));
+		}
+	}
+	REQUIRE(sender.enqueueBatch(std::move(packets)));
+	sender.stop();
+
+	REQUIRE(recording_raw->sent.size() == 36u);
+	for (std::size_t index = 0; index < recording_raw->sent.size(); ++index)
+	{
+		const auto& bytes = recording_raw->sent[index];
+		const auto time_index = index / 2u;
+		CAPTURE(index);
+		CHECK(readU32(bytes, 4) == 5u + index % 2u);
+		CHECK(((readU32(bytes, 0) >> 16u) & 0x0Fu) == time_index % 16u);
+		CHECK(readU64(bytes, 8) == kFersVrtIqClassId);
+		CHECK(readU32(bytes, 16) == 100u);
+		CHECK(readU64(bytes, 20) == time_index * 1'000'000'000ull);
+		const auto expected_type = time_index % 5u == 0u ? PacketType::Context : PacketType::SignalDataWithStreamId;
+		CHECK((bytes.front() >> 4u) == static_cast<std::uint8_t>(expected_type));
+	}
+}
+
+TEST_CASE("VITA paced sender consumes a packet count when a socket send fails", "[serial][vita49][packet-count][loss]")
+{
+	using namespace serial::vita49;
+	auto recording = std::make_unique<FailFirstSignalSender>();
+	auto* recording_raw = recording.get();
+	PacedSender sender(std::move(recording), 4);
+	sender.open("127.0.0.1", 1);
+	sender.start(0.0);
+
+	std::vector<SerializedPacket> packets;
+	packets.push_back(countedPacket(5u, 0u, 7u, false));
+	packets.push_back(countedPacket(5u, 1u, 13u, false));
+	REQUIRE(sender.enqueueBatch(std::move(packets)));
+	sender.stop();
+
+	REQUIRE(recording_raw->sent.size() == 1u);
+	CHECK(((readU32(recording_raw->sent.front(), 0) >> 16u) & 0x0Fu) == 1u);
+	CHECK(sender.sendFailureCount(5u) == 1u);
+	CHECK(sender.droppedSampleCount(5u) == 1u);
 }
 
 TEST_CASE("VITA paced sender classifies late data and context packets independently", "[serial][vita49][late]")

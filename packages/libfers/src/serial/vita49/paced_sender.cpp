@@ -250,6 +250,13 @@ namespace serial::vita49
 
 			auto packet = std::move(_queue.front());
 			_queue.pop_front();
+			if (packet.bytes.size() >= sizeof(std::uint32_t))
+			{
+				// Deadline sorting can interleave contexts with data created later. Number
+				// packets in send order, including failed attempts so loss leaves a gap.
+				const auto attempts = _sent_packets[packet.stream_id] + _send_failures[packet.stream_id];
+				packet.bytes[1] = static_cast<std::uint8_t>((packet.bytes[1] & 0xF0u) | (attempts & 0x0Fu));
+			}
 			_send_in_progress = true;
 			const auto now = std::chrono::steady_clock::now();
 			lock.unlock();

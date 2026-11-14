@@ -180,7 +180,7 @@ The source comment says this is an internal placeholder until FERS obtains or fi
 | VITA 49.2 format bit | Set. |
 | TSI | UTC (`1`). |
 | TSF | Real-time picoseconds (`2`). |
-| Packet count | 4-bit counter, rolls over modulo 16. |
+| Packet count | Per-stream 4-bit counter assigned in send order after deadline sorting; rolls over modulo 16. Failed socket sends consume a count. |
 | Packet size | 32-bit word count of the whole packet/datagram. |
 
 ## Signal Data Packets
