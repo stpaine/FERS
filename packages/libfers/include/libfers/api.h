@@ -259,6 +259,10 @@ int fers_set_thread_count(unsigned num_threads);
  * disk. It is essential for interoperability with the CLI and legacy workflows that
  * rely on the FERS XML format.
  *
+ * The scenario's randomseed is applied before constructing simulation objects.
+ * When omitted, a generated seed is retained in the scenario parameters for replay.
+ * A failed load restores the context's master random-number generator state.
+ *
  * @param context A valid `fers_context_t` handle.
  * @param xml_filepath A null-terminated UTF-8 string for the input XML file path.
  * @param validate A boolean (0 or 1) indicating whether to validate the XML
@@ -275,6 +279,8 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
  * This function provides a way to load a scenario from an in-memory string,
  * avoiding file I/O. It is useful for test harnesses or for UIs that manage
  * scenarios as text content before parsing.
+ *
+ * Seed selection and retention match fers_load_scenario_from_xml_file().
  *
  * @param context A valid `fers_context_t` handle.
  * @param xml_content A null-terminated UTF-8 string containing the FERS scenario in XML format.

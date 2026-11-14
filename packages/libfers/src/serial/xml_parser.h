@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <optional>
 #include <random>
 #include <string>
 
@@ -35,19 +36,22 @@ namespace serial
 	 * 2. Loads the main XML file.
 	 * 3. Recursively finds and merges any `<include>` files into the main document.
 	 * 4. Optionally validates the combined document against the built-in DTD and XSD schemas.
-	 * 5. Uses the internal parser utilities to instantiate simulation objects.
-	 * 6. Updates the global `params::params` with the parsed context parameters.
+	 * 5. Selects the master seed and publishes parsed parameters before constructing components.
+	 * 6. Instantiates simulation objects with independent seeds drawn from the master generator.
 	 *
 	 * @param filename The filesystem path to the main XML simulation script.
 	 * @param world A pointer to the `World` object to be populated with parsed components.
 	 * @param validate A boolean indicating whether to perform strict XML schema validation.
 	 * @param masterSeeder A reference to the master random number generator used for assigning independent seeds to
 	 * components.
+	 * @param fallbackSeed Seed used and retained in parameters when XML omits `randomseed`.
+	 * If both XML and fallback omit a seed, the caller's generator state is used.
 	 *
 	 * @throws XmlException if the XML is malformed, fails schema validation, or contains invalid scenario logic.
 	 * @throws std::runtime_error for file I/O errors or other critical setup issues.
 	 */
-	void parseSimulation(const std::string& filename, core::World* world, bool validate, std::mt19937& masterSeeder);
+	void parseSimulation(const std::string& filename, core::World* world, bool validate, std::mt19937& masterSeeder,
+						 std::optional<unsigned> fallbackSeed = std::nullopt);
 
 	/**
 	 * @brief Parses a simulation configuration directly from an XML string in memory.
@@ -62,9 +66,11 @@ namespace serial
 	 * @param validate A boolean indicating whether to perform strict XML schema validation.
 	 * @param masterSeeder A reference to the master random number generator used for assigning independent seeds to
 	 * components.
+	 * @param fallbackSeed Seed used and retained in parameters when XML omits `randomseed`.
+	 * If both XML and fallback omit a seed, the caller's generator state is used.
 	 *
 	 * @throws XmlException if the XML string is malformed, fails schema validation, or contains invalid scenario logic.
 	 */
 	void parseSimulationFromString(const std::string& xmlContent, core::World* world, bool validate,
-								   std::mt19937& masterSeeder);
+								   std::mt19937& masterSeeder, std::optional<unsigned> fallbackSeed = std::nullopt);
 }

@@ -23,7 +23,7 @@
 namespace serial
 {
 	void parseSimulation(const std::string& filename, core::World* world, const bool validate,
-						 std::mt19937& masterSeeder)
+						 std::mt19937& masterSeeder, const std::optional<unsigned> fallbackSeed)
 	{
 		world->clear();
 		params::params.reset();
@@ -49,6 +49,7 @@ namespace serial
 		xml_parser_utils::ParserContext ctx;
 		ctx.world = world;
 		ctx.master_seeder = &masterSeeder;
+		ctx.fallback_seed = fallbackSeed;
 		ctx.base_dir = main_dir;
 		ctx.loaders = xml_parser_utils::createDefaultAssetLoaders();
 
@@ -59,7 +60,7 @@ namespace serial
 	}
 
 	void parseSimulationFromString(const std::string& xmlContent, core::World* world, const bool validate,
-								   std::mt19937& masterSeeder)
+								   std::mt19937& masterSeeder, const std::optional<unsigned> fallbackSeed)
 	{
 		world->clear();
 		params::params.reset();
@@ -87,6 +88,7 @@ namespace serial
 		xml_parser_utils::ParserContext ctx;
 		ctx.world = world;
 		ctx.master_seeder = &masterSeeder;
+		ctx.fallback_seed = fallbackSeed;
 		ctx.base_dir = base_dir;
 		ctx.loaders = xml_parser_utils::createDefaultAssetLoaders();
 

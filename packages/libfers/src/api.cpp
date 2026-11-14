@@ -28,6 +28,7 @@
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <random>
 #include <span>
 #include <string>
 #include <utility>
@@ -616,8 +617,11 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 	}
 
 	auto* ctx = context;
+	auto& master_seeder = ctx->getMasterSeeder();
+	const auto saved_master_seeder = master_seeder;
 	try
 	{
+		const auto fallback_seed = static_cast<unsigned>(std::random_device{}());
 		// Set default output directory to the scenario file's directory
 		std::filesystem::path const p(xml_filepath);
 		auto parent = p.parent_path();
@@ -625,29 +629,20 @@ int fers_load_scenario_from_xml_file(fers_context_t* context, const char* xml_fi
 			parent = ".";
 		ctx->setOutputDir(parent.string());
 
-		serial::parseSimulation(xml_filepath, ctx->getWorld(), static_cast<bool>(validate), ctx->getMasterSeeder());
+		serial::parseSimulation(xml_filepath, ctx->getWorld(), static_cast<bool>(validate), master_seeder,
+								fallback_seed);
 
-		// After parsing, seed the master random number generator. This is done
-		// to ensure simulation reproducibility. If the scenario specifies a seed,
-		// it is used; otherwise, a non-deterministic seed is generated so that
-		// subsequent runs are unique by default.
-		if (params::params.random_seed)
+		if (!params::params.random_seed)
 		{
-			LOG(logging::Level::INFO, "Using master seed from scenario file: {}", *params::params.random_seed);
-			ctx->getMasterSeeder().seed(*params::params.random_seed);
+			throw std::logic_error("XML parser did not retain the selected fallback random seed.");
 		}
-		else
-		{
-			const auto seed = std::random_device{}();
-			LOG(logging::Level::INFO, "No master seed provided in scenario. Using random_device seed: {}", seed);
-			params::params.random_seed = seed;
-			ctx->getMasterSeeder().seed(seed);
-		}
+		LOG(logging::Level::INFO, "Using master seed for XML scenario file: {}", *params::params.random_seed);
 		complete_warning_capture();
 		return 0; // Success
 	}
 	catch (const std::exception& e)
 	{
+		master_seeder = saved_master_seeder;
 		discard_warning_capture();
 		handle_api_exception(e, "fers_load_scenario_from_xml_file");
 		return 1; // Error
@@ -667,32 +662,26 @@ int fers_load_scenario_from_xml_string(fers_context_t* context, const char* xml_
 	}
 
 	auto* ctx = context;
+	auto& master_seeder = ctx->getMasterSeeder();
+	const auto saved_master_seeder = master_seeder;
 	try
 	{
-		serial::parseSimulationFromString(xml_content, ctx->getWorld(), static_cast<bool>(validate),
-										  ctx->getMasterSeeder());
+		const auto fallback_seed = static_cast<unsigned>(std::random_device{}());
+		serial::parseSimulationFromString(xml_content, ctx->getWorld(), static_cast<bool>(validate), master_seeder,
+										  fallback_seed);
 
-		// After parsing, seed the master random number generator. This ensures
-		// that if the scenario provides a seed, the simulation will be
-		// reproducible. If not, a random seed is used to ensure unique runs.
-		if (params::params.random_seed)
+		if (!params::params.random_seed)
 		{
-			LOG(logging::Level::INFO, "Using master seed from scenario string: {}", *params::params.random_seed);
-			ctx->getMasterSeeder().seed(*params::params.random_seed);
+			throw std::logic_error("XML parser did not retain the selected fallback random seed.");
 		}
-		else
-		{
-			const auto seed = std::random_device{}();
-			LOG(logging::Level::INFO, "No master seed provided in scenario. Using random_device seed: {}", seed);
-			params::params.random_seed = seed;
-			ctx->getMasterSeeder().seed(seed);
-		}
+		LOG(logging::Level::INFO, "Using master seed for XML scenario string: {}", *params::params.random_seed);
 
 		complete_warning_capture();
 		return 0; // Success
 	}
 	catch (const std::exception& e)
 	{
+		master_seeder = saved_master_seeder;
 		discard_warning_capture();
 		handle_api_exception(e, "fers_load_scenario_from_xml_string");
 		return 1; // Parsing or logic error

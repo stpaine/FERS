@@ -1493,6 +1493,22 @@ namespace serial::xml_parser_utils
 
 		parseParameters(root.childElement("parameters", 0), ctx.parameters);
 
+		// Seed before constructing any timing, receiver, or target object. These
+		// objects draw independent seeds from the master RNG during parsing.
+		if (ctx.master_seeder == nullptr)
+		{
+			throw XmlException("XML parser master seeder is not configured.");
+		}
+		if (ctx.parameters.random_seed.has_value())
+		{
+			ctx.master_seeder->seed(*ctx.parameters.random_seed);
+		}
+		else if (ctx.fallback_seed.has_value())
+		{
+			ctx.parameters.random_seed = *ctx.fallback_seed;
+			ctx.master_seeder->seed(*ctx.fallback_seed);
+		}
+
 		params::params = ctx.parameters;
 
 		auto parseElements =

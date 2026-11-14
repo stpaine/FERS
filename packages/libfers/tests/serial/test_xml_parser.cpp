@@ -4,11 +4,13 @@
 #include <filesystem>
 #include <fstream>
 #include <highfive/highfive.hpp>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include "core/parameters.h"
 #include "core/world.h"
+#include "radar/receiver.h"
 #include "serial/xml_parser.h"
 
 using Catch::Matchers::ContainsSubstring;
@@ -58,6 +60,34 @@ namespace
 		</simulation>)";
 	}
 
+	std::string getSeededReceiverXml(const std::optional<unsigned> random_seed)
+	{
+		const std::string seed_element =
+			random_seed.has_value() ? "<randomseed>" + std::to_string(*random_seed) + "</randomseed>" : "";
+		return R"(<?xml version="1.0" encoding="UTF-8"?>
+		<simulation name="SeededReceiver">
+		  <parameters><starttime>0</starttime><endtime>0.01</endtime><rate>1000</rate>)" +
+			seed_element + R"(</parameters>
+		  <waveform name="w1"><power>1</power><carrier_frequency>1e9</carrier_frequency><cw/></waveform>
+		  <timing name="t1"><frequency>1e6</frequency></timing>
+		  <antenna name="a1" pattern="isotropic"/>
+		  <platform name="p1">
+		    <motionpath interpolation="static"><positionwaypoint><x>0</x><y>0</y><altitude>0</altitude><time>0</time></positionwaypoint></motionpath>
+		    <rotationpath interpolation="static"><rotationwaypoint><azimuth>0</azimuth><elevation>0</elevation><time>0</time></rotationwaypoint></rotationpath>
+		    <monostatic name="rx1" waveform="w1" antenna="a1" timing="t1" nodirect="true"><cw_mode/><noise_temp>290</noise_temp></monostatic>
+		  </platform>
+		</simulation>)";
+	}
+
+	unsigned firstReceiverDrawFromString(const std::optional<unsigned> xml_seed, const unsigned caller_seed)
+	{
+		core::World world;
+		std::mt19937 seeder(caller_seed);
+		serial::parseSimulationFromString(getSeededReceiverXml(xml_seed), &world, true, seeder);
+		REQUIRE(world.getReceivers().size() == 1u);
+		return world.getReceivers().front()->getRngEngine()();
+	}
+
 	std::filesystem::path writeTempXml(const std::string& filename, const std::string& content)
 	{
 		auto path = std::filesystem::temp_directory_path() / filename;
@@ -74,6 +104,34 @@ namespace
 		file.createGroup("/I").createDataSet<RealType>("value", HighFive::DataSpace::From(i_values)).write(i_values);
 		file.createGroup("/Q").createDataSet<RealType>("value", HighFive::DataSpace::From(q_values)).write(q_values);
 	}
+}
+
+TEST_CASE("XML randomseed controls object RNGs before construction", "[serial][xml_parser][rng]")
+{
+	ParamGuard const guard;
+	const auto first_a = firstReceiverDrawFromString(88'007u, 123u);
+	const auto replay_a = firstReceiverDrawFromString(88'007u, 999u);
+	const auto changed = firstReceiverDrawFromString(88'070u, 123u);
+	REQUIRE(first_a == replay_a);
+	REQUIRE(first_a != changed);
+
+	const auto path = writeTempXml("fers_seed_order_regression.xml", getSeededReceiverXml(88'007u));
+	core::World world;
+	std::mt19937 file_seeder(456u);
+	REQUIRE_NOTHROW(serial::parseSimulation(path.string(), &world, true, file_seeder));
+	REQUIRE(world.getReceivers().size() == 1u);
+	REQUIRE(world.getReceivers().front()->getRngEngine()() == first_a);
+	std::filesystem::remove(path);
+}
+
+TEST_CASE("XML without randomseed preserves direct-parser caller seeding", "[serial][xml_parser][rng]")
+{
+	ParamGuard const guard;
+	const auto first_a = firstReceiverDrawFromString(std::nullopt, 123u);
+	const auto replay_a = firstReceiverDrawFromString(std::nullopt, 123u);
+	const auto changed = firstReceiverDrawFromString(std::nullopt, 124u);
+	REQUIRE(first_a == replay_a);
+	REQUIRE(first_a != changed);
 }
 
 TEST_CASE("parseSimulationFromString successfully parses a valid scenario", "[serial][xml_parser]")

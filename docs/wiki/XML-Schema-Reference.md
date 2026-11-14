@@ -68,7 +68,7 @@ Optional children, in order:
 | --- | --- | --- | --- |
 | `<c>` | m/s | `299792458` | Propagation speed. Use the default for free-space radio propagation. |
 | `<simSamplingRate>` | Hz | `1000` | Geometry interpolation rate used while building pulsed responses. Increase it when fast platform motion needs finer geometry sampling. |
-| `<randomseed>` | integer | random | Seed for repeatable noise and random models. Set this when you want repeatable runs. |
+| `<randomseed>` | integer | generated and retained | Master seed applied before timing sources, receivers, and targets are constructed. The CLI/API retains a generated seed in scenario parameters when this element is omitted. |
 | `<adc_bits>` | bits | `0` | ADC quantization depth. `0` disables quantization and stores normalized floating-point samples. |
 | `<oversample>` | multiplier | `1` | Internal oversampling factor. Valid range is `1` to `8`. FMCW waveform aliasing checks use `<rate> * <oversample>`. Most final output is still written at `<rate>`, but legacy dechirped FMCW output without `<if_sample_rate>` is written at `<rate> * <oversample>`. |
 | `<rotationangleunit>` | `deg` or `rad` | `deg` | Unit used by platform rotation values. |

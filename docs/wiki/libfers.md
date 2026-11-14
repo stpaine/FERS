@@ -43,6 +43,8 @@ File loading is the normal choice. It resolves relative asset paths and processe
 
 XML-string loading is useful when another application already has the XML in memory. It does not process `<include>` files, so embedded applications should expand includes themselves or load from a file.
 
+XML file and string loads apply `<randomseed>` before constructing timing sources, receivers, and targets. When the seed is omitted, the API generates one and retains it in the scenario parameters; save the serialized scenario to replay that seed. A rejected XML load restores the context's master generator state.
+
 ## Running Simulations
 
 A `libfers` simulation run is synchronous: the call does not return until the simulation is finished or has failed.
