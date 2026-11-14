@@ -131,6 +131,8 @@ queue. Queue pressure does not create dropped packets. Dropped packet counters a
 
 `finalize()` flushes queued packets, emits close context packets for streams that are still open, stops the sender, and returns final stream stats. `core::sim_threading.cpp` reports `Waiting for VITA output stream drain...` before finalization in VITA mode.
 
+A closing context follows the stream's pending data. Its timestamp is the later of the latest context time and the exclusive data end; its delivery deadline follows the last data-packet deadline. A context-only stream closes at its latest context time.
+
 ## Stream IDs
 
 FERS allocates one VRT Stream ID per receiver stream descriptor key:
@@ -491,7 +493,7 @@ Each `streams` entry contains:
 - `integer_seconds`
 - `fractional_picoseconds`
 
-`end_sample_time` and `end_timestamp` are exclusive stream-end values from the current stats model.
+`end_sample_time` and `end_timestamp` describe the latest exclusive data end across submitted packets, including blocks submitted out of time order.
 
 ## Live Telemetry Through C API
 

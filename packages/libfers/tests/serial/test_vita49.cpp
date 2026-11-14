@@ -1069,6 +1069,51 @@ TEST_CASE("VITA output sink emits context, signal data, and stats through inject
 	CHECK(stats.streams.front().over_range_count == 1u);
 }
 
+TEST_CASE("VITA output sink sends close context after pending data at the stream end",
+		  "[serial][vita49][ordering][lifecycle]")
+{
+	using namespace serial::vita49;
+
+	ParamGuard const guard;
+	params::setTime(0.0, 1.0);
+	constexpr std::uint64_t epoch_ns = 1'700'000'000'000'000'000ull;
+	auto recording = std::make_unique<RecordingSender>();
+	auto* recording_raw = recording.get();
+	Vita49OutputSink sink(std::move(recording));
+	const core::OutputConfig config{.mode = core::OutputMode::Vita49Udp,
+									.vita49 = {.host = "127.0.0.1",
+											   .port = 1,
+											   .adc_fullscale = 1.0,
+											   .queue_depth = 8,
+											   .epoch_unix_nanoseconds = epoch_ns,
+											   .max_udp_payload = 1400}};
+	sink.initializeRun(config, "close-order");
+
+	auto stream = basicCwStreamDescriptor();
+	stream.sample_rate = 100.0;
+	const auto stream_id = sink.registerStream(stream);
+	sink.openStream(stream_id, 0.0);
+	std::vector<ComplexType> samples{ComplexType(0.25, -0.25), ComplexType(0.5, -0.5)};
+	sink.submitBlock(core::ReceiverSampleBlock{
+		.stream = stream, .first_sample_time = 0.08, .sample_rate = 100.0, .samples = samples, .sample_start = 0});
+	sink.closeStream(stream_id);
+	(void)sink.finalize();
+
+	REQUIRE(recording_raw->sent.size() == 3u);
+	const auto packet_type = [](const auto& bytes) { return bytes.front() >> 4u; };
+	CHECK(packet_type(recording_raw->sent.at(0)) == static_cast<std::uint8_t>(PacketType::Context));
+	CHECK(packet_type(recording_raw->sent.at(1)) == static_cast<std::uint8_t>(PacketType::SignalDataWithStreamId));
+	CHECK(packet_type(recording_raw->sent.at(2)) == static_cast<std::uint8_t>(PacketType::Context));
+	for (std::size_t index = 0; index < recording_raw->sent.size(); ++index)
+	{
+		CHECK(((readU32(recording_raw->sent.at(index), 0) >> 16u) & 0x0Fu) == index);
+	}
+	CHECK(readU32(recording_raw->sent.back(), 16) == 1'700'000'000u);
+	CHECK(readU64(recording_raw->sent.back(), 20) == 100'000'000'000ull);
+	const auto close_metadata = nlohmann::json::parse(readAsciiMetadata(recording_raw->sent.back(), 92u));
+	CHECK((close_metadata.at("receiver").at("context_flags").get<std::uint32_t>() & ContextFlagStreamClose) != 0u);
+}
+
 TEST_CASE("VITA output sink keeps mixed receiver modes as distinct streams", "[serial][vita49]")
 {
 	using namespace serial::vita49;
@@ -1465,7 +1510,7 @@ TEST_CASE("VITA output sink drains pending contexts when no data arrives", "[ser
 	using namespace std::chrono_literals;
 
 	ParamGuard const guard;
-	params::setTime(0.0, 0.0);
+	params::setTime(0.25, 0.25);
 	auto recording = std::make_unique<RecordingSender>();
 	auto* recording_raw = recording.get();
 	Vita49OutputSink sink(std::move(recording));
@@ -1474,7 +1519,7 @@ TEST_CASE("VITA output sink drains pending contexts when no data arrives", "[ser
 		.vita49 = {.host = "127.0.0.1", .port = 1, .adc_fullscale = 1.0, .queue_depth = 1, .max_udp_payload = 1400}};
 	sink.initializeRun(config, "context-only");
 	const auto stream_id = sink.registerStream(basicCwStreamDescriptor());
-	sink.openStream(stream_id, 0.0);
+	sink.openStream(stream_id, 0.25);
 	std::this_thread::sleep_for(10ms);
 	REQUIRE(recording_raw->sent.empty());
 
@@ -1484,6 +1529,14 @@ TEST_CASE("VITA output sink drains pending contexts when no data arrives", "[ser
 	REQUIRE(stats.streams.size() == 1u);
 	CHECK(stats.streams.front().context_packets == 2u);
 	CHECK(recording_raw->sent.size() == 2u);
+	CHECK((readU32(recording_raw->sent.at(0), 0) >> 28u) == static_cast<std::uint8_t>(PacketType::Context));
+	CHECK((readU32(recording_raw->sent.at(1), 0) >> 28u) == static_cast<std::uint8_t>(PacketType::Context));
+	CHECK(((readU32(recording_raw->sent.at(0), 0) >> 16u) & 0x0Fu) == 0u);
+	CHECK(((readU32(recording_raw->sent.at(1), 0) >> 16u) & 0x0Fu) == 1u);
+	CHECK(readU32(recording_raw->sent.at(0), 16) == readU32(recording_raw->sent.at(1), 16));
+	CHECK(readU64(recording_raw->sent.at(0), 20) == readU64(recording_raw->sent.at(1), 20));
+	const auto close_metadata = nlohmann::json::parse(readAsciiMetadata(recording_raw->sent.back(), 92u));
+	CHECK((close_metadata.at("receiver").at("context_flags").get<std::uint32_t>() & ContextFlagStreamClose) != 0u);
 }
 
 TEST_CASE("VITA output sink drains future packets before final stats", "[serial][vita49]")

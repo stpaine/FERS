@@ -54,12 +54,14 @@ namespace serial::vita49
 			bool sample_loss_pending = false;
 			bool over_range_pending = false;
 			RealType last_context_time = -1.0e300;
+			std::optional<RealType> last_data_deadline = std::nullopt;
 		};
 
 		struct PendingContext
 		{
 			std::uint32_t stream_id = 0;
 			RealType simulation_time = 0.0;
+			RealType delivery_time = 0.0;
 			bool stream_open = false;
 			bool stream_close = false;
 		};
@@ -79,8 +81,9 @@ namespace serial::vita49
 																std::string event) const;
 		[[nodiscard]] core::ReceiverOutputPacketTrace makeDropTrace(const DroppedDatagram& dropped) const;
 		[[nodiscard]] SerializedPacket buildContextPacket(std::uint32_t stream_id, RealType simulation_time,
-														  bool stream_open, bool stream_close);
-		void emitContext(std::uint32_t stream_id, RealType simulation_time, bool stream_open, bool stream_close);
+														  RealType delivery_time, bool stream_open, bool stream_close);
+		void emitContext(std::uint32_t stream_id, RealType simulation_time, bool stream_open, bool stream_close,
+						 RealType delivery_time = -1.0e300);
 		void applyDropped(const DroppedDatagram& dropped);
 
 		core::OutputConfig _config;

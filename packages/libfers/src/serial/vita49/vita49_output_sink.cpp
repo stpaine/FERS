@@ -209,6 +209,10 @@ namespace serial::vita49
 		for (const auto& packet : accounting)
 		{
 			auto& state = stateFor(packet.stream_id);
+			if (!state.last_data_deadline.has_value() || packet.first_sample_time > *state.last_data_deadline)
+			{
+				state.last_data_deadline = packet.first_sample_time;
+			}
 			state.stats.samples_emitted += packet.sample_count;
 			++state.stats.packets_emitted;
 			if (!state.stats.first_sample_time.has_value())
@@ -216,8 +220,11 @@ namespace serial::vita49
 				state.stats.first_sample_time = packet.first_sample_time;
 				state.stats.first_timestamp = packet.timestamp;
 			}
-			state.stats.end_sample_time = packet.end_sample_time;
-			state.stats.end_timestamp = packet.end_timestamp;
+			if (!state.stats.end_sample_time.has_value() || packet.end_sample_time > *state.stats.end_sample_time)
+			{
+				state.stats.end_sample_time = packet.end_sample_time;
+				state.stats.end_timestamp = packet.end_timestamp;
+			}
 			if (packet.over_range)
 			{
 				state.over_range_pending = true;
@@ -245,7 +252,13 @@ namespace serial::vita49
 		auto& state = stateFor(stream_id);
 		if (!state.closed)
 		{
-			emitContext(stream_id, state.last_context_time, false, true);
+			const auto close_time = state.stats.end_sample_time.has_value()
+				? std::max(state.last_context_time, *state.stats.end_sample_time)
+				: state.last_context_time;
+			const auto delivery_time = state.last_data_deadline.has_value()
+				? std::max(state.last_context_time, *state.last_data_deadline)
+				: state.last_context_time;
+			emitContext(stream_id, close_time, false, true, delivery_time);
 			state.closed = true;
 			emitTelemetry({}, true);
 		}
@@ -271,7 +284,13 @@ namespace serial::vita49
 		{
 			if (!state.closed)
 			{
-				emitContext(stream_id, state.last_context_time, false, true);
+				const auto close_time = state.stats.end_sample_time.has_value()
+					? std::max(state.last_context_time, *state.stats.end_sample_time)
+					: state.last_context_time;
+				const auto delivery_time = state.last_data_deadline.has_value()
+					? std::max(state.last_context_time, *state.last_data_deadline)
+					: state.last_context_time;
+				emitContext(stream_id, close_time, false, true, delivery_time);
 				state.closed = true;
 			}
 		}
@@ -378,8 +397,8 @@ namespace serial::vita49
 		context_stream_ids.reserve(context_stream_ids.size() + _pending_contexts.size());
 		for (const auto& pending : _pending_contexts)
 		{
-			packets.push_back(buildContextPacket(pending.stream_id, pending.simulation_time, pending.stream_open,
-												 pending.stream_close));
+			packets.push_back(buildContextPacket(pending.stream_id, pending.simulation_time, pending.delivery_time,
+												 pending.stream_open, pending.stream_close));
 			context_stream_ids.push_back(pending.stream_id);
 		}
 		_pending_contexts.clear();
@@ -552,7 +571,8 @@ namespace serial::vita49
 	}
 
 	SerializedPacket Vita49OutputSink::buildContextPacket(const std::uint32_t stream_id, const RealType simulation_time,
-														  const bool stream_open, const bool stream_close)
+														  const RealType delivery_time, const bool stream_open,
+														  const bool stream_close)
 	{
 		if (!_packetizer)
 		{
@@ -576,7 +596,7 @@ namespace serial::vita49
 										  .stream_close = stream_close};
 		const auto context = Vita49ContextBuilder::build(request);
 		auto packet = _packetizer->makeContextPacket(context);
-		packet.first_sample_time = context_time;
+		packet.first_sample_time = delivery_time <= -1.0e200 ? context_time : delivery_time;
 		state.last_context_time = context_time;
 		state.sample_loss_pending = false;
 		state.over_range_pending = false;
@@ -584,19 +604,21 @@ namespace serial::vita49
 	}
 
 	void Vita49OutputSink::emitContext(const std::uint32_t stream_id, const RealType simulation_time,
-									   const bool stream_open, const bool stream_close)
+									   const bool stream_open, const bool stream_close, const RealType delivery_time)
 	{
+		const RealType context_time = simulation_time <= -1.0e200 ? 0.0 : simulation_time;
+		const RealType context_delivery_time = delivery_time <= -1.0e200 ? context_time : delivery_time;
 		if (!_pacing_started)
 		{
-			const RealType context_time = simulation_time <= -1.0e200 ? 0.0 : simulation_time;
 			_pending_contexts.push_back(PendingContext{.stream_id = stream_id,
 													   .simulation_time = context_time,
+													   .delivery_time = context_delivery_time,
 													   .stream_open = stream_open,
 													   .stream_close = stream_close});
 			stateFor(stream_id).last_context_time = context_time;
 			return;
 		}
-		auto packet = buildContextPacket(stream_id, simulation_time, stream_open, stream_close);
+		auto packet = buildContextPacket(stream_id, context_time, context_delivery_time, stream_open, stream_close);
 		if (enqueuePacket(std::move(packet)))
 		{
 			++stateFor(stream_id).stats.context_packets;
