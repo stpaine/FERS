@@ -213,12 +213,23 @@ namespace
 	}
 
 	/**
-	 * @brief Compute the Bessel function of the first kind.
+	 * @brief Compute J1(x) / x with its finite limit at zero.
 	 *
 	 * @param x The value for which to compute the Bessel function.
-	 * @return The value of the Bessel function of the first kind at the given value x.
+	 * @return J1(x) / x, approaching 1/2 at zero.
 	 */
-	RealType j1C(const RealType x) noexcept { return x == 0 ? 1.0 : core::besselJ1(x) / x; }
+	RealType j1C(const RealType x) noexcept
+	{
+		// J1(x) / x has a removable singularity at zero with limit 1/2. Use
+		// the first terms of its power series near zero both to supply the
+		// correct limit and to avoid dividing two very small values.
+		if (std::abs(x) < std::sqrt(std::sqrt(EPSILON)))
+		{
+			const RealType x_squared = x * x;
+			return 0.5 - x_squared / 16.0 + x_squared * x_squared / 384.0;
+		}
+		return core::besselJ1(x) / x;
+	}
 
 	void loadAntennaGainSample(const interp::InterpSet* set, const AxisMetadata& metadata, const std::string& axis_name,
 							   const XmlElement& sample, AxisSampleStats& stats)

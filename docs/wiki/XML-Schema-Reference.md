@@ -378,7 +378,7 @@ Pattern notes:
 | `sinc` | Analytic sinc-shaped gain pattern controlled by `alpha`, `beta`, and `gamma`. |
 | `gaussian` | Analytic Gaussian beam controlled by `azscale` and `elscale`. |
 | `squarehorn` | Approximate square horn aperture model using `diameter`. |
-| `parabolic` | Approximate parabolic dish model using `diameter`. |
+| `parabolic` | Circular-aperture dish model using `diameter`. Boresight power gain is `efficiency * (pi * diameter / wavelength)^2`, continuous with the off-axis pattern. |
 | `xml` | Uses a standalone antenna-pattern XML file. |
 | `file` | Uses an HDF5 antenna pattern file. |
 

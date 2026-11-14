@@ -146,11 +146,22 @@ TEST_CASE("Parabolic gain matches Bessel-based model", "[antenna]")
 	const auto ref = unitDirection(0.0, 0.0);
 	const auto on_axis = unitDirection(0.0, 0.0);
 	const RealType ge = std::pow(PI * diameter / wavelength, 2);
-	const RealType expected_on_axis = ge * 4.0 * 0.8;
+	const RealType expected_on_axis = ge * 0.8;
 	const auto gain_on_axis = antenna.getGain(on_axis, ref, wavelength);
 
 	REQUIRE_THAT(gain_on_axis, WithinAbs(expected_on_axis, 1e-8));
 	REQUIRE(antenna.getDiameter() == diameter);
+
+	// Exact boresight is a removable singularity of 2*J1(x)/x. It must
+	// agree with the limiting values from both the power-series and Bessel
+	// evaluation regions, rather than forming a one-sample 4x spike.
+	for (const RealType theta : {1.0e-8, 1.0e-6, 1.0e-5})
+	{
+		const auto near_axis = unitDirection(theta, 0.0);
+		const RealType gain_near_axis = antenna.getGain(near_axis, ref, wavelength);
+		REQUIRE_THAT(gain_near_axis, WithinAbs(expected_on_axis, expected_on_axis * 1e-8));
+		REQUIRE(gain_near_axis <= gain_on_axis);
+	}
 
 	const auto off_axis = unitDirection(0.1, 0.0);
 	const RealType x = PI * diameter * std::sin(0.1) / wavelength;
