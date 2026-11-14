@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,31 @@ namespace
 		std::vector<RealType> heartbeat_times;
 		std::vector<std::vector<ComplexType>> blocks;
 		std::vector<std::size_t> batch_sizes;
+	};
+
+	class ThrowOnStreamingCloseSink final : public core::ReceiverOutputSink
+	{
+	public:
+		void initializeRun(const core::OutputConfig&, std::string) override {}
+		std::uint32_t registerStream(const core::ReceiverStreamDescriptor& stream) override
+		{
+			return stream.mode == "pulsed" ? pulsed_stream_id : streaming_stream_id;
+		}
+		void openStream(std::uint32_t, RealType) override {}
+		void submitBlock(const core::ReceiverSampleBlock&) override {}
+		void emitContextHeartbeat(RealType) override {}
+		void closeStream(const std::uint32_t stream_id) override
+		{
+			if (stream_id == streaming_stream_id)
+			{
+				throw std::runtime_error("injected streaming close failure");
+			}
+		}
+		core::OutputStats finalize() override { return {}; }
+
+	private:
+		static constexpr std::uint32_t pulsed_stream_id = 1u;
+		static constexpr std::uint32_t streaming_stream_id = 2u;
 	};
 
 	ComplexType sampleAt(const RecordingOutputSink& sink, const std::uint64_t sample_index)
@@ -1576,7 +1602,7 @@ TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle",
 {
 	// This test covers:
 	// 1. initializeFinalizers() -> _finalizer_threads.emplace_back(...)
-	// 6. shutdown() -> else if (PULSED_MODE) { enqueue shutdown_job }
+	// 2. shutdown() -> shutdownFinalizers() -> enqueue sentinel and join
 	ParamGuard const guard;
 	params::setRate(1000.0);
 	params::setOversampleRatio(1);
@@ -1603,10 +1629,70 @@ TEST_CASE("SimulationEngine handles Pulsed receiver finalizer thread lifecycle",
 	world->add(std::move(rx));
 
 	pool::ThreadPool pool(1);
+	int completed_finalizers = 0;
+	auto progress_callback = [&](const std::string& message, int, int)
+	{
+		if (message.starts_with("Finished Exporting PulsedRx"))
+		{
+			++completed_finalizers;
+		}
+	};
 
 	// Running the engine will initialize the finalizer thread and then shut it down.
 	// If the shutdown logic fails, the std::jthread will hang indefinitely waiting for a job.
-	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, nullptr, "."));
+	REQUIRE_NOTHROW(core::runEventDrivenSim(world.get(), pool, progress_callback, "."));
+	REQUIRE(completed_finalizers == 1);
+}
+
+TEST_CASE("SimulationEngine exception unwind shuts down every pulsed finalizer",
+		  "[core][threading][finalizer][exception][regression]")
+{
+	ParamGuard const guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.005);
+
+	auto world = createPhysicsWorld();
+	auto rx_plat = std::make_unique<radar::Platform>("PulsedRxPlat", 110);
+	setupStaticPlatform(*rx_plat, math::Vec3{200.0, 0.0, 0.0});
+	auto proto_timing = std::make_unique<timing::PrototypeTiming>("PulsedRxClock", 111);
+	proto_timing->setFrequency(1000.0);
+	auto timing = std::make_shared<timing::Timing>("PulsedRxClockInstance", 112);
+	timing->initializeModel(proto_timing.get());
+	auto pulsed_rx =
+		std::make_unique<radar::Receiver>(rx_plat.get(), "PulsedRx", 42, radar::OperationMode::PULSED_MODE, 113);
+	pulsed_rx->setTiming(timing);
+	pulsed_rx->setWindowProperties(0.001, 1000.0, 0.0);
+	world->add(std::move(rx_plat));
+	world->add(std::move(proto_timing));
+	world->add(std::move(pulsed_rx));
+
+	auto* tx = world->getTransmitters().front().get();
+	auto* streaming_rx = world->getReceivers().front().get();
+	world->getEventQueue().push({0.0, core::EventType::TX_STREAMING_START, tx});
+	world->getEventQueue().push({0.0, core::EventType::RX_STREAMING_START, streaming_rx});
+	world->getEventQueue().push({0.004, core::EventType::TX_STREAMING_END, tx});
+	world->getEventQueue().push({0.004, core::EventType::RX_STREAMING_END, streaming_rx});
+
+	int completed_finalizers = 0;
+	auto reporter = std::make_shared<core::ProgressReporter>(
+		[&](const std::string& message, int, int)
+		{
+			if (message.starts_with("Finished Exporting PulsedRx"))
+			{
+				++completed_finalizers;
+			}
+		});
+	pool::ThreadPool pool(1);
+	ThrowOnStreamingCloseSink sink;
+	{
+		core::SimulationEngine engine(world.get(), pool, reporter, ".", nullptr, &sink);
+		REQUIRE_THROWS_WITH(engine.run(), "injected streaming close failure");
+	}
+
+	// Returning from the engine scope proves the destructor joined the otherwise-blocked finalizer.
+	// One completion proves one shutdown sentinel reached the sole pulsed finalizer.
+	REQUIRE(completed_finalizers == 1);
 }
 
 TEST_CASE("SimulationEngine processStreamingPhysics exits early if t_event <= t_current", "[core][threading]")

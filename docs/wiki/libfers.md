@@ -51,6 +51,8 @@ XML file and string loads apply `<randomseed>` before constructing timing source
 
 A `libfers` simulation run is synchronous: the call does not return until the simulation is finished or has failed.
 
+Pulsed rendering tasks finish before finalizer workers receive their shutdown jobs. The engine joins those workers during normal completion and exception cleanup.
+
 If your application has a UI, run the simulation on a background thread and use the progress callback to update the interface.
 
 The simulation writes the same HDF5 files as `fers-cli`. See [[Using FERS]] for output file structure.

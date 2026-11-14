@@ -121,6 +121,9 @@ namespace core
 						 ReceiverOutputSink* output_sink = nullptr, std::function<bool()> cancel_callback = nullptr,
 						 bool eager_context_stream_open = false);
 
+		/// Ensures pulsed finalizer workers are signalled and joined during exception unwinding.
+		~SimulationEngine() noexcept;
+
 		/**
 		 * @brief Starts and runs the main simulation loop until completion.
 		 */
@@ -335,10 +338,14 @@ namespace core
 		 */
 		void shutdown();
 
+		/// Enqueues one shutdown sentinel per live pulsed finalizer and joins every worker.
+		void shutdownFinalizers();
+
 		World* _world; ///< Pointer to the simulation world state.
 		pool::ThreadPool& _pool; ///< Reference to the global thread pool.
 		std::shared_ptr<ProgressReporter> _reporter; ///< Shared progress reporter instance.
 		std::vector<std::jthread> _finalizer_threads; ///< Collection of dedicated pulsed finalizer threads.
+		std::vector<radar::Receiver*> _finalizer_receivers; ///< Receivers corresponding to finalizer threads.
 		std::shared_ptr<OutputMetadataCollector> _metadata_collector; ///< Collector for generated output metadata.
 		ReceiverOutputSink* _output_sink = nullptr; ///< Selected receiver output sink.
 		std::function<bool()> _cancel_callback; ///< Optional cooperative cancellation callback.

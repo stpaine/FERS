@@ -849,6 +849,17 @@ namespace core
 		}
 	}
 
+	SimulationEngine::~SimulationEngine() noexcept
+	{
+		if (!_finalizer_threads.empty())
+		{
+			// A run-time exception can bypass normal shutdown while worker-pool tasks are still producing pulsed jobs.
+			// Preserve normal ordering: finish producers, enqueue sentinels, then join finalizers.
+			_pool.wait();
+			shutdownFinalizers();
+		}
+	}
+
 	void SimulationEngine::run()
 	{
 		if (_reporter)
@@ -936,6 +947,11 @@ namespace core
 		{
 			return;
 		}
+		const auto pulsed_receiver_count = static_cast<std::size_t>(
+			std::ranges::count_if(_world->getReceivers(), [](const auto& receiver_ptr)
+								  { return receiver_ptr->getMode() == OperationMode::PULSED_MODE; }));
+		_finalizer_threads.reserve(_finalizer_threads.size() + pulsed_receiver_count);
+		_finalizer_receivers.reserve(_finalizer_receivers.size() + pulsed_receiver_count);
 		for (const auto& receiver_ptr : _world->getReceivers())
 		{
 			if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
@@ -943,6 +959,7 @@ namespace core
 				_finalizer_threads.emplace_back(processing::runPulsedFinalizer, receiver_ptr.get(),
 												&_world->getTargets(), _reporter, _output_dir, _metadata_collector,
 												_output_sink);
+				_finalizer_receivers.push_back(receiver_ptr.get());
 			}
 		}
 	}
@@ -2070,15 +2087,26 @@ namespace core
 					}
 				}
 			}
-			else if (receiver_ptr->getMode() == OperationMode::PULSED_MODE)
-			{
-				RenderingJob shutdown_job{};
-				shutdown_job.duration = -1.0;
-				receiver_ptr->enqueueFinalizerJob(std::move(shutdown_job));
-			}
 		}
 
 		_pool.wait();
+		shutdownFinalizers();
+
+		LOG(Level::INFO, "All finalization tasks complete.");
+	}
+
+	void SimulationEngine::shutdownFinalizers()
+	{
+		while (!_finalizer_receivers.empty())
+		{
+			auto* receiver = _finalizer_receivers.back();
+			RenderingJob shutdown_job{};
+			shutdown_job.duration = -1.0;
+			receiver->enqueueFinalizerJob(std::move(shutdown_job));
+			// Remove only after successful enqueue so an allocation failure can be retried during unwinding.
+			_finalizer_receivers.pop_back();
+		}
+
 		for (auto& finalizer_thread : _finalizer_threads)
 		{
 			if (finalizer_thread.joinable())
@@ -2086,8 +2114,7 @@ namespace core
 				finalizer_thread.join();
 			}
 		}
-
-		LOG(Level::INFO, "All finalization tasks complete.");
+		_finalizer_threads.clear();
 	}
 
 	OutputMetadata runEventDrivenSim(World* world, pool::ThreadPool& pool,
