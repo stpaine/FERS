@@ -15,6 +15,7 @@ terminal and to maintain backward compatibility with the original FERS workflow.
 - Loads scenarios from FERS XML files.
 - Runs pulsed, CW, FMCW, and SFCW scenarios using the same XML workflow, including HDF5-backed CW/FMCW waveforms.
 - Writes HDF5 receiver results by default or streams paced VITA 49.2 UDP output when selected at runtime.
+- Saves VITA run configuration and final stream counters as JSON in the output directory.
 - Displays real-time simulation progress in the console.
 - Automatically outputs results to the scenario's directory by default.
 - Generates KML files for scenario visualization.
@@ -77,3 +78,5 @@ Stream receiver output as VITA 49.2 UDP:
 VITA transport selection is a runtime option and is not stored in `.fersxml`. See the
 [VITA 49.2 streaming implementation guide](../../docs/wiki/VITA49-Streaming-Implementation.md) for packet layout,
 pacing, metadata, and counter semantics.
+
+After a successful VITA run, the CLI writes `<sanitized-simulation-name>_metadata.json` under `--out-dir`, or beside the scenario when that option is omitted. The name comes from `<simulation name="...">`; each byte outside ASCII letters and digits becomes `_`. Metadata export failure returns exit status `1`.

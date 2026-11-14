@@ -327,9 +327,11 @@ char* fers_get_scenario_as_json(fers_context_t* context);
 char* fers_get_scenario_as_xml(fers_context_t* context);
 
 /**
- * @brief Returns JSON metadata for the most recent simulation output files.
+ * @brief Returns JSON metadata for the most recent simulation output.
  *
- * The returned JSON describes generated HDF5 file structure and sample ranges.
+ * HDF5 runs describe generated file structure and sample ranges. VITA runs
+ * include endpoint, epoch, scaling settings, and final stream statistics in a
+ * top-level `vita49` object.
  * The caller owns the returned string and must free it with `fers_free_string`.
  * If no simulation has completed yet, the returned JSON contains an empty `files`
  * array.

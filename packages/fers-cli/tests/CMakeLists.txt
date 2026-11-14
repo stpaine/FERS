@@ -12,6 +12,7 @@ add_executable(fers_cli_tests
 target_link_libraries(fers_cli_tests PRIVATE
 					  Catch2::Catch2WithMain
 					  fers-cli-core
+					  nlohmann_json::nlohmann_json
 )
 
 if (COMMAND apply_fers_warnings)

@@ -20,7 +20,7 @@ Windows:
 | --- | --- |
 | `--help`, `-h` | Show help. |
 | `--version`, `-v` | Show the FERS version. |
-| `--out-dir=<dir>` | Choose where HDF5 result files are written. |
+| `--out-dir=<dir>` | Choose where HDF5 results, VITA run metadata, and default KML output are written. |
 | `--kml` | Export KML and do not run the simulation. |
 | `--kml=<file>` | Export KML to a specific file and do not run the simulation. |
 | `--no-validate` | Skip XML schema validation before loading. |
@@ -114,17 +114,19 @@ Use `TRACE` only when you need very detailed logs. It can produce a large amount
 
 `fers-cli` returns `0` when help/version is shown, a simulation succeeds, or KML export succeeds.
 
-It returns `1` for argument errors, scenario loading errors, output-directory errors, simulation failures, and KML export failures. This means scripts can treat a nonzero exit status as a failed run or failed KML export.
+It returns `1` for argument errors, scenario loading errors, output-directory errors, simulation failures, VITA metadata export failures, and KML export failures.
 
 ## Output Directory Behavior
 
 `--out-dir` controls:
 
 - HDF5 result files from simulation runs.
-- Run metadata, logs, and default KML paths for VITA 49.2 runs.
+- Final run metadata for VITA 49.2 runs.
 - The default location for KML when `--kml` is used without a file path.
 
 `.fersxml` files remain scenario descriptions. They do not select VITA/network output; use the runtime switches above.
+
+After a successful VITA run, the CLI writes `<sanitized-simulation-name>_metadata.json`. The name comes from the XML `<simulation name="...">` attribute, with each byte outside ASCII letters and digits replaced by `_`. The file includes endpoint, epoch, full scale, packet settings, and final per-stream counters. Log files follow the explicit `--log-file` path.
 
 Examples:
 

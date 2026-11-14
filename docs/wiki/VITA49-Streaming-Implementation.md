@@ -455,6 +455,8 @@ FERS output metadata.
 
 After a VITA run, `fers_get_last_output_metadata_json` includes a top-level `vita49` object. The object is omitted after HDF5 runs and after switching a context back to HDF5.
 
+The CLI saves this JSON as `<sanitized-simulation-name>_metadata.json` in its selected output directory. The filename uses the XML simulation name with bytes outside ASCII letters and digits replaced by `_`. Metadata export failure produces a nonzero CLI exit status.
+
 `vita49` fields:
 
 - `endpoint`: `host:port`

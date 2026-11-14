@@ -1,5 +1,7 @@
 project(fers-cli)
 
+find_package(nlohmann_json CONFIG REQUIRED)
+
 # Create the internal library target that holds the unit-testable CLI logic.
 add_library(fers-cli-core STATIC)
 
@@ -20,6 +22,7 @@ if (TARGET fers::fers_static)
 else ()
     target_link_libraries(fers-cli-core PUBLIC fers::fers)
 endif ()
+target_link_libraries(fers-cli-core PRIVATE nlohmann_json::nlohmann_json)
 
 # Create the executable target
 add_executable(fers-cli)

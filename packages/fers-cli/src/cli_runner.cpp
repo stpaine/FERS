@@ -10,8 +10,12 @@
 
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <libfers/api.h>
+#include <nlohmann/json.hpp>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -68,6 +72,22 @@ namespace
 
 	private:
 		fers_context_t* _context;
+	};
+
+	class ApiString
+	{
+	public:
+		explicit ApiString(char* value) noexcept : _value(value) {}
+		ApiString(const ApiString&) = delete;
+		ApiString& operator=(const ApiString&) = delete;
+		ApiString(ApiString&&) = delete;
+		ApiString& operator=(ApiString&&) = delete;
+		~ApiString() { fers_free_string(_value); }
+
+		[[nodiscard]] const char* get() const noexcept { return _value; }
+
+	private:
+		char* _value;
 	};
 
 	bool isParseExit(const std::string& error)
@@ -179,7 +199,66 @@ namespace
 		fers_free_string(err);
 	}
 
-	int runSimulation(fers_context_t* context)
+	std::string sanitizeFileStem(const std::string& name)
+	{
+		std::string sanitized;
+		sanitized.reserve(name.size());
+		for (const unsigned char character : name)
+		{
+			const bool ascii_alphanumeric = (character >= '0' && character <= '9') ||
+				(character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
+			sanitized.push_back(ascii_alphanumeric ? static_cast<char>(character) : '_');
+		}
+		return sanitized.empty() ? "simulation" : sanitized;
+	}
+
+	int exportOutputMetadata(fers_context_t* context, const std::filesystem::path& output_directory)
+	{
+		ApiString const metadata_json(fers_get_last_output_metadata_json(context));
+		if (metadata_json.get() == nullptr)
+		{
+			return logApiFailure(FERS_LOG_FATAL, "Failed to retrieve output metadata", 1);
+		}
+
+		std::optional<std::filesystem::path> temporary_path;
+		try
+		{
+			const auto metadata = nlohmann::json::parse(metadata_json.get());
+			const auto simulation_name = metadata.value("simulation_name", std::string{"simulation"});
+			std::filesystem::create_directories(output_directory);
+			const auto output_path = output_directory / (sanitizeFileStem(simulation_name) + "_metadata.json");
+			temporary_path = output_path.string() + ".tmp";
+			{
+				std::ofstream output(*temporary_path, std::ios::binary | std::ios::trunc);
+				if (!output)
+				{
+					throw std::runtime_error("could not open temporary metadata file");
+				}
+				output << metadata_json.get();
+				output.flush();
+				if (!output)
+				{
+					throw std::runtime_error("could not write temporary metadata file");
+				}
+			}
+			std::filesystem::rename(*temporary_path, output_path);
+			log(FERS_LOG_INFO, "Output metadata written successfully: {}", output_path.string());
+			return 0;
+		}
+		catch (const std::exception& error)
+		{
+			if (temporary_path.has_value())
+			{
+				std::error_code ignored;
+				std::filesystem::remove(*temporary_path, ignored);
+			}
+			log(FERS_LOG_FATAL, "Failed to write output metadata: {}", error.what());
+			return 1;
+		}
+	}
+
+	int runSimulation(fers_context_t* context, const core::Config& config,
+					  const std::filesystem::path& output_directory)
 	{
 		log(FERS_LOG_INFO, "Starting simulation...");
 		if (fers_run_simulation(context, nullptr, nullptr) != 0)
@@ -187,7 +266,7 @@ namespace
 			return logApiFailure(FERS_LOG_FATAL, "Simulation run failed", 1);
 		}
 		log(FERS_LOG_INFO, "Simulation completed successfully.");
-		return 0;
+		return config.vita49_enabled ? exportOutputMetadata(context, output_directory) : 0;
 	}
 }
 
@@ -251,6 +330,6 @@ namespace core
 
 		configureThreadCount(config);
 
-		return runSimulation(context.get());
+		return runSimulation(context.get(), config, final_out_dir);
 	}
 }

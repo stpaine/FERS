@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <nlohmann/json.hpp>
 #include <string>
 #include <system_error>
 #include <utility>
@@ -122,4 +123,34 @@ TEST_CASE("runCli returns nonzero when KML generation fails", "[fers-cli][runner
 
 	CHECK(exit_code == 1);
 	CHECK_FALSE(std::filesystem::exists(kml_path));
+}
+
+TEST_CASE("runCli writes configured VITA output metadata to the selected directory",
+		  "[fers-cli][runner][vita49][metadata]")
+{
+	const auto test_root = uniqueTempPath("fers_cli_vita_metadata");
+	ScopedPath const test_guard(test_root);
+	std::filesystem::create_directories(test_root);
+	const auto scenario_path = test_root / "scenario.fersxml";
+	const auto output_directory = test_root / "output";
+	writeTextFile(scenario_path, minimalScenarioXml());
+
+	const int exit_code =
+		runCliWithArgs({scenario_path.string(), "--log-level=FATAL", "--out-dir=" + output_directory.string(),
+						"--vita49", "127.0.0.1:9", "--vita49-fullscale", "2.5", "--vita49-epoch", "1700000000123456789",
+						"--vita49-max-udp-payload", "1400", "--vita49-queue-depth", "3"});
+
+	CHECK(exit_code == 0);
+	const auto metadata_path = output_directory / "CLI_KML_Scenario_metadata.json";
+	REQUIRE(std::filesystem::is_regular_file(metadata_path));
+	std::ifstream input(metadata_path, std::ios::binary);
+	const auto metadata = nlohmann::json::parse(input);
+	CHECK(metadata.at("simulation_name") == "CLI KML Scenario");
+	CHECK(metadata.at("output_directory") == output_directory.string());
+	const auto& vita49 = metadata.at("vita49");
+	CHECK(vita49.at("endpoint") == "127.0.0.1:9");
+	CHECK(vita49.at("adc_fullscale") == 2.5);
+	CHECK(vita49.at("epoch_unix_nanoseconds") == "1700000000123456789");
+	CHECK(vita49.at("max_udp_payload") == 1400u);
+	CHECK(vita49.at("queue_depth") == 3u);
 }
