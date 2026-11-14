@@ -286,7 +286,14 @@ namespace core
 			{
 				return 0;
 			}
-			return static_cast<std::size_t>(std::ceil((time - params::startTime()) / dt_sim));
+			const RealType raw_index = (time - params::startTime()) / dt_sim;
+			const RealType nearest = std::round(raw_index);
+			const RealType tolerance = 1.0e-12 * std::max<RealType>(1.0, std::abs(nearest));
+			if (std::abs(raw_index - nearest) <= tolerance)
+			{
+				return static_cast<std::size_t>(nearest);
+			}
+			return static_cast<std::size_t>(std::ceil(raw_index));
 		}
 
 		struct PositionBounds
@@ -1432,7 +1439,6 @@ namespace core
 		{
 			return;
 		}
-
 		const auto& receiver = _world->getReceivers()[receiver_index];
 		auto& processed = _streaming_output_processed_buffers[receiver_index];
 		processed.assign(samples.begin(), samples.end());

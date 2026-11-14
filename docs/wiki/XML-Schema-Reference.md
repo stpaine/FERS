@@ -518,6 +518,8 @@ Schedules are optional. They restrict when a transmitter or receiver is active.
 
 If no schedule is supplied, the object is active for the full simulation.
 
+Streaming sample ranges use an exclusive end index. An end time exactly on the sample grid retains the samples before that boundary; an off-grid end uses the next sample index. Floating-point round-off at an exact boundary is snapped to the grid. At 2 MHz, an interval from `0` to `0.00032` seconds contains 640 samples.
+
 ## Radar Modes
 
 Each transmitter, receiver, or monostatic radar chooses exactly one mode:

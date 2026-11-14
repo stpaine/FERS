@@ -903,6 +903,51 @@ TEST_CASE("SimulationEngine clips FMCW IF over-render to the requested output ex
 	}
 }
 
+TEST_CASE("SimulationEngine streaming end indices snap exact sample boundaries and ceil off-grid times",
+		  "[core][threading][schedule][boundary]")
+{
+	ParamGuard const guard;
+	params::setRate(2.0e6);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.001);
+
+	SECTION("exact end-exclusive boundary")
+	{
+		auto world = createPhysicsWorld();
+		pool::ThreadPool pool(1);
+		RecordingOutputSink sink;
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".", nullptr, &sink);
+		auto* tx = world->getTransmitters().front().get();
+		auto* rx = world->getReceivers().front().get();
+		rx->setActive(true);
+		engine.handleTxStreamingStart(core::makeActiveSource(tx, 0.0, 0.001));
+		world->getSimulationState().t_current = 0.0;
+
+		engine.processStreamingPhysics(0.00032);
+		engine.handleRxStreamingEnd(rx);
+
+		REQUIRE(outputTimeline(sink).size() == 640u);
+	}
+
+	SECTION("materially off-grid boundary")
+	{
+		auto world = createPhysicsWorld();
+		pool::ThreadPool pool(1);
+		RecordingOutputSink sink;
+		core::SimulationEngine engine(world.get(), pool, nullptr, ".", nullptr, &sink);
+		auto* tx = world->getTransmitters().front().get();
+		auto* rx = world->getReceivers().front().get();
+		rx->setActive(true);
+		engine.handleTxStreamingStart(core::makeActiveSource(tx, 0.0, 0.001));
+		world->getSimulationState().t_current = 0.0;
+
+		engine.processStreamingPhysics(0.00032000025);
+		engine.handleRxStreamingEnd(rx);
+
+		REQUIRE(outputTimeline(sink).size() == 641u);
+	}
+}
+
 TEST_CASE("SimulationEngine live streaming output emits bounded CW blocks", "[core][threading][vita49][bounded]")
 {
 	ParamGuard const guard;
