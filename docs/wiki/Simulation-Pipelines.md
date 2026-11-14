@@ -229,6 +229,8 @@ flowchart TD
 
 If `if_sample_rate` is omitted, dechirped FMCW is written as legacy full-rate IF output at `<rate> * <oversample>`.
 
+The IF filter can render additional samples internally to complete its response. Exported samples are clipped to the requested simulation extent at the realized IF output rate.
+
 For `<fmcw_from_file>`, the dechirp reference uses the same finite complex samples, including their amplitude and phase
 modulation. Reference playback ends at the file boundary and does not synthesize chirp repetition.
 

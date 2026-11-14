@@ -845,6 +845,64 @@ TEST_CASE("SimulationEngine processStreamingPhysics steps through time and emits
 	}
 }
 
+TEST_CASE("SimulationEngine clips FMCW IF over-render to the requested output extent",
+		  "[core][threading][fmcw][if][output]")
+{
+	ParamGuard const guard;
+	params::setRate(1000.0);
+	params::setOversampleRatio(1);
+	params::setTime(0.0, 0.004);
+
+	auto world = std::make_unique<core::World>();
+	auto platform = std::make_unique<radar::Platform>("FmcwIfPlatform", 401);
+	setupStaticPlatform(*platform, math::Vec3{0.0, 0.0, 0.0});
+	auto timing_prototype = std::make_unique<timing::PrototypeTiming>("FmcwIfClock", 402);
+	timing_prototype->setFrequency(1.0e6);
+	auto timing = std::make_shared<timing::Timing>("FmcwIfClockInstance", 403);
+	timing->initializeModel(timing_prototype.get());
+	auto antenna = std::make_unique<antenna::Isotropic>("FmcwIfAntenna", 404);
+	auto waveform = std::make_unique<fers_signal::RadarSignal>(
+		"FmcwIfWave", 1.0, 1.0e6, 0.004,
+		std::make_unique<fers_signal::FmcwChirpSignal>(100.0, 0.004, 0.004, 0.0, std::size_t{1}), 405);
+
+	auto transmitter =
+		std::make_unique<radar::Transmitter>(platform.get(), "FmcwIfTx", radar::OperationMode::FMCW_MODE, 406);
+	transmitter->setTiming(timing);
+	transmitter->setAntenna(antenna.get());
+	transmitter->setSignal(waveform.get());
+	auto receiver =
+		std::make_unique<radar::Receiver>(platform.get(), "FmcwIfRx", 42, radar::OperationMode::FMCW_MODE, 407);
+	receiver->setTiming(timing);
+	receiver->setAntenna(antenna.get());
+	receiver->setDechirpMode(radar::Receiver::DechirpMode::Physical);
+	receiver->setDechirpReference({.source = radar::Receiver::DechirpReferenceSource::Transmitter, .name = "FmcwIfTx"});
+	receiver->setFmcwIfChainRequest(
+		{.sample_rate_hz = 1000.0, .filter_bandwidth_hz = 300.0, .filter_transition_width_hz = 100.0});
+
+	world->add(std::move(platform));
+	world->add(std::move(timing_prototype));
+	world->add(std::move(antenna));
+	world->add(std::move(waveform));
+	world->add(std::move(transmitter));
+	world->add(std::move(receiver));
+	world->resolveReceiverDechirpReferences();
+	world->scheduleInitialEvents();
+
+	pool::ThreadPool pool(1);
+	RecordingOutputSink sink;
+	core::SimulationEngine engine(world.get(), pool, nullptr, ".", nullptr, &sink);
+	engine.run();
+
+	const auto timeline = outputTimeline(sink);
+	REQUIRE(timeline.size() == 4u);
+	REQUIRE(
+		std::all_of(sink.sample_starts.begin(), sink.sample_starts.end(), [](const auto start) { return start < 4u; }));
+	for (std::size_t block_index = 0; block_index < sink.blocks.size(); ++block_index)
+	{
+		REQUIRE(sink.sample_starts[block_index] + sink.blocks[block_index].size() <= 4u);
+	}
+}
+
 TEST_CASE("SimulationEngine live streaming output emits bounded CW blocks", "[core][threading][vita49][bounded]")
 {
 	ParamGuard const guard;

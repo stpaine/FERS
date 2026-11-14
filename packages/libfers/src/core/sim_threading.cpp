@@ -1017,10 +1017,18 @@ namespace core
 					{
 						return;
 					}
+					const auto expected_samples = static_cast<std::uint64_t>(
+						expectedStreamingOutputSamples(if_plan->actual_output_sample_rate_hz));
+					if (sample_start >= expected_samples)
+					{
+						return;
+					}
+					const auto retained_count = static_cast<std::size_t>(
+						std::min<std::uint64_t>(samples.size(), expected_samples - sample_start));
 					const RealType first_sample_time = params::startTime() +
 						static_cast<RealType>(sample_start) / if_plan->actual_output_sample_rate_hz;
 					emitStreamingOutputBlock(receiver_index, first_sample_time, if_plan->actual_output_sample_rate_hz,
-											 samples, sample_start);
+											 samples.first(retained_count), sample_start);
 				});
 		}
 		const RealType actual_output_sample_rate_hz = plan.actual_output_sample_rate_hz;
