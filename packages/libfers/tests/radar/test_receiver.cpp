@@ -294,7 +294,62 @@ TEST_CASE("Receiver IF resampling aligns off-grid segments to the global IF grid
 	scheduled.endFmcwIfResamplingSegment();
 	scheduled.flushFmcwIfResampling();
 
+	// The callback omits all-zero gaps, including a trailing gap. Check that
+	// any omitted tail is zero before materialising the common output extent.
+	REQUIRE(scheduled_samples.size() <= reference_samples.size());
+	for (std::size_t i = scheduled_samples.size(); i < reference_samples.size(); ++i)
+	{
+		REQUIRE(std::abs(reference_samples[i]) < 1e-10);
+	}
+	scheduled_samples.resize(reference_samples.size(), ComplexType{0.0, 0.0});
 	requireComplexVectorsNear(scheduled_samples, reference_samples, 1e-10);
+}
+
+TEST_CASE("Receiver IF resampling preserves tone phase at the declared output time",
+		  "[radar][receiver][fmcw][if_resampler]")
+{
+	ParamGuard const guard;
+	params::setTime(0.0, 4.0);
+	params::setOversampleRatio(1);
+	for (const auto input_rate : {1024.0, 4096.0})
+	{
+		const auto output_rate = input_rate == 1024.0 ? 320.0 : 640.0;
+		params::setRate(input_rate);
+		const fers_signal::FmcwIfResamplerRequest request{.input_sample_rate_hz = input_rate,
+														  .output_sample_rate_hz = output_rate,
+														  .filter_bandwidth_hz = 96.0,
+														  .filter_transition_width_hz = 60.0};
+		const auto plan = fers_signal::planFmcwIfResampler(request);
+		radar::Platform platform("PhaseOraclePlatform");
+		radar::Receiver rx(&platform, "PhaseOracleRx", 19, radar::OperationMode::FMCW_MODE);
+		rx.setDechirpMode(radar::Receiver::DechirpMode::Physical);
+		std::vector<ComplexType> output;
+		rx.setFmcwIfOutputCallback([&output](const std::span<const ComplexType> block, const std::uint64_t sample_start)
+								   { appendCapturedIfOutput(output, block, sample_start); });
+		rx.initializeFmcwIfResampling(plan);
+		const auto oracle = [](const RealType t)
+		{ return std::polar(1.0, 2.0 * PI * 31.0 * t + 0.37) + std::polar(0.4, -2.0 * PI * 13.0 * t - 0.21); };
+		std::vector<ComplexType> input(static_cast<std::size_t>(4.0 * input_rate));
+		for (std::size_t i = 0; i < input.size(); ++i)
+		{
+			input[i] = oracle(static_cast<RealType>(i) / input_rate);
+		}
+		for (std::size_t offset = 0; offset < input.size(); offset += 311)
+		{
+			const auto count = std::min<std::size_t>(311, input.size() - offset);
+			rx.consumeFmcwIfBlock(std::span<const ComplexType>(input.data() + offset, count),
+								  static_cast<RealType>(offset) / input_rate);
+		}
+		rx.flushFmcwIfResampling();
+		REQUIRE(output.size() >= static_cast<std::size_t>(4.0 * output_rate));
+		RealType max_error = 0.0;
+		for (std::size_t i = static_cast<std::size_t>(output_rate); i < static_cast<std::size_t>(3.0 * output_rate);
+			 ++i)
+		{
+			max_error = std::max(max_error, std::abs(output[i] - oracle(static_cast<RealType>(i) / output_rate)));
+		}
+		REQUIRE(max_error < 0.002);
+	}
 }
 
 TEST_CASE("Receiver IF resampling flushes filtered tail samples after scheduled segment ends",
@@ -342,6 +397,12 @@ TEST_CASE("Receiver IF resampling flushes filtered tail samples after scheduled 
 	scheduled.endFmcwIfResamplingSegment();
 	scheduled.flushFmcwIfResampling();
 
+	REQUIRE(scheduled_samples.size() <= reference_samples.size());
+	for (std::size_t i = scheduled_samples.size(); i < reference_samples.size(); ++i)
+	{
+		REQUIRE(std::abs(reference_samples[i]) < 1e-10);
+	}
+	scheduled_samples.resize(reference_samples.size(), ComplexType{0.0, 0.0});
 	requireComplexVectorsNear(scheduled_samples, reference_samples, 1e-10);
 }
 

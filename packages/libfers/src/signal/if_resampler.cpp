@@ -605,8 +605,14 @@ namespace fers_signal
 		[[nodiscard]] long double stagePosition(const std::size_t output_index) const noexcept
 		{
 			const std::size_t phase_count = std::max<std::size_t>(1, _plan.phase_count);
+			// evaluateBranch uses a centred interpolation kernel. Give its output the
+			// declared stage delay before applying the final fractional advance; the
+			// receiver then removes the remaining integer delay exactly once. Without
+			// this shift, that removal advances the signal relative to its timestamps.
 			const long double base = static_cast<long double>(output_index) *
-				static_cast<long double>(_plan.down_factor) / static_cast<long double>(_plan.up_factor);
+					static_cast<long double>(_plan.down_factor) / static_cast<long double>(_plan.up_factor) -
+				static_cast<long double>(_plan.group_delay_seconds) *
+					static_cast<long double>(_plan.input_sample_rate_hz);
 			if (!_plan.applies_fractional_delay)
 			{
 				return base;
