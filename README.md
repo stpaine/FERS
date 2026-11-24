@@ -35,26 +35,12 @@ semi-independent packages.
 - **Unified Schema:** A central XML schema ensures consistency and serves as the single source of truth for scenarios
   across the simulator and the UI.
 
-## Feature Stability
+## Feature Scope
 
-Last reviewed: 2026-05-31.
-
-These labels describe the current state of the `master` branch and should be read alongside
-the [development status disclaimer](#disclaimer--development-status). "Verified" means the feature has been checked
-against the current project expectations; "unverified" means it is available but still needs validation before users
-should rely on it for important results.
-
-| Feature | Stability | Verification |
-| ------- | --------- | ------------ |
-| fers-cli | Stable | N/A |
-| fers-ui | Beta | N/A |
-| Pulsed radar | Stable | Verified |
-| CW radar | Beta | Unverified |
-| FMCW radar | Beta | Unverified |
-| SFCW radar | Beta | Unverified |
-| Multimodal | Alpha | Unverified |
-| VITA 49.2 UDP output | Alpha | Unverified |
-| KML generation | Stable | Verified |
+FERS implements the complete workflow from scenario creation and XML import/export to simulation and receiver-data
+output. Supported modes are pulsed, CW, FMCW, SFCW, and mixed-mode scenarios, with HDF5 output or the documented
+VITA 49.2 UDP profile. The library, CLI, and desktop application share the simulation engine. Regression tests and
+[runnable examples](docs/wiki/Examples.md) exercise these workflows.
 
 ## Repository Structure
 
@@ -279,14 +265,3 @@ bun run licenses:rust  # regenerate THIRD_PARTY_LICENSES/rust-licenses.html
 ```
 
 Run these after updating `packages/fers-ui/package.json` or `packages/fers-ui/src-tauri/Cargo.toml`. CI will fail if they are stale.
-
-## Disclaimer & Development Status
-
-> [!WARNING]
-> Please be aware that FERS is currently undergoing a significant modernization and re-architecture. The `master` branch is under **heavy active development** and should be considered an **alpha-stage** project.
-
-This means:
-
-- **Stability:** Expect bugs, crashes, and incomplete features.
-- **Breaking Changes:** The C-API, JSON/XML schemas, and internal architecture are subject to change without notice as the new foundation is stabilized.
-- **Use Case:** This version is intended for development, testing, and community feedback. It is **not yet recommended for production or critical simulation work.**

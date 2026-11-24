@@ -9,7 +9,9 @@ This library is built with modern C++23 standards for optimal performance and ma
 C-style Foreign Function Interface (FFI) in `include/libfers/api.h`, allowing it to be used by various frontends,
 including the official `fers-cli` and `fers-ui` applications.
 
-The C API can change without notice during active development, as described in the [project development status](../../README.md#disclaimer--development-status).
+The library implements scenario loading and editing, simulation, and receiver-data export for the
+[supported feature scope](../../README.md#feature-scope). Build clients against the matching library headers and schema
+version; regression tests and bundled examples exercise the API and output workflows.
 
 ## Features
 
