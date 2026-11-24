@@ -169,7 +169,7 @@ TEST_CASE("FMCW IF resampler applies fractional delay phase state", "[signal][if
 	for (std::size_t i = 300; i < output.size() - 300; ++i)
 	{
 		const RealType shifted_time =
-			(static_cast<RealType>(i) + plan.fractional_output_delay_samples) / output_rate_hz;
+			(static_cast<RealType>(i) - static_cast<RealType>(plan.warmup_discard_samples)) / output_rate_hz;
 		const RealType shifted_phase = 2.0 * PI * tone_hz * shifted_time;
 		const ComplexType shifted_expected{std::cos(shifted_phase), std::sin(shifted_phase)};
 		const RealType unshifted_phase = 2.0 * PI * tone_hz * static_cast<RealType>(i) / output_rate_hz;
@@ -226,7 +226,7 @@ TEST_CASE("FMCW IF resampler keeps multi-stage fractional delay aligned", "[sign
 	for (std::size_t i = 600; i < output.size() - 600; ++i)
 	{
 		const RealType shifted_time =
-			(static_cast<RealType>(i) + plan.fractional_output_delay_samples) / output_rate_hz;
+			(static_cast<RealType>(i) - static_cast<RealType>(plan.warmup_discard_samples)) / output_rate_hz;
 		const RealType shifted_phase = 2.0 * PI * tone_hz * shifted_time;
 		const ComplexType shifted_expected{std::cos(shifted_phase), std::sin(shifted_phase)};
 		const RealType unshifted_phase = 2.0 * PI * tone_hz * static_cast<RealType>(i) / output_rate_hz;
