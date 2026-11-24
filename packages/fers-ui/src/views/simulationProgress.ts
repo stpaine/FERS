@@ -66,7 +66,10 @@ const matchProgressMessage = (message: string): ProgressMessageMatch => {
         return { kind: 'main', key: 'main', detailId: 'main-progress' };
     }
 
-    if (message.startsWith('Main simulation finished')) {
+    if (
+        message.startsWith('Main simulation finished') ||
+        message.startsWith('Simulation compute finished')
+    ) {
         return { kind: 'main', key: 'main', detailId: 'main-export-wait' };
     }
 

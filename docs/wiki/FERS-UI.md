@@ -4,9 +4,9 @@
 
 Use the UI when you want a visual scenario workbench. Use `fers-cli` when you already have a `.fersxml` file and want a simple terminal run.
 
-## Current Status
+## Supported Workflow
 
-The UI is usable but still marked beta and under active development. Expect some incomplete workflows and rough edges. The CLI remains the most stable way to run production scenario batches.
+The desktop supports scenario creation, XML import/export, simulation through `libfers`, and inspection of receiver-output metadata for the [supported radar modes](../../README.md#feature-scope). Detailed signal analysis uses external tools, including the bundled Python scripts.
 
 Known practical limitations:
 

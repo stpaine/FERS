@@ -1,6 +1,6 @@
 ---
 blank_issues_enabled: true
 contact_links:
-    - name: 💬 Ask a Question or Start a Discussion
-      url: https://github.com/stpaine/FERS/discussions
-      about: Please use GitHub Discussions for questions, ideas, and general conversation.
+    - name: 💬 Ask a Question or Get Help
+      url: https://github.com/stpaine/FERS/issues/new
+      about: Open an issue for usage questions or help. Include your FERS version, platform, and relevant scenario details.

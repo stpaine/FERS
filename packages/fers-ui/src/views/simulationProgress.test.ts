@@ -235,6 +235,59 @@ describe('simulation progress normalization', () => {
         });
     });
 
+    test('tracks the native receiver-finalization wait on the main row', () => {
+        const waiting = {
+            message:
+                'Simulation compute finished. Waiting for receiver finalization...',
+            current: 100,
+            total: 100,
+        };
+        const tracked = trackProgress([
+            {
+                message: 'Simulating... 1.00s / 1.00s',
+                current: 100,
+                total: 100,
+            },
+            waiting,
+        ]);
+
+        expect(tracked).toEqual({ main: waiting });
+        expect(
+            addSimulationProgressEvent(tracked, {
+                message: 'Simulation complete',
+                current: 100,
+                total: 100,
+            })
+        ).toEqual({
+            main: {
+                message: 'Simulation complete',
+                current: 100,
+                total: 100,
+            },
+        });
+    });
+
+    test('removes the native finalization wait after a successful completion event', () => {
+        const message =
+            'Simulation compute finished. Waiting for receiver finalization...';
+        const completed = normalizeCompletedProgressSnapshot({
+            [message]: {
+                message,
+                current: 100,
+                total: 100,
+                details: [{ id: message, message, current: 100, total: 100 }],
+            },
+        });
+
+        expect(completed).toEqual({
+            main: {
+                message: 'Simulation complete',
+                current: 100,
+                total: 100,
+            },
+        });
+    });
+
     test('marks known stale receiver and export rows complete after success', () => {
         const completed = normalizeCompletedProgressSnapshot({
             CW: {
