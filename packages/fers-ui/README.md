@@ -5,7 +5,9 @@
 ![Desktop App](https://img.shields.io/badge/Tauri-v2-FFC336)
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](https://github.com/stpaine/FERS/blob/master/LICENSE)
 
-**fers-ui** is the official graphical user interface for the **Flexible Extensible Radar Simulator (FERS)**. It provides a professional-grade, visual workbench designed to streamline the entire simulation pipeline—from asset creation and scenario construction to simulation execution and results analysis. By offering an intuitive and powerful toolset, fers-ui dramatically improves the usability and accessibility of the core FERS engine.
+**fers-ui** is the desktop scenario editor and runner for the **Flexible Extensible Radar Simulator (FERS)**. It supports
+scenario creation, XML import/export, simulation through `libfers`, and inspection of output metadata. Detailed signal
+analysis uses external tools, including the bundled Python scripts.
 
 ## Key Features
 
@@ -51,6 +53,7 @@ To build a release bundle:
 bun ui:build
 ```
 
-> [!WARNING]
-> The UI is currently in active development and may be unstable. Expect crashes and incomplete features.
-> In particular, there is a known issue causing WebGL context loss on macOS on launch. See https://github.com/davidbits/FERS/issues/181 for details.
+> [!NOTE]
+> The 3D viewport requires WebGL2. Some macOS systems may experience WebGL context loss on launch;
+> see [issue #181](https://github.com/davidbits/FERS/issues/181). Other platform and XML editing limitations are
+> documented in the [UI guide](../../docs/wiki/FERS-UI.md).
